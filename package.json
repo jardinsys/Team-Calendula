@@ -1,0 +1,17 @@
+{
+  "name": "team-calendula",
+  "version": "1.0.0",
+  "description": "A collective of bots and applications to help with trauma in different aspects",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "discord.js": "^14.25.1",
+    "mongoose": "^9.0.2"
+  }
+}
