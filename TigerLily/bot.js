@@ -6,7 +6,7 @@ const token = config.discordTokens.trigin;
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.once(Events.ClientReady, (readyClient) => {
-	console.log(`Let our wheels spin... Logged in as ${readyClient.user.tag}`);
+	console.log(`Ready to Roar! Logged in as ${readyClient.user.tag}`);
 });
 
 // Log in to Discord
