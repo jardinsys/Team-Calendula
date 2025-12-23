@@ -3,10 +3,20 @@ const path = require('node:path');
 const { Client, Events, GatewayIntentBits } = require('discord.js');
 const config = require('./../config.json');
 const token = config.discordTokens.system;
+const mongoURI = config.mongoURIs.system;
 
 // Create New client instance
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
+//Connect to MongoDB
+try {
+    await mongoose.connect(mongoURI);
+    console.log(`Connected to System's MongoDB Cluster`);
+} catch (error) {
+    console.error(`System's MongoDB connection error:`, error);
+}
+
+//Check if Ready
 client.once(Events.ClientReady, (readyClient) => {
 	console.log(`Let our wheels spin... Logged in as ${readyClient.user.tag}`);
 });

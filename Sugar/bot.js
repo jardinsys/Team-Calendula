@@ -3,10 +3,20 @@ const path = require('node:path');
 const { Client, Events, GatewayIntentBits } = require('discord.js');
 const config = require('./../config.json');
 const token = config.discordTokens.sucre;
+const mongoURI = config.mongoURIs.sucre;
 
 // Create New client instance
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
+//Connect to MongoDB
+try {
+    await mongoose.connect(mongoURI);
+    console.log(`Connected to Sugar's MongoDB Cluster`);
+} catch (error) {
+    console.error(`Sugar's MongoDB connection error:`, error);
+}
+
+//Check if Ready
 client.once(Events.ClientReady, (readyClient) => {
 	console.log(`Ready to send love! Logged in as ${readyClient.user.tag}`);
 });
