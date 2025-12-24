@@ -11,7 +11,6 @@ client.once(Events.ClientReady, (readyClient) => {
 	console.log(`Ready for the fixes. Logged in as ${readyClient.user.tag}`);
 });
 
-/*
 //Load Commands
 client.commands = new Collection();
 
@@ -32,12 +31,10 @@ for (const folder of commandFolders) {
 		}
 	}
 }
-*/
 
 // Log in to Discord
 client.login(token);
 
-/*
 //Interaction Handling
 client.on(Events.InteractionCreate, async (interaction) => {
 	if (!interaction.isChatInputCommand()) return;
@@ -65,4 +62,3 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		}
 	}
 });
-*/
