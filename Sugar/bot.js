@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { Client, Events, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, Events, GatewayIntentBits, Collection, MessageFlags } = require('discord.js');
 const { MongoClient } = require('mongodb');
 const config = require('./../config.json');
 const token = config.discordTokens.sucre;
@@ -53,6 +53,8 @@ function loadCommandsFromDirectory(directory) {
 		}
 	}
 }
+
+loadCommandsFromDirectory(foldersPath);
 
 // Log in to Discord
 connectToDatabase();

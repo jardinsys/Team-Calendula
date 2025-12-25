@@ -26,10 +26,10 @@ while (directoriesToProcess.length > 0) {
         } else if (item.endsWith('.js')) {
             //.js file - load command
             const command = require(itemPath);
-            if ('data' in command && 'execute' in command) {
+            if ('data' in command) {
                 commands.push(command.data.toJSON());
             } else {
-                console.log(`[WARNING] The command at ${itemPath} is missing a required "data" or "execute" property.`);
+                console.log(`[🔴WARNING] The command at ${itemPath} is missing a required "data" or "execute" property.`);
             }
         }
     }

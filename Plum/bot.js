@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { Client, Events, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, Events, GatewayIntentBits, Collection, MessageFlags } = require('discord.js');
 const config = require('./../config.json');
 const token = config.discordTokens.prune;
 
@@ -41,6 +41,8 @@ function loadCommandsFromDirectory(directory) {
 		}
 	}
 }
+
+loadCommandsFromDirectory(foldersPath);
 
 // Log in to Discord
 client.login(token);
