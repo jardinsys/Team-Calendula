@@ -9,23 +9,28 @@ const token = config.discordTokens.system;
 const globalCommands = [];
 const guildCommands = [];
 
-// Grab all the command folders from the commands directory
+// Grab all the command folders and files from commands directory
 
 function loadCommands(foldersPath, commandArray) {
-    const commandFolders = fs.readdirSync(foldersPath);
+    const items = fs.readdirSync(foldersPath);
 
-    for (const folder of commandFolders) {
-        // Grab all the command files from the commands directory 
-        const commandsPath = path.join(foldersPath, folder);
-        const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith('.js'));
-        // Grab the SlashCommandBuilder#toJSON() output of each command's data for deployment
-        for (const file of commandFiles) {
-            const filePath = path.join(commandsPath, file);
-            const command = require(filePath);
-            if ('data' in command && 'execute' in command) {
+    for (const item of items) {
+        const itemPath = path.join(foldersPath, item);
+
+        // Check if Directory
+        if (fs.statSync(itemPath).isDirectory()) {
+            // Recursively load commands from subfolder
+            loadCommands(itemPath, commandArray);
+        } else if (item.endsWith('.js')) {
+            // It's a .js file - load command
+            const command = require(itemPath);
+            if ('data' in command) {
                 commandArray.push(command.data.toJSON());
-            } else {
-                console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+            } else if ('name' in command) {
+                console.log(`The command at ${itemPath} is a prefix command`)
+            }
+            else {
+                console.log(`[🔴WARNING] The command at ${itemPath} is missing a required "data" or "name" property`);
             }
         }
     }
@@ -47,29 +52,23 @@ const rest = new REST().setToken(token);
 
 //Deploy commands
 (async () => {
-	try {
-		console.log(`Started refreshing ${globalCommands.length} global and ${guildCommands.length} guild application (/) commands.`);
+    try {
+        console.log(`Started refreshing ${globalCommands.length} global and ${guildCommands.length} guild application (/) commands.`);
+        await rest.put(Routes.applicationCommands(clientId), { body: [] }); // Nuke/Delete all global Commands
+        await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: [] }); // Nuke/Delete all guild Commands
 
-		// Deploy global commands
-		if (globalCommands.length > 0) {
-			const globalData = await rest.put(
-				Routes.applicationCommands(clientId),
-				{ body: globalCommands }
-			);
-			console.log(`Successfully reloaded ${globalData.length} global application (/) commands.`);
-		}
+        // Deploy global commands
+        if (globalCommands.length > 0) {
+            const globalData = await rest.put(Routes.applicationCommands(clientId), { body: globalCommands });
+            console.log(`Successfully reloaded ${globalData.length} global application (/) commands.`);
+        }
 
-		// Deploy guild-specific commands
-		if (guildCommands.length > 0) {
-			const guildData = await rest.put(
-				Routes.applicationGuildCommands(clientId, guildId),
-				{ body: guildCommands }
-			);
-			console.log(`Successfully reloaded ${guildData.length} guild application (/) commands.`);
-		}
-
-		console.log('All commands deployed successfully!');
-	} catch (error) {
-		console.error(error);
-	}
+        // Deploy guild-specific commands
+        if (guildCommands.length > 0) {
+            const guildData = await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: guildCommands });
+            console.log(`Successfully reloaded ${guildData.length} guild application (/) commands.`);
+        }
+    } catch (error) {
+        console.error(error);
+    }
 })();
