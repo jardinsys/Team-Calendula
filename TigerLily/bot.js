@@ -3,8 +3,8 @@ const path = require('path');
 const { Client, Events, GatewayIntentBits, Collection } = require('discord.js');
 const { MongoClient } = require('mongodb');
 const config = require('./../config.json');
+const dbConnection = require('./database');
 const token = config.discordTokens.trigin;
-const mongoURI = config.mongoURIs.trigin;
 const prefix = 'tr!'
 
 // Create New client instance
@@ -17,14 +17,7 @@ const client = new Client({
 });
 
 //Connect to MongoDB
-async function connectToDatabase() {
-	try {
-		await MongoClient.connect(mongoURI);
-		console.log(`Connected to Trig's MongoDB Cluster`);
-	} catch (error) {
-		console.error(`Trig's MongoDB connection error:`, error);
-	}
-}
+client.db = dbConnection;
 
 //Check if Ready
 client.once(Events.ClientReady, (readyClient) => {

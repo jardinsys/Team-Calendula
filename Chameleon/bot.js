@@ -3,8 +3,8 @@ const path = require('path');
 const { Client, Events, GatewayIntentBits, Collection } = require('discord.js');
 const config = require('./../config.json');
 const { MongoClient } = require('mongodb');
+const dbConnection = require('./database');
 const token = config.discordTokens.system;
-const mongoURI = config.mongoURIs.system;
 const prefixes = ['sys!', 'sys;'];
 
 // Create New client instance
@@ -15,15 +15,9 @@ const client = new Client({
 		GatewayIntentBits.MessageContent
 	]
 });
+
 //Connect to MongoDB
-async function connectToDatabase() {
-	try {
-		await MongoClient.connect(mongoURI);
-		console.log(`Connected to System's MongoDB Cluster`);
-	} catch (error) {
-		console.error(`System's MongoDB connection error:`, error);
-	}
-}
+client.db = dbConnection;
 
 //Check if Ready
 client.once(Events.ClientReady, (readyClient) => {
