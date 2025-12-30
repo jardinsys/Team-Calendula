@@ -14,17 +14,104 @@ const systemSchema = new mongoose.Schema({
         default: () => snowflake.generate(),
         unique: true
     },
-    users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User'}],
+    users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
-    name: String,
-    type: String,
-    discord: {
-        name: {},
-        description: String,
+    name: {
+        indexable: String,
+        display: String,
+        closedNameDisplay: String
     },
-    app: {},
-    proxy: {},
-    setting: {}
+    type: String,
+    description: String,
+    color: String,
+    avatar: mediaSchema,
+    alterSynonym: {
+        singular: { type: String, default: "alter" },
+        plural: { type: String, default: "alters" }
+    },
+    alters: [{ type: String, ref: 'Alter' }],
+    mask: {
+        maskTo: [{
+            user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            discordUserID: String,
+            discordGuildID: { type: String, ref: 'Guild' }
+        }],
+        maskExclude: [{
+            user: 'User',
+            discordUserID: String,
+            discordGuildID: { type: String, ref: 'Guild' }
+        }],
+        name: {
+            indexable: String,
+            display: String,
+            closedNameDisplay: String
+        },
+        description: String,
+        color: String,
+        avatar: mediaSchema,
+        theme: {
+        background:{
+            media: mediaSchema, // $$
+            colorTheme: {
+                colors:[String],
+            }
+        },},
+        discord: {
+            name: String,
+            description: String,
+            color: String,
+            image: {
+                avatar: mediaSchema,
+                banner: mediaSchema,
+            },
+            tag: [String],
+            pronounSeparator: String
+        }
+    },
+    discord: {
+        name: {
+            indexable: String,
+            display: String,
+            closedNameDisplay: String
+        },
+        description: String,
+        color: String,
+        image: {
+            avatar: mediaSchema,
+            banner: mediaSchema,
+        },
+        tag: [String],
+        pronounSeparator: String,
+        server: [{
+            id: { type: String, ref: 'Guild' },
+            name: String,
+            description: String,
+            avatar: mediaSchema,
+            tag: [String],
+            pronounSeparator: String,
+            proxyStyle: { type: String, default: off }
+        }]
+    },
+    front: {
+        status: String,
+        caution: String,
+        layers: [layerSchema],
+    },
+    cautionAlgos: [{
+        style: String,
+        alters: [{type: String, ref: 'Alter'}],
+        layer: [{type: String, ref: 'Layer'}]
+    }],
+    proxy: {
+        recentProxies: [String],
+        lastProxyTime: Date,
+        style: { type: String, default: off }
+    },
+    setting: {
+        autoshareNotestoUsers: { type: Boolean, default: false },
+        proxyCoolDown: { type: Number, default: 3600 },
+        privacy: [{}]
+    }
 });
 
 const System = sysDB.model('System', systemSchema);
