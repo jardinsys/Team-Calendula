@@ -34,13 +34,11 @@ function dateToTimestamp(date) {
  * @returns {Date} JavaScript Date object
  */
 function timestampToDate(timestamp) {
-    if (typeof timestamp !== 'number') {
+    if (typeof timestamp !== 'number')
         throw new Error('Timestamp must be a number');
-    }
 
-    if (timestamp < 0) {
+    if (timestamp < 0) 
         throw new Error('Timestamp must be positive');
-    }
 
     // To convert seconds to milliseconds (required)
     return new Date(timestamp * 1000);
