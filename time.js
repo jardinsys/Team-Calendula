@@ -1,5 +1,11 @@
 /**
  * Utility functions for converting between ISO Date and Unix timestamps
+ * 
+ * Functions:
+ *      dateToTimestamp
+ *      timestampToDate
+ *      dateToDiscordTimestamp
+ *      now
  */
 
 /**
