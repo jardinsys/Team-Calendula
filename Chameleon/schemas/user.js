@@ -43,7 +43,7 @@ const userSchema = new mongoose.Schema({
 
     notes: {
         tags: [String],
-        notes: [noteSchema]
+        notes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Note' }]
     },
 
     friends: [{
