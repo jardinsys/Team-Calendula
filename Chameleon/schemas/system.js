@@ -15,6 +15,7 @@ const systemSchema = new mongoose.Schema({
         unique: true
     },
     users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    joinedAt: { type: Date, default: Date.now },
 
     name: {
         indexable: String,
@@ -50,14 +51,18 @@ const systemSchema = new mongoose.Schema({
         color: String,
         avatar: mediaSchema,
         theme: {
-        background:{
-            media: mediaSchema, // $$
-            colorTheme: {
-                colors:[String],
-            }
-        },},
+            background: {
+                media: mediaSchema, // $$
+                colorTheme: {
+                    colors: [String],
+                }
+            },
+        },
         discord: {
-            name: String,
+            name: {
+                display: String,
+                openCharDisplay: String
+            },
             description: String,
             color: String,
             image: {
@@ -70,9 +75,8 @@ const systemSchema = new mongoose.Schema({
     },
     discord: {
         name: {
-            indexable: String,
             display: String,
-            closedNameDisplay: String
+            openCharDisplay: String
         },
         description: String,
         color: String,
@@ -99,8 +103,8 @@ const systemSchema = new mongoose.Schema({
     },
     cautionAlgos: [{
         style: String,
-        alters: [{type: String, ref: 'Alter'}],
-        layer: [{type: String, ref: 'Layer'}]
+        alters: [{ type: String, ref: 'Alter' }],
+        layer: [{ type: String, ref: 'Layer' }]
     }],
     proxy: {
         recentProxies: [String],
@@ -110,6 +114,7 @@ const systemSchema = new mongoose.Schema({
     setting: {
         autoshareNotestoUsers: { type: Boolean, default: false },
         proxyCoolDown: { type: Number, default: 3600 },
+        defaults: {},
         privacy: [{}]
     }
 });
