@@ -5,7 +5,6 @@ const { triggerGroupSchema } = require('./trigger');
 const guildSchema = new mongoose.Schema({
     //Guild Info
     discordId: { type: String, required: true, unique: true },
-    createdAt: { type: Date, default: Date.now },
     admins: {
         roleIDs: [String],
         memberIDs: [String] 
