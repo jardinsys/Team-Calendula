@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const sysDB = require("../database");
 const friendPrivacySettingsSchema = require('./settings');
+const { layerSchema } = require('./front.js')
 const mediaSchema = require('../../media.js');
 const Snowflake = require('snowflake-id').default;
 const snowflake = new Snowflake({

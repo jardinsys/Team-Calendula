@@ -22,7 +22,7 @@ const shiftSchema = new mongoose.Schema({
 
 const Shift = sysDB.model('Shift', shiftSchema);
 
-const frontLayerSchema = new mongoose.Schema({
+const layerSchema = new mongoose.Schema({
     _id: { type: mongoose.Schema.Types.ObjectId, unique: true },
     name: String,
     color: String,
@@ -31,5 +31,5 @@ const frontLayerSchema = new mongoose.Schema({
 
 module.exports = {
     Shift,
-    frontLayerSchema
+    layerSchema
 };
