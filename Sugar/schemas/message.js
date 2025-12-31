@@ -24,6 +24,7 @@ const messageSchema = new mongoose.Schema({
         enum: ['user', 'guild'],
         required: true
     },
+    createdAt: {type:Date, default: Date.now},
 
     // Content
     title: String,
