@@ -24,7 +24,7 @@ const systemSchema = new mongoose.Schema({
         display: String,
         closedNameDisplay: String
     },
-    s_type: {
+    sys_type: {
         name: String,
         calledSysstem: Boolean
     },
