@@ -25,19 +25,9 @@ const groupSchema = new mongoose.Schema({
     description: String,
     color: String,
     avatar: mediaSchema,
-    alters: [{ type: String, ref: 'Alter' }], 
+    alters: [{ type: String, ref: 'Alter' }],
     states: [{ type: String, ref: 'State' }],
     mask: {
-        maskTo: [{
-            user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            discordUserID: String,
-            discordGuildID: { type: String, ref: 'Guild' }
-        }],
-        maskExclude: [{
-            user: 'User',
-            discordUserID: String,
-            discordGuildID: { type: String, ref: 'Guild' }
-        }],
         name: {
             indexable: String,
             display: String,
@@ -92,6 +82,18 @@ const groupSchema = new mongoose.Schema({
         }
     },
     setting: {
+        mask: {
+            maskTo: [{
+                user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                discordUserID: String,
+                discordGuildID: { type: String, ref: 'Guild' }
+            }],
+            maskExclude: [{
+                user: 'User',
+                discordUserID: String,
+                discordGuildID: { type: String, ref: 'Guild' }
+            }],
+        },
         privacy: [{}]
     }
 });

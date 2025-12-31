@@ -14,7 +14,6 @@ const alterSchema = new mongoose.Schema({
         unique: true
     },
     system: { type: String, ref: 'System' },
-    createdAt: { type: Date, default: Date.now },
     addedAt: { type: Date, default: Date.now },
     name: {
         indexable: String,
@@ -79,7 +78,11 @@ const alterSchema = new mongoose.Schema({
             description: String,
             avatar: mediaSchema,
             pronounSeparator: String,
-        }]
+        }],
+        metadata: {
+            messageCount: Number,
+            lastMessageTime: Date,
+        }
     },
     caution: {
         c_type: String,
@@ -93,6 +96,9 @@ const alterSchema = new mongoose.Schema({
         }
     },
     proxy: [String],
+    metadata: {
+    createdAt: { type: Date, default: Date.now },
+},
     setting: {
         privacy: [{}]
     }

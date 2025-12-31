@@ -24,8 +24,7 @@ const userSchema = new mongoose.Schema({
         unique: true
     },
     systemID: { type: String, index: true, ref: 'System' },
-
-    pronouns: System,
+    pronouns: String,
 
     discord: {
         name: {

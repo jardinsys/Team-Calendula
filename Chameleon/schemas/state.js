@@ -79,7 +79,11 @@ const stateSchema = new mongoose.Schema({
             description: String,
             avatar: mediaSchema,
             pronounSeparator: String,
-        }]
+        }],
+        metadata: {
+            messageCount: Number,
+            lastMessageTime: Date,
+        }
     },
     caution: {
         c_type: String,

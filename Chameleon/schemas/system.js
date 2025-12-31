@@ -15,7 +15,9 @@ const systemSchema = new mongoose.Schema({
         unique: true
     },
     users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    joinedAt: { type: Date, default: Date.now },
+    metadata: {
+        joinedAt: { type: Date, default: Date.now },
+    },
 
     name: {
         indexable: String,
@@ -32,21 +34,12 @@ const systemSchema = new mongoose.Schema({
     },
     alters: [{ type: String, ref: 'Alter' }],
     mask: {
-        maskTo: [{
-            user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            discordUserID: String,
-            discordGuildID: { type: String, ref: 'Guild' }
-        }],
-        maskExclude: [{
-            user: 'User',
-            discordUserID: String,
-            discordGuildID: { type: String, ref: 'Guild' }
-        }],
         name: {
             indexable: String,
             display: String,
             closedNameDisplay: String
         },
+        pronouns: String,
         description: String,
         color: String,
         avatar: mediaSchema,
@@ -115,6 +108,18 @@ const systemSchema = new mongoose.Schema({
         autoshareNotestoUsers: { type: Boolean, default: false },
         proxyCoolDown: { type: Number, default: 3600 },
         defaults: {},
+        mask: {
+            maskTo: [{
+                user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                discordUserID: String,
+                discordGuildID: { type: String, ref: 'Guild' }
+            }],
+            maskExclude: [{
+                user: 'User',
+                discordUserID: String,
+                discordGuildID: { type: String, ref: 'Guild' }
+            }]
+        },
         privacy: [{}]
     }
 });
