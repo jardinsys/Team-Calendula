@@ -24,7 +24,10 @@ const systemSchema = new mongoose.Schema({
         display: String,
         closedNameDisplay: String
     },
-    type: String,
+    s_type: {
+        name: String,
+        calledSysstem: Boolean
+    },
     description: String,
     color: String,
     avatar: mediaSchema,
