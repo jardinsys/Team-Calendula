@@ -22,20 +22,11 @@ const alterSchema = new mongoose.Schema({
     },
     type: String,
     description: String,
+    birthday: Date,
     color: String,
     avatar: mediaSchema,
     groups: [{ type: String, ref: 'Group' }],
     mask: {
-        maskTo: [{
-            user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            discordUserID: String,
-            discordGuildID: { type: String, ref: 'Guild' }
-        }],
-        maskExclude: [{
-            user: 'User',
-            discordUserID: String,
-            discordGuildID: { type: String, ref: 'Guild' }
-        }],
         name: {
             indexable: String,
             display: String,
@@ -80,7 +71,7 @@ const alterSchema = new mongoose.Schema({
             pronounSeparator: String,
         }],
         metadata: {
-            messageCount: Number,
+            messageCount: { type: Number, integer: true },
             lastMessageTime: Date,
         }
     },
@@ -97,9 +88,21 @@ const alterSchema = new mongoose.Schema({
     },
     proxy: [String],
     metadata: {
-    createdAt: { type: Date, default: Date.now },
-},
+        createdAt: { type: Date, default: Date.now },
+    },
     setting: {
+        mask: {
+            maskTo: [{
+                userFriendID: { type: String, ref: 'User' },
+                discordUserID: String,
+                discordGuildID: { type: String, ref: 'Guild' }
+            }],
+            maskExclude: [{
+                userFriendID: { type: String, ref: 'User' },
+                discordUserID: String,
+                discordGuildID: { type: String, ref: 'Guild' }
+            }],
+        },
         privacy: [{}]
     }
 });

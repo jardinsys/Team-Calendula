@@ -48,13 +48,13 @@ const userSchema = new mongoose.Schema({
 
     friends: [{
         friendID: { type: String, index: true, ref: 'User' },
-        name: {
+        customName: {
             indexable: String,
             display: String
         },
         discordID: { type: String, index: true },
         addedAt: { type: Date, default: Date.now },
-        privacySettings: friendPrivacySettingsSchema
+        privacyBucket: String
     }],
     blocked: [{
         name: {

@@ -84,12 +84,12 @@ const groupSchema = new mongoose.Schema({
     setting: {
         mask: {
             maskTo: [{
-                user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                userFriendID: {type: String, ref: 'User' },
                 discordUserID: String,
                 discordGuildID: { type: String, ref: 'Guild' }
             }],
             maskExclude: [{
-                user: 'User',
+                userFriendID: {type: String, ref: 'User' },
                 discordUserID: String,
                 discordGuildID: { type: String, ref: 'Guild' }
             }],

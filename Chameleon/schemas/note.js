@@ -35,7 +35,7 @@ const noteSchema = new mongoose.Schema({
     content: String,
     media: [{
         mediaID: { type: mongoose.Schema.Types.ObjectId, ref: 'Media' },
-        position: { type: Number, required: true },
+        position: { type: Number, required: true, integer: true},
         caption: String,
         placeholder: String
     }]

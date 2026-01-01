@@ -30,6 +30,7 @@ const systemSchema = new mongoose.Schema({
         calledSysstem: Boolean
     },
     description: String,
+    birthday: Date,
     color: String,
     avatar: mediaSchema,
     alterSynonym: {
@@ -66,7 +67,11 @@ const systemSchema = new mongoose.Schema({
                 avatar: mediaSchema,
                 banner: mediaSchema,
             },
-            tag: [String],
+            tag: {
+                normal: [String],
+                openCharDisplay: [String]
+            },
+            proxylayout: String,
             pronounSeparator: String
         }
     },
@@ -81,7 +86,10 @@ const systemSchema = new mongoose.Schema({
             avatar: mediaSchema,
             banner: mediaSchema,
         },
-        tag: [String],
+        tag: {
+            normal: [String],
+            openCharDisplay: [String]
+        },
         pronounSeparator: String,
         server: [{
             id: { type: String, ref: 'Guild' },
@@ -98,34 +106,39 @@ const systemSchema = new mongoose.Schema({
         caution: String,
         layers: [layerSchema],
     },
+    battery: Number, // Social Battery
     cautionAlgos: [{
         style: String,
         alters: [{ type: String, ref: 'Alter' }],
         layer: [{ type: String, ref: 'Layer' }]
     }],
     proxy: {
+        layout: String,
         recentProxies: [String],
         lastProxyTime: Date,
+        break: Boolean,
         style: { type: String, default: off }
     },
     setting: {
         autoshareNotestoUsers: { type: Boolean, default: false },
         proxyCoolDown: { type: Number, default: 3600 },
-        defaults: {},
         mask: {
             maskTo: [{
-                user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+                userFriendID: { type: String, ref: 'User' },
                 discordUserID: String,
                 discordGuildID: { type: String, ref: 'Guild' }
             }],
             maskExclude: [{
-                user: 'User',
+                userFriendID: { type: String, ref: 'User' },
                 discordUserID: String,
                 discordGuildID: { type: String, ref: 'Guild' }
             }]
         },
-        privacy: [{}]
-    }
+        privacy: systemPrivacySchema,
+        friendAutoBucket: String
+    },
+    privacyBuckets: [PrivacyBucket],
+    affirmations: [String]
 });
 
 const System = sysDB.model('System', systemSchema);
