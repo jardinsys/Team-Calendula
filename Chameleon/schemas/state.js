@@ -21,6 +21,11 @@ const stateSchema = new mongoose.Schema({
         display: String,
         closedNameDisplay: String
     },
+    aliases: [{
+        indexable: String,
+        display: String,
+        closedNameDisplay: String
+    }],
     type: String,
     description: String,
     color: String,
