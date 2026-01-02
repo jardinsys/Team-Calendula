@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const sysDB = require("../database");
 const mediaSchema = require("../../media");
+const { alterPrivacySchema } = require("./settings");
 const Snowflake = require('snowflake-id').default;
 const snowflake = new Snowflake({
     mid: 1,  // Machine ID
@@ -105,7 +106,10 @@ const stateSchema = new mongoose.Schema({
                 discordGuildID: { type: String, ref: 'Guild' }
             }],
         },
-        privacy: [{}]
+        privacy: [{
+            bucket: {type: String, ref: PrivacyBucket},
+            settings: alterPrivacySchema
+        }]
     }
 });
 

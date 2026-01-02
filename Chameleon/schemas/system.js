@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const sysDB = require("../database");
-const friendPrivacySettingsSchema = require('./settings');
+const {PrivacyBucket, systemPrivacySchema} = require('./settings');
 const { layerSchema } = require('./front.js')
 const mediaSchema = require('../../media.js');
 const Snowflake = require('snowflake-id').default;
@@ -134,7 +134,10 @@ const systemSchema = new mongoose.Schema({
                 discordGuildID: { type: String, ref: 'Guild' }
             }]
         },
-        privacy: systemPrivacySchema,
+        privacy: [{
+            bucket: {type: String, ref: PrivacyBucket},
+            settings: systemPrivacySchema
+        }],
         friendAutoBucket: String
     },
     privacyBuckets: [PrivacyBucket],

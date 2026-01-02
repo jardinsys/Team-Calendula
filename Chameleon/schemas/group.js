@@ -94,7 +94,10 @@ const groupSchema = new mongoose.Schema({
                 discordGuildID: { type: String, ref: 'Guild' }
             }],
         },
-        privacy: [{}]
+        privacy: [{
+            bucket: {type: String, ref: PrivacyBucket},
+            settings: groupPrivacySchema
+        }]
     }
 });
 
