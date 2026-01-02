@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const sysDB = require("../database");
 const mediaSchema = require("../../media");
+const { groupPrivacySchema } = require("./settings");
 const Snowflake = require('snowflake-id').default;
 const snowflake = new Snowflake({
     mid: 1,  // Machine ID

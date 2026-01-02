@@ -46,7 +46,7 @@ const privacyBucketSchema = new mongoose.Schema({
     _id: mongoose.Schema.Types.ObjectId,
     name: String,
     friends: [{
-        userID: String,
+        friendID: String,
         discordUserID: String,
         discordGuildID: String,
     }]
