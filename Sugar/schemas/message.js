@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 const sucreDB = require("../database");
-const mediaSchema = require("../../media");
 const Snowflake = require('snowflake-id').default;
 const snowflake = new Snowflake({
     mid: 1,  // Machine ID
@@ -24,26 +23,27 @@ const messageSchema = new mongoose.Schema({
         enum: ['user', 'guild'],
         required: true
     },
+    public: {type: Boolean, default: false},
     createdAt: {type:Date, default: Date.now},
 
     // Content
     title: String,
     text: String,
-    thumbnail: mediaSchema,
-    banner: mediaSchema,
+    thumbnail: String,
+    banner: String,
     color: String,
     footer: {
         text: String,
-        icon: mediaSchema
+        icon: String
     },
     header: {
         text: String,
-        icon: mediaSchema
+        icon: String
     },
-    field: {
-        title: [String],
-        text: [String]
-    },
+    field: [{
+        title: String,
+        text: String
+    }],
 });
 
 const Message = sucreDB.model('Message', messageSchema);
