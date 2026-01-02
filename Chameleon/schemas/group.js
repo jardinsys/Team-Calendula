@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const sysDB = require("../database");
 const mediaSchema = require("../../media");
+const triggerSchema = require('../../TigerLily/schemas/trigger.js');
 const { groupPrivacySchema } = require("./settings");
 const Snowflake = require('snowflake-id').default;
 const snowflake = new Snowflake({
@@ -71,6 +72,7 @@ const groupSchema = new mongoose.Schema({
             pronounSeparator: String,
         }]
     },
+    triggers: [triggerSchema],
     caution: {
         c_type: String,
         detail: String,

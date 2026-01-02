@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const sysDB = require("../database");
 const mediaSchema = require("../../media");
 const { alterPrivacySchema } = require("./settings");
+const triggerSchema = require('../../TigerLily/schemas/trigger.js');
 const Snowflake = require('snowflake-id').default;
 const snowflake = new Snowflake({
     mid: 1,  // Machine ID
@@ -92,6 +93,7 @@ const alterSchema = new mongoose.Schema({
             include_in_Count: Boolean,
         }
     },
+    triggers: [triggerSchema],
     proxy: [String],
     metadata: {
         createdAt: { type: Date, default: Date.now },

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const sysDB = require("../database");
 const mediaSchema = require("../../media");
+const triggerSchema = require('../../TigerLily/schemas/trigger.js');
 const { alterPrivacySchema } = require("./settings");
 const Snowflake = require('snowflake-id').default;
 const snowflake = new Snowflake({
@@ -92,6 +93,7 @@ const stateSchema = new mongoose.Schema({
             include_in_Count: Boolean,
         }
     },
+    triggers: [triggerSchema],
     proxy: [String],
     setting: {
         mask: {

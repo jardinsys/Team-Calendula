@@ -10,6 +10,7 @@ const systemPrivacySchema = new mongoose.Schema({
     birthday: Boolean,
     pronouns: Boolean,
     metadata: Boolean,
+    triggers: Boolean,
     hidden: Boolean
 });
 
@@ -22,6 +23,7 @@ const groupPrivacySchema = new mongoose.Schema({
     list: Boolean,
     metadata: Boolean,
     hidden: Boolean,
+    triggers: Boolean
 });
 
 //Alter
@@ -35,6 +37,7 @@ const alterPrivacySchema = new mongoose.Schema({
     metadata: Boolean,
     hidden: Boolean,
     proxies: Boolean,
+    triggers: Boolean,
     aliases: {
         all: Boolean,
         allowed: [String]

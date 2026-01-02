@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
 const sysDB = require("../database");
 const {PrivacyBucket, systemPrivacySchema} = require('./settings');
-const { layerSchema } = require('./front.js')
+const { layerSchema } = require('./front.js');
+const triggerSchema = require('../../TigerLily/schemas/trigger.js');
 const mediaSchema = require('../../media.js');
 const Snowflake = require('snowflake-id').default;
 const snowflake = new Snowflake({
@@ -113,6 +114,7 @@ const systemSchema = new mongoose.Schema({
         alters: [String],
         layer: [String]
     }],
+    triggers: [triggerSchema],
     proxy: {
         layout: String,
         recentProxies: [String],
