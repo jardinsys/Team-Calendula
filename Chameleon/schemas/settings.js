@@ -13,7 +13,6 @@ const systemPrivacySchema = new mongoose.Schema({
     hidden: Boolean
 });
 
-
 //Group
 const groupPrivacySchema = new mongoose.Schema({
     mask: Boolean,
