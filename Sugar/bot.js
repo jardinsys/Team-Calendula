@@ -54,31 +54,74 @@ loadCommandsFromDirectory(foldersPath);
 connectToDatabase();
 client.login(token);
 
-
 //Interaction Handling
 client.on(Events.InteractionCreate, async (interaction) => {
-	if (!interaction.isChatInputCommand()) return;
-	const command = interaction.client.commands.get(interaction.commandName);
+	// Handle slash commands
+	if (interaction.isChatInputCommand()) {
+		const command = interaction.client.commands.get(interaction.commandName);
 
-	if (!command) {
-		console.error(`No command matching ${interaction.commandName} was found.`);
-		return;
+		if (!command) {
+			console.error(`No command matching ${interaction.commandName} was found.`);
+			return;
+		}
+
+		try {
+			await command.execute(interaction);
+		} catch (error) {
+			console.error(error);
+			if (interaction.replied || interaction.deferred) {
+				await interaction.followUp({
+					content: 'There was an error while executing this command!',
+					flags: MessageFlags.Ephemeral,
+				});
+			} else {
+				await interaction.reply({
+					content: 'There was an error while executing this command!',
+					flags: MessageFlags.Ephemeral,
+				});
+			}
+		}
 	}
-
-	try {
-		await command.execute(interaction);
-	} catch (error) {
-		console.error(error);
-		if (interaction.replied || interaction.deferred) {
-			await interaction.followUp({
-				content: 'There was an error while executing this command!',
-				flags: MessageFlags.Ephemeral,
-			});
-		} else {
-			await interaction.reply({
-				content: 'There was an error while executing this command!',
-				flags: MessageFlags.Ephemeral,
-			});
+	
+	// Handle modal submissions
+	else if (interaction.isModalSubmit()) {
+		try {
+			// Import handlers from addmessage command
+			const addMessageCommand = client.commands.get('addmessage');
+			if (addMessageCommand && addMessageCommand.handleModalSubmit) {
+				if (interaction.customId.startsWith('select_field_')) {
+					await addMessageCommand.handleFieldSelection(interaction);
+				} else {
+					await addMessageCommand.handleModalSubmit(interaction);
+				}
+			}
+		} catch (error) {
+			console.error('Modal submit error:', error);
+			if (!interaction.replied && !interaction.deferred) {
+				await interaction.reply({
+					content: 'There was an error processing your form!',
+					flags: MessageFlags.Ephemeral,
+				}).catch(console.error);
+			}
+		}
+	}
+	
+	// Handle button clicks
+	else if (interaction.isButton()) {
+		try {
+			// Import handlers from addmessage command
+			const addMessageCommand = client.commands.get('addmessage');
+			if (addMessageCommand && addMessageCommand.handleButton) {
+				await addMessageCommand.handleButton(interaction);
+			}
+		} catch (error) {
+			console.error('Button error:', error);
+			if (!interaction.replied && !interaction.deferred) {
+				await interaction.reply({
+					content: 'There was an error processing your button click!',
+					flags: MessageFlags.Ephemeral,
+				}).catch(console.error);
+			}
 		}
 	}
 });
