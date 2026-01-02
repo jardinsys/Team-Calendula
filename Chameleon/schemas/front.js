@@ -4,9 +4,9 @@ const sysDB = require("../database");
 const shiftSchema = new mongoose.Schema({
     _id: { type: mongoose.Schema.Types.ObjectId, unique: true },
     s_type: { type: String },
-    alterID: { type: String, ref: 'Alter' },
-    stateID: { type: String, ref: 'State' },
-    groupID: { type: String, ref: 'Group' },
+    alterID: String,
+    stateID: String,
+    groupID: String,
     type_name: String,
     startTime: { type: Date, default: Date.now },
     endTime: Date,

@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema({
         default: () => snowflake.generate(),
         unique: true
     },
-    systemID: { type: String, index: true, ref: 'System' },
+    systemID: String,
     pronouns: String,
 
     discord: {
@@ -47,7 +47,7 @@ const userSchema = new mongoose.Schema({
     },
 
     friends: [{
-        friendID: { type: String, index: true, ref: 'User' },
+        friendID: String,
         customName: {
             indexable: String,
             display: String

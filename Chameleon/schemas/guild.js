@@ -3,7 +3,7 @@ const sysDB = require("../database");
 
 const guildSchema = new mongoose.Schema({
     id: { type: String, unique: true },
-    users: [{type: String, ref: 'User'}],
+    userIDs: [String],
     admins: {
         roleIDs: [String],
         memberIDs: [String] 

@@ -14,7 +14,7 @@ const stateSchema = new mongoose.Schema({
         default: () => snowflake.generate(),
         unique: true
     },
-    system: { type: String, ref: 'System' },
+    systemID: String,
     createdAt: { type: Date, default: Date.now },
     addedAt: { type: Date, default: Date.now },
     name: {
@@ -31,7 +31,7 @@ const stateSchema = new mongoose.Schema({
     description: String,
     color: String,
     avatar: mediaSchema,
-    groups: [{ type: String, ref: 'Group' }],
+    groupIDs: [String],
     mask: {
         name: {
             indexable: String,
@@ -70,7 +70,7 @@ const stateSchema = new mongoose.Schema({
         },
         pronounSeparator: String,
         server: [{
-            id: { type: String, ref: 'Guild' },
+            id: String,
             name: String,
             description: String,
             avatar: mediaSchema,
@@ -96,18 +96,18 @@ const stateSchema = new mongoose.Schema({
     setting: {
         mask: {
             maskTo: [{
-                userFriendID: { type: String, ref: 'User' },
+                userFriendID: String,
                 discordUserID: String,
-                discordGuildID: { type: String, ref: 'Guild' }
+                discordGuildID: String
             }],
             maskExclude: [{
-                userFriendID: { type: String, ref: 'User' },
+                userFriendID: String,
                 discordUserID: String,
-                discordGuildID: { type: String, ref: 'Guild' }
+                discordGuildID: String
             }],
         },
         privacy: [{
-            bucket: {type: String, ref: PrivacyBucket},
+            bucket: String,
             settings: alterPrivacySchema
         }]
     }

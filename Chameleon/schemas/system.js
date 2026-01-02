@@ -37,7 +37,7 @@ const systemSchema = new mongoose.Schema({
         singular: { type: String, default: "alter" },
         plural: { type: String, default: "alters" }
     },
-    alters: [{ type: String, ref: 'Alter' }],
+    alterIDs: [String],
     mask: {
         name: {
             indexable: String,
@@ -92,7 +92,7 @@ const systemSchema = new mongoose.Schema({
         },
         pronounSeparator: String,
         server: [{
-            id: { type: String, ref: 'Guild' },
+            id: String,
             name: String,
             description: String,
             avatar: mediaSchema,
@@ -109,8 +109,8 @@ const systemSchema = new mongoose.Schema({
     battery: Number, // Social Battery
     cautionAlgos: [{
         style: String,
-        alters: [{ type: String, ref: 'Alter' }],
-        layer: [{ type: String, ref: 'Layer' }]
+        alters: [String],
+        layer: [String]
     }],
     proxy: {
         layout: String,
@@ -124,18 +124,18 @@ const systemSchema = new mongoose.Schema({
         proxyCoolDown: { type: Number, default: 3600 },
         mask: {
             maskTo: [{
-                userFriendID: { type: String, ref: 'User' },
+                userFriendID: String,
                 discordUserID: String,
-                discordGuildID: { type: String, ref: 'Guild' }
+                discordGuildID: String
             }],
             maskExclude: [{
-                userFriendID: { type: String, ref: 'User' },
+                userFriendID: String,
                 discordUserID: String,
-                discordGuildID: { type: String, ref: 'Guild' }
+                discordGuildID: String
             }]
         },
         privacy: [{
-            bucket: {type: String, ref: PrivacyBucket},
+            bucket: String,
             settings: systemPrivacySchema
         }],
         friendAutoBucket: String

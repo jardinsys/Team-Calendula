@@ -6,28 +6,28 @@ const noteSchema = new mongoose.Schema({
     id: { type: mongoose.Schema.Types.ObjectId, unique: true },
     author: {
         userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-        alters: [{ author: { type: String, ref: 'Alter' } }],
-        state: [{ author: { type: String, ref: 'State' } }],
-        group: [{ author: { type: String, ref: 'Group' } }]
+        alterIDs: [String],
+        stateIDs: [String],
+        groupIDs: [String]
     },
     users: {
         owner: {
             userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            alters: [{ author: { type: String, ref: 'Alter' } }],
-            state: [{ author: { type: String, ref: 'State' } }],
-            group: [{ author: { type: String, ref: 'Group' } }]
+            alterIDs: [String],
+            stateIDs: [String],
+            groupIDs: [String]
         },
         rwAccess: [{
             userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            alters: [{ author: { type: String, ref: 'Alter' } }],
-            state: [{ author: { type: String, ref: 'State' } }],
-            group: [{ author: { type: String, ref: 'Group' } }]
+            alterIDs: [String],
+            stateIDs: [String],
+            groupIDs: [String]
         }],
         rAccess: [{
             userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            alters: [{ author: { type: String, ref: 'Alter' } }],
-            state: [{ author: { type: String, ref: 'State' } }],
-            group: [{ author: { type: String, ref: 'Group' } }]
+            alterIDs: [String],
+            stateIDs: [String],
+            groupIDs: [String]
         }],
     },
     tags: [String],

@@ -46,10 +46,11 @@ const alterPrivacySchema = new mongoose.Schema({
 const privacyBucketSchema = new mongoose.Schema({
     _id: mongoose.Schema.Types.ObjectId,
     name: String,
-    friends: {
-        user: [{ type: String, ref: 'User' }],
-        discordID: String
-    }
+    friends: [{
+        userID: String,
+        discordUserID: String,
+        discordGuildID: String,
+    }]
 });
 
 const PrivacyBucket = sysDB.model('PrivacyBucket', privacyBucketSchema);
