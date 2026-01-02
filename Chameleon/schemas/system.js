@@ -31,6 +31,7 @@ const systemSchema = new mongoose.Schema({
     },
     description: String,
     birthday: Date,
+    timezone: String,
     color: String,
     avatar: mediaSchema,
     alterSynonym: {
