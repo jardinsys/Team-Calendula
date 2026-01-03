@@ -115,6 +115,31 @@ console.log(`💙---LOGGING IN---💙`);
 connectToDatabase();
 client.login(token);
 
+//Upon Invite to server (PLEASE DESCRIPTION LATER)
+client.on('guildCreate', async guild => {
+    try {
+        const owner = await guild.fetchOwner();
+
+        const embed = new EmbedBuilder()
+            .setTitle("🎉 Thanks for Adding Me!")
+            .setDescription(
+                `Hey **${owner.user.username}**, thanks for adding me to **${guild.name}**!\n\n` +
+                `Here’s how to get started:\n` +
+                `• Use \`/help\` to see all commands\n` +
+                `• Configure settings with \`/setup\`\n` +
+                `• DM me anytime if you need help`
+            )
+            .setColor("Blurple");
+
+        await owner.send({ embeds: [embed] }).catch(() => {
+            console.log(`Couldn't DM the owner of ${guild.name}`);
+        });
+
+    } catch (err) {
+        console.error(err);
+    }
+});
+
 //Interaction Handling (Slash Commands)
 client.on(Events.InteractionCreate, async (interaction) => {
 	if (!interaction.isChatInputCommand()) return;
