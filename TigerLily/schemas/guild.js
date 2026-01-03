@@ -44,7 +44,7 @@ const guildSchema = new mongoose.Schema({
         mainMessageID: String,
         thumbnail: mediaSchema,
         color: String,
-        bullet: String,
+        bullet: { type: String, default: '-'},
         triggerGroups: [triggerGroupSchema],
         title: String, // $$
         footer: { // $$

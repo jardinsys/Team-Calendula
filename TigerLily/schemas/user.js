@@ -35,7 +35,7 @@ const userSchema = new mongoose.Schema({
     trigger: {
         thumbnail: mediaSchema,
         color: String,
-        bullet: String,
+        bullet: { type: String, default: '-'},
         triggerGroups: [triggerGroupSchema],
         title: String, // $$
         footer: { // $$
