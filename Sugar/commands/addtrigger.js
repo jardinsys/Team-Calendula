@@ -65,7 +65,7 @@ module.exports = {
             .setCustomId('description')
             .setLabel('Description')
             .setStyle(TextInputStyle.Paragraph)
-            .setRequired(true)
+            .setRequired(false)
             .setMaxLength(2000);
 
         const helpInput = new TextInputBuilder()
@@ -451,7 +451,7 @@ async function handleButton(interaction) {
             .setLabel('Description')
             .setStyle(TextInputStyle.Paragraph)
             .setValue(triggerData.description || '')
-            .setRequired(true)
+            .setRequired(false)
             .setMaxLength(2000);
 
         const helpInput = new TextInputBuilder()

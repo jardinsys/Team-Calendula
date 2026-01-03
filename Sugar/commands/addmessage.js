@@ -86,7 +86,7 @@ module.exports = {
 
         const colorInput = new TextInputBuilder()
             .setCustomId('color')
-            .setLabel('Color (hex code, e.g., #FF0000) - Optional')
+            .setLabel('Color (hex code)')
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setPlaceholder('#5865F2')
@@ -388,13 +388,13 @@ async function handleModalSubmit(interaction) {
 
         const thumbnailInput = new TextInputBuilder()
             .setCustomId('thumbnail')
-            .setLabel('Thumbnail URL - Optional')
+            .setLabel('Thumbnail URL')
             .setStyle(TextInputStyle.Short)
             .setRequired(false);
 
         const bannerInput = new TextInputBuilder()
             .setCustomId('banner')
-            .setLabel('Banner URL - Optional')
+            .setLabel('Banner URL')
             .setStyle(TextInputStyle.Short)
             .setRequired(false);
 
@@ -478,14 +478,14 @@ async function handleModalSubmit(interaction) {
 
         const thumbnailInput = new TextInputBuilder()
             .setCustomId('thumbnail')
-            .setLabel('Thumbnail URL - Optional')
+            .setLabel('Thumbnail URL')
             .setStyle(TextInputStyle.Short)
             .setValue(messageData.thumbnail || '')
             .setRequired(false);
 
         const bannerInput = new TextInputBuilder()
             .setCustomId('banner')
-            .setLabel('Banner URL - Optional')
+            .setLabel('Banner URL')
             .setStyle(TextInputStyle.Short)
             .setValue(messageData.banner || '')
             .setRequired(false);
@@ -827,11 +827,10 @@ async function handleButton(interaction) {
 
         const colorInput = new TextInputBuilder()
             .setCustomId('color')
-            .setLabel('Color (hex) - Optional')
+            .setLabel('Color (hex)')
             .setStyle(TextInputStyle.Short)
             .setValue(messageData.color || '')
             .setRequired(false)
-            .setMaxLength(7);
 
         modal.addComponents(
             new ActionRowBuilder().addComponents(appInput),
@@ -860,7 +859,7 @@ async function handleButton(interaction) {
 
         const iconInput = new TextInputBuilder()
             .setCustomId('footer_icon')
-            .setLabel('Footer Icon URL (optional)')
+            .setLabel('Footer Icon URL')
             .setStyle(TextInputStyle.Short)
             .setValue(messageData.footer?.icon || '')
             .setRequired(false);
@@ -889,7 +888,7 @@ async function handleButton(interaction) {
 
         const iconInput = new TextInputBuilder()
             .setCustomId('header_icon')
-            .setLabel('Header Icon URL (optional)')
+            .setLabel('Header Icon URL')
             .setStyle(TextInputStyle.Short)
             .setValue(messageData.header?.icon || '')
             .setRequired(false);

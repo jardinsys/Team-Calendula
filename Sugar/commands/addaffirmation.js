@@ -70,7 +70,7 @@ module.exports = {
 
         const footerInput = new TextInputBuilder()
             .setCustomId('footer')
-            .setLabel('Footer Text (optional)')
+            .setLabel('Footer Text')
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(2048);
@@ -456,7 +456,7 @@ async function handleButton(interaction) {
 
         const footerInput = new TextInputBuilder()
             .setCustomId('footer')
-            .setLabel('Footer Text (optional)')
+            .setLabel('Footer Text')
             .setStyle(TextInputStyle.Short)
             .setValue(affirmationData.footer || '')
             .setRequired(false)
