@@ -10,7 +10,12 @@ const guildSchema = new mongoose.Schema({
         memberIDs: [String] 
     },
 
-    UserIDs: [String], // $$
+    userIDs: [String], // $$
+    webhooksEnabled: Boolean, // $$
+    userTriggerChannel: String,
+    userIntroChannel: String,
+    serverIntroMessageURL: String,
+    serverTriggerMessageURL: String,   
 
     //Intro
     intro: {
