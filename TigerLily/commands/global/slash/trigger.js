@@ -1,0 +1,5 @@
+// (/trigger edit)
+// (/trigger show)
+// (/trigger add:[string])
+// (/trigger add:[string] group:[string])
+// (/trigger addgroup:[string])
