@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const sysDB = require("../database");
-const {PrivacyBucket, systemPrivacySchema} = require('./settings');
+const { PrivacyBucket, systemPrivacySchema } = require('./settings');
 const { layerSchema } = require('./front.js');
 const triggerSchema = require('../../TigerLily/schemas/trigger.js');
 const mediaSchema = require('../../media.js');
@@ -109,12 +109,22 @@ const systemSchema = new mongoose.Schema({
         layers: [layerSchema],
     },
     battery: Number, // Social Battery
-    cautionAlgos: [{
-        style: String,
-        alters: [String],
-        layer: [String]
-    }],
-    triggers: [triggerSchema],
+    caution: {
+        c_type: String,
+        detail: String,
+        default: {
+            c_type: String,
+            detail: String,
+        },
+        cautionAlgos: [{
+            style: String,
+            alters: [String],
+            layer: [String],
+            c_type: String,
+            detail: String,
+        }],
+        triggers: [triggerSchema],
+    },
     proxy: {
         layout: String,
         recentProxies: [String],

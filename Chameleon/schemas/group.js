@@ -72,10 +72,10 @@ const groupSchema = new mongoose.Schema({
             pronounSeparator: String,
         }]
     },
-    triggers: [triggerSchema],
     caution: {
         c_type: String,
         detail: String,
+        triggers: [triggerSchema],
     },
     condition: {
         name: String,

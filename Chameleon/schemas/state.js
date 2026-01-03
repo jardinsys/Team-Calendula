@@ -85,6 +85,7 @@ const stateSchema = new mongoose.Schema({
     caution: {
         c_type: String,
         detail: String,
+        triggers: [triggerSchema],
     },
     condition: {
         name: String,
@@ -93,7 +94,6 @@ const stateSchema = new mongoose.Schema({
             include_in_Count: Boolean,
         }
     },
-    triggers: [triggerSchema],
     proxy: [String],
     setting: {
         mask: {
