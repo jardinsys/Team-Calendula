@@ -30,7 +30,7 @@ console.log(`💙---LOADING COMMANDS---💙`);
 client.commands = new Collection();
 client.prefixCommands = new Collection();
 
-const foldersPath = path.join(__dirname, 'commands');
+const foldersPath = path.join(__dirname, 'discord_commands');
 
 const loadedSlashCommands = [];
 const loadedPrefixCommands = [];
