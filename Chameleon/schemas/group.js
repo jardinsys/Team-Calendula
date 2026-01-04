@@ -21,12 +21,14 @@ const groupSchema = new mongoose.Schema({
     name: {
         indexable: String,
         display: String,
-        closedNameDisplay: String
+        closedNameDisplay: String,
+        aliases: [String]
     },
     type: String,
     description: String,
     color: String,
     avatar: mediaSchema,
+    signoff: String,
     alterIDs: [String],
     stateIDs: [String],
     mask: {
@@ -77,14 +79,9 @@ const groupSchema = new mongoose.Schema({
         detail: String,
         triggers: [triggerSchema],
     },
-    condition: {
-        name: String,
-        settings: {
-            hide_to_self: Boolean,
-            include_in_Count: Boolean,
-        }
-    },
+    condition: String,
     setting: {
+        default_status: String,
         mask: {
             maskTo: [{
                 userFriendID: String,

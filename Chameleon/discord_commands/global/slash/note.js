@@ -1,0 +1,8 @@
+// (/note showlist)
+// (/note show note_name:[string] note_id:[string])
+// (/note new note_name:[string] note_id:[string])
+// (/note edit note_name:[string] note_id:[string])
+// (/note users note_name:[string] note_id:[string])
+// (/note users note_name:[string] note_id:[string] add user:[user] access:[read, read/write, admin])
+// (/note users note_name:[string] note_id:[string] edit user:[user] access:[read, read/write, admin])
+// (/note users note_name:[string] note_id:[string] remove user:[user])

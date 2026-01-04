@@ -21,17 +21,14 @@ const stateSchema = new mongoose.Schema({
     name: {
         indexable: String,
         display: String,
-        closedNameDisplay: String
+        closedNameDisplay: String,
+        aliases: [String],
     },
-    aliases: [{
-        indexable: String,
-        display: String,
-        closedNameDisplay: String
-    }],
-    type: String,
+    for_alter: String,
     description: String,
     color: String,
     avatar: mediaSchema,
+    signoff: String,
     groupIDs: [String],
     mask: {
         name: {
@@ -78,7 +75,7 @@ const stateSchema = new mongoose.Schema({
             pronounSeparator: String,
         }],
         metadata: {
-            messageCount: { type: Number, integer: true },
+            messageCount: { type: Number, integer: true, default: 0 },
             lastMessageTime: Date,
         }
     },
@@ -87,15 +84,10 @@ const stateSchema = new mongoose.Schema({
         detail: String,
         triggers: [triggerSchema],
     },
-    condition: {
-        name: String,
-        settings: {
-            hide_to_self: Boolean,
-            include_in_Count: Boolean,
-        }
-    },
+    condition: String,
     proxy: [String],
     setting: {
+        default_status: String,
         mask: {
             maskTo: [{
                 userFriendID: String,

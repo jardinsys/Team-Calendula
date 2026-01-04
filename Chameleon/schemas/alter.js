@@ -17,21 +17,19 @@ const alterSchema = new mongoose.Schema({
     },
     systemID: String,
     addedAt: { type: Date, default: Date.now },
+    genesisDate: Date, 
     name: {
         indexable: String,
         display: String,
-        closedNameDisplay: String
+        closedNameDisplay: String,
+        aliases: [String]
     },
-    aliases: [{
-        indexable: String,
-        display: String,
-        closedNameDisplay: String
-    }],
-    type: String,
+    states: [String],
     description: String,
     birthday: Date,
     color: String,
     avatar: mediaSchema,
+    signoff: String,
     groupsIDs: [String],
     mask: {
         name: {
@@ -78,7 +76,7 @@ const alterSchema = new mongoose.Schema({
             pronounSeparator: String,
         }],
         metadata: {
-            messageCount: { type: Number, integer: true },
+            messageCount: { type: Number, integer: true, default: 0 },
             lastMessageTime: Date,
         }
     },
@@ -87,18 +85,13 @@ const alterSchema = new mongoose.Schema({
         detail: String,
         triggers: [triggerSchema]
     },
-    condition: {
-        name: String,
-        settings: {
-            hide_to_self: Boolean,
-            include_in_Count: Boolean,
-        }
-    },
+    condition: String,
     proxy: [String],
     metadata: {
         createdAt: { type: Date, default: Date.now },
     },
     setting: {
+        default_status: String,
         mask: {
             maskTo: [{
                 userFriendID: String,

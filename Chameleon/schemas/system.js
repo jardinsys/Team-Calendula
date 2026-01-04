@@ -28,18 +28,56 @@ const systemSchema = new mongoose.Schema({
     },
     sys_type: {
         name: String,
-        calledSysstem: Boolean
+        calledSystem: Boolean
     },
     description: String,
     birthday: Date,
     timezone: String,
     color: String,
+    theme: {
+        background: {
+            media: mediaSchema, // $$
+            colorTheme: {
+                colors: [String],
+            }
+        },
+    },
     avatar: mediaSchema,
     alterSynonym: {
         singular: { type: String, default: "alter" },
         plural: { type: String, default: "alters" }
     },
-    alterIDs: [String],
+    alters: {
+        conditions: [{
+            name: String,
+            settings: {
+                hide_to_self: Boolean,
+                include_in_Count: Boolean,
+            }
+        }],
+        IDs: [String]
+    },
+    states: {
+        conditions: [{
+            name: String,
+            settings: {
+                hide_to_self: Boolean,
+                include_in_Count: Boolean,
+            }
+        }],
+        IDs: [String]
+    },
+    groups: {
+        types: [String],
+        conditions: [{
+            name: String,
+            settings: {
+                hide_to_self: Boolean,
+                include_in_Count: Boolean,
+            },
+        }],
+        IDs: [String]
+    },
     mask: {
         name: {
             indexable: String,

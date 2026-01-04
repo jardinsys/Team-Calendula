@@ -23,7 +23,11 @@ const groupPrivacySchema = new mongoose.Schema({
     list: Boolean,
     metadata: Boolean,
     hidden: Boolean,
-    caution: Boolean
+    caution: Boolean,
+    aliases: {
+        all: Boolean,
+        allowed: [String]
+    }
 });
 
 //Alter

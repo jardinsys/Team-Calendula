@@ -3,10 +3,8 @@ const sysDB = require("../database");
 
 const shiftSchema = new mongoose.Schema({
     _id: { type: mongoose.Schema.Types.ObjectId, unique: true },
-    s_type: { type: String },
-    alterID: String,
-    stateID: String,
-    groupID: String,
+    s_type: { type: String, enum: [alter, state, group] },
+    ID: String,
     type_name: String,
     startTime: { type: Date, default: Date.now },
     endTime: Date,
