@@ -16,15 +16,18 @@ const stateSchema = new mongoose.Schema({
         unique: true
     },
     systemID: String,
-    createdAt: { type: Date, default: Date.now },
+    genesisDate: { type: Date, default: Date.now },
     addedAt: { type: Date, default: Date.now },
+    syncWithApps: {
+        discord: Boolean
+    },
     name: {
         indexable: String,
         display: String,
         closedNameDisplay: String,
         aliases: [String],
     },
-    for_alter: String,
+    alters: [String],
     description: String,
     color: String,
     avatar: mediaSchema,

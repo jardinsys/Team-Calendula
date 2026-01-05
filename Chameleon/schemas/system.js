@@ -111,7 +111,6 @@ const systemSchema = new mongoose.Schema({
                 normal: [String],
                 openCharDisplay: [String]
             },
-            proxylayout: String,
             pronounSeparator: String
         }
     },
@@ -131,6 +130,7 @@ const systemSchema = new mongoose.Schema({
             openCharDisplay: [String]
         },
         pronounSeparator: String,
+        proxylayout: String,
         server: [{
             id: String,
             name: String,

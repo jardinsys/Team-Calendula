@@ -17,14 +17,31 @@ const alterSchema = new mongoose.Schema({
     },
     systemID: String,
     addedAt: { type: Date, default: Date.now },
-    genesisDate: Date, 
+    genesisDate: Date,
+    syncWithApps: {
+        discord: Boolean
+    },
     name: {
         indexable: String,
         display: String,
         closedNameDisplay: String,
         aliases: [String]
     },
-    states: [String],
+    states: [{
+        connected_id: String,
+        name: {
+            indexable: String,
+            display: String,
+            closedNameDisplay: String
+        },
+        avatar: mediaSchema,
+        description: String,
+        caution: {
+            c_type: String,
+            detail: String,
+            triggers: [triggerSchema]
+        }
+    }],
     description: String,
     birthday: Date,
     color: String,

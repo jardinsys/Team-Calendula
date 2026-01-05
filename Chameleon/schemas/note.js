@@ -36,6 +36,7 @@ const noteSchema = new mongoose.Schema({
         }],
     },
     tags: [String],
+    pinned: Boolean,
     title: String,
     content: String,
     media: [{
