@@ -16,8 +16,7 @@ const alterSchema = new mongoose.Schema({
         unique: true
     },
     systemID: String,
-    addedAt: { type: Date, default: Date.now },
-    genesisDate: Date,
+        genesisDate: Date,
     syncWithApps: {
         discord: Boolean
     },
@@ -27,6 +26,7 @@ const alterSchema = new mongoose.Schema({
         closedNameDisplay: String,
         aliases: [String]
     },
+    pronouns: [String],
     states: [{
         connected_id: String,
         name: {
@@ -105,7 +105,7 @@ const alterSchema = new mongoose.Schema({
     condition: String,
     proxy: [String],
     metadata: {
-        createdAt: { type: Date, default: Date.now },
+        addedAt: { type: Date, default: Date.now },
     },
     setting: {
         default_status: String,

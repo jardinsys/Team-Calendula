@@ -22,7 +22,8 @@ const userSchema = new mongoose.Schema({
         unique: true
     },
     systemID: String,
-    pronouns: String,
+    pronouns: [String],
+    pronounSeperator: String,
 
     discord: {
         name: {
@@ -51,7 +52,7 @@ const userSchema = new mongoose.Schema({
             display: String
         },
         discordID: { type: String, index: true },
-        addedAt: { type: Date, default: Date.now },
+        addedAt: { type: Date },
         privacyBucket: String
     }],
     blocked: [{
@@ -61,8 +62,11 @@ const userSchema = new mongoose.Schema({
         },
         discordID: { type: String, index: true },
         friendID: { type: String, index: true },
-        addedAt: { type: Date, default: Date.now }
-    }]
+        addedAt: { type: Date }
+    }],
+    settings:{
+        closedCharAllowed: {type: Boolean, default: true}
+    }
 
 });
 

@@ -21,13 +21,20 @@ const systemSchema = new mongoose.Schema({
         joinedAt: { type: Date, default: Date.now },
     },
 
+    syncWithApps: {
+        discord: Boolean
+    },
     name: {
         indexable: String,
         display: String,
         closedNameDisplay: String
     },
     sys_type: {
-        name: String,
+        name: {type: String, default: "None"},
+        dd:{
+            DSM:{type: String, enum: ["DID","Amnesia","Dereal/Depers","OSDD-1A","OSDD-1B","OSDD-2","OSDD-3","OSDD-4","UDD"]},
+            ICD: {type: String, enum: ["P-DID","Trance","DNSD","Possession Trance","SDS"]},
+        },
         calledSystem: Boolean
     },
     description: String,

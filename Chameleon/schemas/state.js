@@ -89,6 +89,9 @@ const stateSchema = new mongoose.Schema({
     },
     condition: String,
     proxy: [String],
+    metadata: {
+        addedAt: { type: Date, default: Date.now },
+    },
     setting: {
         default_status: String,
         mask: {

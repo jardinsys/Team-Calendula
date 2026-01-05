@@ -17,14 +17,19 @@ const groupSchema = new mongoose.Schema({
     },
     systemID: String,
     createdAt: { type: Date, default: Date.now },
-    addedAt: { type: Date, default: Date.now },
+    syncWithApps: {
+        discord: Boolean
+    },
     name: {
         indexable: String,
         display: String,
         closedNameDisplay: String,
         aliases: [String]
     },
-    type: String,
+    type: {
+        name: String,
+        canFront: String
+    },
     description: String,
     color: String,
     avatar: mediaSchema,
@@ -49,7 +54,8 @@ const groupSchema = new mongoose.Schema({
             color: String,
             image: {
                 avatar: mediaSchema,
-                banner: mediaSchema
+                banner: mediaSchema,
+                proxyAvatar: mediaSchema
             },
             pronounSeparator: String
         }
@@ -63,7 +69,8 @@ const groupSchema = new mongoose.Schema({
         color: String,
         image: {
             avatar: mediaSchema,
-            banner: mediaSchema
+            banner: mediaSchema,
+            proxyAvatar: mediaSchema
         },
         pronounSeparator: String,
         server: [{
@@ -72,7 +79,11 @@ const groupSchema = new mongoose.Schema({
             description: String,
             avatar: mediaSchema,
             pronounSeparator: String,
-        }]
+        }],
+        metadata: {
+            messageCount: { type: Number, integer: true, default: 0 },
+            lastMessageTime: Date,
+        }
     },
     caution: {
         c_type: String,
@@ -80,6 +91,10 @@ const groupSchema = new mongoose.Schema({
         triggers: [triggerSchema],
     },
     condition: String,
+    proxy: [String],
+    metadata: {
+        addedAt: { type: Date, default: Date.now },
+    },
     setting: {
         default_status: String,
         mask: {
