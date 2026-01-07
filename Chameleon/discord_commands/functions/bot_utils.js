@@ -1,5 +1,5 @@
 // Systemiser Shared Utilities
-// Used by alter.js, state.js, group.js, and other system-related commands
+// Used by alter.js, state.js, group.js, system.js and other system-related commands
 
 const { 
     EmbedBuilder, 
@@ -13,13 +13,13 @@ const {
 const mongoose = require('mongoose');
 
 // Import schemas
-const System = require('../schemas/system');
-const User = require('../schemas/user');
-const Alter = require('../schemas/alter');
-const State = require('../schemas/state');
-const Group = require('../schemas/group');
-const Guild = require('../schemas/guild');
-const { PrivacyBucket } = require('../schemas/settings');
+const System = require('../../schemas/system');
+const User = require('../../schemas/user');
+const Alter = require('../../schemas/alter');
+const State = require('../../schemas/state');
+const Group = require('../../schemas/group');
+const Guild = require('../../schemas/guild');
+const { PrivacyBucket } = require('../../schemas/settings');
 
 // ============================================
 // CONSTANTS
@@ -27,6 +27,18 @@ const { PrivacyBucket } = require('../schemas/settings');
 
 const ITEMS_PER_PAGE = 10;
 const INDEXABLE_NAME_REGEX = /^[a-zA-Z0-9\-_]+$/;
+
+// Entity colors for consistent styling
+const ENTITY_COLORS = {
+    alter: '#FFA500',
+    state: '#9B59B6',
+    group: '#3498DB',
+    system: '#2ECC71'
+};
+
+// DSM and ICD type definitions for system type validation
+const DSM_TYPES = ['DID', 'Amnesia', 'Dereal/Depers', 'OSDD-1A', 'OSDD-1B', 'OSDD-2', 'OSDD-3', 'OSDD-4', 'UDD'];
+const ICD_TYPES = ['P-DID', 'Trance', 'DNSD', 'Possession Trance', 'SDS'];
 
 // Session storage for multi-step interactions
 const activeSessions = new Map();
@@ -516,25 +528,20 @@ function getTotalPages(totalItems) {
 
 /**
  * Build the sync confirmation embed and buttons
- * @param {string} entityType - 'alter', 'state', or 'group'
+ * @param {string} entityType - 'alter', 'state', 'group', or 'system'
  * @param {string} entityName - Name of the entity
  * @param {string} sessionId - Session ID
  * @param {string} action - 'new' or 'edit'
  * @returns {{embed: EmbedBuilder, buttons: ActionRowBuilder}}
  */
 function buildSyncConfirmation(entityType, entityName, sessionId, action = 'edit') {
-    const colors = {
-        alter: '#FFA500',
-        state: '#9B59B6',
-        group: '#3498DB'
-    };
-
     const embed = new EmbedBuilder()
-        .setColor(colors[entityType] || '#FFA500')
+        .setColor(ENTITY_COLORS[entityType] || '#FFA500')
         .setTitle(action === 'new' ? `Create New ${capitalize(entityType)}` : `Edit ${capitalize(entityType)}: ${entityName}`)
         .setDescription(
             'Would you like changes to sync with Discord?\n\n' +
-            '*If yes, edits will apply to your main profile. If no, edits will be Discord-specific.*'
+            '**Yes:** Edits will apply to your main profile and sync across platforms.\n' +
+            '**No:** Edits will be Discord-specific only.'
         );
 
     const buttons = new ActionRowBuilder()
@@ -689,6 +696,128 @@ function formatDate(date) {
 }
 
 // ============================================
+// PROXY VALIDATION HELPERS
+// ============================================
+
+/**
+ * Check if a proxy pattern already exists in the system
+ * @param {string} proxy - The proxy pattern to check
+ * @param {System} system - The system to check in
+ * @param {string} excludeEntityId - Entity ID to exclude from check (for editing)
+ * @param {string} excludeEntityType - Type of entity to exclude ('alter', 'state', 'group')
+ * @returns {Promise<{exists: boolean, entity: Object|null, type: string|null}>}
+ */
+async function checkProxyExists(proxy, system, excludeEntityId = null, excludeEntityType = null) {
+    if (!proxy || !proxy.trim()) {
+        return { exists: false, entity: null, type: null };
+    }
+
+    const normalizedProxy = proxy.trim().toLowerCase();
+
+    // Check alters
+    const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
+    for (const alter of alters) {
+        if (excludeEntityType === 'alter' && alter._id.toString() === excludeEntityId) continue;
+        
+        const hasProxy = alter.proxy?.some(p => p.toLowerCase() === normalizedProxy);
+        if (hasProxy) {
+            return { exists: true, entity: alter, type: 'alter' };
+        }
+    }
+
+    // Check states
+    const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
+    for (const state of states) {
+        if (excludeEntityType === 'state' && state._id.toString() === excludeEntityId) continue;
+        
+        const hasProxy = state.proxy?.some(p => p.toLowerCase() === normalizedProxy);
+        if (hasProxy) {
+            return { exists: true, entity: state, type: 'state' };
+        }
+    }
+
+    // Check groups
+    const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
+    for (const group of groups) {
+        if (excludeEntityType === 'group' && group._id.toString() === excludeEntityId) continue;
+        
+        const hasProxy = group.proxy?.some(p => p.toLowerCase() === normalizedProxy);
+        if (hasProxy) {
+            return { exists: true, entity: group, type: 'group' };
+        }
+    }
+
+    return { exists: false, entity: null, type: null };
+}
+
+/**
+ * Validate proxies and return duplicates
+ * @param {string[]} proxies - Array of proxy patterns to validate
+ * @param {System} system - The system
+ * @param {string} excludeEntityId - Entity ID to exclude
+ * @param {string} excludeEntityType - Entity type to exclude
+ * @returns {Promise<{valid: string[], duplicates: {proxy: string, owner: string, type: string}[]}>}
+ */
+async function validateProxies(proxies, system, excludeEntityId = null, excludeEntityType = null) {
+    const valid = [];
+    const duplicates = [];
+
+    for (const proxy of proxies) {
+        if (!proxy.trim()) continue;
+
+        const { exists, entity, type } = await checkProxyExists(proxy, system, excludeEntityId, excludeEntityType);
+        
+        if (exists) {
+            duplicates.push({
+                proxy: proxy,
+                owner: getDisplayName(entity),
+                type: type
+            });
+        } else {
+            valid.push(proxy);
+        }
+    }
+
+    return { valid, duplicates };
+}
+
+/**
+ * Get the proxy layout placeholder help text
+ * @param {string} entityType - 'alter', 'state', or 'group'
+ * @returns {string}
+ */
+function getProxyLayoutHelp(entityType = 'alter') {
+    const signPrefix = entityType === 'alter' ? 'a-sign' : (entityType === 'state' ? 'st-sign' : 'g-sign');
+    
+    return `**Available Placeholders:**
+• \`{name}\` - Display name of the ${entityType}
+• \`{sys-name}\` - System display name
+• \`{tag1}\`, \`{tag2}\`, \`{tag3}\`... - **System** tag array items
+• \`{a-sign#}\` - Alter signoff | \`{st-sign#}\` - State signoff | \`{g-sign#}\` - Group signoff
+• \`{pronouns}\` - Pronouns joined by separator
+• \`{caution}\` - Caution type
+
+**Example:** \`{tag1} {name} {${signPrefix}1}\`
+Result: \`🌙 Luna ✨\` (where 🌙 is a system tag, ✨ is ${entityType} signoff)
+
+**Note:** Tags are set at system level. Signoffs are per-entity.
+You can mix signoff types! E.g., \`{tag1}{a-sign1}{name}{g-sign1}\``;
+}
+
+/**
+ * Get proxy style options for select menu
+ * @returns {Array<{label: string, value: string, description: string}>}
+ */
+function getProxyStyleOptions() {
+    return [
+        { label: 'Off', value: 'off', description: 'Only proxy when a proxy pattern is matched' },
+        { label: 'Last', value: 'last', description: 'Auto-proxy as the most recent proxy used' },
+        { label: 'Front', value: 'front', description: 'Auto-proxy as the current fronter (if single)' },
+        { label: 'Specify', value: 'specify', description: 'Always proxy as a specific alter/state/group' }
+    ];
+}
+
+// ============================================
 // EXPORTS
 // ============================================
 
@@ -696,6 +825,9 @@ module.exports = {
     // Constants
     ITEMS_PER_PAGE,
     INDEXABLE_NAME_REGEX,
+    ENTITY_COLORS,
+    DSM_TYPES,
+    ICD_TYPES,
     
     // Session management
     generateSessionId,
@@ -741,6 +873,12 @@ module.exports = {
     
     // Condition management
     ensureConditionExists,
+    
+    // Proxy validation
+    checkProxyExists,
+    validateProxies,
+    getProxyLayoutHelp,
+    getProxyStyleOptions,
     
     // Utilities
     capitalize,

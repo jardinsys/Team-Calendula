@@ -1,3 +1,5 @@
+// (/alter) - Systemiser Alter Management Command
+
 // (/alter menu)
 // (/alter showlist ) (click button to show full in ephemeral)
 // (/alter showlist user:[@user] userID:[string])
@@ -12,17 +14,14 @@
 // (/alter alter_name:[string] edit (have the select menu of what to edit (card info, personal info, proxy info, image info, caution info ) and have a buttons to (enter mask mode, open alter settings, edit groups, edit states))
 // (/alter alter_name:[string] settings
 
-// (/alter) - Systemiser Alter Management Command
-// Uses shared utilities from systemiser-utils.js
-
-const { 
-    SlashCommandBuilder, 
-    EmbedBuilder, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle, 
-    ModalBuilder, 
-    TextInputBuilder, 
+const {
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
     TextInputStyle,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder
@@ -61,7 +60,7 @@ module.exports = {
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const { user, system, isNew } = await utils.getOrCreateUserAndSystem(interaction);
-        
+
         if (isNew) {
             return await utils.handleNewUserFlow(interaction, 'alter');
         }
@@ -104,7 +103,7 @@ function buildAlterListEmbed(alters, page, system, showFullList) {
         .setColor(system.color || '#FFA500')
         .setTitle(`${utils.getDisplayName(system)}'s Alters`)
         .setDescription(showFullList ? '📋 Showing full list (including hidden)' : '📋 Alter List')
-        .setFooter({ 
+        .setFooter({
             text: `Page ${page + 1}/${totalPages} • ${alters.length} alter${alters.length !== 1 ? 's' : ''}`
         });
 
@@ -128,14 +127,14 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
 
     const color = utils.getDiscordOrDefault(alter, 'color') || system.color || '#FFA500';
     const description = utils.getDiscordOrDefault(alter, 'description');
-    const displayName = closedCharAllowed 
+    const displayName = closedCharAllowed
         ? (alter.name?.display || alter.name?.indexable)
         : (alter.name?.closedNameDisplay || alter.name?.display || alter.name?.indexable);
 
     // Header/Author
     const proxyAvatar = alter.discord?.image?.proxyAvatar?.url || alter.avatar?.url;
     const systemDisplayName = utils.getDisplayName(system, closedCharAllowed);
-    
+
     embed.setAuthor({
         name: `${alter.name?.indexable || 'Unknown'} (from ${systemDisplayName})`,
         iconURL: proxyAvatar || undefined
@@ -143,14 +142,14 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
 
     embed.setTitle(displayName || 'Unknown Alter');
     embed.setColor(color);
-    
+
     if (description) {
         embed.setDescription(description);
     }
 
     // Get groups for this alter
     const groups = await Group.find({ _id: { $in: alter.groupsIDs || [] } });
-    
+
     // Organize groups by type
     const groupsByType = {};
     for (const group of groups) {
@@ -171,10 +170,10 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
     identificationInfo += `**Display Name:** ${displayName}\n`;
 
     if (identificationInfo) {
-        embed.addFields({ 
-            name: '🏷️ Identification', 
-            value: identificationInfo.trim() || 'None', 
-            inline: false 
+        embed.addFields({
+            name: '🏷️ Identification',
+            value: identificationInfo.trim() || 'None',
+            inline: false
         });
     }
 
@@ -191,10 +190,10 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
     }
 
     if (personalInfo) {
-        embed.addFields({ 
-            name: '👤 Personal Info', 
-            value: personalInfo.trim(), 
-            inline: false 
+        embed.addFields({
+            name: '👤 Personal Info',
+            value: personalInfo.trim(),
+            inline: false
         });
     }
 
@@ -211,10 +210,10 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
         }
 
         if (cautionInfo) {
-            embed.addFields({ 
-                name: '⚠️ Caution', 
-                value: cautionInfo.trim(), 
-                inline: false 
+            embed.addFields({
+                name: '⚠️ Caution',
+                value: cautionInfo.trim(),
+                inline: false
             });
         }
     }
@@ -232,7 +231,7 @@ function buildEditInterface(alter, session) {
     const embed = new EmbedBuilder()
         .setColor(alter.color || '#FFA500')
         .setTitle(`Editing: ${utils.getDisplayName(alter)}`)
-        .setDescription(session.mode 
+        .setDescription(session.mode
             ? `Currently in **${session.mode.toUpperCase()} MODE**\n\nSelect what you would like to edit.`
             : 'Select what you would like to edit from the dropdown menu below.'
         );
@@ -304,10 +303,10 @@ async function handleShowList(interaction, currentUser, currentSystem) {
     if (targetUser || targetUserId) {
         isOwner = false;
         const discordId = targetUser?.id || targetUserId;
-        
+
         const User = require('../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
-        
+
         if (!otherUser || !otherUser.systemID) {
             return await interaction.reply({
                 content: '❌ This user does not have an alter list to show. They may not have a system set up in this application...',
@@ -332,7 +331,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         }
 
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
-        
+
         // Check if system is hidden
         const systemPrivacy = targetSystem.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
         if (systemPrivacy?.settings?.hidden === false) {
@@ -389,7 +388,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     if (targetUser || targetUserId) {
         isOwner = false;
         const discordId = targetUser?.id || targetUserId;
-        
+
         const User = require('../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
         if (!otherUser || !otherUser.systemID) {
@@ -420,7 +419,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
 
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
     const embed = await buildAlterCard(alter, targetSystem, privacyBucket, closedCharAllowed);
-    
+
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
         type: 'show',
@@ -469,7 +468,7 @@ async function handleNew(interaction, user, system) {
 async function handleEdit(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
-    
+
     if (!alter) {
         return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
     }
@@ -494,7 +493,7 @@ async function handleEdit(interaction, user, system) {
 async function handleDormant(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
-    
+
     if (!alter) {
         return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
     }
@@ -511,7 +510,7 @@ async function handleDormant(interaction, user, system) {
 async function handleDelete(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
-    
+
     if (!alter) {
         return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
     }
@@ -542,7 +541,7 @@ async function handleDelete(interaction, user, system) {
 async function handleSettings(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
-    
+
     if (!alter) {
         return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
     }
@@ -628,7 +627,7 @@ async function handleButtonInteraction(interaction) {
         const alter = await Alter.findById(session.alterId);
         const system = await System.findById(session.systemId);
         const embed = await buildAlterCard(alter, system, null, true);
-        
+
         let metadataInfo = '';
         if (alter.metadata?.addedAt) metadataInfo += `**Added:** ${utils.formatDate(alter.metadata.addedAt)}\n`;
         if (alter.genesisDate) metadataInfo += `**Genesis Date:** ${utils.formatDate(alter.genesisDate)}\n`;
@@ -767,8 +766,8 @@ async function handleSelectMenu(interaction) {
         proxy_info: () => {
             const modal = new ModalBuilder().setCustomId(`alter_edit_proxy_modal_${sessionId}`).setTitle('Edit Proxy Info');
             modal.addComponents(
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('proxies').setLabel('Proxies (one per line)').setStyle(TextInputStyle.Paragraph).setValue(alter.proxy?.join('\n') || '').setRequired(false).setMaxLength(500)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('signoff').setLabel('Sign-off').setStyle(TextInputStyle.Short).setValue(alter.signoff || '').setRequired(false).setMaxLength(100))
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('proxies').setLabel('Proxies (one per line, use "text" as placeholder)').setStyle(TextInputStyle.Paragraph).setValue(alter.proxy?.join('\n') || '').setPlaceholder('a:text\ntext -a\n-alter text').setRequired(false).setMaxLength(500)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('signoff').setLabel('Sign-offs (one per line, emojis recommended)').setStyle(TextInputStyle.Paragraph).setValue(alter.signoff || '').setPlaceholder('✨\n💫').setRequired(false).setMaxLength(200))
             );
             return modal;
         },
@@ -815,9 +814,9 @@ async function handleModalSubmit(interaction) {
         const conditionName = interaction.fields.getTextInputValue('condition_name');
         alter.condition = conditionName;
         await alter.save();
-        
+
         await utils.ensureConditionExists(await System.findById(session.systemId), 'alters', conditionName);
-        
+
         utils.deleteSession(sessionId);
         return await interaction.update({ content: `✅ **${utils.getDisplayName(alter)}** condition changed to "${conditionName}".`, embeds: [], components: [] });
     }
@@ -854,11 +853,46 @@ async function handleModalSubmit(interaction) {
 
     // Proxy info modal
     if (interaction.customId.startsWith('alter_edit_proxy_modal_')) {
-        const proxies = interaction.fields.getTextInputValue('proxies');
+        const proxiesInput = interaction.fields.getTextInputValue('proxies');
         const signoff = interaction.fields.getTextInputValue('signoff');
 
-        if (proxies) alter.proxy = utils.parseNewlineSeparated(proxies);
-        if (signoff !== undefined) alter.signoff = signoff;
+        // Parse proxies
+        const newProxies = utils.parseNewlineSeparated(proxiesInput);
+
+        // Validate proxies for duplicates
+        if (newProxies.length > 0) {
+            const system = await System.findById(session.systemId);
+            const { valid, duplicates } = await utils.validateProxies(
+                newProxies,
+                system,
+                alter._id.toString(),
+                'alter'
+            );
+
+            if (duplicates.length > 0) {
+                const dupList = duplicates.map(d => `\`${d.proxy}\` (used by ${d.owner})`).join('\n');
+
+                // Still save valid proxies
+                alter.proxy = valid;
+                if (signoff !== undefined) alter.signoff = signoff || undefined;
+                await alter.save();
+
+                // Show warning about duplicates
+                session.id = sessionId;
+                const { embed, components } = buildEditInterface(alter, session);
+                return await interaction.update({
+                    content: `⚠️ Some proxies were already in use and were skipped:\n${dupList}\n\nValid proxies were saved.`,
+                    embeds: [embed],
+                    components
+                });
+            }
+
+            alter.proxy = valid;
+        } else {
+            alter.proxy = [];
+        }
+
+        if (signoff !== undefined) alter.signoff = signoff || undefined;
         await alter.save();
     }
 

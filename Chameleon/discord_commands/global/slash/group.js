@@ -1,3 +1,5 @@
+// (/group) - Systemiser Group Management Command
+
 // (/group menu)
 // (/group showlist ) (click button to show full in ephemeral)
 // (/group showlist user:[@user] userID:[string])
@@ -11,17 +13,15 @@
 // (/group group_name:[string] edit (have the select menu of what to edit (card info, personal info, proxy info, image info, caution info ) and have a buttons to (enter mask mode, open group settings, edit groups, edit states))
 // (/group group_name:[string] settings
 
-// (/group) - Systemiser Group Management Command
-// Uses shared utilities from systemiser-utils.js
 
-const { 
-    SlashCommandBuilder, 
-    EmbedBuilder, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle, 
-    ModalBuilder, 
-    TextInputBuilder, 
+const {
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
     TextInputStyle,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder
@@ -59,7 +59,7 @@ module.exports = {
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const { user, system, isNew } = await utils.getOrCreateUserAndSystem(interaction);
-        
+
         if (isNew) {
             return await utils.handleNewUserFlow(interaction, 'group');
         }
@@ -128,10 +128,10 @@ function buildGroupListEmbed(groups, page, system, showFullList) {
 
 async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = true) {
     const embed = new EmbedBuilder();
-    
+
     const color = utils.getDiscordOrDefault(group, 'color') || system.color || '#3498DB';
     const description = utils.getDiscordOrDefault(group, 'description');
-    const displayName = closedCharAllowed 
+    const displayName = closedCharAllowed
         ? (group.name?.display || group.name?.indexable)
         : (group.name?.closedNameDisplay || group.name?.display || group.name?.indexable);
 
@@ -176,7 +176,7 @@ function buildEditInterface(group, session) {
     const embed = new EmbedBuilder()
         .setColor(group.color || '#3498DB')
         .setTitle(`Editing: ${utils.getDisplayName(group)}`)
-        .setDescription(session.mode 
+        .setDescription(session.mode
             ? `Currently in **${session.mode.toUpperCase()} MODE**\n\nSelect what to edit.`
             : 'Select what you would like to edit from the dropdown menu below.'
         );
@@ -247,7 +247,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         const discordId = targetUser?.id || targetUserId;
         const User = require('../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
-        
+
         if (!otherUser?.systemID) {
             return await interaction.reply({ content: '❌ This user does not have a group list to show.', ephemeral: true });
         }
@@ -306,7 +306,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         const discordId = targetUser?.id || targetUserId;
         const User = require('../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
-        
+
         if (!otherUser?.systemID) {
             return await interaction.reply({ content: '❌ Group cannot be found.', ephemeral: true });
         }
@@ -362,7 +362,7 @@ async function handleNew(interaction, user, system) {
 async function handleEdit(interaction, user, system) {
     const groupName = interaction.options.getString('group_name');
     const group = await utils.findGroupByName(groupName, system);
-    
+
     if (!group) {
         return await interaction.reply({ content: '❌ Group not found.', ephemeral: true });
     }
@@ -381,7 +381,7 @@ async function handleEdit(interaction, user, system) {
 async function handleDelete(interaction, user, system) {
     const groupName = interaction.options.getString('group_name');
     const group = await utils.findGroupByName(groupName, system);
-    
+
     if (!group) {
         return await interaction.reply({ content: '❌ Group not found.', ephemeral: true });
     }
@@ -409,7 +409,7 @@ async function handleDelete(interaction, user, system) {
 async function handleSettings(interaction, user, system) {
     const groupName = interaction.options.getString('group_name');
     const group = await utils.findGroupByName(groupName, system);
-    
+
     if (!group) {
         return await interaction.reply({ content: '❌ Group not found.', ephemeral: true });
     }
@@ -461,13 +461,13 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('group_list_prev_')) session.page = Math.max(0, session.page - 1);
     if (customId.startsWith('group_list_next_')) session.page++;
     if (customId.startsWith('group_list_toggle_')) { session.showFullList = !session.showFullList; session.page = 0; }
-    
+
     if (customId.startsWith('group_list_')) {
         const groups = session.showFullList ? session.allGroups : session.groups;
         const system = await System.findById(session.systemId);
-        return await interaction.update({ 
-            embeds: [buildGroupListEmbed(groups, session.page, system, session.showFullList)], 
-            components: utils.buildListButtons(groups.length, session.page, session.isOwner, session.showFullList, sessionId, 'group') 
+        return await interaction.update({
+            embeds: [buildGroupListEmbed(groups, session.page, system, session.showFullList)],
+            components: utils.buildListButtons(groups.length, session.page, session.isOwner, session.showFullList, sessionId, 'group')
         });
     }
 
@@ -589,8 +589,8 @@ async function handleSelectMenu(interaction) {
         case 'proxy_info':
             modal = new ModalBuilder().setCustomId(`group_edit_proxy_modal_${sessionId}`).setTitle('Edit Proxy Info');
             modal.addComponents(
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('proxies').setLabel('Proxies (one per line)').setStyle(TextInputStyle.Paragraph).setValue(group.proxy?.join('\n') || '').setRequired(false)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('signoff').setLabel('Sign-off').setStyle(TextInputStyle.Short).setValue(group.signoff || '').setRequired(false))
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('proxies').setLabel('Proxies (one per line, use "text" as placeholder)').setStyle(TextInputStyle.Paragraph).setValue(group.proxy?.join('\n') || '').setPlaceholder('g:text\ntext -g\n-group text').setRequired(false).setMaxLength(500)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('signoff').setLabel('Sign-offs (one per line, emojis recommended)').setStyle(TextInputStyle.Paragraph).setValue(group.signoff || '').setPlaceholder('✨\n💫').setRequired(false).setMaxLength(200))
             );
             break;
 
@@ -663,15 +663,53 @@ async function handleModalSubmit(interaction) {
     }
 
     if (interaction.customId.startsWith('group_edit_proxy_modal_')) {
-        group.proxy = utils.parseNewlineSeparated(interaction.fields.getTextInputValue('proxies'));
-        group.signoff = interaction.fields.getTextInputValue('signoff') || undefined;
+        const proxiesInput = interaction.fields.getTextInputValue('proxies');
+        const signoff = interaction.fields.getTextInputValue('signoff');
+
+        // Parse proxies
+        const newProxies = utils.parseNewlineSeparated(proxiesInput);
+
+        // Validate proxies for duplicates
+        if (newProxies.length > 0) {
+            const system = await System.findById(session.systemId);
+            const { valid, duplicates } = await utils.validateProxies(
+                newProxies,
+                system,
+                group._id.toString(),
+                'group'
+            );
+
+            if (duplicates.length > 0) {
+                const dupList = duplicates.map(d => `\`${d.proxy}\` (used by ${d.owner})`).join('\n');
+
+                // Still save valid proxies
+                group.proxy = valid;
+                group.signoff = signoff || undefined;
+                await group.save();
+
+                // Show warning about duplicates
+                session.id = sessionId;
+                const { embed, components } = buildEditInterface(group, session);
+                return await interaction.update({
+                    content: `⚠️ Some proxies were already in use and were skipped:\n${dupList}\n\nValid proxies were saved.`,
+                    embeds: [embed],
+                    components
+                });
+            }
+
+            group.proxy = valid;
+        } else {
+            group.proxy = [];
+        }
+
+        group.signoff = signoff || undefined;
         await group.save();
     }
 
     if (interaction.customId.startsWith('group_edit_image_modal_')) {
         const avatarUrl = interaction.fields.getTextInputValue('avatar_url');
         const bannerUrl = interaction.fields.getTextInputValue('banner_url');
-        
+
         if (session.mode === 'mask') {
             if (!group.mask) group.mask = { discord: { image: {} } };
             if (avatarUrl) group.mask.avatar = { url: avatarUrl };
