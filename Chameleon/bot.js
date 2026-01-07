@@ -142,9 +142,15 @@ client.on('guildCreate', async guild => {
 	}
 });
 
+// ============================================
 // INTERACTION HANDLING
+// ============================================
+
 client.on(Events.InteractionCreate, async (interaction) => {
+	
+	// ------------------------------------------
 	// SLASH COMMAND HANDLING
+	// ------------------------------------------
 	if (interaction.isChatInputCommand()) {
 		const command = interaction.client.commands.get(interaction.commandName);
 
@@ -162,7 +168,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 			}
 		} catch (error) {
 			console.error(`Error executing command ${interaction.commandName}:`, error);
-
+			
 			const errorMessage = {
 				content: 'There was an error while executing this command!',
 				flags: MessageFlags.Ephemeral,
@@ -177,7 +183,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		return;
 	}
 
+	// ------------------------------------------
 	// BUTTON INTERACTION HANDLING
+	// ------------------------------------------
 	if (interaction.isButton()) {
 		try {
 			const customId = interaction.customId;
@@ -226,9 +234,51 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				}
 			}
 
+			// Switch command buttons
+			if (customId.startsWith('switch_')) {
+				const cmd = interaction.client.commands.get('switch');
+				if (cmd?.handleButtonInteraction) {
+					return await cmd.handleButtonInteraction(interaction);
+				}
+			}
+
+			// Front command buttons
+			if (customId.startsWith('front_')) {
+				const cmd = interaction.client.commands.get('front');
+				if (cmd?.handleButtonInteraction) {
+					return await cmd.handleButtonInteraction(interaction);
+				}
+			}
+
+			// Message command buttons
+			if (customId.startsWith('message_')) {
+				const cmd = interaction.client.commands.get('message');
+				if (cmd?.handleButtonInteraction) {
+					return await cmd.handleButtonInteraction(interaction);
+				}
+			}
+
+			// Profile command buttons
+			if (customId.startsWith('profile_')) {
+				const cmd = interaction.client.commands.get('profile');
+				if (cmd?.handleButtonInteraction) {
+					return await cmd.handleButtonInteraction(interaction);
+				}
+			}
+
+			// Note command buttons
+			if (customId.startsWith('note_')) {
+				const cmd = interaction.client.commands.get('note');
+				if (cmd?.handleButtonInteraction) {
+					return await cmd.handleButtonInteraction(interaction);
+				}
+			}
+
+			// Add more button handlers here as needed...
+
 		} catch (error) {
 			console.error('Button interaction error:', error);
-
+			
 			const errorMessage = {
 				content: 'There was an error processing this button!',
 				flags: MessageFlags.Ephemeral,
@@ -243,7 +293,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		return;
 	}
 
+	// ------------------------------------------
 	// SELECT MENU INTERACTION HANDLING
+	// ------------------------------------------
 	if (interaction.isStringSelectMenu()) {
 		try {
 			const customId = interaction.customId;
@@ -280,11 +332,43 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				}
 			}
 
+			// Switch command select menus
+			if (customId.startsWith('switch_')) {
+				const cmd = interaction.client.commands.get('switch');
+				if (cmd?.handleSelectMenu) {
+					return await cmd.handleSelectMenu(interaction);
+				}
+			}
+
+			// Front command select menus
+			if (customId.startsWith('front_')) {
+				const cmd = interaction.client.commands.get('front');
+				if (cmd?.handleSelectMenu) {
+					return await cmd.handleSelectMenu(interaction);
+				}
+			}
+
+			// Profile command select menus
+			if (customId.startsWith('profile_')) {
+				const cmd = interaction.client.commands.get('profile');
+				if (cmd?.handleSelectMenu) {
+					return await cmd.handleSelectMenu(interaction);
+				}
+			}
+
+			// Note command select menus
+			if (customId.startsWith('note_')) {
+				const cmd = interaction.client.commands.get('note');
+				if (cmd?.handleSelectMenu) {
+					return await cmd.handleSelectMenu(interaction);
+				}
+			}
+
 			// Add more select menu handlers here as needed...
 
 		} catch (error) {
 			console.error('Select menu interaction error:', error);
-
+			
 			const errorMessage = {
 				content: 'There was an error processing this selection!',
 				flags: MessageFlags.Ephemeral,
@@ -299,7 +383,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		return;
 	}
 
+	// ------------------------------------------
 	// MODAL SUBMIT HANDLING
+	// ------------------------------------------
 	if (interaction.isModalSubmit()) {
 		try {
 			const customId = interaction.customId;
@@ -336,9 +422,51 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				}
 			}
 
+			// Switch command modals
+			if (customId.startsWith('switch_')) {
+				const cmd = interaction.client.commands.get('switch');
+				if (cmd?.handleModalSubmit) {
+					return await cmd.handleModalSubmit(interaction);
+				}
+			}
+
+			// Front command modals
+			if (customId.startsWith('front_')) {
+				const cmd = interaction.client.commands.get('front');
+				if (cmd?.handleModalSubmit) {
+					return await cmd.handleModalSubmit(interaction);
+				}
+			}
+
+			// Message command modals
+			if (customId.startsWith('message_')) {
+				const cmd = interaction.client.commands.get('message');
+				if (cmd?.handleModalSubmit) {
+					return await cmd.handleModalSubmit(interaction);
+				}
+			}
+
+			// Profile command modals
+			if (customId.startsWith('profile_')) {
+				const cmd = interaction.client.commands.get('profile');
+				if (cmd?.handleModalSubmit) {
+					return await cmd.handleModalSubmit(interaction);
+				}
+			}
+
+			// Note command modals
+			if (customId.startsWith('note_')) {
+				const cmd = interaction.client.commands.get('note');
+				if (cmd?.handleModalSubmit) {
+					return await cmd.handleModalSubmit(interaction);
+				}
+			}
+
+			// Add more modal handlers here as needed...
+
 		} catch (error) {
 			console.error('Modal submit error:', error);
-
+			
 			const errorMessage = {
 				content: 'There was an error processing this form!',
 				flags: MessageFlags.Ephemeral,
@@ -353,11 +481,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		return;
 	}
 
-	// AUTOCOMPLETE HANDLING
+	// ------------------------------------------
+	// AUTOCOMPLETE HANDLING (for future use)
+	// ------------------------------------------
 	if (interaction.isAutocomplete()) {
 		try {
 			const command = interaction.client.commands.get(interaction.commandName);
-
+			
 			if (command?.autocomplete) {
 				await command.autocomplete(interaction);
 			}
@@ -366,36 +496,94 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		}
 		return;
 	}
+
+	// ------------------------------------------
+	// CONTEXT MENU HANDLING (Right-click commands)
+	// ------------------------------------------
+	if (interaction.isMessageContextMenuCommand()) {
+		try {
+			// Look for command by context menu name
+			const command = interaction.client.commands.find(cmd => 
+				cmd.contextMenuData?.name === interaction.commandName
+			);
+			
+			if (command?.executeContextMenu) {
+				await command.executeContextMenu(interaction);
+			}
+		} catch (error) {
+			console.error('Context menu error:', error);
+			
+			const errorMessage = {
+				content: 'There was an error processing this action!',
+				flags: MessageFlags.Ephemeral,
+			};
+
+			if (interaction.replied || interaction.deferred) {
+				await interaction.followUp(errorMessage).catch(console.error);
+			} else {
+				await interaction.reply(errorMessage).catch(console.error);
+			}
+		}
+		return;
+	}
+
+	if (interaction.isUserContextMenuCommand()) {
+		try {
+			const command = interaction.client.commands.find(cmd => 
+				cmd.userContextMenuData?.name === interaction.commandName
+			);
+			
+			if (command?.executeUserContextMenu) {
+				await command.executeUserContextMenu(interaction);
+			}
+		} catch (error) {
+			console.error('User context menu error:', error);
+		}
+		return;
+	}
 });
 
 // ============================================
-// MESSAGE HANDLING (Prefix Commands)
+// MESSAGE HANDLING (Prefix Commands + Proxy)
 // ============================================
 
+// Import proxy message handler
+const proxyMessageHandler = require('./discord_commands/global/proxy-message');
+
 client.on(Events.MessageCreate, async (message) => {
-	// Ignore messages from bots and messages that don't start with prefix
+	// Ignore messages from bots
 	if (message.author.bot) return;
 
+	// Check for prefix commands first
 	const prefix = prefixes.find(p => message.content.startsWith(p));
-	if (!prefix) return;
+	
+	if (prefix) {
+		// Parse command and arguments
+		const args = message.content.slice(prefix.length).trim().split(/ +/);
+		const commandName = args.shift().toLowerCase();
 
-	// Parse command and arguments
-	const args = message.content.slice(prefix.length).trim().split(/ +/);
-	const commandName = args.shift().toLowerCase();
+		// Get command from prefix commands collection
+		const command = client.prefixCommands.get(commandName);
 
-	// Get command from prefix commands collection
-	const command = client.prefixCommands.get(commandName);
-
-	if (!command) return; // Command not found, silently ignore
-
-	try {
-		await command.executeMessage(message, args);
-	} catch (error) {
-		console.error(error);
-		try {
-			await message.reply('There was an error while executing this command!');
-		} catch (replyError) {
-			console.error('Could not send error message:', replyError);
+		if (command) {
+			try {
+				await command.executeMessage(message, args);
+			} catch (error) {
+				console.error(error);
+				try {
+					await message.reply('There was an error while executing this command!');
+				} catch (replyError) {
+					console.error('Could not send error message:', replyError);
+				}
+			}
+			return; // Don't check for proxy if it was a prefix command
 		}
+	}
+
+	// If not a prefix command, check for proxy messages
+	try {
+		await proxyMessageHandler.handleProxyMessage(message, client);
+	} catch (error) {
+		console.error('Proxy handler error:', error);
 	}
 });

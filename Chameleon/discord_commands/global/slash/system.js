@@ -27,10 +27,10 @@ const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 
 // Import shared utilities
-const utils = require('../../functions/bot_utils');
+const utils = require('./systemiser-utils');
 
 // Use DSM and ICD types from utils
-const { DSM_TYPES, ICD_TYPES, ENTITY_COLORS } = utils;
+const { DSM_TYPES, ICD_TYPES, ENTITY_COLORS, getSystemEmbedColor } = utils;
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -99,8 +99,8 @@ module.exports = {
 async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, showFull = false) {
     const embed = new EmbedBuilder();
 
-    // Get display values
-    const color = utils.getDiscordOrDefault(system, 'color') || ENTITY_COLORS.system;
+    // Get display values - system.color or none
+    const color = getSystemEmbedColor(system);
     const description = utils.getDiscordOrDefault(system, 'description');
     const displayName = closedCharAllowed
         ? (system.name?.display || system.name?.indexable)
@@ -115,7 +115,7 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     });
 
     embed.setTitle(displayName || 'Unknown System');
-    embed.setColor(color);
+    if (color) embed.setColor(color);
 
     if (description) {
         embed.setDescription(description);
@@ -304,12 +304,15 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
  */
 function buildEditInterface(system, session) {
     const embed = new EmbedBuilder()
-        .setColor(system.color || ENTITY_COLORS.system)
         .setTitle(`Editing: ${utils.getDisplayName(system)}`)
         .setDescription(session.mode
             ? `Currently in **${session.mode.toUpperCase()} MODE**\n\nSelect what you would like to edit.`
             : 'Select what you would like to edit from the dropdown menu below.'
         );
+
+    // Use system color if available
+    const color = getSystemEmbedColor(system);
+    if (color) embed.setColor(color);
 
     // Edit options dropdown
     const selectMenu = new StringSelectMenuBuilder()
@@ -406,7 +409,7 @@ function buildEditInterface(system, session) {
  */
 function buildSettingsInterface(system, session) {
     const embed = new EmbedBuilder()
-        .setColor(ENTITY_COLORS.system)
+
         .setTitle(`⚙️ System Settings`)
         .setDescription('Configure your system settings below.');
 
@@ -494,7 +497,7 @@ function buildSettingsInterface(system, session) {
  */
 function buildBucketsInterface(system, session) {
     const embed = new EmbedBuilder()
-        .setColor(ENTITY_COLORS.system)
+
         .setTitle('🔒 Privacy Buckets')
         .setDescription('Manage your privacy buckets. Each bucket can contain friends with specific privacy levels.');
 
@@ -545,7 +548,7 @@ function buildBucketsInterface(system, session) {
  */
 function buildConditionsInterface(system, session) {
     const embed = new EmbedBuilder()
-        .setColor(ENTITY_COLORS.system)
+
         .setTitle('📋 Conditions Management')
         .setDescription('Manage conditions for alters and states.');
 
@@ -619,7 +622,7 @@ function buildConditionsInterface(system, session) {
  */
 async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
-        .setColor(ENTITY_COLORS.system)
+
         .setTitle('🎡 System Management')
         .setDescription('Select a button to start managing your system.')
         .setFooter({ text: 'Use the buttons below to navigate' });
@@ -870,7 +873,7 @@ async function handleButtonInteraction(interaction) {
     // Handle proxy layout help
     if (customId.startsWith('system_edit_proxy_help_')) {
         const helpEmbed = new EmbedBuilder()
-            .setColor(ENTITY_COLORS.system)
+
             .setTitle('📝 Proxy Layout Help')
             .setDescription('Each entity type (alter, state, group) has its own layout. The layout determines how the sender name appears when proxying messages.')
             .addFields(
@@ -1625,7 +1628,7 @@ async function handleSelectMenu(interaction) {
         case 'proxy_info':
             // Instead of a modal, show a select menu to choose which proxy setting to edit
             const proxyEmbed = new EmbedBuilder()
-                .setColor(ENTITY_COLORS.system)
+
                 .setTitle('💬 Proxy Settings')
                 .setDescription('Select which proxy setting you want to edit.')
                 .addFields(
@@ -2167,7 +2170,7 @@ function buildProxySettingsEmbed(system) {
     };
 
     return new EmbedBuilder()
-        .setColor(ENTITY_COLORS.system)
+
         .setTitle('💬 Proxy Settings')
         .setDescription('Select which proxy setting you want to edit.')
         .addFields(

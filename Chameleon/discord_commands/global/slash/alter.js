@@ -32,7 +32,7 @@ const System = require('../../schemas/system');
 const Group = require('../../schemas/group');
 
 // Import shared utilities
-const utils = require('../../functions/bot_utils');
+const utils = require('./systemiser-utils');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -100,12 +100,15 @@ function buildAlterListEmbed(alters, page, system, showFullList) {
     const totalPages = utils.getTotalPages(alters.length);
 
     const embed = new EmbedBuilder()
-        .setColor(system.color || '#FFA500')
         .setTitle(`${utils.getDisplayName(system)}'s Alters`)
         .setDescription(showFullList ? '📋 Showing full list (including hidden)' : '📋 Alter List')
         .setFooter({
             text: `Page ${page + 1}/${totalPages} • ${alters.length} alter${alters.length !== 1 ? 's' : ''}`
         });
+
+    // Use system color if available
+    const embedColor = utils.getSystemEmbedColor(system);
+    if (embedColor) embed.setColor(embedColor);
 
     if (pageAlters.length === 0) {
         embed.addFields({ name: 'No alters', value: 'No alters to display on this page.' });
@@ -125,7 +128,8 @@ function buildAlterListEmbed(alters, page, system, showFullList) {
 async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = true) {
     const embed = new EmbedBuilder();
 
-    const color = utils.getDiscordOrDefault(alter, 'color') || system.color || '#FFA500';
+    // Color priority: alter.color > system.color > none
+    const color = utils.getEntityEmbedColor(alter, system);
     const description = utils.getDiscordOrDefault(alter, 'description');
     const displayName = closedCharAllowed
         ? (alter.name?.display || alter.name?.indexable)
@@ -141,7 +145,7 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
     });
 
     embed.setTitle(displayName || 'Unknown Alter');
-    embed.setColor(color);
+    if (color) embed.setColor(color);
 
     if (description) {
         embed.setDescription(description);
@@ -227,14 +231,17 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
     return embed;
 }
 
-function buildEditInterface(alter, session) {
+function buildEditInterface(alter, session, system = null) {
     const embed = new EmbedBuilder()
-        .setColor(alter.color || '#FFA500')
         .setTitle(`Editing: ${utils.getDisplayName(alter)}`)
         .setDescription(session.mode
             ? `Currently in **${session.mode.toUpperCase()} MODE**\n\nSelect what you would like to edit.`
             : 'Select what you would like to edit from the dropdown menu below.'
         );
+
+    // Color priority: alter.color > system.color > none
+    const color = utils.getEntityEmbedColor(alter, system);
+    if (color) embed.setColor(color);
 
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId(`alter_edit_select_${session.id}`)
@@ -278,10 +285,13 @@ function buildEditInterface(alter, session) {
 
 async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
-        .setColor('#FFA500')
         .setTitle('🎭 Alter Management')
         .setDescription('Select a button to start managing your alters.')
         .setFooter({ text: 'Use the buttons below to navigate' });
+
+    // Use system color if available
+    const color = utils.getSystemEmbedColor(system);
+    if (color) embed.setColor(color);
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('alter_menu_showlist').setLabel('Show List').setStyle(ButtonStyle.Primary).setEmoji('📋'),
@@ -554,7 +564,6 @@ async function handleSettings(interaction, user, system) {
     });
 
     const embed = new EmbedBuilder()
-        .setColor('#FFA500')
         .setTitle(`⚙️ Settings: ${utils.getDisplayName(alter)}`)
         .setDescription('Configure settings for this alter.')
         .addFields(
@@ -562,6 +571,10 @@ async function handleSettings(interaction, user, system) {
             { name: 'Default Status', value: alter.setting?.default_status || '*Not set*', inline: true },
             { name: 'Current Condition', value: alter.condition || '*None*', inline: true }
         );
+
+    // Color priority: alter.color > system.color > none
+    const settingsColor = utils.getEntityEmbedColor(alter, system);
+    if (settingsColor) embed.setColor(settingsColor);
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`alter_settings_closedname_${sessionId}`).setLabel('Edit Closed Name').setStyle(ButtonStyle.Primary),

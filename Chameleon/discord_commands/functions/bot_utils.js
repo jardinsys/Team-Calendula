@@ -1,5 +1,6 @@
-// Systemiser Shared Utilities
-// Used by alter.js, state.js, group.js, system.js and other system-related commands
+// Chameleon/Systemiser Bot Utilities
+// Shared utilities used by all Systemiser slash commands
+// Location: Chameleon/discord_commands/functions/bot_utils.js
 
 const { 
     EmbedBuilder, 
@@ -33,8 +34,44 @@ const ENTITY_COLORS = {
     alter: '#FFA500',
     state: '#9B59B6',
     group: '#3498DB',
-    system: '#2ECC71'
+    system: '#2ECC71',
+    profile: '#5865F2',
+    note: '#5865F2'
 };
+
+/**
+ * Get the embed color for an entity display
+ * Priority: entity.color > system.color > null (no color/default)
+ * @param {Object} entity - The entity (alter/state/group) - can be null
+ * @param {Object} system - The system - can be null
+ * @returns {string|null} Hex color string or null
+ */
+function getEntityEmbedColor(entity, system) {
+    // If entity has its own color, use it
+    if (entity?.color) {
+        return entity.color;
+    }
+    
+    // Fall back to system color
+    if (system?.color) {
+        return system.color;
+    }
+    
+    // No color (Discord will use default gray)
+    return null;
+}
+
+/**
+ * Get the embed color for system-level displays
+ * @param {Object} system - The system
+ * @returns {string|null} Hex color string or null
+ */
+function getSystemEmbedColor(system) {
+    if (system?.color) {
+        return system.color;
+    }
+    return null;
+}
 
 // DSM and ICD type definitions for system type validation
 const DSM_TYPES = ['DID', 'Amnesia', 'Dereal/Depers', 'OSDD-1A', 'OSDD-1B', 'OSDD-2', 'OSDD-3', 'OSDD-4', 'UDD'];
@@ -453,6 +490,48 @@ async function findGroupByName(name, system) {
     return group || null;
 }
 
+/**
+ * Find an entity by name across all entity types (alter, state, group)
+ * @param {string} name - Name to search for
+ * @param {System} system - System to search in
+ * @returns {Promise<{entity: Object|null, type: string|null}>}
+ */
+async function findEntityByName(name, system) {
+    const searchName = name.toLowerCase();
+
+    // Search alters first
+    const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
+    let entity = alters.find(a => a.name?.indexable?.toLowerCase() === searchName);
+    if (!entity) {
+        entity = alters.find(a => 
+            a.name?.aliases?.some(alias => alias.toLowerCase() === searchName)
+        );
+    }
+    if (entity) return { entity, type: 'alter' };
+
+    // Search states
+    const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
+    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName);
+    if (!entity) {
+        entity = states.find(s => 
+            s.name?.aliases?.some(alias => alias.toLowerCase() === searchName)
+        );
+    }
+    if (entity) return { entity, type: 'state' };
+
+    // Search groups
+    const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
+    entity = groups.find(g => g.name?.indexable?.toLowerCase() === searchName);
+    if (!entity) {
+        entity = groups.find(g => 
+            g.name?.aliases?.some(alias => alias.toLowerCase() === searchName)
+        );
+    }
+    if (entity) return { entity, type: 'group' };
+
+    return { entity: null, type: null };
+}
+
 // ============================================
 // LIST BUILDING HELPERS
 // ============================================
@@ -853,11 +932,14 @@ module.exports = {
     getDiscordOrDefault,
     checkClosedCharAllowed,
     isValidIndexableName,
+    getEntityEmbedColor,
+    getSystemEmbedColor,
     
     // Entity search
     findAlterByName,
     findStateByName,
     findGroupByName,
+    findEntityByName,
     
     // List helpers
     buildListButtons,

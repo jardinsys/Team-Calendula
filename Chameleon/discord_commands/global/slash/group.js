@@ -13,7 +13,6 @@
 // (/group group_name:[string] edit (have the select menu of what to edit (card info, personal info, proxy info, image info, caution info ) and have a buttons to (enter mask mode, open group settings, edit groups, edit states))
 // (/group group_name:[string] settings
 
-
 const {
     SlashCommandBuilder,
     EmbedBuilder,
@@ -33,7 +32,7 @@ const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 
 // Import shared utilities
-const utils = require('../../functions/bot_utils');
+const utils = require('./systemiser-utils');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -98,10 +97,13 @@ function buildGroupListEmbed(groups, page, system, showFullList) {
     const totalPages = utils.getTotalPages(groups.length);
 
     const embed = new EmbedBuilder()
-        .setColor(system.color || '#3498DB')
         .setTitle(`${utils.getDisplayName(system)}'s Groups`)
         .setDescription(showFullList ? '📋 Showing full list (including hidden)' : '📋 Group List')
         .setFooter({ text: `Page ${page + 1}/${totalPages} • ${groups.length} group(s)` });
+
+    // Use system color if available
+    const embedColor = utils.getSystemEmbedColor(system);
+    if (embedColor) embed.setColor(embedColor);
 
     if (pageGroups.length === 0) {
         embed.addFields({ name: 'No groups', value: 'No groups to display.' });
@@ -129,7 +131,8 @@ function buildGroupListEmbed(groups, page, system, showFullList) {
 async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = true) {
     const embed = new EmbedBuilder();
 
-    const color = utils.getDiscordOrDefault(group, 'color') || system.color || '#3498DB';
+    // Color priority: group.color > system.color > none
+    const color = utils.getEntityEmbedColor(group, system);
     const description = utils.getDiscordOrDefault(group, 'description');
     const displayName = closedCharAllowed
         ? (group.name?.display || group.name?.indexable)
@@ -141,7 +144,8 @@ async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = 
         iconURL: proxyAvatar || undefined
     });
 
-    embed.setTitle(displayName || 'Unknown Group').setColor(color);
+    embed.setTitle(displayName || 'Unknown Group');
+    if (color) embed.setColor(color);
     if (description) embed.setDescription(description);
 
     // Count members
@@ -174,12 +178,15 @@ async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = 
 
 function buildEditInterface(group, session) {
     const embed = new EmbedBuilder()
-        .setColor(group.color || '#3498DB')
         .setTitle(`Editing: ${utils.getDisplayName(group)}`)
         .setDescription(session.mode
             ? `Currently in **${session.mode.toUpperCase()} MODE**\n\nSelect what to edit.`
             : 'Select what you would like to edit from the dropdown menu below.'
         );
+
+    // Color priority: group.color > system.color > none
+    const color = utils.getEntityEmbedColor(group, system);
+    if (color) embed.setColor(color);
 
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId(`group_edit_select_${session.id}`)
@@ -222,9 +229,12 @@ function buildEditInterface(group, session) {
 
 async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
-        .setColor('#3498DB')
         .setTitle('👥 Group Management')
         .setDescription('Select a button to start managing your groups.');
+
+    // Use system color if available
+    const menuColor = utils.getSystemEmbedColor(system);
+    if (menuColor) embed.setColor(menuColor);
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('group_menu_showlist').setLabel('Show List').setStyle(ButtonStyle.Primary).setEmoji('📋'),
@@ -418,13 +428,16 @@ async function handleSettings(interaction, user, system) {
     utils.setSession(sessionId, { type: 'settings', groupId: group._id, systemId: system._id });
 
     const embed = new EmbedBuilder()
-        .setColor('#3498DB')
         .setTitle(`⚙️ Settings: ${utils.getDisplayName(group)}`)
         .addFields(
             { name: 'Closed Name', value: group.name?.closedNameDisplay || '*Not set*', inline: true },
             { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
             { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true }
         );
+
+    // Color priority: group.color > system.color > none
+    const settingsColor = utils.getEntityEmbedColor(group, system);
+    if (settingsColor) embed.setColor(settingsColor);
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),

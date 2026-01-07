@@ -11,41 +11,43 @@ const noteSchema = new mongoose.Schema({
     id: { type: String, default: () => snowflake.generate(), unique: true },
     author: {
         userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-        alterIDs: [String],
-        stateIDs: [String],
-        groupIDs: [String]
+        subs: [{
+            ID: String,
+            s_type: { type: String, enum: ["alter", "state", "group"] }
+        }]
     },
     users: {
         owner: {
             userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            alterIDs: [String],
-            stateIDs: [String],
-            groupIDs: [String]
+            subs: [{
+                ID: String,
+                s_type: { type: String, enum: ["alter", "state", "group"] }
+            }]
         },
         rwAccess: [{
             userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            alterIDs: [String],
-            stateIDs: [String],
-            groupIDs: [String]
+            subs: [{
+                ID: String,
+                s_type: { type: String, enum: ["alter", "state", "group"] }
+            }]
         }],
         rAccess: [{
-            userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-            alterIDs: [String],
-            stateIDs: [String],
-            groupIDs: [String]
-        }],
+            userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+        }]
     },
     tags: [String],
     pinned: Boolean,
     title: String,
-    content: String,
+    content: mediaSchema,
+    contentPreview: String,
     media: [{
         media: mediaSchema,
-        position: { type: Number, required: true, integer: true},
+        position: { type: Number, required: true, integer: true },
         caption: String,
         placeholder: String
-    }]
-},{
+    }],
+    color: String
+}, {
     timestamps: true
 });
 const Note = sysDB.model('Note', noteSchema);

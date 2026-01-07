@@ -10,6 +10,9 @@ const State = require('../schemas/state');
 const Group = require('../schemas/group');
 const Guild = require('../schemas/guild');
 
+// Import shared utilities (for findEntityByName)
+const utils = require('./functions/bot_utils');
+
 // ============================================
 // MAIN HANDLER
 // ============================================
@@ -22,7 +25,7 @@ const Guild = require('../schemas/guild');
 async function handleProxyMessage(message, client) {
     // Ignore bots and webhooks
     if (message.author.bot || message.webhookId) return;
-
+    
     // Ignore DMs
     if (!message.guild) return;
 
@@ -34,37 +37,122 @@ async function handleProxyMessage(message, client) {
         const system = await System.findById(user.systemID);
         if (!system) return;
 
-        // Check if system is on proxy break
-        if (system.proxy?.break) return;
+        // Check for escape sequences FIRST
+        // "\\" = don't proxy AND set break to true
+        if (message.content.startsWith('\\\\')) {
+            await System.findByIdAndUpdate(system._id, { 'proxy.break': true });
+            return; // Don't proxy, don't delete message
+        }
+        
+        // "\" = just don't proxy this message (no break change)
+        if (message.content.startsWith('\\')) {
+            return; // Don't proxy, don't delete message
+        }
 
-        // Check for proxy match
+        // Check and update break status based on cooldown
+        const breakStatus = await checkAndUpdateBreakStatus(system);
+        
+        // Check for explicit proxy match first
         const proxyMatch = await findProxyMatch(message.content, system);
-
-        if (!proxyMatch) {
-            // No proxy found in message, check auto-proxy settings
+        
+        if (proxyMatch) {
+            // Explicit proxy found - always proxy and clear break
+            await sendProxyMessage(message, proxyMatch.entity, proxyMatch.type, system, proxyMatch.content);
+            
+            // Clear break since we just proxied
+            await System.findByIdAndUpdate(system._id, { 
+                'proxy.break': false,
+                'proxy.lastProxyTime': new Date()
+            });
+        } else {
+            // No explicit proxy - check auto-proxy settings
+            // But first check if break is active (after cooldown check)
+            if (breakStatus.isBreak) {
+                // Break is active, check proxy style behavior
+                const proxyStyle = getEffectiveProxyStyle(system, message.guild.id);
+                
+                // If style is 'last' or a specific entity, don't auto-proxy while on break
+                if (proxyStyle === 'last' || (proxyStyle && proxyStyle !== 'off' && proxyStyle !== 'front')) {
+                    return; // On break, don't auto-proxy
+                }
+                
+                // If style is 'front', also don't auto-proxy while on break
+                if (proxyStyle === 'front') {
+                    return; // On break, don't auto-proxy
+                }
+            }
+            
+            // Not on break (or break doesn't apply), try auto-proxy
             const autoProxy = await getAutoProxy(system, message.guild.id);
             if (!autoProxy) return;
-
+            
             // Use auto-proxy
             await sendProxyMessage(message, autoProxy.entity, autoProxy.type, system, message.content);
-        } else {
-            // Proxy found in message
-            await sendProxyMessage(message, proxyMatch.entity, proxyMatch.type, system, proxyMatch.content);
+            
+            // Update last proxy time
+            await System.findByIdAndUpdate(system._id, { 
+                'proxy.lastProxyTime': new Date()
+            });
         }
     } catch (error) {
         console.error('Proxy message error:', error);
-
+        
         // Try to notify user of error in ephemeral-like way
         try {
             const errorMsg = await message.channel.send({
                 content: `❌ <@${message.author.id}> Proxy error: ${getErrorMessage(error)}`
             });
             // Delete error message after 10 seconds
-            setTimeout(() => errorMsg.delete().catch(() => { }), 10000);
+            setTimeout(() => errorMsg.delete().catch(() => {}), 10000);
         } catch (e) {
             // Couldn't send error message
         }
     }
+}
+
+/**
+ * Check if break should be active based on cooldown
+ * @param {Object} system - The system object
+ * @returns {Object} { isBreak: boolean, shouldUpdate: boolean }
+ */
+async function checkAndUpdateBreakStatus(system) {
+    const cooldownSeconds = system.proxy?.cooldown || 0; // Default no cooldown
+    const lastProxyTime = system.proxy?.lastProxyTime;
+    const currentBreak = system.proxy?.break || false;
+    
+    // If no cooldown set, don't auto-break
+    if (cooldownSeconds <= 0) {
+        return { isBreak: currentBreak, shouldUpdate: false };
+    }
+    
+    // If no last proxy time, no break from cooldown
+    if (!lastProxyTime) {
+        return { isBreak: currentBreak, shouldUpdate: false };
+    }
+    
+    const now = new Date();
+    const lastProxy = new Date(lastProxyTime);
+    const elapsedSeconds = (now - lastProxy) / 1000;
+    
+    // If elapsed time > cooldown, set break to true
+    if (elapsedSeconds > cooldownSeconds && !currentBreak) {
+        await System.findByIdAndUpdate(system._id, { 'proxy.break': true });
+        return { isBreak: true, shouldUpdate: true };
+    }
+    
+    return { isBreak: currentBreak, shouldUpdate: false };
+}
+
+/**
+ * Get the effective proxy style for a guild
+ * @param {Object} system - The system object
+ * @param {string} guildId - The guild ID
+ * @returns {string} The proxy style
+ */
+function getEffectiveProxyStyle(system, guildId) {
+    const proxyStyle = system.proxy?.style || 'off';
+    const serverSettings = system.discord?.server?.find(s => s.id === guildId);
+    return serverSettings?.proxyStyle || proxyStyle;
 }
 
 // ============================================
@@ -102,11 +190,11 @@ async function findProxyMatch(content, system) {
  */
 async function checkRecentProxies(content, system) {
     const recentProxies = system.proxy?.recentProxies || [];
-
+    
     for (const proxyId of recentProxies) {
         // recentProxies format: "type:id:proxy" e.g., "alter:123456:a:"
         const [type, entityId, proxyPattern] = proxyId.split(':');
-
+        
         if (!proxyPattern) continue;
 
         const match = matchProxyPattern(content, proxyPattern);
@@ -123,7 +211,7 @@ async function checkRecentProxies(content, system) {
                     entity = await Group.findById(entityId);
                     break;
             }
-
+            
             if (entity) {
                 return { entity, type, content: match.content };
             }
@@ -143,7 +231,7 @@ async function searchEntityProxies(content, entityIds, Model, type) {
 
     for (const entity of entities) {
         const proxies = entity.proxy || [];
-
+        
         for (const proxy of proxies) {
             const match = matchProxyPattern(content, proxy);
             if (match) {
@@ -167,7 +255,7 @@ function matchProxyPattern(content, pattern) {
 
     // Check if pattern contains "text" placeholder
     const textIndex = pattern.toLowerCase().indexOf('text');
-
+    
     if (textIndex === -1) {
         // No placeholder, treat the whole pattern as a prefix
         if (content.toLowerCase().startsWith(pattern.toLowerCase())) {
@@ -309,46 +397,13 @@ async function getAutoProxy(system, guildId) {
     // Check if it's a specific entity name (specify mode)
     if (effectiveStyle && effectiveStyle !== 'off' && effectiveStyle !== 'last' && effectiveStyle !== 'front') {
         // It's an entity indexable name
-        const { entity, type } = await findEntityByName(effectiveStyle, system);
+        const { entity, type } = await utils.findEntityByName(effectiveStyle, system);
         if (entity) {
             return { entity, type };
         }
     }
 
     return null;
-}
-
-/**
- * Find an entity by name across all entity types
- */
-async function findEntityByName(name, system) {
-    const searchName = name.toLowerCase();
-
-    // Search alters
-    const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
-    let entity = alters.find(a => a.name?.indexable?.toLowerCase() === searchName);
-    if (!entity) {
-        entity = alters.find(a => a.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
-    }
-    if (entity) return { entity, type: 'alter' };
-
-    // Search states
-    const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
-    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName);
-    if (!entity) {
-        entity = states.find(s => s.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
-    }
-    if (entity) return { entity, type: 'state' };
-
-    // Search groups
-    const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
-    entity = groups.find(g => g.name?.indexable?.toLowerCase() === searchName);
-    if (!entity) {
-        entity = groups.find(g => g.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
-    }
-    if (entity) return { entity, type: 'group' };
-
-    return { entity: null, type: null };
 }
 
 // ============================================
@@ -382,13 +437,14 @@ async function sendProxyMessage(originalMessage, entity, type, system, content) 
         username: displayName.substring(0, 80), // Discord limits webhook usernames to 80 chars
         avatarURL: avatarUrl || undefined,
         content: content,
-        allowedMentions: { parse: ['users', 'roles'] }
+        allowedMentions: { parse: ['users', 'roles'] },
+        embeds: []
     };
 
     // Handle attachments
     if (originalMessage.attachments.size > 0) {
         const totalSize = originalMessage.attachments.reduce((sum, att) => sum + att.size, 0);
-
+        
         // Check file size limit (8MB for regular servers, 50MB for boosted)
         const maxSize = guild.premiumTier >= 2 ? 50 * 1024 * 1024 : 8 * 1024 * 1024;
         if (totalSize > maxSize) {
@@ -401,16 +457,37 @@ async function sendProxyMessage(originalMessage, entity, type, system, content) 
         }));
     }
 
-    // Handle replies
+    // Extract media URLs from content to preserve Discord's auto-embeds
+    const mediaUrls = extractMediaUrls(content);
+
+    // Get color for reply embed: entity color > system color > none
+    const embedColor = getEmbedColor(entity, system);
+
+    // Handle replies with embed
     if (originalMessage.reference) {
-        // Note: Webhooks can't directly reply, but we can mention the user
         try {
             const referencedMessage = await channel.messages.fetch(originalMessage.reference.messageId);
             if (referencedMessage) {
-                webhookOptions.content = `> ${referencedMessage.content.substring(0, 100)}${referencedMessage.content.length > 100 ? '...' : ''}\n<@${referencedMessage.author.id}>\n\n${content}`;
+                const replyEmbed = buildReplyEmbed(referencedMessage, channel.id, guild.id, embedColor);
+                webhookOptions.embeds.push(replyEmbed);
             }
         } catch (e) {
             // Couldn't fetch referenced message, continue without it
+        }
+    }
+
+    // If there are media URLs in content, we need to ensure they still embed
+    // Discord won't auto-embed URLs when there are other embeds present
+    // Solution: Add a second message or ensure media URLs are not suppressed
+    // For now, we'll add the first media URL as an image embed if we have a reply embed
+    if (webhookOptions.embeds.length > 0 && mediaUrls.length > 0) {
+        // Check if any media URLs are images/videos that would normally embed
+        const imageUrl = mediaUrls.find(url => isImageUrl(url));
+        if (imageUrl && webhookOptions.embeds.length < 10) {
+            // Add an empty embed with just the image to preserve the media display
+            webhookOptions.embeds.push({
+                image: { url: imageUrl }
+            });
         }
     }
 
@@ -497,9 +574,9 @@ function getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed = tr
     }
     // Check if this is a mask server
     else if (shouldMask(entity, system, guild.id)) {
-        avatarUrl = entity.mask?.avatar?.url ||
-            entity.mask?.discord?.image?.avatar?.url ||
-            entity.mask?.discord?.image?.proxyAvatar?.url;
+        avatarUrl = entity.mask?.avatar?.url || 
+                   entity.mask?.discord?.image?.avatar?.url ||
+                   entity.mask?.discord?.image?.proxyAvatar?.url;
     }
     // Use proxy avatar
     else if (entity.discord?.image?.proxyAvatar?.url) {
@@ -520,10 +597,10 @@ function getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed = tr
     } else if (serverSettings?.name) {
         displayName = serverSettings.name;
     } else if (shouldMask(entity, system, guild.id)) {
-        displayName = entity.mask?.name?.display ||
-            entity.mask?.discord?.name?.display ||
-            entity.name?.display ||
-            entity.name?.indexable;
+        displayName = entity.mask?.name?.display || 
+                     entity.mask?.discord?.name?.display ||
+                     entity.name?.display || 
+                     entity.name?.indexable;
     } else {
         displayName = entity.name?.display || entity.name?.indexable || entity._id;
     }
@@ -615,10 +692,10 @@ function formatProxyLayout(layout, entity, type, system, closedCharAllowed = tru
     // {st-sign1}, {st-sign2}... for state signoffs  
     // {g-sign1}, {g-sign2}... for group signoffs
     // The current entity's signoffs are used for its prefix type
-
+    
     // Determine which prefix belongs to current entity
     const currentPrefix = type === 'alter' ? 'a-sign' : (type === 'state' ? 'st-sign' : 'g-sign');
-
+    
     // Replace current entity's signoffs with its prefix
     for (let i = 0; i < Math.max(signoffs.length, 20); i++) {
         result = result.replace(new RegExp(`{${currentPrefix}${i + 1}}`, 'gi'), signoffs[i] || '');
@@ -652,15 +729,15 @@ function formatProxyLayout(layout, entity, type, system, closedCharAllowed = tru
  */
 async function updateRecentProxies(system, entity, type) {
     const proxyId = `${type}:${entity._id}:${entity.proxy?.[0] || ''}`;
-
+    
     let recentProxies = system.proxy?.recentProxies || [];
-
+    
     // Remove if already exists
     recentProxies = recentProxies.filter(p => !p.startsWith(`${type}:${entity._id}`));
-
+    
     // Add to front
     recentProxies.unshift(proxyId);
-
+    
     // Keep only last 20
     recentProxies = recentProxies.slice(0, 20);
 
@@ -675,7 +752,7 @@ async function updateRecentProxies(system, entity, type) {
  */
 async function updateEntityMessageCount(entity, type) {
     const Model = type === 'alter' ? Alter : (type === 'state' ? State : Group);
-
+    
     await Model.findByIdAndUpdate(entity._id, {
         $inc: { 'discord.metadata.messageCount': 1 },
         'discord.metadata.lastMessageTime': new Date()
@@ -698,6 +775,211 @@ function getErrorMessage(error) {
     return 'An error occurred while proxying';
 }
 
+/**
+ * Get embed color from entity or system
+ * Priority: entity.color > system.color > null (no color)
+ * @param {Object} entity - The alter/state/group entity
+ * @param {Object} system - The system
+ * @returns {number|null} Color as integer or null
+ */
+function getEmbedColor(entity, system) {
+    // Try entity color first
+    if (entity?.color) {
+        return parseColor(entity.color);
+    }
+    
+    // Fall back to system color
+    if (system?.color) {
+        return parseColor(system.color);
+    }
+    
+    // No color
+    return null;
+}
+
+/**
+ * Parse a color string to integer
+ * @param {string|number} color - Color as hex string or integer
+ * @returns {number|null} Color as integer
+ */
+function parseColor(color) {
+    if (!color) return null;
+    
+    // Already a number
+    if (typeof color === 'number') {
+        return color;
+    }
+    
+    // Hex string (with or without #)
+    if (typeof color === 'string') {
+        const hex = color.replace('#', '');
+        const parsed = parseInt(hex, 16);
+        return isNaN(parsed) ? null : parsed;
+    }
+    
+    return null;
+}
+
+// ============================================
+// REPLY EMBED HELPERS
+// ============================================
+
+/**
+ * Build an embed for replying to a message
+ * @param {Message} referencedMessage - The message being replied to
+ * @param {string} channelId - Channel ID for building the message link
+ * @param {string} guildId - Guild ID for building the message link
+ * @param {number|null} color - Color to use for the embed (entity or system color)
+ * @returns {Object} Discord embed object
+ */
+function buildReplyEmbed(referencedMessage, channelId, guildId, color = null) {
+    // Get the author info
+    const authorName = referencedMessage.author?.username || 'Unknown User';
+    const authorAvatar = referencedMessage.author?.displayAvatarURL({ size: 32 }) || null;
+    
+    // Build message link
+    const messageLink = `https://discord.com/channels/${guildId}/${channelId}/${referencedMessage.id}`;
+    
+    // Get preview content (first 50 chars)
+    let previewContent = '';
+    
+    if (referencedMessage.content) {
+        previewContent = referencedMessage.content.substring(0, 50);
+        if (referencedMessage.content.length > 50) {
+            previewContent += '...';
+        }
+    } else if (referencedMessage.attachments.size > 0) {
+        previewContent = '*[Attachment]*';
+    } else if (referencedMessage.embeds.length > 0) {
+        previewContent = '*[Embed]*';
+    } else if (referencedMessage.stickers?.size > 0) {
+        previewContent = '*[Sticker]*';
+    } else {
+        previewContent = '*[Empty message]*';
+    }
+
+    // Build the embed - use provided color or no color
+    const embed = {
+        author: {
+            name: authorName,
+            icon_url: authorAvatar
+        },
+        description: `[Reply to:](${messageLink}) ${previewContent}`
+    };
+
+    // Only add color if provided
+    if (color) {
+        embed.color = color;
+    }
+
+    // If the referenced message has an image attachment, show a thumbnail
+    const imageAttachment = referencedMessage.attachments.find(att => 
+        att.contentType?.startsWith('image/') || 
+        /\.(png|jpg|jpeg|gif|webp)$/i.test(att.name)
+    );
+    
+    if (imageAttachment) {
+        embed.thumbnail = { url: imageAttachment.url };
+    }
+
+    return embed;
+}
+
+/**
+ * Extract media URLs from message content
+ * @param {string} content - Message content
+ * @returns {string[]} Array of media URLs
+ */
+function extractMediaUrls(content) {
+    if (!content) return [];
+    
+    // Match URLs that are likely to be media
+    const urlRegex = /https?:\/\/[^\s<]+[^\s<.,:;"')\]!?]/gi;
+    const urls = content.match(urlRegex) || [];
+    
+    // Filter to likely media URLs
+    return urls.filter(url => isMediaUrl(url));
+}
+
+/**
+ * Check if a URL is likely to be media that Discord would embed
+ * @param {string} url - URL to check
+ * @returns {boolean}
+ */
+function isMediaUrl(url) {
+    const mediaExtensions = /\.(png|jpg|jpeg|gif|webp|mp4|webm|mov)(\?.*)?$/i;
+    const mediaHosts = [
+        'cdn.discordapp.com',
+        'media.discordapp.net',
+        'i.imgur.com',
+        'imgur.com',
+        'gyazo.com',
+        'prnt.sc',
+        'pbs.twimg.com',
+        'tenor.com',
+        'giphy.com',
+        'media.tenor.com',
+        'media.giphy.com'
+    ];
+    
+    try {
+        const urlObj = new URL(url);
+        
+        // Check if it's a known media host
+        if (mediaHosts.some(host => urlObj.hostname.includes(host))) {
+            return true;
+        }
+        
+        // Check if it has a media extension
+        if (mediaExtensions.test(urlObj.pathname)) {
+            return true;
+        }
+        
+        return false;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Check if a URL is specifically an image URL
+ * @param {string} url - URL to check
+ * @returns {boolean}
+ */
+function isImageUrl(url) {
+    const imageExtensions = /\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i;
+    const imageHosts = [
+        'cdn.discordapp.com',
+        'media.discordapp.net',
+        'i.imgur.com',
+        'gyazo.com',
+        'prnt.sc',
+        'pbs.twimg.com'
+    ];
+    
+    try {
+        const urlObj = new URL(url);
+        
+        // Check if it has an image extension
+        if (imageExtensions.test(urlObj.pathname)) {
+            return true;
+        }
+        
+        // Check if it's a known image host with common patterns
+        if (imageHosts.some(host => urlObj.hostname.includes(host))) {
+            // Discord CDN and media URLs are images
+            if (urlObj.hostname.includes('discordapp')) {
+                return urlObj.pathname.includes('/attachments/');
+            }
+            return true;
+        }
+        
+        return false;
+    } catch {
+        return false;
+    }
+}
+
 // ============================================
 // EXPORTS
 // ============================================
@@ -708,5 +990,7 @@ module.exports = {
     matchProxyPattern,
     getProxyDisplayInfo,
     formatProxyLayout,
-    getOrCreateWebhook
+    getOrCreateWebhook,
+    buildReplyEmbed,
+    extractMediaUrls
 };
