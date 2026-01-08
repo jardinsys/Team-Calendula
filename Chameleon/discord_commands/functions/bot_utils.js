@@ -1,26 +1,26 @@
-// Chameleon/Systemiser Bot Utilities
-// Shared utilities used by all Systemiser slash commands
-// Location: Chameleon/discord_commands/functions/bot_utils.js
+// Systemiser Shared Utilities
+// Merged utilities for both slash commands and prefix commands
+// Used by: alter.js, state.js, group.js, system.js, switch.js, autoproxy.js, etc.
 
-const { 
-    EmbedBuilder, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle, 
-    ModalBuilder, 
-    TextInputBuilder, 
-    TextInputStyle 
+const {
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
 const mongoose = require('mongoose');
 
 // Import schemas
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
-const Guild = require('../../schemas/guild');
-const { PrivacyBucket } = require('../../schemas/settings');
+const System = require('../schemas/system');
+const User = require('../schemas/user');
+const Alter = require('../schemas/alter');
+const State = require('../schemas/state');
+const Group = require('../schemas/group');
+const Guild = require('../schemas/guild');
+const { PrivacyBucket } = require('../schemas/settings');
 
 // ============================================
 // CONSTANTS
@@ -35,43 +35,10 @@ const ENTITY_COLORS = {
     state: '#9B59B6',
     group: '#3498DB',
     system: '#2ECC71',
-    profile: '#5865F2',
-    note: '#5865F2'
+    error: '#FF0000',
+    success: '#00FF00',
+    info: '#0099FF'
 };
-
-/**
- * Get the embed color for an entity display
- * Priority: entity.color > system.color > null (no color/default)
- * @param {Object} entity - The entity (alter/state/group) - can be null
- * @param {Object} system - The system - can be null
- * @returns {string|null} Hex color string or null
- */
-function getEntityEmbedColor(entity, system) {
-    // If entity has its own color, use it
-    if (entity?.color) {
-        return entity.color;
-    }
-    
-    // Fall back to system color
-    if (system?.color) {
-        return system.color;
-    }
-    
-    // No color (Discord will use default gray)
-    return null;
-}
-
-/**
- * Get the embed color for system-level displays
- * @param {Object} system - The system
- * @returns {string|null} Hex color string or null
- */
-function getSystemEmbedColor(system) {
-    if (system?.color) {
-        return system.color;
-    }
-    return null;
-}
 
 // DSM and ICD type definitions for system type validation
 const DSM_TYPES = ['DID', 'Amnesia', 'Dereal/Depers', 'OSDD-1A', 'OSDD-1B', 'OSDD-2', 'OSDD-3', 'OSDD-4', 'UDD'];
@@ -86,7 +53,7 @@ const activeSessions = new Map();
 
 /**
  * Generate a unique session ID
- * @param {string} odUserId - Discord user ID
+ * @param {string} userId - Discord user ID
  * @returns {string} Unique session ID
  */
 function generateSessionId(userId) {
@@ -109,6 +76,8 @@ function getSession(sessionId) {
  */
 function setSession(sessionId, data) {
     activeSessions.set(sessionId, data);
+    // Auto-cleanup after 15 minutes
+    setTimeout(() => activeSessions.delete(sessionId), 15 * 60 * 1000);
 }
 
 /**
@@ -120,13 +89,135 @@ function deleteSession(sessionId) {
 }
 
 /**
- * Extract session ID from a custom ID string (usually the last part after underscore)
- * @param {string} customId 
- * @returns {string}
+ * Extract session ID from a custom ID string
+ * @param {string} customId - Button/modal custom ID
+ * @returns {string} Session ID
  */
 function extractSessionId(customId) {
     const parts = customId.split('_');
-    return parts[parts.length - 1];
+    return parts.slice(-2).join('_');
+}
+
+// ============================================
+// PREFIX COMMAND ARGUMENT PARSING
+// ============================================
+
+/**
+ * Parse prefix command arguments into structured data
+ * Supports: key:value pairs, flags (-flag), quoted strings, and positional args
+ * ALL KEYS AND FLAGS ARE CASE-INSENSITIVE
+ * 
+ * Examples:
+ *   "luna name:Luna color:#FF0000" -> { _positional: ['luna'], name: 'Luna', color: '#FF0000' }
+ *   "luna -private" -> { _positional: ['luna'], private: true }
+ *   'luna description:"A friendly alter"' -> { _positional: ['luna'], description: 'A friendly alter' }
+ * 
+ * @param {string[]} args - Array of arguments from message.content.split(' ')
+ * @returns {Object} Parsed arguments object
+ */
+function parseArgs(args) {
+    const result = { _positional: [] };
+    let i = 0;
+
+    while (i < args.length) {
+        const arg = args[i];
+
+        // Handle flags: -private, -clear, -full (case-insensitive)
+        if (arg.startsWith('-') && !arg.includes(':')) {
+            const flagName = arg.slice(1).toLowerCase();
+            result[flagName] = true;
+            i++;
+            continue;
+        }
+
+        // Handle key:value pairs (key is case-insensitive)
+        if (arg.includes(':')) {
+            const colonIndex = arg.indexOf(':');
+            const key = arg.slice(0, colonIndex).toLowerCase();
+            let value = arg.slice(colonIndex + 1);
+
+            // Handle quoted values that might span multiple args
+            if (value.startsWith('"') && !value.endsWith('"')) {
+                const parts = [value.slice(1)];
+                i++;
+                while (i < args.length) {
+                    if (args[i].endsWith('"')) {
+                        parts.push(args[i].slice(0, -1));
+                        break;
+                    }
+                    parts.push(args[i]);
+                    i++;
+                }
+                value = parts.join(' ');
+            } else if (value.startsWith('"') && value.endsWith('"')) {
+                value = value.slice(1, -1);
+            }
+
+            result[key] = value;
+            i++;
+            continue;
+        }
+
+        // Handle quoted positional arguments
+        if (arg.startsWith('"')) {
+            const parts = [arg.slice(1)];
+            if (!arg.endsWith('"') || arg.length === 1) {
+                i++;
+                while (i < args.length) {
+                    if (args[i].endsWith('"')) {
+                        parts.push(args[i].slice(0, -1));
+                        break;
+                    }
+                    parts.push(args[i]);
+                    i++;
+                }
+            } else {
+                parts[0] = arg.slice(1, -1);
+            }
+            result._positional.push(parts.join(' '));
+            i++;
+            continue;
+        }
+
+        // Regular positional argument (preserve original case for names)
+        result._positional.push(arg);
+        i++;
+    }
+
+    return result;
+}
+
+/**
+ * Extract target system from args (handles @mention, user ID, or defaults to self)
+ * @param {Message} message - Discord message object
+ * @param {Object} parsedArgs - Parsed arguments
+ * @returns {Promise<{user: User, system: System, targetUserId: string}|null>}
+ */
+async function resolveTargetSystem(message, parsedArgs) {
+    let targetUserId = message.author.id;
+
+    // Check for @mention
+    const mention = message.mentions.users.first();
+    if (mention) {
+        targetUserId = mention.id;
+    }
+    // Check for explicit user ID in args
+    else if (parsedArgs.user) {
+        targetUserId = parsedArgs.user;
+    }
+    // Check first positional for user ID pattern
+    else if (parsedArgs._positional[0]?.match(/^\d{17,19}$/)) {
+        targetUserId = parsedArgs._positional[0];
+        parsedArgs._positional.shift();
+    }
+
+    const user = await User.findOne({ discordID: targetUserId });
+    if (!user) {
+        return { user: null, system: null, targetUserId };
+    }
+
+    const system = await System.findById(user.systemID);
+    return { user, system, targetUserId };
 }
 
 // ============================================
@@ -134,164 +225,248 @@ function extractSessionId(customId) {
 // ============================================
 
 /**
- * Get or identify if user needs to be created
- * @param {Interaction} interaction - Discord interaction
- * @returns {Promise<{user: User|null, system: System|null, isNew: boolean}>}
+ * Get or create user and system for an interaction or message
+ * Works with both slash commands (interaction) and prefix commands (message)
+ * @param {Interaction|Message} context - Discord interaction or message
+ * @returns {Promise<{user: User, system: System, isNew: boolean}>}
  */
-async function getOrCreateUserAndSystem(interaction) {
-    let user = await User.findOne({ discordID: interaction.user.id });
-    
+async function getOrCreateUserAndSystem(context) {
+    // Handle both interaction and message contexts
+    const discordId = context.user?.id || context.author?.id;
+
+    let user = await User.findOne({ discordID: discordId });
+    let system = null;
+    let isNew = false;
+
     if (!user) {
-        return { user: null, system: null, isNew: true };
+        user = new User({
+            _id: new mongoose.Types.ObjectId(),
+            discordID: discordId,
+            joinedAt: new Date()
+        });
+        await user.save();
+        isNew = true;
     }
 
-    let system = null;
     if (user.systemID) {
         system = await System.findById(user.systemID);
     }
 
-    return { user, system, isNew: false };
+    return { user, system, isNew };
 }
 
 /**
- * Create a new user and system with default settings
- * @param {Interaction} interaction - Discord interaction
+ * Create a new user and system
+ * @param {string} discordId - Discord user ID
  * @returns {Promise<{user: User, system: System}>}
  */
-async function createNewUserAndSystem(interaction) {
-    // Create new user
-    const newUser = new User({
+async function createNewUserAndSystem(discordId) {
+    const user = new User({
         _id: new mongoose.Types.ObjectId(),
-        discordID: interaction.user.id,
-        joinedAt: new Date(),
-        discord: {
-            name: {
-                indexable: interaction.user.username.toLowerCase().replace(/[^a-z0-9\-_]/g, ''),
-                display: interaction.user.displayName || interaction.user.username
-            }
-        }
+        discordID: discordId,
+        joinedAt: new Date()
     });
 
-    // Create default privacy buckets
-    const defaultBucket = new PrivacyBucket({
-        _id: new mongoose.Types.ObjectId(),
-        name: 'Default',
-        friends: []
+    const system = new System({
+        users: [user._id],
+        metadata: { joinedAt: new Date() }
     });
 
-    const friendsBucket = new PrivacyBucket({
-        _id: new mongoose.Types.ObjectId(),
-        name: 'Friends',
-        friends: []
-    });
+    user.systemID = system._id;
 
-    // Create new system with default conditions
-    const newSystem = new System({
-        users: [newUser._id],
-        name: {
-            indexable: `system-${interaction.user.id}`,
-            display: `${interaction.user.displayName || interaction.user.username}'s System`
-        },
-        alters: {
-            conditions: [{
-                name: 'dormant',
-                settings: {
-                    hide_to_self: false,
-                    include_in_Count: false
-                }
-            }],
-            IDs: []
-        },
-        states: {
-            conditions: [{
-                name: 'remission',
-                settings: {
-                    hide_to_self: false,
-                    include_in_Count: false
-                }
-            }],
-            IDs: []
-        },
-        groups: {
-            types: [],
-            conditions: [],
-            IDs: []
-        },
-        privacyBuckets: [defaultBucket, friendsBucket],
-        setting: {
-            friendAutoBucket: friendsBucket._id.toString()
-        }
-    });
+    await user.save();
+    await system.save();
 
-    // Link user to system
-    newUser.systemID = newSystem._id;
-
-    await newUser.save();
-    await newSystem.save();
-
-    return { user: newUser, system: newSystem };
+    return { user, system };
 }
 
 /**
- * Handle the new user flow with buttons
+ * Handle new user flow for slash commands
  * @param {Interaction} interaction 
- * @param {string} entityType - 'alter', 'state', or 'group'
+ * @param {string} entityType - 'system', 'alter', 'state', or 'group'
  */
-async function handleNewUserFlow(interaction, entityType = 'alter') {
+async function handleNewUserFlow(interaction, entityType) {
     const embed = new EmbedBuilder()
-        .setColor('#FFA500')
-        .setTitle('Welcome to Systemiser! 🎡')
-        .setDescription('It looks like this is your first time here. Do you already have a system set up?')
-        .setFooter({ text: 'Select an option below to continue' });
-
-    const buttons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId(`new_user_has_system_${entityType}`)
-                .setLabel('Yes, I have a system')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId(`new_user_no_system_${entityType}`)
-                .setLabel('No, create new system')
-                .setStyle(ButtonStyle.Success)
+        .setColor(ENTITY_COLORS.system)
+        .setTitle('👋 Welcome to Systemiser!')
+        .setDescription(
+            'It looks like you don\'t have a system set up yet.\n\n' +
+            'Would you like to create one now?'
         );
 
-    await interaction.reply({
-        embeds: [embed],
-        components: [buttons],
-        ephemeral: true
-    });
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`new_user_has_system_${entityType}`)
+            .setLabel('Yes, create my system')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId(`new_user_no_system_${entityType}`)
+            .setLabel('Not now')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
 }
 
 /**
- * Handle the new user button response
+ * Handle new user button interaction
  * @param {Interaction} interaction 
- * @param {string} entityType 
- * @returns {Promise<{user: User, system: System}|null>}
  */
-async function handleNewUserButton(interaction, entityType) {
+async function handleNewUserButton(interaction) {
     const customId = interaction.customId;
-    
-    if (customId === `new_user_has_system_${entityType}`) {
+
+    if (customId.startsWith('new_user_has_system_')) {
+        const { user, system } = await createNewUserAndSystem(interaction.user.id);
+
+        const embed = new EmbedBuilder()
+            .setColor(ENTITY_COLORS.success)
+            .setTitle('✅ System Created!')
+            .setDescription(
+                'Your system has been created!\n\n' +
+                'Use `/system edit` to customize your system, or `/alter new` to create your first alter.'
+            );
+
+        await interaction.update({ embeds: [embed], components: [] });
+    } else if (customId.startsWith('new_user_no_system_')) {
         await interaction.update({
-            content: '🔗 Please contact support to link your existing system, or use the web app to connect your accounts.',
+            content: 'No problem! Come back when you\'re ready to set up your system.',
             embeds: [],
             components: []
         });
-        return null;
+    }
+}
+
+/**
+ * Require that the user has a system, send error if not
+ * Works with both interactions and messages
+ * @param {Interaction|Message} context - Discord interaction or message
+ * @param {System} system - System object
+ * @returns {Promise<boolean>} True if system exists, false if error was sent
+ */
+async function requireSystem(context, system) {
+    if (!system) {
+        const errorMsg = 'You don\'t have a system set up yet. Use `sys!system new` or `/system` to create one.';
+
+        // Check if it's an interaction or message
+        if (context.reply && context.author) {
+            // It's a message
+            await error(context, errorMsg);
+        } else if (context.reply) {
+            // It's an interaction
+            await context.reply({ content: `❌ ${errorMsg}`, ephemeral: true });
+        }
+        return false;
+    }
+    return true;
+}
+
+// ============================================
+// ENTITY SEARCH (CASE-INSENSITIVE)
+// ============================================
+
+/**
+ * Escape special regex characters
+ * @param {string} str 
+ * @returns {string}
+ */
+function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Find an entity (alter/state/group) by name or ID (case-insensitive)
+ * @param {string} identifier - Name, alias, or ID
+ * @param {System} system - System to search in
+ * @param {string} entityType - 'alter', 'state', 'group', or 'any'
+ * @returns {Promise<{entity: Object, type: string}|null>}
+ */
+async function findEntity(identifier, system, entityType = 'any') {
+    if (!identifier || !system) return null;
+
+    const searchName = identifier.toLowerCase();
+
+    const findInCollection = async (Model, ids) => {
+        return await Model.findOne({
+            _id: { $in: ids || [] },
+            $or: [
+                { _id: identifier },
+                { 'name.indexable': { $regex: new RegExp(`^${escapeRegex(searchName)}$`, 'i') } },
+                { 'name.aliases': { $elemMatch: { $regex: new RegExp(`^${escapeRegex(searchName)}$`, 'i') } } }
+            ]
+        });
+    };
+
+    if (entityType === 'alter' || entityType === 'any') {
+        const alter = await findInCollection(Alter, system.alters?.IDs);
+        if (alter) return { entity: alter, type: 'alter' };
     }
 
-    if (customId === `new_user_no_system_${entityType}`) {
-        const { user, system } = await createNewUserAndSystem(interaction);
-        await interaction.update({
-            content: `✅ Welcome! Your system has been created.\n\n**System ID:** ${system._id}\n**Your Friend ID:** ${user.friendID}\n\nUse \`/${entityType} new\` to create your first ${entityType}!`,
-            embeds: [],
-            components: []
-        });
-        return { user, system };
+    if (entityType === 'state' || entityType === 'any') {
+        const state = await findInCollection(State, system.states?.IDs);
+        if (state) return { entity: state, type: 'state' };
+    }
+
+    if (entityType === 'group' || entityType === 'any') {
+        const group = await findInCollection(Group, system.groups?.IDs);
+        if (group) return { entity: group, type: 'group' };
     }
 
     return null;
+}
+
+/**
+ * Find an alter by name (case-insensitive) - backward compatibility
+ * @param {string} name - Name to search for
+ * @param {System} system - System to search in
+ * @returns {Promise<Alter|null>}
+ */
+async function findAlterByName(name, system) {
+    const result = await findEntity(name, system, 'alter');
+    return result?.entity || null;
+}
+
+/**
+ * Find a state by name (case-insensitive) - backward compatibility
+ * @param {string} name - Name to search for
+ * @param {System} system - System to search in
+ * @returns {Promise<State|null>}
+ */
+async function findStateByName(name, system) {
+    const result = await findEntity(name, system, 'state');
+    return result?.entity || null;
+}
+
+/**
+ * Find a group by name (case-insensitive) - backward compatibility
+ * @param {string} name - Name to search for
+ * @param {System} system - System to search in
+ * @returns {Promise<Group|null>}
+ */
+async function findGroupByName(name, system) {
+    const result = await findEntity(name, system, 'group');
+    return result?.entity || null;
+}
+
+/**
+ * Find multiple entities by names/IDs
+ * @param {string[]} identifiers - Array of names, aliases, or IDs
+ * @param {System} system - System to search in
+ * @returns {Promise<{found: Array<{entity: Object, type: string}>, notFound: string[]}>}
+ */
+async function findMultipleEntities(identifiers, system) {
+    const found = [];
+    const notFound = [];
+
+    for (const identifier of identifiers) {
+        const result = await findEntity(identifier, system);
+        if (result) {
+            found.push(result);
+        } else {
+            notFound.push(identifier);
+        }
+    }
+
+    return { found, notFound };
 }
 
 // ============================================
@@ -299,27 +474,22 @@ async function handleNewUserButton(interaction, entityType) {
 // ============================================
 
 /**
- * Get the appropriate privacy bucket for a viewer
+ * Get the privacy bucket for a viewer
  * @param {System} system - The system being viewed
- * @param {string} discordUserId - The viewer's Discord ID
- * @param {string} guildId - The current guild ID
+ * @param {string} viewerDiscordId - The viewer's Discord ID
+ * @param {string} viewerFriendId - The viewer's Friend ID (optional)
  * @returns {PrivacyBucket|null}
  */
-function getPrivacyBucket(system, discordUserId, guildId) {
-    if (!system || !system.privacyBuckets) return null;
+function getPrivacyBucket(system, viewerDiscordId, viewerFriendId) {
+    if (!system?.privacyBuckets) return null;
 
-    // Check all privacy buckets for the user
     for (const bucket of system.privacyBuckets) {
-        if (bucket.friends) {
-            for (const friend of bucket.friends) {
-                if (friend.discordUserID === discordUserId || friend.discordGuildID === guildId) {
-                    return bucket;
-                }
-            }
-        }
+        const inBucket = bucket.friends?.some(f =>
+            f.discordUserID === viewerDiscordId || f.friendID === viewerFriendId
+        );
+        if (inBucket) return bucket;
     }
 
-    // Return default bucket if not found in any specific bucket
     return system.privacyBuckets.find(b => b.name === 'Default') || null;
 }
 
@@ -332,19 +502,11 @@ function getPrivacyBucket(system, discordUserId, guildId) {
  * @returns {boolean}
  */
 function shouldShowEntity(entity, privacyBucket, isOwner, showFullList = false) {
-    if (isOwner) {
-        // Owner can see all, unless hideToSelf is enabled and not showing full list
-        // For now, owners see everything
-        return true;
-    }
-
+    if (isOwner) return true;
     if (!privacyBucket) return false;
 
-    // Check privacy settings for this entity
     const entityPrivacy = entity.setting?.privacy?.find(p => p.bucket === privacyBucket.name);
-    if (entityPrivacy?.settings?.hidden === false) {
-        return false;
-    }
+    if (entityPrivacy?.settings?.hidden === false) return false;
 
     return true;
 }
@@ -358,7 +520,7 @@ function shouldShowEntity(entity, privacyBucket, isOwner, showFullList = false) 
  */
 function isBlocked(targetUser, viewerDiscordId, viewerFriendId) {
     if (!targetUser?.blocked) return false;
-    return targetUser.blocked.some(b => 
+    return targetUser.blocked.some(b =>
         b.discordID === viewerDiscordId || b.friendID === viewerFriendId
     );
 }
@@ -401,7 +563,6 @@ function getDiscordOrDefault(entity, property) {
  */
 async function checkClosedCharAllowed(guild) {
     if (!guild) return true;
-    
     const guildSettings = await Guild.findOne({ id: guild.id });
     return guildSettings?.settings?.closedCharAllowed !== false;
 }
@@ -416,120 +577,174 @@ function isValidIndexableName(name) {
 }
 
 // ============================================
-// ENTITY SEARCH HELPERS
+// PREFIX COMMAND RESPONSE HELPERS
 // ============================================
 
 /**
- * Find an alter by name (indexable or alias)
- * @param {string} name - Name to search for
- * @param {System} system - System to search in
- * @returns {Promise<Alter|null>}
+ * Send a quick success message (for prefix commands)
+ * @param {Message} message - Discord message to reply to
+ * @param {string} text - Success message text
  */
-async function findAlterByName(name, system) {
-    const searchName = name.toLowerCase();
-    const alters = await Alter.find({
-        _id: { $in: system.alters?.IDs || [] }
+async function success(message, text) {
+    return message.reply({
+        embeds: [new EmbedBuilder()
+            .setColor(ENTITY_COLORS.success)
+            .setDescription(`✅ ${text}`)]
     });
-
-    // Search by indexable name first
-    let alter = alters.find(a => a.name?.indexable?.toLowerCase() === searchName);
-    
-    // If not found, search through aliases
-    if (!alter) {
-        alter = alters.find(a => 
-            a.name?.aliases?.some(alias => alias.toLowerCase() === searchName)
-        );
-    }
-
-    return alter || null;
 }
 
 /**
- * Find a state by name (indexable or alias)
- * @param {string} name - Name to search for
- * @param {System} system - System to search in
- * @returns {Promise<State|null>}
+ * Send a quick error message (for prefix commands)
+ * @param {Message} message - Discord message to reply to
+ * @param {string} text - Error message text
  */
-async function findStateByName(name, system) {
-    const searchName = name.toLowerCase();
-    const states = await State.find({
-        _id: { $in: system.states?.IDs || [] }
+async function error(message, text) {
+    return message.reply({
+        embeds: [new EmbedBuilder()
+            .setColor(ENTITY_COLORS.error)
+            .setDescription(`❌ ${text}`)]
     });
-
-    let state = states.find(s => s.name?.indexable?.toLowerCase() === searchName);
-    
-    if (!state) {
-        state = states.find(s => 
-            s.name?.aliases?.some(alias => alias.toLowerCase() === searchName)
-        );
-    }
-
-    return state || null;
 }
 
 /**
- * Find a group by name (indexable or alias)
- * @param {string} name - Name to search for
- * @param {System} system - System to search in
- * @returns {Promise<Group|null>}
+ * Send an info message (for prefix commands)
+ * @param {Message} message - Discord message to reply to
+ * @param {string} text - Info message text
  */
-async function findGroupByName(name, system) {
-    const searchName = name.toLowerCase();
-    const groups = await Group.find({
-        _id: { $in: system.groups?.IDs || [] }
+async function info(message, text) {
+    return message.reply({
+        embeds: [new EmbedBuilder()
+            .setColor(ENTITY_COLORS.info)
+            .setDescription(`ℹ️ ${text}`)]
     });
-
-    let group = groups.find(g => g.name?.indexable?.toLowerCase() === searchName);
-    
-    if (!group) {
-        group = groups.find(g => 
-            g.name?.aliases?.some(alias => alias.toLowerCase() === searchName)
-        );
-    }
-
-    return group || null;
 }
 
 /**
- * Find an entity by name across all entity types (alter, state, group)
- * @param {string} name - Name to search for
- * @param {System} system - System to search in
- * @returns {Promise<{entity: Object|null, type: string|null}>}
+ * Build a help embed for a command
+ * @param {string} commandName - Name of the command
+ * @param {string} description - Command description
+ * @param {Array<{usage: string, description: string}>} subcommands - List of subcommands
+ * @returns {EmbedBuilder}
  */
-async function findEntityByName(name, system) {
-    const searchName = name.toLowerCase();
+function buildHelpEmbed(commandName, description, subcommands) {
+    const embed = new EmbedBuilder()
+        .setColor(ENTITY_COLORS.info)
+        .setTitle(`📖 ${commandName} Command Help`)
+        .setDescription(description);
 
-    // Search alters first
-    const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
-    let entity = alters.find(a => a.name?.indexable?.toLowerCase() === searchName);
-    if (!entity) {
-        entity = alters.find(a => 
-            a.name?.aliases?.some(alias => alias.toLowerCase() === searchName)
-        );
+    let usageText = '';
+    for (const sub of subcommands) {
+        usageText += `\`${sub.usage}\`\n${sub.description}\n\n`;
     }
-    if (entity) return { entity, type: 'alter' };
 
-    // Search states
-    const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
-    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName);
-    if (!entity) {
-        entity = states.find(s => 
-            s.name?.aliases?.some(alias => alias.toLowerCase() === searchName)
-        );
+    embed.addFields({ name: 'Usage', value: usageText.trim() });
+
+    return embed;
+}
+
+// ============================================
+// FORMATTING UTILITIES
+// ============================================
+
+/**
+ * Capitalize first letter of a string
+ * @param {string} str 
+ * @returns {string}
+ */
+function capitalize(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
+ * Format a field value, handling empty/null values
+ * @param {*} value - Value to format
+ * @param {string} defaultText - Default text if value is empty
+ * @returns {string}
+ */
+function formatValue(value, defaultText = '*Not set*') {
+    if (value === null || value === undefined || value === '') {
+        return defaultText;
     }
-    if (entity) return { entity, type: 'state' };
-
-    // Search groups
-    const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
-    entity = groups.find(g => g.name?.indexable?.toLowerCase() === searchName);
-    if (!entity) {
-        entity = groups.find(g => 
-            g.name?.aliases?.some(alias => alias.toLowerCase() === searchName)
-        );
+    if (Array.isArray(value)) {
+        return value.length > 0 ? value.join(', ') : defaultText;
     }
-    if (entity) return { entity, type: 'group' };
+    return String(value);
+}
 
-    return { entity: null, type: null };
+/**
+ * Format a date for display
+ * @param {Date|string} date 
+ * @returns {string}
+ */
+function formatDate(date) {
+    if (!date) return '*Not set*';
+    const d = new Date(date);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/**
+ * Format proxies for display (with code formatting)
+ * @param {string[]} proxies 
+ * @returns {string}
+ */
+function formatProxies(proxies) {
+    if (!proxies || proxies.length === 0) return '*No proxies*';
+    return proxies.map(p => `\`${p}\``).join(', ');
+}
+
+/**
+ * Parse comma-separated string into array
+ * @param {string} str 
+ * @returns {string[]}
+ */
+function parseCommaSeparated(str) {
+    if (!str) return [];
+    return str.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+// Alias for parseCommaSeparated
+const parseList = parseCommaSeparated;
+
+/**
+ * Parse newline-separated string into array
+ * @param {string} str 
+ * @returns {string[]}
+ */
+function parseNewlineSeparated(str) {
+    if (!str) return [];
+    return str.split('\n').map(s => s.trim()).filter(Boolean);
+}
+
+// Alias for parseNewlineSeparated
+const parseNewlineList = parseNewlineSeparated;
+
+// ============================================
+// VALIDATION HELPERS
+// ============================================
+
+/**
+ * Check if a string is a valid hex color
+ * @param {string} str 
+ * @returns {boolean}
+ */
+function isValidColor(str) {
+    if (!str) return false;
+    return /^#?[0-9A-Fa-f]{6}$/.test(str);
+}
+
+/**
+ * Normalize a hex color (ensure # prefix, uppercase)
+ * @param {string} color 
+ * @returns {string|null}
+ */
+function normalizeColor(color) {
+    if (!color) return null;
+    color = color.replace('#', '');
+    if (/^[0-9A-Fa-f]{6}$/.test(color)) {
+        return `#${color.toUpperCase()}`;
+    }
+    return null;
 }
 
 // ============================================
@@ -543,14 +758,13 @@ async function findEntityByName(name, system) {
  * @param {boolean} isOwner - Whether viewer is owner
  * @param {boolean} showFullList - Whether showing full list
  * @param {string} sessionId - Session ID
- * @param {string} prefix - Button ID prefix (e.g., 'alter', 'state', 'group')
+ * @param {string} prefix - Button ID prefix
  * @returns {ActionRowBuilder[]}
  */
 function buildListButtons(totalItems, currentPage, isOwner, showFullList, sessionId, prefix) {
     const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
     const rows = [];
 
-    // Navigation row
     const navRow = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
@@ -566,7 +780,6 @@ function buildListButtons(totalItems, currentPage, isOwner, showFullList, sessio
         );
     rows.push(navRow);
 
-    // Toggle full list button (owner only)
     if (isOwner) {
         const actionRow = new ActionRowBuilder()
             .addComponents(
@@ -602,7 +815,7 @@ function getTotalPages(totalItems) {
 }
 
 // ============================================
-// SYNC WITH DISCORD HELPERS
+// SYNC HELPERS
 // ============================================
 
 /**
@@ -616,79 +829,74 @@ function getTotalPages(totalItems) {
 function buildSyncConfirmation(entityType, entityName, sessionId, action = 'edit') {
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS[entityType] || '#FFA500')
-        .setTitle(action === 'new' ? `Create New ${capitalize(entityType)}` : `Edit ${capitalize(entityType)}: ${entityName}`)
+        .setTitle(action === 'new'
+            ? `✅ ${capitalize(entityType)} Created!`
+            : `✅ ${capitalize(entityType)} Updated!`)
         .setDescription(
-            'Would you like changes to sync with Discord?\n\n' +
-            '**Yes:** Edits will apply to your main profile and sync across platforms.\n' +
-            '**No:** Edits will be Discord-specific only.'
+            `**${entityName}** has been ${action === 'new' ? 'created' : 'updated'}.\n\n` +
+            'Would you like to sync Discord-specific settings?'
         );
 
-    const buttons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId(`${entityType}_${action}_sync_yes_${sessionId}`)
-                .setLabel('Yes, sync with Discord')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId(`${entityType}_${action}_sync_no_${sessionId}`)
-                .setLabel('No, Discord-specific')
-                .setStyle(ButtonStyle.Secondary)
-        );
+    const buttons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`${entityType}_sync_yes_${sessionId}`)
+            .setLabel('Yes, sync now')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId(`${entityType}_sync_no_${sessionId}`)
+            .setLabel('Not now')
+            .setStyle(ButtonStyle.Secondary)
+    );
 
     return { embed, buttons };
 }
 
 // ============================================
-// EDIT INTERFACE HELPERS
+// EDIT HELPERS
 // ============================================
 
 /**
- * Get the target object for edits based on mode and sync settings
+ * Get the correct target for editing based on current mode
  * @param {Object} entity - The entity being edited
- * @param {Object} session - Current session with mode and sync info
- * @returns {Object} - The object to read/write properties from/to
+ * @param {Object} session - Session data containing mode
+ * @returns {Object}
  */
 function getEditTarget(entity, session) {
-    if (session.mode === 'mask') {
-        return entity.mask || {};
-    } else if (session.mode === 'server' || !session.syncWithDiscord) {
-        return entity.discord || {};
+    if (session?.mode === 'mask') {
+        return entity.mask || entity;
     }
-    return entity;
+    if (session?.mode === 'server' && session?.serverId) {
+        const serverSettings = entity.discord?.server?.find(s => s.id === session.serverId);
+        return serverSettings || entity.discord || entity;
+    }
+    return entity.discord || entity;
 }
 
 /**
- * Update entity property based on mode and sync settings
- * @param {Object} entity - The entity being edited
- * @param {Object} session - Current session
- * @param {string} path - Property path (e.g., 'name.display', 'description')
+ * Update an entity property based on current mode
+ * @param {Object} entity - The entity to update
+ * @param {Object} session - Session data
+ * @param {string} property - Property path to update
  * @param {*} value - New value
  */
-function updateEntityProperty(entity, session, path, value) {
-    const parts = path.split('.');
-    let target;
+function updateEntityProperty(entity, session, property, value) {
+    const target = session?.mode === 'mask' ? 'mask' : 'discord';
 
-    if (session.mode === 'mask') {
-        if (!entity.mask) entity.mask = {};
-        target = entity.mask;
-    } else if (session.mode === 'server' || !session.syncWithDiscord) {
-        if (!entity.discord) entity.discord = {};
-        target = entity.discord;
-    } else {
-        target = entity;
+    if (!entity[target]) {
+        entity[target] = {};
     }
 
-    // Navigate to nested property
+    const parts = property.split('.');
+    let current = entity[target];
+
     for (let i = 0; i < parts.length - 1; i++) {
-        if (!target[parts[i]]) target[parts[i]] = {};
-        target = target[parts[i]];
+        if (!current[parts[i]]) {
+            current[parts[i]] = {};
+        }
+        current = current[parts[i]];
     }
 
-    // Set the value
-    const finalKey = parts[parts.length - 1];
-    if (value !== undefined && value !== null && value !== '') {
-        target[finalKey] = value;
-    }
+    current[parts[parts.length - 1]] = value;
 }
 
 // ============================================
@@ -696,20 +904,21 @@ function updateEntityProperty(entity, session, path, value) {
 // ============================================
 
 /**
- * Add a condition to the system if it doesn't exist
- * @param {System} system - The system
- * @param {string} entityType - 'alters' or 'states'
+ * Ensure a condition exists in the system
+ * @param {System} system - System to update
+ * @param {string} entityType - 'alter', 'state', or 'group'
  * @param {string} conditionName - Name of the condition
  */
 async function ensureConditionExists(system, entityType, conditionName) {
-    const conditions = system[entityType]?.conditions || [];
-    const exists = conditions.some(c => c.name === conditionName);
-    
+    const conditionsPath = `${entityType}s.conditions`;
+    const conditions = system[`${entityType}s`]?.conditions || [];
+
+    const exists = conditions.some(c => c.name?.toLowerCase() === conditionName.toLowerCase());
     if (!exists) {
-        if (!system[entityType]) system[entityType] = { conditions: [], IDs: [] };
-        if (!system[entityType].conditions) system[entityType].conditions = [];
-        
-        system[entityType].conditions.push({
+        if (!system[`${entityType}s`]) {
+            system[`${entityType}s`] = { conditions: [], IDs: [] };
+        }
+        system[`${entityType}s`].conditions.push({
             name: conditionName,
             settings: {
                 hide_to_self: false,
@@ -721,85 +930,24 @@ async function ensureConditionExists(system, entityType, conditionName) {
 }
 
 // ============================================
-// UTILITY FUNCTIONS
-// ============================================
-
-/**
- * Capitalize first letter of a string
- * @param {string} str 
- * @returns {string}
- */
-function capitalize(str) {
-    if (!str) return '';
-    return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-/**
- * Parse comma-separated string into array
- * @param {string} str 
- * @returns {string[]}
- */
-function parseCommaSeparated(str) {
-    if (!str) return [];
-    return str.split(',').map(s => s.trim()).filter(Boolean);
-}
-
-/**
- * Parse newline-separated string into array
- * @param {string} str 
- * @returns {string[]}
- */
-function parseNewlineSeparated(str) {
-    if (!str) return [];
-    return str.split('\n').map(s => s.trim()).filter(Boolean);
-}
-
-/**
- * Format proxies for display (with code formatting)
- * @param {string[]} proxies 
- * @returns {string}
- */
-function formatProxies(proxies) {
-    if (!proxies || proxies.length === 0) return '*No proxies*';
-    return proxies.map(p => `\`${p}\``).join(', ');
-}
-
-/**
- * Format a date for display
- * @param {Date} date 
- * @returns {string}
- */
-function formatDate(date) {
-    if (!date) return '*Not set*';
-    return new Date(date).toLocaleDateString();
-}
-
-// ============================================
-// PROXY VALIDATION HELPERS
+// PROXY VALIDATION
 // ============================================
 
 /**
  * Check if a proxy pattern already exists in the system
  * @param {string} proxy - The proxy pattern to check
- * @param {System} system - The system to check in
- * @param {string} excludeEntityId - Entity ID to exclude from check (for editing)
- * @param {string} excludeEntityType - Type of entity to exclude ('alter', 'state', 'group')
+ * @param {System} system - The system to check
+ * @param {string} excludeEntityId - Entity ID to exclude from check
  * @returns {Promise<{exists: boolean, entity: Object|null, type: string|null}>}
  */
-async function checkProxyExists(proxy, system, excludeEntityId = null, excludeEntityType = null) {
-    if (!proxy || !proxy.trim()) {
-        return { exists: false, entity: null, type: null };
-    }
-
-    const normalizedProxy = proxy.trim().toLowerCase();
+async function checkProxyExists(proxy, system, excludeEntityId = null) {
+    const proxyLower = proxy.toLowerCase();
 
     // Check alters
     const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
     for (const alter of alters) {
-        if (excludeEntityType === 'alter' && alter._id.toString() === excludeEntityId) continue;
-        
-        const hasProxy = alter.proxy?.some(p => p.toLowerCase() === normalizedProxy);
-        if (hasProxy) {
+        if (alter._id.toString() === excludeEntityId) continue;
+        if (alter.proxy?.some(p => p.toLowerCase() === proxyLower)) {
             return { exists: true, entity: alter, type: 'alter' };
         }
     }
@@ -807,10 +955,8 @@ async function checkProxyExists(proxy, system, excludeEntityId = null, excludeEn
     // Check states
     const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
     for (const state of states) {
-        if (excludeEntityType === 'state' && state._id.toString() === excludeEntityId) continue;
-        
-        const hasProxy = state.proxy?.some(p => p.toLowerCase() === normalizedProxy);
-        if (hasProxy) {
+        if (state._id.toString() === excludeEntityId) continue;
+        if (state.proxy?.some(p => p.toLowerCase() === proxyLower)) {
             return { exists: true, entity: state, type: 'state' };
         }
     }
@@ -818,10 +964,8 @@ async function checkProxyExists(proxy, system, excludeEntityId = null, excludeEn
     // Check groups
     const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
     for (const group of groups) {
-        if (excludeEntityType === 'group' && group._id.toString() === excludeEntityId) continue;
-        
-        const hasProxy = group.proxy?.some(p => p.toLowerCase() === normalizedProxy);
-        if (hasProxy) {
+        if (group._id.toString() === excludeEntityId) continue;
+        if (group.proxy?.some(p => p.toLowerCase() === proxyLower)) {
             return { exists: true, entity: group, type: 'group' };
         }
     }
@@ -830,56 +974,42 @@ async function checkProxyExists(proxy, system, excludeEntityId = null, excludeEn
 }
 
 /**
- * Validate proxies and return duplicates
- * @param {string[]} proxies - Array of proxy patterns to validate
- * @param {System} system - The system
- * @param {string} excludeEntityId - Entity ID to exclude
- * @param {string} excludeEntityType - Entity type to exclude
- * @returns {Promise<{valid: string[], duplicates: {proxy: string, owner: string, type: string}[]}>}
+ * Validate proxy patterns
+ * @param {string[]} proxies - Array of proxy patterns
+ * @returns {{valid: boolean, errors: string[]}}
  */
-async function validateProxies(proxies, system, excludeEntityId = null, excludeEntityType = null) {
-    const valid = [];
-    const duplicates = [];
+function validateProxies(proxies) {
+    const errors = [];
 
     for (const proxy of proxies) {
-        if (!proxy.trim()) continue;
-
-        const { exists, entity, type } = await checkProxyExists(proxy, system, excludeEntityId, excludeEntityType);
-        
-        if (exists) {
-            duplicates.push({
-                proxy: proxy,
-                owner: getDisplayName(entity),
-                type: type
-            });
-        } else {
-            valid.push(proxy);
+        if (!proxy.includes('text')) {
+            errors.push(`Proxy "${proxy}" must contain "text" as a placeholder`);
+        }
+        if (proxy.length > 100) {
+            errors.push(`Proxy "${proxy}" is too long (max 100 characters)`);
         }
     }
 
-    return { valid, duplicates };
+    return { valid: errors.length === 0, errors };
 }
 
 /**
- * Get the proxy layout placeholder help text
- * @param {string} entityType - 'alter', 'state', or 'group'
+ * Get proxy layout help text
  * @returns {string}
  */
-function getProxyLayoutHelp(entityType = 'alter') {
-    const signPrefix = entityType === 'alter' ? 'a-sign' : (entityType === 'state' ? 'st-sign' : 'g-sign');
-    
+function getProxyLayoutHelp() {
     return `**Available Placeholders:**
-• \`{name}\` - Display name of the ${entityType}
-• \`{sys-name}\` - System display name
-• \`{tag1}\`, \`{tag2}\`, \`{tag3}\`... - **System** tag array items
-• \`{a-sign#}\` - Alter signoff | \`{st-sign#}\` - State signoff | \`{g-sign#}\` - Group signoff
-• \`{pronouns}\` - Pronouns joined by separator
-• \`{caution}\` - Caution type
+\`{name}\` - Display name
+\`{sys-name}\` - System name
+\`{tag1}\`, \`{tag2}\`... - System tags
+\`{pronouns}\` - Pronouns
+\`{caution}\` - Caution type
 
-**Example:** \`{tag1} {name} {${signPrefix}1}\`
-Result: \`🌙 Luna ✨\` (where 🌙 is a system tag, ✨ is ${entityType} signoff)
+**Signoffs (per-entity):**
+\`{a-sign1}\`, \`{a-sign2}\`... - Alter signoffs
+\`{st-sign1}\`, \`{st-sign2}\`... - State signoffs
+\`{g-sign1}\`, \`{g-sign2}\`... - Group signoffs
 
-**Note:** Tags are set at system level. Signoffs are per-entity.
 You can mix signoff types! E.g., \`{tag1}{a-sign1}{name}{g-sign1}\``;
 }
 
@@ -907,7 +1037,7 @@ module.exports = {
     ENTITY_COLORS,
     DSM_TYPES,
     ICD_TYPES,
-    
+
     // Session management
     generateSessionId,
     getSession,
@@ -915,57 +1045,75 @@ module.exports = {
     deleteSession,
     extractSessionId,
     activeSessions,
-    
+
+    // Prefix command parsing
+    parseArgs,
+    resolveTargetSystem,
+
     // User and system management
     getOrCreateUserAndSystem,
     createNewUserAndSystem,
     handleNewUserFlow,
     handleNewUserButton,
-    
+    requireSystem,
+
+    // Entity search (case-insensitive)
+    findEntity,
+    findAlterByName,
+    findStateByName,
+    findGroupByName,
+    findMultipleEntities,
+    escapeRegex,
+
     // Privacy and visibility
     getPrivacyBucket,
     shouldShowEntity,
     isBlocked,
-    
+
     // Display helpers
     getDisplayName,
     getDiscordOrDefault,
     checkClosedCharAllowed,
     isValidIndexableName,
-    getEntityEmbedColor,
-    getSystemEmbedColor,
-    
-    // Entity search
-    findAlterByName,
-    findStateByName,
-    findGroupByName,
-    findEntityByName,
-    
+
+    // Prefix command response helpers
+    success,
+    error,
+    info,
+    buildHelpEmbed,
+
+    // Formatting utilities
+    capitalize,
+    formatValue,
+    formatDate,
+    formatProxies,
+    parseCommaSeparated,
+    parseList, // alias
+    parseNewlineSeparated,
+    parseNewlineList, // alias
+
+    // Validation helpers
+    isValidColor,
+    normalizeColor,
+
     // List helpers
     buildListButtons,
     getPageItems,
     getTotalPages,
-    
+
     // Sync helpers
     buildSyncConfirmation,
-    
+
     // Edit helpers
     getEditTarget,
     updateEntityProperty,
-    
+
     // Condition management
     ensureConditionExists,
-    
+
     // Proxy validation
     checkProxyExists,
     validateProxies,
     getProxyLayoutHelp,
-    getProxyStyleOptions,
-    
-    // Utilities
-    capitalize,
-    parseCommaSeparated,
-    parseNewlineSeparated,
-    formatProxies,
-    formatDate
+    getProxyStyleOptions
 };

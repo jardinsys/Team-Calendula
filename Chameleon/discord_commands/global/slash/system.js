@@ -156,8 +156,8 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     if (system.sys_type?.dd?.ICD) {
         typeInfo += `**ICD:** ${system.sys_type.dd.ICD}\n`;
     }
-    if (system.sys_type?.calledSystem !== undefined) {
-        typeInfo += `**Calls self a system:** ${system.sys_type.calledSystem ? 'Yes' : 'No'}\n`;
+    if (system.sys_type?.isSystem !== undefined) {
+        typeInfo += `**Is a system:** ${system.sys_type.isSystem ? 'Yes' : 'No'}\n`;
     }
 
     if (typeInfo) {
@@ -1501,7 +1501,7 @@ async function handleSelectMenu(interaction) {
                         .setCustomId('called_system')
                         .setLabel('Calls self a system? (yes/no)')
                         .setStyle(TextInputStyle.Short)
-                        .setValue(system.sys_type?.calledSystem ? 'yes' : 'no')
+                        .setValue(system.sys_type?.isSystem ? 'yes' : 'no')
                         .setRequired(false)
                         .setMaxLength(3)
                 )
@@ -1941,7 +1941,7 @@ async function handleModalSubmit(interaction) {
         const typeName = interaction.fields.getTextInputValue('type_name');
         const dsmType = interaction.fields.getTextInputValue('dsm_type');
         const icdType = interaction.fields.getTextInputValue('icd_type');
-        const calledSystem = interaction.fields.getTextInputValue('called_system');
+        const isSystem = interaction.fields.getTextInputValue('called_system');
 
         if (!system.sys_type) system.sys_type = { dd: {} };
         if (!system.sys_type.dd) system.sys_type.dd = {};
@@ -1962,7 +1962,7 @@ async function handleModalSubmit(interaction) {
             system.sys_type.dd.ICD = undefined;
         }
 
-        system.sys_type.calledSystem = calledSystem?.toLowerCase() === 'yes';
+        system.sys_type.isSystem = isSystem?.toLowerCase() === 'yes';
 
         await system.save();
     }

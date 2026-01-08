@@ -35,7 +35,8 @@ const systemSchema = new mongoose.Schema({
             DSM: { type: String, enum: ["DID", "Amnesia", "Dereal/Depers", "OSDD-1A", "OSDD-1B", "OSDD-2", "OSDD-3", "OSDD-4", "UDD"] },
             ICD: { type: String, enum: ["P-DID", "Trance", "DNSD", "Possession Trance", "SDS"] },
         },
-        calledSystem: Boolean
+        isSystem: Boolean, // Alters, States, Groups
+        isFragmented: Boolean // States + Groups
     },
     description: String,
     birthday: Date,
