@@ -61,7 +61,7 @@ const CHARS_PER_PAGE = 1800; // Leave room for title/metadata in embed
 const MEDIA_PER_MESSAGE = 10; // Discord limit
 const PREVIEW_LENGTH = 500; // Characters to store in contentPreview
 const NOTE_COLORS = {
-    default: '#5865F2',
+    default: '#fafafa',
     red: '#ED4245',
     orange: '#E67E22',
     yellow: '#F1C40F',

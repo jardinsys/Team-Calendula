@@ -133,7 +133,7 @@ async function handleWhoisLookup(interaction, messageId, channelId, targetMessag
 
     // Build the embed
     const embed = new EmbedBuilder()
-        .setColor(entity?.color || system?.color || '#FFA500')
+        .setColor(entity?.color || system?.color || '#888888')
         .setTitle('🔍 Message Identity')
         .addFields(
             { 

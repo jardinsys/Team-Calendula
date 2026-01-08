@@ -25,7 +25,7 @@ const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const utils = require('../../functions/bot_utils');
 
-const CONVERT_COLOR = '#9B59B6'; // Purple
+const CONVERT_COLOR = '#007bd8'; 
 
 module.exports = {
     name: 'convert',

@@ -20,12 +20,7 @@ const { Shift } = require('../../schemas/front');
 const utils = require('../functions/bot_utils');
 
 // Constants
-const ENTITY_COLORS = utils.ENTITY_COLORS || {
-    system: '#9B59B6',
-    alter: '#3498DB',
-    state: '#2ECC71',
-    group: '#E74C3C'
-};
+const ENTITY_COLORS = utils.ENTITY_COLORS;
 
 module.exports = {
     data: new SlashCommandBuilder()

@@ -35,7 +35,7 @@ const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const utils = require('../../functions/bot_utils');
 
-const IMPORT_COLOR = '#00CED1'; // Dark turquoise
+const IMPORT_COLOR = '#007bd8';
 
 // API endpoints
 const PK_API_BASE = 'https://api.pluralkit.me/v2';

@@ -31,13 +31,14 @@ const INDEXABLE_NAME_REGEX = /^[a-zA-Z0-9\-_]+$/;
 
 // Entity colors for consistent styling
 const ENTITY_COLORS = {
-    alter: '#FFA500',
-    state: '#9B59B6',
-    group: '#3498DB',
-    system: '#2ECC71',
-    error: '#FF0000',
-    success: '#00FF00',
-    info: '#0099FF'
+    alter: '#fb4fd9',
+    state: '#00e1da',
+    group: '#ffdb28',
+    system: '#007bd8',
+    profile: '#f28200',
+    error: '#e9162d',
+    success: '#1fb819',
+    info: '#8f2be7'
 };
 
 // DSM and ICD type definitions for system type validation
