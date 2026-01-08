@@ -15,6 +15,12 @@
 //   -nogroups                            - Don't import groups
 //   -noswitches                          - Don't import switch history
 //   -states:<name1,name2,name3>          - Import these members as states instead of alters
+//   -target:app                          - Import to main/app fields (default)
+//   -target:discord                      - Import to Discord-specific fields
+//
+// MULTI-SOURCE WORKFLOW:
+//   1. sys!import simplyplural <token>              - Import SP data as main profile
+//   2. sys!import pluralkit <token> -target:discord - Add PK data as Discord overlay
 //
 // NOTE: Other platforms don't have "states" - all members import as alters by default.
 //       Use -states: flag or sys!convert after import to change alters to states.
@@ -35,6 +41,10 @@ const IMPORT_COLOR = '#00CED1'; // Dark turquoise
 const PK_API_BASE = 'https://api.pluralkit.me/v2';
 const SP_API_BASE = 'https://api.apparyllis.com/v1';
 
+// Target modes for import
+const TARGET_APP = 'app';       // Import to main/app fields (default)
+const TARGET_DISCORD = 'discord'; // Import to discord-specific fields
+
 module.exports = {
     name: 'import',
     aliases: ['imp'],
@@ -50,7 +60,7 @@ module.exports = {
 
         // Get or create user and system
         let { user, system } = await utils.getOrCreateUserAndSystem(message);
-        
+
         if (!system) {
             // Create a new system for the user
             system = new System({
@@ -66,13 +76,27 @@ module.exports = {
             await user.save();
         }
 
+        // Parse target mode
+        let targetMode = TARGET_APP; // default
+        if (parsed.target) {
+            const t = parsed.target.toLowerCase();
+            if (t === 'discord' || t === 'dc') {
+                targetMode = TARGET_DISCORD;
+            } else if (t === 'app' || t === 'main') {
+                targetMode = TARGET_APP;
+            } else {
+                return utils.error(message, `Invalid target: \`${parsed.target}\`\nUse \`-target:app\` or \`-target:discord\``);
+            }
+        }
+
         // Parse flags
         const options = {
             replace: parsed.replace || false,
             skipExisting: parsed.skipexisting || false,
             noGroups: parsed.nogroups || false,
             noSwitches: parsed.noswitches || false,
-            stateNames: parsed.states ? parsed.states.split(',').map(n => n.trim().toLowerCase()) : []
+            stateNames: parsed.states ? parsed.states.split(',').map(n => n.trim().toLowerCase()) : [],
+            target: targetMode
         };
 
         // Route based on source
@@ -164,7 +188,33 @@ async function handleHelp(message) {
                 inline: false
             },
             {
-                name: '⚙️ Options',
+                name: '🎯 Target Mode',
+                value: [
+                    '`-target:app` - Import to main profile fields *(default)*',
+                    '`-target:discord` - Import to Discord-specific fields',
+                    '',
+                    '**Use different sources for different targets!**',
+                    'This lets you keep separate avatars/info for Discord vs the app.'
+                ].join('\n'),
+                inline: false
+            },
+            {
+                name: '📱 Multi-Source Workflow',
+                value: [
+                    '```',
+                    '# 1. Import Simply Plural as main profile',
+                    'sys!import simplyplural <token>',
+                    '',
+                    '# 2. Add PluralKit data for Discord',
+                    'sys!import pluralkit <token> -target:discord',
+                    '```',
+                    'Now your alters have SP avatars for the app,',
+                    'and PK avatars for Discord proxying!'
+                ].join('\n'),
+                inline: false
+            },
+            {
+                name: '⚙️ Other Options',
                 value: [
                     '`-replace` - Replace all existing data',
                     '`-skipexisting` - Skip members that already exist',
@@ -181,8 +231,7 @@ async function handleHelp(message) {
                     '`sys!import pk <token> -states:Tired,Anxious`',
                     '',
                     'Or convert after import:',
-                    '`sys!convert alter Tired to state`',
-                    '`sys!convert alters Tired,Anxious to states`'
+                    '`sys!convert alter Tired to state`'
                 ].join('\n'),
                 inline: false
             }
@@ -292,7 +341,7 @@ async function importPluralKitAPI(message, system, token, options) {
         }, options);
 
         await statusMsg.edit({
-            embeds: [buildImportResultEmbed('PluralKit', result)]
+            embeds: [buildImportResultEmbed('PluralKit', result, options.target)]
         });
 
     } catch (error) {
@@ -310,7 +359,7 @@ async function importPluralKitAPI(message, system, token, options) {
 
 async function importPluralKitFile(message, system, options) {
     const attachment = message.attachments.first();
-    
+
     if (!attachment.name.endsWith('.json')) {
         return utils.error(message, 'Please attach a JSON file.');
     }
@@ -344,7 +393,7 @@ async function importPluralKitFile(message, system, options) {
         }, options);
 
         await statusMsg.edit({
-            embeds: [buildImportResultEmbed('PluralKit', result)]
+            embeds: [buildImportResultEmbed('PluralKit', result, options.target)]
         });
 
     } catch (error) {
@@ -391,10 +440,21 @@ async function processPluralKitData(system, data, options) {
             system.discord.tag.normal = [data.system.tag];
         }
         if (data.system.avatar_url) {
-            system.avatar = { url: data.system.avatar_url };
+            if (options.target === TARGET_DISCORD) {
+                system.discord = system.discord || {};
+                system.discord.image = system.discord.image || {};
+                system.discord.image.avatar = { url: data.system.avatar_url };
+            } else {
+                system.avatar = { url: data.system.avatar_url };
+            }
         }
         if (data.system.color) {
-            system.color = `#${data.system.color}`;
+            if (options.target === TARGET_DISCORD) {
+                system.discord = system.discord || {};
+                system.discord.color = `#${data.system.color}`;
+            } else {
+                system.color = `#${data.system.color}`;
+            }
         }
         result.systemUpdated = true;
     }
@@ -410,7 +470,7 @@ async function processPluralKitData(system, data, options) {
             // Check if this member should be imported as a state
             const memberNameLower = pkMember.name.toLowerCase();
             const displayNameLower = (pkMember.display_name || '').toLowerCase();
-            const shouldBeState = options.stateNames?.some(sn => 
+            const shouldBeState = options.stateNames?.some(sn =>
                 sn === memberNameLower || sn === displayNameLower
             );
 
@@ -425,12 +485,22 @@ async function processPluralKitData(system, data, options) {
                 }
 
                 if (existingState && !options.replace) {
-                    updateStateFromPK(existingState, pkMember);
+                    // Update existing - pass target mode
+                    updateStateFromPK(existingState, pkMember, options.target);
+                    await existingState.save();
+                    memberIdMap.set(pkMember.id, { id: existingState._id, type: 'state' });
+                    result.statesUpdated++;
+                } else if (existingState && options.target === TARGET_DISCORD) {
+                    // Discord target on existing - just update discord fields
+                    updateStateFromPK(existingState, pkMember, options.target);
                     await existingState.save();
                     memberIdMap.set(pkMember.id, { id: existingState._id, type: 'state' });
                     result.statesUpdated++;
                 } else {
-                    const newState = createStateFromPK(pkMember);
+                    // Create new
+                    const newState = options.target === TARGET_DISCORD
+                        ? createStateFromPKDiscord(pkMember)
+                        : createStateFromPK(pkMember);
                     await newState.save();
 
                     if (!system.states.IDs.includes(newState._id)) {
@@ -451,12 +521,22 @@ async function processPluralKitData(system, data, options) {
                 }
 
                 if (existingAlter && !options.replace) {
-                    updateAlterFromPK(existingAlter, pkMember);
+                    // Update existing - pass target mode
+                    updateAlterFromPK(existingAlter, pkMember, options.target);
+                    await existingAlter.save();
+                    memberIdMap.set(pkMember.id, { id: existingAlter._id, type: 'alter' });
+                    result.membersUpdated++;
+                } else if (existingAlter && options.target === TARGET_DISCORD) {
+                    // Discord target on existing - just update discord fields
+                    updateAlterFromPK(existingAlter, pkMember, options.target);
                     await existingAlter.save();
                     memberIdMap.set(pkMember.id, { id: existingAlter._id, type: 'alter' });
                     result.membersUpdated++;
                 } else {
-                    const newAlter = createAlterFromPK(pkMember);
+                    // Create new
+                    const newAlter = options.target === TARGET_DISCORD
+                        ? createAlterFromPKDiscord(pkMember)
+                        : createAlterFromPK(pkMember);
                     await newAlter.save();
 
                     if (!system.alters.IDs.includes(newAlter._id)) {
@@ -518,7 +598,7 @@ async function processPluralKitData(system, data, options) {
         }
 
         const mainLayer = system.front.layers[0];
-        
+
         // Convert PK switches to our shift format (most recent first in PK)
         for (const pkSwitch of data.switches.slice(0, 50)) {
             const memberIds = pkSwitch.members
@@ -546,7 +626,7 @@ async function processPluralKitData(system, data, options) {
 
 async function importTupperboxFile(message, system, options) {
     const attachment = message.attachments.first();
-    
+
     if (!attachment.name.endsWith('.json')) {
         return utils.error(message, 'Please attach a JSON file.');
     }
@@ -575,7 +655,7 @@ async function importTupperboxFile(message, system, options) {
         const result = await processTupperboxData(system, data, options);
 
         await statusMsg.edit({
-            embeds: [buildImportResultEmbed('Tupperbox', result)]
+            embeds: [buildImportResultEmbed('Tupperbox', result, options.target)]
         });
 
     } catch (error) {
@@ -679,7 +759,7 @@ async function processTupperboxData(system, data, options) {
                     existingAlter.proxy.push(proxy);
                 }
                 if (tupper.tag) existingAlter.signoff = tupper.tag;
-                
+
                 await existingAlter.save();
 
                 // Add to group if specified
@@ -787,7 +867,7 @@ async function importSimplyPluralAPI(message, system, token, options) {
         }, options);
 
         await statusMsg.edit({
-            embeds: [buildImportResultEmbed('Simply Plural', result)]
+            embeds: [buildImportResultEmbed('Simply Plural', result, options.target)]
         });
 
     } catch (error) {
@@ -938,7 +1018,7 @@ async function processSimplyPluralData(system, data, options) {
 
 async function importAutoDetect(message, system, options) {
     const attachment = message.attachments.first();
-    
+
     if (!attachment.name.endsWith('.json')) {
         return utils.error(message, 'Please attach a JSON file.');
     }
@@ -963,7 +1043,7 @@ async function importAutoDetect(message, system, options) {
             });
 
             const result = await processTupperboxData(system, data, options);
-            await statusMsg.edit({ embeds: [buildImportResultEmbed('Tupperbox', result)] });
+            await statusMsg.edit({ embeds: [buildImportResultEmbed('Tupperbox', result, options.target)] });
 
         } else if (data.members || data.id) {
             // PluralKit format
@@ -979,7 +1059,7 @@ async function importAutoDetect(message, system, options) {
                 groups: data.groups || [],
                 switches: data.switches || []
             }, options);
-            await statusMsg.edit({ embeds: [buildImportResultEmbed('PluralKit', result)] });
+            await statusMsg.edit({ embeds: [buildImportResultEmbed('PluralKit', result, options.target)] });
 
         } else {
             throw new Error('Could not detect file format. Please specify: `sys!import pluralkit` or `sys!import tupperbox`');
@@ -998,13 +1078,20 @@ async function importAutoDetect(message, system, options) {
 // HELPER FUNCTIONS
 // ============================================
 
-function buildImportResultEmbed(source, result) {
+function buildImportResultEmbed(source, result, targetMode = TARGET_APP) {
     const embed = new EmbedBuilder()
         .setColor(result.errors.length > 0 ? '#FFA500' : utils.ENTITY_COLORS.success)
         .setTitle(`✅ Import from ${source} Complete`);
 
     let description = '';
-    
+
+    // Show target mode
+    if (targetMode === TARGET_DISCORD) {
+        description += '🎯 **Target:** Discord-specific fields\n';
+    } else {
+        description += '🎯 **Target:** Main/App fields\n';
+    }
+
     if (result.systemUpdated) {
         description += '📋 System info updated\n';
     }
@@ -1042,11 +1129,17 @@ function buildImportResultEmbed(source, result) {
         });
     }
 
-    // Add tip about converting to states if no states were imported
-    if ((result.statesImported || 0) === 0 && result.membersImported > 0) {
+    // Add helpful tips based on what happened
+    if (targetMode === TARGET_DISCORD && result.membersUpdated > 0) {
+        embed.addFields({
+            name: '✨ Multi-Source Import',
+            value: 'Discord-specific data has been added to your existing members!\nYour main profile data remains unchanged.',
+            inline: false
+        });
+    } else if ((result.statesImported || 0) === 0 && result.membersImported > 0) {
         embed.addFields({
             name: '💡 Tip',
-            value: 'Use `sys!convert alter <name> to state` to convert any alters that should be states.',
+            value: 'Use `sys!convert alter <n> to state` to convert any alters that should be states.',
             inline: false
         });
     }
@@ -1149,15 +1242,67 @@ function createAlterFromPK(pkMember) {
     });
 }
 
-function updateAlterFromPK(alter, pkMember) {
-    if (pkMember.display_name) alter.name.display = pkMember.display_name;
-    if (pkMember.description) alter.description = pkMember.description;
-    if (pkMember.pronouns) alter.pronouns = [pkMember.pronouns];
-    if (pkMember.color) alter.color = `#${pkMember.color}`;
-    if (pkMember.birthday) alter.birthday = new Date(pkMember.birthday);
-    if (pkMember.avatar_url) alter.avatar = { url: pkMember.avatar_url };
+function createAlterFromPKDiscord(pkMember) {
+    // Create alter with data in discord-specific fields
+    // Convert PK proxy tags to our format
+    const proxies = (pkMember.proxy_tags || []).map(tag => {
+        const prefix = tag.prefix || '';
+        const suffix = tag.suffix || '';
+        return `${prefix}text${suffix}`;
+    }).filter(p => p !== 'text');
 
-    // Update proxy tags
+    return new Alter({
+        name: {
+            indexable: pkMember.name.replace(/[^a-zA-Z0-9\-_]/g, '').substring(0, 32) || `alter${Date.now()}`
+            // Don't set display here - leave for app
+        },
+        // Discord-specific fields
+        discord: {
+            name: {
+                display: pkMember.display_name || pkMember.name
+            },
+            description: pkMember.description || undefined,
+            color: pkMember.color ? `#${pkMember.color}` : undefined,
+            image: {
+                avatar: pkMember.avatar_url ? { url: pkMember.avatar_url } : undefined,
+                banner: pkMember.banner ? { url: pkMember.banner } : undefined
+            }
+        },
+        proxy: proxies,
+        groupsIDs: [],
+        metadata: {
+            addedAt: pkMember.created ? new Date(pkMember.created) : new Date(),
+            importedFrom: 'pluralkit',
+            importedAt: new Date(),
+            pluralKitId: pkMember.id,
+            pluralKitUuid: pkMember.uuid
+        }
+    });
+}
+
+function updateAlterFromPK(alter, pkMember, targetMode = TARGET_APP) {
+    if (targetMode === TARGET_DISCORD) {
+        // Update discord-specific fields only
+        if (!alter.discord) alter.discord = {};
+        if (!alter.discord.name) alter.discord.name = {};
+        if (!alter.discord.image) alter.discord.image = {};
+
+        if (pkMember.display_name) alter.discord.name.display = pkMember.display_name;
+        if (pkMember.description) alter.discord.description = pkMember.description;
+        if (pkMember.color) alter.discord.color = `#${pkMember.color}`;
+        if (pkMember.avatar_url) alter.discord.image.avatar = { url: pkMember.avatar_url };
+        if (pkMember.banner) alter.discord.image.banner = { url: pkMember.banner };
+    } else {
+        // Update main/app fields (default)
+        if (pkMember.display_name) alter.name.display = pkMember.display_name;
+        if (pkMember.description) alter.description = pkMember.description;
+        if (pkMember.pronouns) alter.pronouns = [pkMember.pronouns];
+        if (pkMember.color) alter.color = `#${pkMember.color}`;
+        if (pkMember.birthday) alter.birthday = new Date(pkMember.birthday);
+        if (pkMember.avatar_url) alter.avatar = { url: pkMember.avatar_url };
+    }
+
+    // Proxy tags always go to main proxy field (used for Discord proxying)
     const newProxies = (pkMember.proxy_tags || []).map(tag => {
         const prefix = tag.prefix || '';
         const suffix = tag.suffix || '';
@@ -1208,21 +1353,70 @@ function createStateFromPK(pkMember) {
     });
 }
 
-function updateStateFromPK(state, pkMember) {
-    if (pkMember.display_name) state.name.display = pkMember.display_name;
-    if (pkMember.description) state.description = pkMember.description;
-    if (pkMember.pronouns) state.pronouns = [pkMember.pronouns];
-    if (pkMember.color) state.color = `#${pkMember.color}`;
-    if (pkMember.avatar_url) state.avatar = { url: pkMember.avatar_url };
+function createStateFromPKDiscord(pkMember) {
+    // Create state with data in discord-specific fields
+    const proxies = (pkMember.proxy_tags || []).map(tag => {
+        const prefix = tag.prefix || '';
+        const suffix = tag.suffix || '';
+        return `${prefix}text${suffix}`;
+    }).filter(p => p !== 'text');
 
-    // Update proxy tags
+    return new State({
+        name: {
+            indexable: pkMember.name.replace(/[^a-zA-Z0-9\-_]/g, '').substring(0, 32) || `state${Date.now()}`
+        },
+        discord: {
+            name: {
+                display: pkMember.display_name || pkMember.name
+            },
+            description: pkMember.description || undefined,
+            color: pkMember.color ? `#${pkMember.color}` : undefined,
+            image: {
+                avatar: pkMember.avatar_url ? { url: pkMember.avatar_url } : undefined,
+                banner: pkMember.banner ? { url: pkMember.banner } : undefined
+            }
+        },
+        proxy: proxies,
+        groupsIDs: [],
+        alterIDs: [],
+        metadata: {
+            addedAt: pkMember.created ? new Date(pkMember.created) : new Date(),
+            importedFrom: 'pluralkit',
+            importedAt: new Date(),
+            pluralKitId: pkMember.id,
+            pluralKitUuid: pkMember.uuid
+        }
+    });
+}
+
+function updateStateFromPK(state, pkMember, targetMode = TARGET_APP) {
+    if (targetMode === TARGET_DISCORD) {
+        // Update discord-specific fields only
+        if (!state.discord) state.discord = {};
+        if (!state.discord.name) state.discord.name = {};
+        if (!state.discord.image) state.discord.image = {};
+
+        if (pkMember.display_name) state.discord.name.display = pkMember.display_name;
+        if (pkMember.description) state.discord.description = pkMember.description;
+        if (pkMember.color) state.discord.color = `#${pkMember.color}`;
+        if (pkMember.avatar_url) state.discord.image.avatar = { url: pkMember.avatar_url };
+        if (pkMember.banner) state.discord.image.banner = { url: pkMember.banner };
+    } else {
+        // Update main/app fields (default)
+        if (pkMember.display_name) state.name.display = pkMember.display_name;
+        if (pkMember.description) state.description = pkMember.description;
+        if (pkMember.pronouns) state.pronouns = [pkMember.pronouns];
+        if (pkMember.color) state.color = `#${pkMember.color}`;
+        if (pkMember.avatar_url) state.avatar = { url: pkMember.avatar_url };
+    }
+
+    // Proxy tags always go to main proxy field
     const newProxies = (pkMember.proxy_tags || []).map(tag => {
         const prefix = tag.prefix || '';
         const suffix = tag.suffix || '';
         return `${prefix}text${suffix}`;
     }).filter(p => p !== 'text');
 
-    // Merge proxies, avoiding duplicates
     for (const proxy of newProxies) {
         if (!state.proxy?.includes(proxy)) {
             state.proxy = state.proxy || [];
@@ -1230,7 +1424,6 @@ function updateStateFromPK(state, pkMember) {
         }
     }
 
-    // Store PK IDs for future reference
     state.metadata = state.metadata || {};
     state.metadata.pluralKitId = pkMember.id;
     state.metadata.pluralKitUuid = pkMember.uuid;
@@ -1240,7 +1433,7 @@ function createGroupFromPK(pkGroup, memberIdMap) {
     // Separate alters and states
     const alterIDs = [];
     const stateIDs = [];
-    
+
     for (const m of (pkGroup.members || [])) {
         const mapped = memberIdMap.get(typeof m === 'string' ? m : m.id);
         if (mapped) {

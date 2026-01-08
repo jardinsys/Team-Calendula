@@ -33,17 +33,17 @@ module.exports = {
 
     async executeMessage(message, args) {
         const { user, system } = await utils.getOrCreateUserAndSystem(message);
-        
+
         if (!system) {
             return utils.error(message, 'You need a system to convert entities. Use `sys!system new` to create one.');
         }
 
         const parsed = utils.parseArgs(args);
-        
+
         // Parse: convert <type> <name> to <targetType>
         // Or: convert <type>s <name1,name2> to <targetType>s
         const sourceType = parsed._positional[0]?.toLowerCase();
-        
+
         if (!sourceType || sourceType === 'help') {
             return handleHelp(message);
         }
@@ -84,7 +84,7 @@ module.exports = {
         }
 
         // Parse names (comma-separated for batch, or single name)
-        const names = isBatch 
+        const names = isBatch
             ? namesPart.split(',').map(n => n.trim()).filter(Boolean)
             : [namesPart];
 
@@ -202,7 +202,7 @@ async function convertAltersToStates(message, system, names, options) {
             .setDescription(`This will convert **${altersToConvert.length}** alter(s) to states:\n${alterNames}`)
             .addFields({
                 name: options.keep ? '📋 Mode: Copy' : '⚠️ Mode: Convert',
-                value: options.keep 
+                value: options.keep
                     ? 'Original alters will be kept (copies created as states)'
                     : 'Original alters will be **deleted** after conversion',
                 inline: false
@@ -210,24 +210,24 @@ async function convertAltersToStates(message, system, names, options) {
             .setFooter({ text: 'Add -confirm to skip this prompt' });
 
         const confirmMsg = await message.reply({ embeds: [embed] });
-        
+
         // Wait for confirmation
-        const filter = m => m.author.id === message.author.id && 
+        const filter = m => m.author.id === message.author.id &&
             ['yes', 'y', 'confirm', 'no', 'n', 'cancel'].includes(m.content.toLowerCase());
-        
+
         try {
             const collected = await message.channel.awaitMessages({ filter, max: 1, time: 30000, errors: ['time'] });
             const response = collected.first().content.toLowerCase();
-            
+
             if (['no', 'n', 'cancel'].includes(response)) {
-                return confirmMsg.edit({ 
+                return confirmMsg.edit({
                     embeds: [new EmbedBuilder()
                         .setColor(utils.ENTITY_COLORS.error)
                         .setDescription('❌ Conversion cancelled.')]
                 });
             }
         } catch {
-            return confirmMsg.edit({ 
+            return confirmMsg.edit({
                 embeds: [new EmbedBuilder()
                     .setColor(utils.ENTITY_COLORS.error)
                     .setDescription('❌ Conversion timed out.')]
@@ -259,7 +259,7 @@ async function convertAltersToStates(message, system, names, options) {
                 banner: alter.banner,
                 proxy: alter.proxy || [],
                 signoff: alter.signoff,
-                
+
                 // Convert dormancy to remission
                 remission: alter.dormancy ? {
                     isRemission: alter.dormancy.isDormant || false,
@@ -311,7 +311,7 @@ async function convertAltersToStates(message, system, names, options) {
             if (!options.keep) {
                 // Remove from system
                 system.alters.IDs = system.alters.IDs.filter(id => id.toString() !== alter._id.toString());
-                
+
                 // Remove from groups
                 if (alter.groupsIDs?.length > 0) {
                     for (const groupId of alter.groupsIDs) {
@@ -383,7 +383,7 @@ async function convertStatesToAlters(message, system, names, options) {
             .setDescription(`This will convert **${statesToConvert.length}** state(s) to alters:\n${stateNames}`)
             .addFields({
                 name: options.keep ? '📋 Mode: Copy' : '⚠️ Mode: Convert',
-                value: options.keep 
+                value: options.keep
                     ? 'Original states will be kept (copies created as alters)'
                     : 'Original states will be **deleted** after conversion',
                 inline: false
@@ -391,23 +391,23 @@ async function convertStatesToAlters(message, system, names, options) {
             .setFooter({ text: 'Add -confirm to skip this prompt' });
 
         const confirmMsg = await message.reply({ embeds: [embed] });
-        
-        const filter = m => m.author.id === message.author.id && 
+
+        const filter = m => m.author.id === message.author.id &&
             ['yes', 'y', 'confirm', 'no', 'n', 'cancel'].includes(m.content.toLowerCase());
-        
+
         try {
             const collected = await message.channel.awaitMessages({ filter, max: 1, time: 30000, errors: ['time'] });
             const response = collected.first().content.toLowerCase();
-            
+
             if (['no', 'n', 'cancel'].includes(response)) {
-                return confirmMsg.edit({ 
+                return confirmMsg.edit({
                     embeds: [new EmbedBuilder()
                         .setColor(utils.ENTITY_COLORS.error)
                         .setDescription('❌ Conversion cancelled.')]
                 });
             }
         } catch {
-            return confirmMsg.edit({ 
+            return confirmMsg.edit({
                 embeds: [new EmbedBuilder()
                     .setColor(utils.ENTITY_COLORS.error)
                     .setDescription('❌ Conversion timed out.')]
@@ -439,7 +439,7 @@ async function convertStatesToAlters(message, system, names, options) {
                 banner: state.banner,
                 proxy: state.proxy || [],
                 signoff: state.signoff,
-                
+
                 // Convert remission to dormancy
                 dormancy: state.remission ? {
                     isDormant: state.remission.isRemission || false,
@@ -491,7 +491,7 @@ async function convertStatesToAlters(message, system, names, options) {
             if (!options.keep) {
                 // Remove from system
                 system.states.IDs = system.states.IDs.filter(id => id.toString() !== state._id.toString());
-                
+
                 // Remove from groups
                 if (state.groupsIDs?.length > 0) {
                     for (const groupId of state.groupsIDs) {
