@@ -2,13 +2,13 @@
 // This file handles the detection and sending of proxy messages
 // Place in: discord_commands/global/proxy-message.js (one folder above slash/)
 
-const Message = require('../schemas/message');
-const System = require('../schemas/system');
-const User = require('../schemas/user');
-const Alter = require('../schemas/alter');
-const State = require('../schemas/state');
-const Group = require('../schemas/group');
-const Guild = require('../schemas/guild');
+const Message = require('../../schemas/message');
+const System = require('../../schemas/system');
+const User = require('../../schemas/user');
+const Alter = require('../../schemas/alter');
+const State = require('../../schemas/state');
+const Group = require('../../schemas/group');
+const Guild = require('../../schemas/guild');
 
 // Import shared utilities (for findEntityByName)
 const utils = require('./functions/bot_utils');

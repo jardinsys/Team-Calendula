@@ -20,14 +20,14 @@ const {
     StringSelectMenuOptionBuilder
 } = require('discord.js');
 
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
+const System = require('../../../schemas/system');
+const User = require('../../../schemas/user');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
 
 // Import shared utilities
-const utils = require('./systemiser-utils');
+const utils = require('../../functions/bot_utils');
 
 // Use DSM and ICD types from utils
 const { DSM_TYPES, ICD_TYPES, ENTITY_COLORS, getSystemEmbedColor } = utils;

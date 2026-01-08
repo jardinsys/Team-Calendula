@@ -28,11 +28,11 @@
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const mongoose = require('mongoose');
 const fetch = require('node-fetch');
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
+const System = require('../../../schemas/system');
+const User = require('../../../schemas/user');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 
 const IMPORT_COLOR = '#007bd8';

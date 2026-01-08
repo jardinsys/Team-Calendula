@@ -8,14 +8,14 @@ const {
     EmbedBuilder
 } = require('discord.js');
 
-const Message = require('../../schemas/message');
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
+const Message = require('../../../schemas/message');
+const System = require('../../../schemas/system');
+const User = require('../../../schemas/user');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
 
-const utils = require('./systemiser-utils');
+const utils = require('../../functions/bot_utils');
 
 module.exports = {
     // Slash command data

@@ -15,14 +15,14 @@ const {
 } = require('discord.js');
 
 const mongoose = require('mongoose');
-const System = require('../../schemas/system');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
-const { Shift } = require('../../schemas/front');
+const System = require('../../../schemas/system');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
+const { Shift } = require('../../../schemas/front');
 
 // Import shared utilities
-const utils = require('../functions/bot_utils');
+const utils = require('../../functions/bot_utils');
 
 // Constants
 const ENTITY_COLORS = utils.ENTITY_COLORS;

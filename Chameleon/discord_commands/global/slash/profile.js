@@ -20,11 +20,11 @@ const {
 } = require('discord.js');
 
 const mongoose = require('mongoose');
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
+const System = require('../../../schemas/system');
+const User = require('../../../schemas/user');
 
 // Import shared utilities
-const utils = require('../functions/bot_utils');
+const utils = require('../../functions/bot_utils');
 
 // Constants
 const ENTITY_COLORS = utils.ENTITY_COLORS;

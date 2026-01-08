@@ -26,13 +26,13 @@ const {
     StringSelectMenuOptionBuilder
 } = require('discord.js');
 
-const Group = require('../../schemas/group');
-const System = require('../../schemas/system');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
+const Group = require('../../../schemas/group');
+const System = require('../../../schemas/system');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
 
 // Import shared utilities
-const utils = require('./systemiser-utils');
+const utils = require('../../functions/bot_utils');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -255,7 +255,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
     if (targetUser || targetUserId) {
         isOwner = false;
         const discordId = targetUser?.id || targetUserId;
-        const User = require('../../schemas/user');
+        const User = require('../../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
 
         if (!otherUser?.systemID) {
@@ -314,7 +314,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     if (targetUser || targetUserId) {
         isOwner = false;
         const discordId = targetUser?.id || targetUserId;
-        const User = require('../../schemas/user');
+        const User = require('../../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
 
         if (!otherUser?.systemID) {

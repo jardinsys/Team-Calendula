@@ -1,10 +1,10 @@
 // sys!switch - Switch/front management
 const { EmbedBuilder } = require('discord.js');
 const mongoose = require('mongoose');
-const System = require('../../schemas/system');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
+const System = require('../../../schemas/system');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {

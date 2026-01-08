@@ -19,7 +19,7 @@
 //   sys!config admin list
 
 const { EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
-const Guild = require('../../schemas/guild');
+const Guild = require('../../../schemas/guild');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {

@@ -2,11 +2,11 @@
 // USAGE: See handleHelp() for full command list
 
 const { EmbedBuilder } = require('discord.js');
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
+const System = require('../../../schemas/system');
+const User = require('../../../schemas/user');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {

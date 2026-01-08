@@ -3,7 +3,7 @@
 // (/addmessage edit:[ID])
 // (/addmessage delete:[ID])
 const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
-const Message = require('../schema/message.js');
+const Message = require('../schemas/message.js');
 
 module.exports = {
     data: new SlashCommandBuilder()

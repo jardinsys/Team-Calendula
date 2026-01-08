@@ -3,7 +3,7 @@
 // (/addtrigger edit:[ID])
 // (/addtrigger delete:[ID])
 const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
-const CommonTrigger = require('../schema/CommonTrigger.js');
+const CommonTrigger = require('../schemas/CommonTrigger.js');
 
 module.exports = {
     data: new SlashCommandBuilder()

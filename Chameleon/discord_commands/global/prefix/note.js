@@ -27,12 +27,12 @@
 
 const { EmbedBuilder } = require('discord.js');
 const mongoose = require('mongoose');
-const Note = require('../../schemas/note');
-const User = require('../../schemas/user');
-const System = require('../../schemas/system');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
+const Note = require('../../../schemas/note');
+const User = require('../../../schemas/user');
+const System = require('../../../schemas/system');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 
 const NOTE_COLOR = '#FFD700'; // Gold color for notes

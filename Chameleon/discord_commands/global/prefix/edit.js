@@ -1,9 +1,9 @@
 // sys!edit - Quick edit for proxied messages
 // Shortcut for editing the last proxied message
 const { EmbedBuilder } = require('discord.js');
-const Message = require('../../schemas/message');
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
+const Message = require('../../../schemas/message');
+const System = require('../../../schemas/system');
+const User = require('../../../schemas/user');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {

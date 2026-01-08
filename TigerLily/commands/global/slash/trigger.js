@@ -18,8 +18,8 @@
 // (/trigger move trigger:[string] newgroup:[string])
 
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const User = require('../schemas/user');
-const Guild = require('../schemas/guild');
+const User = require('../../schemas/user');
+const Guild = require('../../schemas/guild');
 const mongoose = require('mongoose');
 const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const { trigR2 } = require('../../../../r2');

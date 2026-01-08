@@ -3,7 +3,7 @@
 // (/addaffirmation edit:[ID])
 // (/addaffirmation delete:[ID])
 const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
-const Affirmation = require('../schema/affirmation.js'); // Adjust path to your affirmation model
+const Affirmation = require('../schemas/affirmation.js'); // Adjust path to your affirmation model
 
 module.exports = {
 	data: new SlashCommandBuilder()

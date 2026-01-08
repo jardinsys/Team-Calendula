@@ -34,17 +34,17 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
-const Note = require('../../schemas/note');
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
-const { Shift } = require('../../schemas/front');
+const Note = require('../../../schemas/note');
+const System = require('../../../schemas/system');
+const User = require('../../../schemas/user');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
+const { Shift } = require('../../../schemas/front');
 const config = require('../../config');
 
 // Import shared utilities
-const utils = require('../functions/bot_utils');
+const utils = require('../../functions/bot_utils');
 
 // Initialize R2 Client for Systemiser
 const sysR2 = new S3Client({
