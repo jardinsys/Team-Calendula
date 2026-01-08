@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const trigDB = require("../database");
+const mediaSchema = require('../../media.js');
 const { triggerGroupSchema } = require('./trigger');
 
 const guildSchema = new mongoose.Schema({

@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const sucreDB = require("../database");
 
 const affirmationSchema = new mongoose.Schema({
-    _id: Schema.Types.ObjectId,
+    _id: mongoose.Schema.Types.ObjectId,
     title: String,
     text: String,
     footer: String,

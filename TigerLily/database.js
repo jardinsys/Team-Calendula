@@ -3,10 +3,7 @@ const config = require('./../config.json');
 
 const mongoURI = config.mongoURIs.trigin;
 
-const trigDB = mongoose.createConnection(mongoURI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-});
+const trigDB = mongoose.createConnection(mongoURI);
 
 trigDB.on('connected', () => {
     console.log(`Trigin's Mongoose connected to MongoDB`);

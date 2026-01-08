@@ -150,7 +150,7 @@ const systemSchema = new mongoose.Schema({
             avatar: mediaSchema,
             tag: [String],
             pronounSeparator: String,
-            proxyStyle: { type: String, default: off }
+            proxyStyle: { type: String, default: "off" }
         }]
     },
     front: {
@@ -180,7 +180,7 @@ const systemSchema = new mongoose.Schema({
         recentProxies: [String],
         lastProxyTime: Date,
         break: Boolean,
-        style: { type: String, default: off }
+        style: { type: String, default: "off" }
     },
     setting: {
         autoshareNotestoUsers: { type: Boolean, default: false },
@@ -203,7 +203,7 @@ const systemSchema = new mongoose.Schema({
         }],
         friendAutoBucket: String
     },
-    privacyBuckets: [PrivacyBucket],
+    privacyBuckets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'PrivacyBucket' }],
     affirmations: [String]
 });
 

@@ -3,7 +3,7 @@ const sysDB = require("../database");
 
 const shiftSchema = new mongoose.Schema({
     _id: { type: mongoose.Schema.Types.ObjectId, unique: true },
-    s_type: { type: String, enum: [alter, state, group] },
+    s_type: { type: String, enum: ['alter', 'state', 'group'] },
     ID: String,
     type_name: String,
     startTime: { type: Date, default: Date.now },
@@ -24,7 +24,7 @@ const layerSchema = new mongoose.Schema({
     _id: { type: mongoose.Schema.Types.ObjectId, unique: true },
     name: String,
     color: String,
-    shifts: [{type: mongoose.Schema.Types.ObjectId, ref: 'Shift'}],
+    shifts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Shift' }],
 });
 
 module.exports = {

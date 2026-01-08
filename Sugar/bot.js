@@ -51,7 +51,7 @@ function loadCommandsFromDirectory(directory) {
 loadCommandsFromDirectory(foldersPath);
 
 // Log in to Discord
-connectToDatabase();
+//connectToDatabase();
 client.login(token);
 
 //Interaction Handling

@@ -11,7 +11,7 @@ const Group = require('../../schemas/group');
 const Guild = require('../../schemas/guild');
 
 // Import shared utilities (for findEntityByName)
-const utils = require('./functions/bot_utils');
+const utils = require('../functions/bot_utils');
 
 // ============================================
 // MAIN HANDLER

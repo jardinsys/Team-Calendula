@@ -18,13 +18,13 @@
 // (/trigger move trigger:[string] newgroup:[string])
 
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const User = require('../../schemas/user');
-const Guild = require('../../schemas/guild');
+const User = require('../../../schemas/user');
+const Guild = require('../../../schemas/guild');
 const mongoose = require('mongoose');
 const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const { trigR2 } = require('../../../../r2');
 const crypto = require('crypto');
-const config = require('../../../../config.js');
+const config = require('../../../../config.json');
 
 // Store active sessions
 const activeSessions = new Map();

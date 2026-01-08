@@ -114,7 +114,7 @@ console.log('');
 
 // Log in
 console.log(`💙---LOGGING IN---💙`);
-connectToDatabase();
+//connectToDatabase();
 client.login(token);
 
 // Upon Invite to server

@@ -3,10 +3,7 @@ const config = require('./../config.json');
 
 const mongoURI = config.mongoURIs.sucre;
 
-const sucreDB = mongoose.createConnection(mongoURI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-});
+const sucreDB = mongoose.createConnection(mongoURI);
 
 sucreDB.on('connected', () => {
     console.log(`Sugar's Mongoose connected to MongoDB`);

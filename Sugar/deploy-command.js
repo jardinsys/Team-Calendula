@@ -21,15 +21,26 @@ while (directoriesToProcess.length > 0) {
 
         // Check if Directory
         if (fs.statSync(itemPath).isDirectory()) {
+            // Skip certain directories that don't contain commands
+            const folderName = path.basename(itemPath);
+            if (folderName === 'functions' || folderName === 'schemas' || folderName === 'utils') {
+                console.log(`  - Skipped directory: ${folderName}/`);
+                continue;
+            }
             // Add it to the list of Directories to process
             directoriesToProcess.push(itemPath);
         } else if (item.endsWith('.js')) {
-            //.js file - load command
-            const command = require(itemPath);
-            if ('data' in command) {
-                commands.push(command.data.toJSON());
-            } else {
-                console.log(`[🔴WARNING] The command at ${itemPath} is missing a required "data" or "execute" property.`);
+            // .js file - try to load as command
+            try {
+                const command = require(itemPath);
+                if ('data' in command) {
+                    commands.push(command.data.toJSON());
+                    console.log(`  ✓ Loaded: ${command.data.name}`);
+                } else {
+                    console.log(`  - Skipped (not a slash command): ${item}`);
+                }
+            } catch (error) {
+                console.log(`  ✗ Error loading ${item}: ${error.message}`);
             }
         }
     }
@@ -41,15 +52,18 @@ const rest = new REST().setToken(token);
 // and deploy commands
 (async () => {
     try {
-        console.log(`Started refreshing ${commands.length} application (/) commands.`);
-        await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: [] }); // Nuke/Delete all guild Commands
+        console.log(`
+Started refreshing ${commands.length} application (/) commands.`);
+
+        // Clear existing commands
+        await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: [] });
 
         // The put method is used to fully refresh all commands in the guild with the current set
         const data = await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commands });
 
-        console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+        console.log(`✓ Successfully reloaded ${data.length} application (/) commands.`);
+        console.log('All Sugar commands deployed! 💌');
     } catch (error) {
-        // And of course, make sure you catch and log any errors!
-        console.error(error);
+        console.error('Error deploying commands:', error);
     }
 })();

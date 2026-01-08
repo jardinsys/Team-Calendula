@@ -1,7 +1,7 @@
-import {  S3Client } from "@aws-sdk/client-s3";
+const { S3Client } = require("@aws-sdk/client-s3");
 const config = require("./config.json");
 
-export const trigR2 = new S3Client({
+const trigR2 = new S3Client({
     region: "auto",
     endpoint: `https://${config.r2.trigin.accountID}.r2.cloudflarestorage.com`,
     credentials: {
@@ -10,7 +10,7 @@ export const trigR2 = new S3Client({
     }
 });
 
-export const sysDiscR2 = new S3Client({
+const sysDiscR2 = new S3Client({
     region: "auto",
     endpoint: `https://${config.r2.system.accountID}.r2.cloudflarestorage.com`,
     credentials: {
@@ -19,7 +19,7 @@ export const sysDiscR2 = new S3Client({
     }
 });
 
-export const sysAppR2 = new S3Client({
+const sysAppR2 = new S3Client({
     region: "auto",
     endpoint: `https://${config.r2.system.accountID}.r2.cloudflarestorage.com`,
     credentials: {
@@ -27,3 +27,5 @@ export const sysAppR2 = new S3Client({
         secretAccessKey: config.r2.system.key.app
     }
 });
+
+module.exports = { trigR2, sysDiscR2, sysAppR2 };

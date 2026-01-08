@@ -3,10 +3,7 @@ const config = require('./../config.json');
 
 const mongoURI = config.mongoURIs.system;
 
-const sysDB = mongoose.createConnection(mongoURI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-});
+const sysDB = mongoose.createConnection(mongoURI);
 
 sysDB.on('connected', () => {
     console.log(`Systemiser's Mongoose connected to MongoDB`);
