@@ -37,23 +37,59 @@ const utils = require('../../functions/bot_utils');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('group')
-        .setDescription('Manage groups in your system')
-        .addSubcommand(sub => sub.setName('menu').setDescription('Open the group management menu'))
-        .addSubcommand(sub => sub.setName('showlist').setDescription('Show a list of groups')
-            .addUserOption(opt => opt.setName('user').setDescription('Show groups for a specific user'))
-            .addStringOption(opt => opt.setName('userid').setDescription('Discord User ID')))
-        .addSubcommand(sub => sub.setName('show').setDescription('Show details of a specific group')
-            .addStringOption(opt => opt.setName('group_name').setDescription('The group name').setRequired(true))
-            .addUserOption(opt => opt.setName('user').setDescription('Show group from a specific user'))
-            .addStringOption(opt => opt.setName('userid').setDescription('Discord User ID')))
-        .addSubcommand(sub => sub.setName('new').setDescription('Create a new group')
-            .addStringOption(opt => opt.setName('group_name').setDescription('The indexable name').setRequired(true)))
-        .addSubcommand(sub => sub.setName('edit').setDescription('Edit an existing group')
-            .addStringOption(opt => opt.setName('group_name').setDescription('The group name').setRequired(true)))
-        .addSubcommand(sub => sub.setName('delete').setDescription('Delete a group')
-            .addStringOption(opt => opt.setName('group_name').setDescription('The group name').setRequired(true)))
-        .addSubcommand(sub => sub.setName('settings').setDescription('Open group settings')
-            .addStringOption(opt => opt.setName('group_name').setDescription('The group name').setRequired(true))),
+        .setDescription('Manage your groups')
+
+        // VIEW subcommand
+        .addSubcommand(sub => sub
+            .setName('view')
+            .setDescription('View group information')
+            .addStringOption(opt => opt
+                .setName('action')
+                .setDescription('What to view')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'List - Show all groups', value: 'list' },
+                    { name: 'Show - View specific group details', value: 'show' }
+                ))
+            .addStringOption(opt => opt
+                .setName('group_name')
+                .setDescription('Group name (required for "show")')
+                .setRequired(false))
+            .addUserOption(opt => opt
+                .setName('user')
+                .setDescription('View another user\'s groups')
+                .setRequired(false))
+            .addBooleanOption(opt => opt
+                .setName('show_all')
+                .setDescription('Show hidden groups (list only)')
+                .setRequired(false)))
+
+        // MANAGE subcommand
+        .addSubcommand(sub => sub
+            .setName('manage')
+            .setDescription('Create, edit, and delete groups')
+            .addStringOption(opt => opt
+                .setName('action')
+                .setDescription('What to do')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'New - Create new group', value: 'new' },
+                    { name: 'Edit - Modify existing group', value: 'edit' },
+                    { name: 'Delete - Remove group permanently', value: 'delete' }
+                ))
+            .addStringOption(opt => opt
+                .setName('group_name')
+                .setDescription('Group name (required for edit/delete)')
+                .setRequired(false)))
+
+        // SETTINGS subcommand
+        .addSubcommand(sub => sub
+            .setName('settings')
+            .setDescription('Configure group settings')
+            .addStringOption(opt => opt
+                .setName('group_name')
+                .setDescription('Group name')
+                .setRequired(true))),
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
@@ -63,24 +99,33 @@ module.exports = {
             return await utils.handleNewUserFlow(interaction, 'group');
         }
 
-        if (!system && !['showlist', 'show'].includes(subcommand)) {
+        if (!system && subcommand !== 'view') {
             return await interaction.reply({
                 content: '❌ You need to set up a system first. Use `/system` to get started.',
                 ephemeral: true
             });
         }
 
-        const handlers = {
-            menu: handleMenu,
-            showlist: handleShowList,
-            show: handleShow,
-            new: handleNew,
-            edit: handleEdit,
-            delete: handleDelete,
-            settings: handleSettings
-        };
-
-        await handlers[subcommand](interaction, user, system);
+        // Route based on subcommand and action
+        if (subcommand === 'view') {
+            const action = interaction.options.getString('action');
+            if (action === 'list') {
+                return await handleShowList(interaction, user, system);
+            } else if (action === 'show') {
+                return await handleShow(interaction, user, system);
+            }
+        } else if (subcommand === 'manage') {
+            const action = interaction.options.getString('action');
+            if (action === 'new') {
+                return await handleNew(interaction, user, system);
+            } else if (action === 'edit') {
+                return await handleEdit(interaction, user, system);
+            } else if (action === 'delete') {
+                return await handleDelete(interaction, user, system);
+            }
+        } else if (subcommand === 'settings') {
+            return await handleSettings(interaction, user, system);
+        }
     },
 
     handleButtonInteraction,

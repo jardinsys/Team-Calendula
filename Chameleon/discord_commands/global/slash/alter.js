@@ -37,25 +37,60 @@ const utils = require('../../functions/bot_utils');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('alter')
-        .setDescription('Manage alters in your system')
-        .addSubcommand(sub => sub.setName('menu').setDescription('Open the alter management menu'))
-        .addSubcommand(sub => sub.setName('showlist').setDescription('Show a list of alters')
-            .addUserOption(opt => opt.setName('user').setDescription('Show alters for a specific user'))
-            .addStringOption(opt => opt.setName('userid').setDescription('Discord User ID (for users outside the server)')))
-        .addSubcommand(sub => sub.setName('show').setDescription('Show details of a specific alter')
-            .addStringOption(opt => opt.setName('alter_name').setDescription('The alter name to show').setRequired(true))
-            .addUserOption(opt => opt.setName('user').setDescription('Show alter from a specific user'))
-            .addStringOption(opt => opt.setName('userid').setDescription('Discord User ID')))
-        .addSubcommand(sub => sub.setName('new').setDescription('Create a new alter')
-            .addStringOption(opt => opt.setName('alter_name').setDescription('The indexable name for the new alter').setRequired(true)))
-        .addSubcommand(sub => sub.setName('edit').setDescription('Edit an existing alter')
-            .addStringOption(opt => opt.setName('alter_name').setDescription('The alter name to edit').setRequired(true)))
-        .addSubcommand(sub => sub.setName('dormant').setDescription('Mark an alter as dormant')
-            .addStringOption(opt => opt.setName('alter_name').setDescription('The alter name to mark as dormant').setRequired(true)))
-        .addSubcommand(sub => sub.setName('delete').setDescription('Delete an alter')
-            .addStringOption(opt => opt.setName('alter_name').setDescription('The alter name to delete').setRequired(true)))
-        .addSubcommand(sub => sub.setName('settings').setDescription('Open alter settings')
-            .addStringOption(opt => opt.setName('alter_name').setDescription('The alter name to configure').setRequired(true))),
+        .setDescription('Manage your alters')
+
+        // VIEW subcommand
+        .addSubcommand(sub => sub
+            .setName('view')
+            .setDescription('View alter information')
+            .addStringOption(opt => opt
+                .setName('action')
+                .setDescription('What to view')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'List - Show all alters', value: 'list' },
+                    { name: 'Show - View specific alter details', value: 'show' }
+                ))
+            .addStringOption(opt => opt
+                .setName('alter_name')
+                .setDescription('Alter name (required for "show")')
+                .setRequired(false))
+            .addUserOption(opt => opt
+                .setName('user')
+                .setDescription('View another user\'s alters')
+                .setRequired(false))
+            .addBooleanOption(opt => opt
+                .setName('show_all')
+                .setDescription('Show hidden alters (list only)')
+                .setRequired(false)))
+
+        // MANAGE subcommand
+        .addSubcommand(sub => sub
+            .setName('manage')
+            .setDescription('Create, edit, and delete alters')
+            .addStringOption(opt => opt
+                .setName('action')
+                .setDescription('What to do')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'New - Create new alter', value: 'new' },
+                    { name: 'Edit - Modify existing alter', value: 'edit' },
+                    { name: 'Dormant - Mark alter as dormant', value: 'dormant' },
+                    { name: 'Delete - Remove alter permanently', value: 'delete' }
+                ))
+            .addStringOption(opt => opt
+                .setName('alter_name')
+                .setDescription('Alter name (required for edit/dormant/delete)')
+                .setRequired(false)))
+
+        // SETTINGS subcommand
+        .addSubcommand(sub => sub
+            .setName('settings')
+            .setDescription('Configure alter settings')
+            .addStringOption(opt => opt
+                .setName('alter_name')
+                .setDescription('Alter name')
+                .setRequired(true))),
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
@@ -65,25 +100,35 @@ module.exports = {
             return await utils.handleNewUserFlow(interaction, 'alter');
         }
 
-        if (!system && !['showlist', 'show'].includes(subcommand)) {
+        if (!system && subcommand !== 'view') {
             return await interaction.reply({
                 content: '❌ You need to set up a system first. Use `/system` to get started.',
                 ephemeral: true
             });
         }
 
-        const handlers = {
-            menu: handleMenu,
-            showlist: handleShowList,
-            show: handleShow,
-            new: handleNew,
-            edit: handleEdit,
-            dormant: handleDormant,
-            delete: handleDelete,
-            settings: handleSettings
-        };
-
-        await handlers[subcommand](interaction, user, system);
+        // Route based on subcommand and action
+        if (subcommand === 'view') {
+            const action = interaction.options.getString('action');
+            if (action === 'list') {
+                return await handleShowList(interaction, user, system);
+            } else if (action === 'show') {
+                return await handleShow(interaction, user, system);
+            }
+        } else if (subcommand === 'manage') {
+            const action = interaction.options.getString('action');
+            if (action === 'new') {
+                return await handleNew(interaction, user, system);
+            } else if (action === 'edit') {
+                return await handleEdit(interaction, user, system);
+            } else if (action === 'dormant') {
+                return await handleDormant(interaction, user, system);
+            } else if (action === 'delete') {
+                return await handleDelete(interaction, user, system);
+            }
+        } else if (subcommand === 'settings') {
+            return await handleSettings(interaction, user, system);
+        }
     },
 
     handleButtonInteraction,

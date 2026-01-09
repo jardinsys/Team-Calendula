@@ -1,171 +1,116 @@
-// (/trigger)
-// (/trigger showlist)
-// (/trigger showlist user:[user])
-// (/trigger showlist server)
-// (/trigger show trigger:[string])
-// (/trigger show trigger:[string] user:[user])
-// (/trigger show trigger:[string] server)
-// (/trigger edit display)
-// (/trigger edit trigger:[string])
-// (/trigger edit group:[string])
-// (/trigger edit grouporder
-// (/trigger add trigger:[string])
-// (/trigger add trigger:[string] group:[string])
-// (/trigger add group:[string])
-// (/trigger remove trigger:[string])
-// (/trigger remove trigger:[string] group:[string])
-// (/trigger remove group:[string])
-// (/trigger move trigger:[string] newgroup:[string])
+// (/trigger) - TigerLily Trigger Management Command
+// Structure: Groups as subcommands, actions as string options
 
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { 
+    SlashCommandBuilder, 
+    EmbedBuilder, 
+    ActionRowBuilder, 
+    ButtonBuilder, 
+    ButtonStyle, 
+    ModalBuilder, 
+    TextInputBuilder, 
+    TextInputStyle 
+} = require('discord.js');
+
 const User = require('../../../schemas/user');
 const Guild = require('../../../schemas/guild');
 const mongoose = require('mongoose');
-const { PutObjectCommand } = require('@aws-sdk/client-s3');
-const { trigR2 } = require('../../../../r2');
-const crypto = require('crypto');
-const config = require('../../../../config.json');
-
-// Store active sessions
-const activeSessions = new Map();
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('trigger')
         .setDescription('Manage your triggers')
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('showlist')
-                .setDescription('Show a list of triggers')
-                .addUserOption(option =>
-                    option.setName('user')
-                        .setDescription('Show triggers for a specific user')
-                        .setRequired(false))
-                .addBooleanOption(option =>
-                    option.setName('server')
-                        .setDescription('Show server triggers')
-                        .setRequired(false)))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('show')
-                .setDescription('Show details of a specific trigger')
-                .addStringOption(option =>
-                    option.setName('trigger')
-                        .setDescription('The trigger name to show')
-                        .setRequired(true))
-                .addUserOption(option =>
-                    option.setName('user')
-                        .setDescription('Show trigger from a specific user')
-                        .setRequired(false))
-                .addBooleanOption(option =>
-                    option.setName('server')
-                        .setDescription('Show server trigger')
-                        .setRequired(false)))
-        .addSubcommandGroup(group =>
-            group
-                .setName('edit')
-                .setDescription('Edit triggers or groups')
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('display')
-                        .setDescription('Edit the display settings of your trigger list'))
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('trigger')
-                        .setDescription('Edit a specific trigger')
-                        .addStringOption(option =>
-                            option.setName('name')
-                                .setDescription('The trigger name to edit')
-                                .setRequired(true)))
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('group')
-                        .setDescription('Edit a trigger group')
-                        .addStringOption(option =>
-                            option.setName('name')
-                                .setDescription('The group name to edit')
-                                .setRequired(true)))
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('grouporder')
-                        .setDescription('Reorder trigger groups')))
-        .addSubcommandGroup(group =>
-            group
-                .setName('add')
-                .setDescription('Add triggers or groups')
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('trigger')
-                        .setDescription('Add a new trigger')
-                        .addStringOption(option =>
-                            option.setName('group')
-                                .setDescription('The group to add the trigger to (optional)')
-                                .setRequired(false)))
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('group')
-                        .setDescription('Add a new trigger group')))
-        .addSubcommandGroup(group =>
-            group
-                .setName('remove')
-                .setDescription('Remove triggers or groups')
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('trigger')
-                        .setDescription('Remove a trigger')
-                        .addStringOption(option =>
-                            option.setName('name')
-                                .setDescription('The trigger name to remove')
-                                .setRequired(true))
-                        .addStringOption(option =>
-                            option.setName('group')
-                                .setDescription('Remove from specific group (moves to Unorganized)')
-                                .setRequired(false)))
-                .addSubcommand(subcommand =>
-                    subcommand
-                        .setName('group')
-                        .setDescription('Remove a trigger group')
-                        .addStringOption(option =>
-                            option.setName('name')
-                                .setDescription('The group name to remove')
-                                .setRequired(true))))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('move')
-                .setDescription('Move a trigger to a different group')
-                .addStringOption(option =>
-                    option.setName('trigger')
-                        .setDescription('The trigger name to move')
-                        .setRequired(true))
-                .addStringOption(option =>
-                    option.setName('newgroup')
-                        .setDescription('The group to move the trigger to')
-                        .setRequired(true))),
+        
+        // VIEW subcommand with action option
+        .addSubcommand(subcommand => subcommand
+            .setName('view')
+            .setDescription('View trigger information')
+            .addStringOption(option => option
+                .setName('action')
+                .setDescription('What to view')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'List - Show all triggers', value: 'list' },
+                    { name: 'Show - View specific trigger', value: 'show' }
+                ))
+            .addStringOption(option => option
+                .setName('trigger')
+                .setDescription('Trigger name (required for "show")')
+                .setRequired(false))
+            .addUserOption(option => option
+                .setName('user')
+                .setDescription('View triggers for another user')
+                .setRequired(false))
+            .addBooleanOption(option => option
+                .setName('server')
+                .setDescription('View server-wide triggers')
+                .setRequired(false)))
+        
+        // MANAGE subcommand with action option
+        .addSubcommand(subcommand => subcommand
+            .setName('manage')
+            .setDescription('Add, edit, remove, or move triggers')
+            .addStringOption(option => option
+                .setName('action')
+                .setDescription('What to do')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Add - Create new trigger', value: 'add' },
+                    { name: 'Edit - Modify existing trigger', value: 'edit' },
+                    { name: 'Remove - Delete trigger', value: 'remove' },
+                    { name: 'Move - Move trigger to another group', value: 'move' }
+                ))
+            .addStringOption(option => option
+                .setName('trigger')
+                .setDescription('Trigger name (required for edit/remove/move)')
+                .setRequired(false))
+            .addStringOption(option => option
+                .setName('group')
+                .setDescription('Group name (optional for add, required for move)')
+                .setRequired(false)))
+        
+        // SETTINGS subcommand with action option
+        .addSubcommand(subcommand => subcommand
+            .setName('settings')
+            .setDescription('Configure trigger display and groups')
+            .addStringOption(option => option
+                .setName('action')
+                .setDescription('What to configure')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Display - Edit list display settings', value: 'display' },
+                    { name: 'Group Order - Reorder groups', value: 'grouporder' },
+                    { name: 'Add Group - Create new group', value: 'addgroup' },
+                    { name: 'Remove Group - Delete group', value: 'removegroup' }
+                ))
+            .addStringOption(option => option
+                .setName('group')
+                .setDescription('Group name (required for removegroup)')
+                .setRequired(false))),
 
     async execute(interaction) {
-        const subcommandGroup = interaction.options.getSubcommandGroup();
         const subcommand = interaction.options.getSubcommand();
+        const action = interaction.options.getString('action');
 
         // Get or create user
-        let user = await User.findOne({ discordId: interaction.user.id });
-        let isNewUser = false;
+        let user = await User.findOne({ discordID: interaction.user.id });
 
         if (!user) {
-            isNewUser = true;
             user = await createNewUser(interaction.user.id);
-
+            
             const welcomeEmbed = new EmbedBuilder()
-                .setColor('#00ff00')
+                .setColor('#5865F2')
                 .setTitle('Welcome! 🎉')
-                .setDescription('Welcome to our bot! You can now create your triggers using `/trigger add trigger`.')
+                .setDescription('Welcome to TigerLily! You can now create your triggers using `/trigger manage add`.')
                 .setTimestamp();
 
             await interaction.reply({ embeds: [welcomeEmbed], ephemeral: true });
             return;
         }
 
-        // Initialize Unorganized group if no trigger groups exist
-        if (!user.trigger.triggerGroups || user.trigger.triggerGroups.length === 0) {
+        // Initialize trigger groups if needed
+        if (!user.trigger?.triggerGroups || user.trigger.triggerGroups.length === 0) {
+            user.trigger = user.trigger || {};
             user.trigger.triggerGroups = [{
                 name: 'Unorganized',
                 displayName: 'Unorganized',
@@ -175,27 +120,53 @@ module.exports = {
             await user.save();
         }
 
-        // Route to appropriate handler
-        if (subcommand === 'showlist') {
-            await handleShowList(interaction, user);
-        } else if (subcommand === 'show') {
-            await handleShow(interaction, user);
-        } else if (subcommandGroup === 'edit') {
-            await handleEdit(interaction, user, subcommand);
-        } else if (subcommandGroup === 'add') {
-            await handleAdd(interaction, user, subcommand);
-        } else if (subcommandGroup === 'remove') {
-            await handleRemove(interaction, user, subcommand);
-        } else if (subcommand === 'move') {
-            await handleMove(interaction, user);
+        // Route based on subcommand and action
+        if (subcommand === 'view') {
+            if (action === 'list') {
+                return await handleShowList(interaction, user);
+            } else if (action === 'show') {
+                return await handleShow(interaction, user);
+            }
+        } else if (subcommand === 'manage') {
+            if (action === 'add') {
+                return await handleAddTrigger(interaction, user);
+            } else if (action === 'edit') {
+                return await handleEditTrigger(interaction, user);
+            } else if (action === 'remove') {
+                return await handleRemoveTrigger(interaction, user);
+            } else if (action === 'move') {
+                return await handleMove(interaction, user);
+            }
+        } else if (subcommand === 'settings') {
+            if (action === 'display') {
+                return await handleEditDisplay(interaction, user);
+            } else if (action === 'grouporder') {
+                return await handleEditGroupOrder(interaction, user);
+            } else if (action === 'addgroup') {
+                return await handleAddGroup(interaction, user);
+            } else if (action === 'removegroup') {
+                return await handleRemoveGroup(interaction, user);
+            }
         }
+
+        return interaction.reply({
+            content: '❌ Unknown command',
+            ephemeral: true
+        });
     },
+
+    handleButtonInteraction,
+    handleModalSubmit
 };
+
+// ============================================
+// USER CREATION
+// ============================================
 
 async function createNewUser(discordId) {
     const user = new User({
         _id: new mongoose.Types.ObjectId(),
-        discordId: discordId,
+        discordID: discordId,
         createdAt: new Date(),
         intro: {},
         trigger: {
@@ -221,16 +192,19 @@ async function createNewUser(discordId) {
     return user;
 }
 
-// SHOW LISTS
+// ============================================
+// VIEW HANDLERS
+// ============================================
+
 async function handleShowList(interaction, currentUser) {
     const specifiedUser = interaction.options.getUser('user');
     const isServer = interaction.options.getBoolean('server');
 
-    let targetData, targetType, targetAvatar, targetName;
+    let targetData, targetAvatar, targetName;
 
     if (isServer) {
         // Show server triggers
-        const guild = await Guild.findOne({ discordId: interaction.guildId });
+        const guild = await Guild.findOne({ discordID: interaction.guildId });
         if (!guild || !guild.trigger?.triggerGroups || guild.trigger.triggerGroups.length === 0) {
             return await interaction.reply({
                 content: '❌ There are no triggers listed for this server.',
@@ -238,26 +212,21 @@ async function handleShowList(interaction, currentUser) {
             });
         }
         targetData = guild;
-        targetType = 'server';
         targetAvatar = interaction.guild.iconURL({ dynamic: true });
         targetName = interaction.guild.name;
     } else if (specifiedUser) {
-        // Show specified user's triggers
-        const user = await User.findOne({ discordId: specifiedUser.id });
+        const user = await User.findOne({ discordID: specifiedUser.id });
         if (!user || !user.trigger?.triggerGroups || user.trigger.triggerGroups.length === 0) {
             return await interaction.reply({
-                content: `❌ ${specifiedUser.username} does not have triggers they are willing to display.`,
+                content: `❌ Trigger not found for ${specifiedUser.username}.`,
                 ephemeral: true
             });
         }
         targetData = user;
-        targetType = 'user';
         targetAvatar = specifiedUser.displayAvatarURL({ dynamic: true });
         targetName = specifiedUser.username;
     } else {
-        // Show current user's triggers
         targetData = currentUser;
-        targetType = 'user';
         targetAvatar = interaction.user.displayAvatarURL({ dynamic: true });
         targetName = interaction.user.username;
     }
@@ -266,36 +235,43 @@ async function handleShowList(interaction, currentUser) {
     await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
-// SHOW SPECIFIC TRIGGER
-async function handleShow(interaction, currentUser) {
+async function handleShow(interaction, user) {
     const triggerName = interaction.options.getString('trigger');
+    
+    if (!triggerName) {
+        return await interaction.reply({
+            content: '❌ Please provide a trigger name using the `trigger` option.',
+            ephemeral: true
+        });
+    }
+
     const specifiedUser = interaction.options.getUser('user');
     const isServer = interaction.options.getBoolean('server');
 
     let targetData, targetAvatar;
 
     if (isServer) {
-        const guild = await Guild.findOne({ discordId: interaction.guildId });
+        const guild = await Guild.findOne({ discordID: interaction.guildId });
         if (!guild) {
             return await interaction.reply({
-                content: '❌ Trigger not found in server triggers.',
+                content: '❌ Server triggers not found.',
                 ephemeral: true
             });
         }
         targetData = guild;
         targetAvatar = interaction.guild.iconURL({ dynamic: true });
     } else if (specifiedUser) {
-        const user = await User.findOne({ discordId: specifiedUser.id });
-        if (!user) {
+        const targetUser = await User.findOne({ discordID: specifiedUser.id });
+        if (!targetUser) {
             return await interaction.reply({
                 content: `❌ Trigger not found for ${specifiedUser.username}.`,
                 ephemeral: true
             });
         }
-        targetData = user;
+        targetData = targetUser;
         targetAvatar = specifiedUser.displayAvatarURL({ dynamic: true });
     } else {
-        targetData = currentUser;
+        targetData = user;
         targetAvatar = interaction.user.displayAvatarURL({ dynamic: true });
     }
 
@@ -312,22 +288,231 @@ async function handleShow(interaction, currentUser) {
     await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
-// EDIT HANDLERS
-async function handleEdit(interaction, user, subcommand) {
-    const hasPremium = user.premium?.active || false;
+// ============================================
+// MANAGE HANDLERS
+// ============================================
 
-    if (subcommand === 'display') {
-        await handleEditDisplay(interaction, user, hasPremium);
-    } else if (subcommand === 'trigger') {
-        await handleEditTrigger(interaction, user);
-    } else if (subcommand === 'group') {
-        await handleEditGroup(interaction, user, hasPremium);
-    } else if (subcommand === 'grouporder') {
-        await handleEditGroupOrder(interaction, user);
+async function handleAddTrigger(interaction, user) {
+    const groupName = interaction.options.getString('group');
+
+    const modal = buildTriggerModal(null, 'add_trigger_modal');
+    await interaction.showModal(modal);
+
+    try {
+        const submitted = await interaction.awaitModalSubmit({
+            filter: i => i.user.id === interaction.user.id,
+            time: 180000
+        });
+
+        const newTrigger = {
+            name: submitted.fields.getTextInputValue('trigger_name'),
+            description: submitted.fields.getTextInputValue('trigger_description'),
+            help: submitted.fields.getTextInputValue('trigger_help') || undefined
+        };
+
+        let targetGroup;
+        let addMessage = '';
+
+        if (groupName) {
+            targetGroup = user.trigger.triggerGroups.find(g => g.name === groupName);
+            if (targetGroup) {
+                targetGroup.triggers.push(newTrigger);
+                addMessage = `✅ Trigger added to group "${groupName}".`;
+            } else {
+                const unorganized = getOrCreateUnorganized(user);
+                unorganized.triggers.push(newTrigger);
+                addMessage = `⚠️ Group "${groupName}" not found. Trigger added to "Unorganized".`;
+            }
+        } else {
+            const unorganized = getOrCreateUnorganized(user);
+            unorganized.triggers.push(newTrigger);
+            addMessage = `✅ Trigger added to "Unorganized".`;
+        }
+
+        await user.save();
+
+        const embed = buildTriggerEmbed(newTrigger, targetGroup || getOrCreateUnorganized(user), user, interaction.user.displayAvatarURL({ dynamic: true }));
+        await submitted.reply({
+            content: addMessage,
+            embeds: [embed],
+            ephemeral: true
+        });
+
+    } catch (error) {
+        if (!error.message.includes('time')) {
+            console.error('Error in handleAddTrigger:', error);
+        }
     }
 }
 
-async function handleEditDisplay(interaction, user, hasPremium) {
+async function handleEditTrigger(interaction, user) {
+    const triggerName = interaction.options.getString('trigger');
+    
+    if (!triggerName) {
+        return await interaction.reply({
+            content: '❌ Please provide a trigger name using the `trigger` option.',
+            ephemeral: true
+        });
+    }
+
+    const result = findTrigger(user, triggerName);
+
+    if (!result) {
+        return await interaction.reply({
+            content: `❌ Trigger "${triggerName}" not found.`,
+            ephemeral: true
+        });
+    }
+
+    const modal = buildTriggerModal(result.trigger, 'edit_trigger_modal');
+    await interaction.showModal(modal);
+
+    try {
+        const submitted = await interaction.awaitModalSubmit({
+            filter: i => i.user.id === interaction.user.id,
+            time: 180000
+        });
+
+        updateTriggerFromModal(result.trigger, submitted);
+        await user.save();
+
+        const embed = buildTriggerEmbed(result.trigger, result.group, user, interaction.user.displayAvatarURL({ dynamic: true }));
+        await submitted.reply({
+            content: '✅ Trigger updated!',
+            embeds: [embed],
+            ephemeral: true
+        });
+
+    } catch (error) {
+        if (!error.message.includes('time')) {
+            console.error('Error in handleEditTrigger:', error);
+        }
+    }
+}
+
+async function handleRemoveTrigger(interaction, user) {
+    const triggerName = interaction.options.getString('trigger');
+    const groupName = interaction.options.getString('group');
+    
+    if (!triggerName) {
+        return await interaction.reply({
+            content: '❌ Please provide a trigger name using the `trigger` option.',
+            ephemeral: true
+        });
+    }
+
+    if (groupName) {
+        // Move trigger from specified group to Unorganized
+        const group = user.trigger.triggerGroups.find(g => g.name === groupName);
+        if (!group) {
+            return await interaction.reply({
+                content: `❌ Group "${groupName}" not found.`,
+                ephemeral: true
+            });
+        }
+
+        const triggerIndex = group.triggers.findIndex(t => t.name === triggerName);
+        if (triggerIndex === -1) {
+            return await interaction.reply({
+                content: `❌ Trigger "${triggerName}" not found in group "${groupName}".`,
+                ephemeral: true
+            });
+        }
+
+        const [trigger] = group.triggers.splice(triggerIndex, 1);
+        const unorganized = getOrCreateUnorganized(user);
+        unorganized.triggers.push(trigger);
+
+        await user.save();
+        return await interaction.reply({
+            content: `✅ Trigger "${triggerName}" moved from "${groupName}" to "Unorganized".`,
+            ephemeral: true
+        });
+    } else {
+        // Delete trigger completely
+        const result = findTrigger(user, triggerName);
+        if (!result) {
+            return await interaction.reply({
+                content: `❌ Trigger "${triggerName}" not found.`,
+                ephemeral: true
+            });
+        }
+
+        const confirmRow = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`trigger_delete_confirm_${triggerName}`)
+                    .setLabel('Confirm Delete')
+                    .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder()
+                    .setCustomId('trigger_delete_cancel')
+                    .setLabel('Cancel')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+
+        await interaction.reply({
+            content: `⚠️ Are you sure you want to delete the trigger "${triggerName}"? This cannot be undone.`,
+            components: [confirmRow],
+            ephemeral: true
+        });
+    }
+}
+
+async function handleMove(interaction, user) {
+    const triggerName = interaction.options.getString('trigger');
+    const newGroupName = interaction.options.getString('group');
+    
+    if (!triggerName) {
+        return await interaction.reply({
+            content: '❌ Please provide a trigger name using the `trigger` option.',
+            ephemeral: true
+        });
+    }
+    
+    if (!newGroupName) {
+        return await interaction.reply({
+            content: '❌ Please provide a target group name using the `group` option.',
+            ephemeral: true
+        });
+    }
+
+    const result = findTrigger(user, triggerName);
+    if (!result) {
+        return await interaction.reply({
+            content: `❌ Trigger "${triggerName}" not found.`,
+            ephemeral: true
+        });
+    }
+
+    const newGroup = user.trigger.triggerGroups.find(g => g.name === newGroupName);
+    if (!newGroup) {
+        return await interaction.reply({
+            content: `❌ Group "${newGroupName}" not found.`,
+            ephemeral: true
+        });
+    }
+
+    // Remove from old group
+    const triggerIndex = result.group.triggers.findIndex(t => t.name === triggerName);
+    const [trigger] = result.group.triggers.splice(triggerIndex, 1);
+
+    // Add to new group
+    newGroup.triggers.push(trigger);
+
+    await user.save();
+    return await interaction.reply({
+        content: `✅ Trigger "${triggerName}" moved from "${result.group.name}" to "${newGroupName}".`,
+        ephemeral: true
+    });
+}
+
+// ============================================
+// SETTINGS HANDLERS
+// ============================================
+
+async function handleEditDisplay(interaction, user) {
+    const hasPremium = user.premium?.active || false;
+
     const modal = new ModalBuilder()
         .setCustomId('edit_display_modal')
         .setTitle('Edit Trigger List Display');
@@ -345,11 +530,8 @@ async function handleEditDisplay(interaction, user, hasPremium) {
         .setLabel('Embed Color (hex code, e.g., #ff0000)')
         .setStyle(TextInputStyle.Short)
         .setRequired(false)
-        .setMaxLength(7);
-
-    if (user.trigger?.color) {
-        colorInput.setValue(user.trigger.color);
-    }
+        .setMaxLength(7)
+        .setValue(user.trigger?.color || '');
 
     modal.addComponents(
         new ActionRowBuilder().addComponents(bulletInput),
@@ -362,11 +544,8 @@ async function handleEditDisplay(interaction, user, hasPremium) {
             .setLabel('Title')
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
-            .setMaxLength(256);
-
-        if (user.trigger?.title) {
-            titleInput.setValue(user.trigger.title);
-        }
+            .setMaxLength(256)
+            .setValue(user.trigger?.title || '');
 
         modal.addComponents(new ActionRowBuilder().addComponents(titleInput));
     }
@@ -400,151 +579,20 @@ async function handleEditDisplay(interaction, user, hasPremium) {
     }
 }
 
-async function handleEditTrigger(interaction, user) {
-    const triggerName = interaction.options.getString('name');
-    const result = findTrigger(user, triggerName);
-
-    if (!result) {
-        return await interaction.reply({
-            content: `❌ Trigger "${triggerName}" not found.`,
-            ephemeral: true
-        });
-    }
-
-    const modal = buildTriggerModal(result.trigger, 'edit_trigger_modal');
-    await interaction.showModal(modal);
-
-    try {
-        const submitted = await interaction.awaitModalSubmit({
-            filter: i => i.user.id === interaction.user.id,
-            time: 180000
-        });
-
-        updateTriggerFromModal(result.trigger, submitted);
-
-        const embed = buildTriggerEmbed(result.trigger, result.group, user, interaction.user.displayAvatarURL({ dynamic: true }));
-        const buttons = buildEditSaveButtons();
-
-        await submitted.reply({ embeds: [embed], components: [buttons], ephemeral: true });
-
-        const collector = submitted.channel.createMessageComponentCollector({
-            filter: i => i.user.id === interaction.user.id,
-            time: 180000
-        });
-
-        collector.on('collect', async i => {
-            if (i.customId === 'edit_trigger') {
-                const modal = buildTriggerModal(result.trigger, 'edit_trigger_modal_2');
-                await i.showModal(modal);
-
-                try {
-                    const submitted2 = await i.awaitModalSubmit({
-                        filter: i2 => i2.user.id === interaction.user.id,
-                        time: 180000
-                    });
-
-                    updateTriggerFromModal(result.trigger, submitted2);
-                    const newEmbed = buildTriggerEmbed(result.trigger, result.group, user, interaction.user.displayAvatarURL({ dynamic: true }));
-                    await submitted2.update({ embeds: [newEmbed], components: [buttons] });
-
-                } catch (error) {
-                    if (!error.message.includes('time')) {
-                        console.error('Error in edit trigger modal:', error);
-                    }
-                }
-            } else if (i.customId === 'save_trigger') {
-                await user.save();
-                await i.reply({ content: '✅ Trigger saved!', ephemeral: true });
-            }
-        });
-
-    } catch (error) {
-        if (!error.message.includes('time')) {
-            console.error('Error in handleEditTrigger:', error);
-        }
-    }
-}
-
-async function handleEditGroup(interaction, user, hasPremium) {
-    const groupName = interaction.options.getString('name');
-    const group = user.trigger.triggerGroups.find(g => g.name === groupName);
-
-    if (!group) {
-        return await interaction.reply({
-            content: `❌ Group "${groupName}" not found.`,
-            ephemeral: true
-        });
-    }
-
-    const modal = buildGroupModal(group, 'edit_group_modal');
-    await interaction.showModal(modal);
-
-    try {
-        const submitted = await interaction.awaitModalSubmit({
-            filter: i => i.user.id === interaction.user.id,
-            time: 180000
-        });
-
-        updateGroupFromModal(group, submitted);
-
-        const embed = buildGroupEmbed(group, user, interaction.user.displayAvatarURL({ dynamic: true }));
-        const buttons = hasPremium ? buildGroupEditButtons() : buildEditSaveButtons();
-
-        await submitted.reply({ embeds: [embed], components: [buttons], ephemeral: true });
-
-        const collector = submitted.channel.createMessageComponentCollector({
-            filter: i => i.user.id === interaction.user.id,
-            time: 180000
-        });
-
-        collector.on('collect', async i => {
-            if (i.customId === 'edit_group') {
-                const modal = buildGroupModal(group, 'edit_group_modal_2');
-                await i.showModal(modal);
-
-                try {
-                    const submitted2 = await i.awaitModalSubmit({
-                        filter: i2 => i2.user.id === interaction.user.id,
-                        time: 180000
-                    });
-
-                    updateGroupFromModal(group, submitted2);
-                    const newEmbed = buildGroupEmbed(group, user, interaction.user.displayAvatarURL({ dynamic: true }));
-                    await submitted2.update({ embeds: [newEmbed], components: [buttons] });
-
-                } catch (error) {
-                    if (!error.message.includes('time')) {
-                        console.error('Error in edit group modal:', error);
-                    }
-                }
-            } else if (i.customId === 'add_banner') {
-                await handleGroupBannerUpload(i, user, group);
-            } else if (i.customId === 'save_group') {
-                await user.save();
-                await i.reply({ content: '✅ Group saved!', ephemeral: true });
-            }
-        });
-
-    } catch (error) {
-        if (!error.message.includes('time')) {
-            console.error('Error in handleEditGroup:', error);
-        }
-    }
-}
-
 async function handleEditGroupOrder(interaction, user) {
-    const groupNames = user.trigger.triggerGroups.map(g => g.name).join('\n');
-
     const modal = new ModalBuilder()
         .setCustomId('edit_grouporder_modal')
-        .setTitle('Reorder Trigger Groups');
+        .setTitle('Edit Group Order');
 
+    const currentOrder = user.trigger.triggerGroups.map(g => g.name).join(', ');
+    
     const orderInput = new TextInputBuilder()
         .setCustomId('group_order')
-        .setLabel('Group names (one per line, in desired order)')
-        .setStyle(TextInputStyle.Paragraph)
+        .setLabel('Group Order (comma-separated)')
+        .setStyle(TextInputStyle.Short)
         .setRequired(true)
-        .setValue(groupNames);
+        .setValue(currentOrder)
+        .setMaxLength(500);
 
     modal.addComponents(new ActionRowBuilder().addComponents(orderInput));
 
@@ -556,18 +604,12 @@ async function handleEditGroupOrder(interaction, user) {
             time: 180000
         });
 
-        const newOrder = submitted.fields.getTextInputValue('group_order')
-            .split('\n')
-            .map(name => name.trim())
-            .filter(name => name.length > 0);
+        const newOrderString = submitted.fields.getTextInputValue('group_order');
+        const newOrder = newOrderString.split(',').map(s => s.trim()).filter(Boolean);
 
-        // Validate all groups are included
-        const originalNames = user.trigger.triggerGroups.map(g => g.name).sort();
-        const newNames = [...newOrder].sort();
-
-        if (JSON.stringify(originalNames) !== JSON.stringify(newNames)) {
+        if (newOrder.length !== user.trigger.triggerGroups.length) {
             return await submitted.reply({
-                content: '❌ Error: All groups must be included in the new order. Please try again.',
+                content: '❌ Invalid group order. Please include all groups.',
                 ephemeral: true
             });
         }
@@ -575,7 +617,14 @@ async function handleEditGroupOrder(interaction, user) {
         // Reorder groups
         const reorderedGroups = newOrder.map(name =>
             user.trigger.triggerGroups.find(g => g.name === name)
-        );
+        ).filter(Boolean);
+
+        if (reorderedGroups.length !== user.trigger.triggerGroups.length) {
+            return await submitted.reply({
+                content: '❌ One or more group names not found. Please try again.',
+                ephemeral: true
+            });
+        }
 
         user.trigger.triggerGroups = reorderedGroups;
         await user.save();
@@ -590,101 +639,38 @@ async function handleEditGroupOrder(interaction, user) {
     }
 }
 
-// ADD HANDLERS
-async function handleAdd(interaction, user, subcommand) {
-    if (subcommand === 'trigger') {
-        await handleAddTrigger(interaction, user);
-    } else if (subcommand === 'group') {
-        await handleAddGroup(interaction, user);
-    }
-}
-
-async function handleAddTrigger(interaction, user) {
-    const groupName = interaction.options.getString('group');
-
-    const modal = buildTriggerModal(null, 'add_trigger_modal');
-    await interaction.showModal(modal);
-
-    try {
-        const submitted = await interaction.awaitModalSubmit({
-            filter: i => i.user.id === interaction.user.id,
-            time: 180000
-        });
-
-        const newTrigger = {
-            name: submitted.fields.getTextInputValue('trigger_name'),
-            description: submitted.fields.getTextInputValue('trigger_description'),
-            help: submitted.fields.getTextInputValue('trigger_help')
-        };
-
-        let targetGroup;
-        let addMessage = '';
-
-        if (groupName) {
-            targetGroup = user.trigger.triggerGroups.find(g => g.name === groupName);
-            if (targetGroup) {
-                targetGroup.triggers.push(newTrigger);
-                addMessage = `✅ Trigger added to group "${groupName}".`;
-            } else {
-                // Group not found, add to Unorganized
-                const unorganized = getOrCreateUnorganized(user);
-                unorganized.triggers.push(newTrigger);
-                addMessage = `⚠️ Group "${groupName}" not found. Trigger added to "Unorganized".`;
-                targetGroup = unorganized;
-            }
-        } else {
-            // No group specified, add to Unorganized
-            const unorganized = getOrCreateUnorganized(user);
-            unorganized.triggers.push(newTrigger);
-            addMessage = `✅ Trigger added to "Unorganized".`;
-            targetGroup = unorganized;
-        }
-
-        const embed = buildTriggerEmbed(newTrigger, targetGroup, user, interaction.user.displayAvatarURL({ dynamic: true }));
-        const buttons = buildEditSaveButtons();
-
-        await submitted.reply({ content: addMessage, embeds: [embed], components: [buttons], ephemeral: true });
-
-        const collector = submitted.channel.createMessageComponentCollector({
-            filter: i => i.user.id === interaction.user.id,
-            time: 180000
-        });
-
-        collector.on('collect', async i => {
-            if (i.customId === 'edit_trigger') {
-                const modal = buildTriggerModal(newTrigger, 'edit_trigger_modal');
-                await i.showModal(modal);
-
-                try {
-                    const submitted2 = await i.awaitModalSubmit({
-                        filter: i2 => i2.user.id === interaction.user.id,
-                        time: 180000
-                    });
-
-                    updateTriggerFromModal(newTrigger, submitted2);
-                    const newEmbed = buildTriggerEmbed(newTrigger, targetGroup, user, interaction.user.displayAvatarURL({ dynamic: true }));
-                    await submitted2.update({ embeds: [newEmbed], components: [buttons] });
-
-                } catch (error) {
-                    if (!error.message.includes('time')) {
-                        console.error('Error in edit trigger modal:', error);
-                    }
-                }
-            } else if (i.customId === 'save_trigger') {
-                await user.save();
-                await i.reply({ content: '✅ Trigger saved!', ephemeral: true });
-            }
-        });
-
-    } catch (error) {
-        if (!error.message.includes('time')) {
-            console.error('Error in handleAddTrigger:', error);
-        }
-    }
-}
-
 async function handleAddGroup(interaction, user) {
-    const modal = buildGroupModal(null, 'add_group_modal');
+    const modal = new ModalBuilder()
+        .setCustomId('add_group_modal')
+        .setTitle('Add Trigger Group');
+
+    const nameInput = new TextInputBuilder()
+        .setCustomId('group_name')
+        .setLabel('Group Name')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(100);
+
+    const displayNameInput = new TextInputBuilder()
+        .setCustomId('display_name')
+        .setLabel('Display Name')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setMaxLength(100);
+
+    const colorInput = new TextInputBuilder()
+        .setCustomId('color')
+        .setLabel('Color (hex code, e.g., #ff0000)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setMaxLength(7);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(nameInput),
+        new ActionRowBuilder().addComponents(displayNameInput),
+        new ActionRowBuilder().addComponents(colorInput)
+    );
+
     await interaction.showModal(modal);
 
     try {
@@ -692,50 +678,32 @@ async function handleAddGroup(interaction, user) {
             filter: i => i.user.id === interaction.user.id,
             time: 180000
         });
+
+        const groupName = submitted.fields.getTextInputValue('group_name');
+        const displayName = submitted.fields.getTextInputValue('display_name') || groupName;
+        const color = submitted.fields.getTextInputValue('color') || '#808080';
+
+        // Check if group already exists
+        if (user.trigger.triggerGroups.find(g => g.name === groupName)) {
+            return await submitted.reply({
+                content: `❌ A group named "${groupName}" already exists.`,
+                ephemeral: true
+            });
+        }
 
         const newGroup = {
-            name: submitted.fields.getTextInputValue('group_name'),
-            displayName: submitted.fields.getTextInputValue('group_displayname'),
-            color: submitted.fields.getTextInputValue('group_color') || '#808080',
-            triggers: []
+            name: groupName,
+            displayName: displayName,
+            triggers: [],
+            color: color
         };
 
         user.trigger.triggerGroups.push(newGroup);
+        await user.save();
 
-        const embed = buildGroupEmbed(newGroup, user, interaction.user.displayAvatarURL({ dynamic: true }));
-        const buttons = buildEditSaveButtons();
-
-        await submitted.reply({ embeds: [embed], components: [buttons], ephemeral: true });
-
-        const collector = submitted.channel.createMessageComponentCollector({
-            filter: i => i.user.id === interaction.user.id,
-            time: 180000
-        });
-
-        collector.on('collect', async i => {
-            if (i.customId === 'edit_group') {
-                const modal = buildGroupModal(newGroup, 'edit_group_modal');
-                await i.showModal(modal);
-
-                try {
-                    const submitted2 = await i.awaitModalSubmit({
-                        filter: i2 => i2.user.id === interaction.user.id,
-                        time: 180000
-                    });
-
-                    updateGroupFromModal(newGroup, submitted2);
-                    const newEmbed = buildGroupEmbed(newGroup, user, interaction.user.displayAvatarURL({ dynamic: true }));
-                    await submitted2.update({ embeds: [newEmbed], components: [buttons] });
-
-                } catch (error) {
-                    if (!error.message.includes('time')) {
-                        console.error('Error in edit group modal:', error);
-                    }
-                }
-            } else if (i.customId === 'save_group') {
-                await user.save();
-                await i.reply({ content: '✅ Group saved!', ephemeal: true });
-            }
+        await submitted.reply({
+            content: `✅ Group "${groupName}" created!`,
+            ephemeral: true
         });
 
     } catch (error) {
@@ -745,367 +713,119 @@ async function handleAddGroup(interaction, user) {
     }
 }
 
-// REMOVE HANDLERS
-async function handleRemove(interaction, user, subcommand) {
-    if (subcommand === 'trigger') {
-        await handleRemoveTrigger(interaction, user);
-    } else if (subcommand === 'group') {
-        await handleRemoveGroup(interaction, user);
-    }
-}
-
-async function handleRemoveTrigger(interaction, user) {
-    const triggerName = interaction.options.getString('name');
-    const groupName = interaction.options.getString('group');
-
-    if (groupName) {
-        // Move trigger from specified group to Unorganized
-        const group = user.trigger.triggerGroups.find(g => g.name === groupName);
-        if (!group) {
-            return await interaction.reply({
-                content: `❌ Group "${groupName}" not found.`,
-                ephemeral: true
-            });
-        }
-
-        const triggerIndex = group.triggers.findIndex(t => t.name === triggerName);
-        if (triggerIndex === -1) {
-            return await interaction.reply({
-                content: `❌ Trigger "${triggerName}" not found in group "${groupName}".`,
-                ephemeral: true
-            });
-        }
-
-        const [trigger] = group.triggers.splice(triggerIndex, 1);
-        const unorganized = getOrCreateUnorganized(user);
-        unorganized.triggers.push(trigger);
-
-        await user.save();
-        return await interaction.reply({
-            content: `✅ Trigger "${triggerName}" moved from "${groupName}" to "Unorganized".`,
-            ephemeral: true
-        });
-    } else {
-        // Delete trigger completely - ask for confirmation
-        const result = findTrigger(user, triggerName);
-        if (!result) {
-            return await interaction.reply({
-                content: `❌ Trigger "${triggerName}" not found.`,
-                ephemeral: true
-            });
-        }
-
-        const confirmButton = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId('confirm_delete_trigger')
-                    .setLabel('Confirm Delete')
-                    .setStyle(ButtonStyle.Danger),
-                new ButtonBuilder()
-                    .setCustomId('cancel_delete')
-                    .setLabel('Cancel')
-                    .setStyle(ButtonStyle.Secondary)
-            );
-
-        await interaction.reply({
-            content: `⚠️ Are you sure you want to delete the trigger "${triggerName}"? This cannot be undone.`,
-            components: [confirmButton],
-            ephemeral: true
-        });
-
-        const collector = interaction.channel.createMessageComponentCollector({
-            filter: i => i.user.id === interaction.user.id,
-            time: 180000,
-            max: 1
-        });
-
-        collector.on('collect', async i => {
-            if (i.customId === 'confirm_delete_trigger') {
-                const triggerIndex = result.group.triggers.findIndex(t => t.name === triggerName);
-                result.group.triggers.splice(triggerIndex, 1);
-                await user.save();
-                await i.update({
-                    content: `✅ Trigger "${triggerName}" deleted.`,
-                    components: []
-                });
-            } else {
-                await i.update({
-                    content: '❌ Deletion cancelled.',
-                    components: []
-                });
-            }
-        });
-    }
-}
-
 async function handleRemoveGroup(interaction, user) {
-    const groupName = interaction.options.getString('name');
-    const group = user.trigger.triggerGroups.find(g => g.name === groupName);
+    const groupName = interaction.options.getString('group');
+    
+    if (!groupName) {
+        return await interaction.reply({
+            content: '❌ Please provide a group name using the `group` option.',
+            ephemeral: true
+        });
+    }
 
-    if (!group) {
+    if (groupName === 'Unorganized') {
+        return await interaction.reply({
+            content: '❌ Cannot delete the "Unorganized" group.',
+            ephemeral: true
+        });
+    }
+
+    const groupIndex = user.trigger.triggerGroups.findIndex(g => g.name === groupName);
+    if (groupIndex === -1) {
         return await interaction.reply({
             content: `❌ Group "${groupName}" not found.`,
             ephemeral: true
         });
     }
 
-    const confirmButtons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('delete_group_and_triggers')
-                .setLabel('Delete Group & Triggers')
-                .setStyle(ButtonStyle.Danger),
-            new ButtonBuilder()
-                .setCustomId('delete_group_keep_triggers')
-                .setLabel('Delete Group (Keep Triggers)')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('cancel_delete')
-                .setLabel('Cancel')
-                .setStyle(ButtonStyle.Secondary)
-        );
-
-    await interaction.reply({
-        content: `⚠️ What would you like to do with the group "${groupName}"?`,
-        components: [confirmButtons],
-        ephemeral: true
-    });
-
-    const collector = interaction.channel.createMessageComponentCollector({
-        filter: i => i.user.id === interaction.user.id,
-        time: 180000,
-        max: 1
-    });
-
-    collector.on('collect', async i => {
-        if (i.customId === 'delete_group_and_triggers') {
-            // Ask for final confirmation
-            const finalConfirm = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('final_confirm_delete')
-                        .setLabel('Yes, Delete Everything')
-                        .setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder()
-                        .setCustomId('cancel_delete')
-                        .setLabel('Cancel')
-                        .setStyle(ButtonStyle.Secondary)
-                );
-
-            await i.update({
-                content: `⚠️ **FINAL CONFIRMATION**: Delete group "${groupName}" and all ${group.triggers.length} triggers? This cannot be undone.`,
-                components: [finalConfirm]
-            });
-
-            const finalCollector = interaction.channel.createMessageComponentCollector({
-                filter: i2 => i2.user.id === interaction.user.id,
-                time: 180000,
-                max: 1
-            });
-
-            finalCollector.on('collect', async i2 => {
-                if (i2.customId === 'final_confirm_delete') {
-                    const groupIndex = user.trigger.triggerGroups.findIndex(g => g.name === groupName);
-                    user.trigger.triggerGroups.splice(groupIndex, 1);
-                    await user.save();
-                    await i2.update({
-                        content: `✅ Group "${groupName}" and all its triggers deleted.`,
-                        components: []
-                    });
-                } else {
-                    await i2.update({
-                        content: '❌ Deletion cancelled.',
-                        components: []
-                    });
-                }
-            });
-
-        } else if (i.customId === 'delete_group_keep_triggers') {
-            // Move triggers to Unorganized
-            const unorganized = getOrCreateUnorganized(user);
-            unorganized.triggers.push(...group.triggers);
-
-            const groupIndex = user.trigger.triggerGroups.findIndex(g => g.name === groupName);
-            user.trigger.triggerGroups.splice(groupIndex, 1);
-
-            await user.save();
-            await i.update({
-                content: `✅ Group "${groupName}" deleted. ${group.triggers.length} triggers moved to "Unorganized".`,
-                components: []
-            });
-        } else {
-            await i.update({
-                content: '❌ Deletion cancelled.',
-                components: []
-            });
-        }
-    });
-}
-
-// MOVE
-async function handleMove(interaction, user) {
-    const triggerName = interaction.options.getString('trigger');
-    const newGroupName = interaction.options.getString('newgroup');
-
-    const result = findTrigger(user, triggerName);
-    if (!result) {
-        return await interaction.reply({
-            content: `❌ Trigger "${triggerName}" not found.`,
-            ephemeral: true
-        });
+    const group = user.trigger.triggerGroups[groupIndex];
+    
+    // Move triggers to Unorganized
+    if (group.triggers && group.triggers.length > 0) {
+        const unorganized = getOrCreateUnorganized(user);
+        unorganized.triggers.push(...group.triggers);
     }
 
-    const newGroup = user.trigger.triggerGroups.find(g => g.name === newGroupName);
-    if (!newGroup) {
-        return await interaction.reply({
-            content: `❌ Group "${newGroupName}" not found.`,
-            ephemeral: true
-        });
-    }
-
-    // Remove from old group
-    const triggerIndex = result.group.triggers.findIndex(t => t.name === triggerName);
-    const [trigger] = result.group.triggers.splice(triggerIndex, 1);
-
-    // Add to new group
-    newGroup.triggers.push(trigger);
-
+    // Remove group
+    user.trigger.triggerGroups.splice(groupIndex, 1);
     await user.save();
-    await interaction.reply({
-        content: `✅ Trigger "${triggerName}" moved from "${result.group.name}" to "${newGroupName}".`,
+
+    return await interaction.reply({
+        content: `✅ Group "${groupName}" deleted. Triggers moved to "Unorganized".`,
         ephemeral: true
     });
 }
 
-// BANNER UPLOADS
-async function handleGroupBannerUpload(interaction, user, group) {
-    await interaction.reply({
-        content: '📸 Please send an image for the group banner (or type "skip" to cancel).\n\n⚠️ Image must be under 8MB.',
-        ephemeral: true
-    });
+// ============================================
+// BUTTON INTERACTION HANDLER
+// ============================================
 
-    const sessionId = `${interaction.user.id}-${Date.now()}`;
-    activeSessions.set(interaction.user.id, {
-        id: sessionId,
-        type: 'banner',
-        interaction: interaction,
-        user: user,
-        group: group
-    });
+async function handleButtonInteraction(interaction) {
+    const customId = interaction.customId;
 
-    const filter = m => m.author.id === interaction.user.id;
-    const collector = interaction.channel.createMessageCollector({
-        filter,
-        max: 1,
-        time: 180000
-    });
+    // Handle delete confirmation
+    if (customId.startsWith('trigger_delete_confirm_')) {
+        const triggerName = customId.replace('trigger_delete_confirm_', '');
+        const user = await User.findOne({ discordID: interaction.user.id });
 
-    collector.on('collect', async message => {
-        try {
-            await message.delete().catch(() => {});
-
-            if (message.content.toLowerCase() === 'skip') {
-                activeSessions.delete(interaction.user.id);
-                return await interaction.followUp({
-                    content: '❌ Banner upload cancelled.',
-                    ephemeral: true
-                });
-            }
-
-            if (message.attachments.size === 0) {
-                activeSessions.delete(interaction.user.id);
-                return await interaction.followUp({
-                    content: '❌ Please send an image.',
-                    ephemeral: true
-                });
-            }
-
-            const attachment = message.attachments.first();
-
-            if (attachment.size > 8 * 1024 * 1024) {
-                activeSessions.delete(interaction.user.id);
-                return await interaction.followUp({
-                    content: '❌ Image must be under 8MB.',
-                    ephemeral: true
-                });
-            }
-
-            if (!attachment.contentType?.startsWith('image/')) {
-                activeSessions.delete(interaction.user.id);
-                return await interaction.followUp({
-                    content: '❌ Please send a valid image file.',
-                    ephemeral: true
-                });
-            }
-
-            const mediaData = await uploadToR2(attachment, 'trigger-banners');
-            group.banner = mediaData;
-
-            activeSessions.delete(interaction.user.id);
-
-            const embed = buildGroupEmbed(group, user, interaction.user.displayAvatarURL({ dynamic: true }));
-            await interaction.followUp({
-                content: '✅ Banner uploaded!',
-                embeds: [embed],
-                ephemeral: true
-            });
-
-        } catch (error) {
-            console.error('Error uploading banner:', error);
-            activeSessions.delete(interaction.user.id);
-            await interaction.followUp({
-                content: '❌ Error uploading banner.',
-                ephemeral: true
+        if (!user) {
+            return interaction.update({
+                content: '❌ User not found.',
+                components: []
             });
         }
-    });
 
-    collector.on('end', (collected, reason) => {
-        if (reason === 'time') {
-            activeSessions.delete(interaction.user.id);
+        const result = findTrigger(user, triggerName);
+        if (!result) {
+            return interaction.update({
+                content: `❌ Trigger "${triggerName}" not found.`,
+                components: []
+            });
         }
-    });
-}
 
-async function uploadToR2(attachment, folder = 'triggers') {
-    try {
-        const response = await fetch(attachment.url);
-        const buffer = Buffer.from(await response.arrayBuffer());
+        const triggerIndex = result.group.triggers.findIndex(t => t.name === triggerName);
+        result.group.triggers.splice(triggerIndex, 1);
+        await user.save();
 
-        const hash = crypto.randomBytes(16).toString('hex');
-        const ext = attachment.name.split('.').pop();
-        const r2Key = `${folder}/${hash}.${ext}`;
-
-        const command = new PutObjectCommand({
-            Bucket: config.r2.trigin.bucketName,
-            Key: r2Key,
-            Body: buffer,
-            ContentType: attachment.contentType,
+        return interaction.update({
+            content: `✅ Trigger "${triggerName}" deleted.`,
+            components: []
         });
-
-        await trigR2.send(command);
-
-        const publicUrl = `${config.r2.trigin.publicURL}/${r2Key}`;
-
-        return {
-            r2Key: r2Key,
-            url: publicUrl,
-            filename: attachment.name,
-            mimeType: attachment.contentType,
-            size: attachment.size,
-            uploadedAt: new Date()
-        };
-
-    } catch (error) {
-        console.error('Error uploading to R2:', error);
-        throw error;
     }
+
+    if (customId === 'trigger_delete_cancel') {
+        return interaction.update({
+            content: '❌ Deletion cancelled.',
+            components: []
+        });
+    }
+
+    return interaction.reply({
+        content: '❌ Unknown button interaction.',
+        ephemeral: true
+    });
 }
 
-// FIND + GET
+// ============================================
+// MODAL SUBMIT HANDLER
+// ============================================
+
+async function handleModalSubmit(interaction) {
+    // Handled inline in handler functions
+    return;
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
 function findTrigger(data, triggerName) {
+    if (!data.trigger?.triggerGroups) return null;
+
     for (const group of data.trigger.triggerGroups) {
-        const trigger = group.triggers.find(t => t.name === triggerName);
+        const trigger = group.triggers?.find(t => 
+            t.name?.toLowerCase() === triggerName.toLowerCase()
+        );
         if (trigger) {
             return { trigger, group };
         }
@@ -1127,172 +847,17 @@ function getOrCreateUnorganized(user) {
     return unorganized;
 }
 
-// BUILD EMBEDS
-function buildTriggerListEmbed(data, avatarUrl, displayName) {
-    const hasPremium = data.premium?.active || false;
-    const trigger = data.trigger;
-
-    const embed = new EmbedBuilder();
-
-    // Color
-    embed.setColor(trigger.color || '#0099ff');
-
-    // Title
-    if (hasPremium && trigger.title) {
-        embed.setTitle(trigger.title);
-    } else {
-        embed.setTitle(`${displayName}'s Triggers`);
-    }
-
-    // Author/Header
-    if (trigger.header?.text) {
-        const authorOptions = { name: trigger.header.text };
-        if (trigger.header.icon?.url) {
-            authorOptions.iconURL = trigger.header.icon.url;
-        } else {
-            authorOptions.iconURL = avatarUrl;
-        }
-        embed.setAuthor(authorOptions);
-    } else {
-        embed.setAuthor({
-            name: displayName,
-            iconURL: avatarUrl
-        });
-    }
-
-    // Footer
-    if (trigger.footer?.text) {
-        const footerOptions = { text: trigger.footer.text };
-        if (trigger.footer.icon?.url) {
-            footerOptions.iconURL = trigger.footer.icon.url;
-        }
-        embed.setFooter(footerOptions);
-    }
-
-    // Thumbnail
-    if (trigger.thumbnail?.url) {
-        embed.setThumbnail(trigger.thumbnail.url);
-    }
-
-    // Banner
-    if (hasPremium && trigger.banner?.url) {
-        embed.setImage(trigger.banner.url);
-    }
-
-    // Build trigger list
-    const bullet = trigger.bullet || '-';
-    const unorganized = trigger.triggerGroups.find(g => g.name === 'Unorganized');
-    const organizedGroups = trigger.triggerGroups.filter(g => g.name !== 'Unorganized');
-
-    // Add unorganized triggers to description
-    let description = '';
-    if (unorganized && unorganized.triggers.length > 0) {
-        description = unorganized.triggers
-            .map(t => `${bullet} ||${t.name}||`)
-            .join('\n');
-    }
-
-    if (description) {
-        embed.setDescription(description);
-    }
-
-    // Add organized groups as fields
-    for (const group of organizedGroups) {
-        if (group.triggers.length > 0) {
-            const fieldValue = group.triggers
-                .map(t => `${bullet} ||${t.name}||`)
-                .join('\n');
-
-            embed.addFields({
-                name: group.displayName || group.name,
-                value: fieldValue,
-                inline: false
-            });
-        }
-    }
-
-    return embed;
+function updateTriggerFromModal(trigger, submitted) {
+    trigger.name = submitted.fields.getTextInputValue('trigger_name');
+    trigger.description = submitted.fields.getTextInputValue('trigger_description');
+    const help = submitted.fields.getTextInputValue('trigger_help');
+    trigger.help = help || undefined;
 }
 
-function buildTriggerEmbed(trigger, group, data, avatarUrl) {
-    const embed = new EmbedBuilder();
+// ============================================
+// MODAL BUILDERS
+// ============================================
 
-    // Color from group, fallback to trigger list color
-    embed.setColor(group.color || data.trigger.color || '#0099ff');
-
-    // Title (spoilered)
-    embed.setTitle(`||${trigger.name}||`);
-
-    // Description (spoilered)
-    if (trigger.description) {
-        embed.setDescription(`||${trigger.description}||`);
-    }
-
-    // Help field
-    if (trigger.help) {
-        embed.addFields({
-            name: 'How to Help',
-            value: trigger.help,
-            inline: false
-        });
-    }
-
-    // Header icon
-    const headerIcon = data.trigger.header?.icon?.url || avatarUrl;
-    if (data.trigger.header?.text) {
-        embed.setAuthor({
-            name: data.trigger.header.text,
-            iconURL: headerIcon
-        });
-    } else {
-        embed.setAuthor({
-            name: 'Trigger',
-            iconURL: headerIcon
-        });
-    }
-
-    // Banner from group
-    if (group.banner?.url) {
-        embed.setImage(group.banner.url);
-    }
-
-    return embed;
-}
-
-function buildGroupEmbed(group, data, avatarUrl) {
-    const embed = new EmbedBuilder();
-
-    embed.setColor(group.color || '#808080');
-    embed.setTitle(group.displayName || group.name);
-
-    const bullet = data.trigger.bullet || '-';
-    if (group.triggers.length > 0) {
-        const description = group.triggers
-            .map(t => `${bullet} ||${t.name}||`)
-            .join('\n');
-        embed.setDescription(description);
-    } else {
-        embed.setDescription('*No triggers in this group*');
-    }
-
-    // Header icon
-    const headerIcon = data.trigger.header?.icon?.url || avatarUrl;
-    if (data.trigger.header?.text) {
-        embed.setAuthor({
-            name: data.trigger.header.text,
-            iconURL: headerIcon
-        });
-    }
-
-    // Banner
-    if (group.banner?.url) {
-        embed.setImage(group.banner.url);
-    }
-
-    return embed;
-}
-
-// BUILD FORM MODALS
 function buildTriggerModal(trigger, customId) {
     const modal = new ModalBuilder()
         .setCustomId(customId)
@@ -1334,95 +899,85 @@ function buildTriggerModal(trigger, customId) {
     return modal;
 }
 
-function buildGroupModal(group, customId) {
-    const modal = new ModalBuilder()
-        .setCustomId(customId)
-        .setTitle(group ? 'Edit Group' : 'Add Group');
+// ============================================
+// EMBED BUILDERS
+// ============================================
 
-    const nameInput = new TextInputBuilder()
-        .setCustomId('group_name')
-        .setLabel('Group Name (internal identifier)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setMaxLength(50);
+function buildTriggerListEmbed(data, avatarUrl, displayName) {
+    const hasPremium = data.premium?.active || false;
+    const trigger = data.trigger;
 
-    const displayNameInput = new TextInputBuilder()
-        .setCustomId('group_displayname')
-        .setLabel('Display Name)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setMaxLength(100);
+    const embed = new EmbedBuilder();
+    embed.setColor(trigger.color || '#5865F2');
 
-    const colorInput = new TextInputBuilder()
-        .setCustomId('group_color')
-        .setLabel('Color (hex)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false);
-
-    if (group) {
-        nameInput.setValue(group.name);
-        displayNameInput.setValue(group.displayName || group.name);
-        if (group.color) colorInput.setValue(group.color);
+    if (hasPremium && trigger.title) {
+        embed.setTitle(trigger.title);
+    } else {
+        embed.setTitle(`${displayName}'s Triggers`);
     }
 
-    modal.addComponents(
-        new ActionRowBuilder().addComponents(nameInput),
-        new ActionRowBuilder().addComponents(displayNameInput),
-        new ActionRowBuilder().addComponents(colorInput)
-    );
+    if (trigger.header?.text) {
+        const authorOptions = { name: trigger.header.text };
+        if (trigger.header.iconURL) {
+            authorOptions.iconURL = trigger.header.iconURL;
+        }
+        embed.setAuthor(authorOptions);
+    }
 
-    return modal;
+    if (avatarUrl) {
+        embed.setThumbnail(avatarUrl);
+    }
+
+    const bullet = trigger.bullet || '-';
+
+    for (const group of trigger.triggerGroups) {
+        if (!group.triggers || group.triggers.length === 0) continue;
+
+        const triggerList = group.triggers
+            .map(t => `${bullet} **${t.name}**\n  ${t.description}`)
+            .join('\n\n');
+
+        embed.addFields({
+            name: group.displayName || group.name,
+            value: triggerList || 'No triggers',
+            inline: false
+        });
+    }
+
+    if (trigger.footer?.text) {
+        const footerOptions = { text: trigger.footer.text };
+        if (trigger.footer.iconURL) {
+            footerOptions.iconURL = trigger.footer.iconURL;
+        }
+        embed.setFooter(footerOptions);
+    }
+
+    return embed;
 }
 
-// FORM MODAL UPDATES
-function updateTriggerFromModal(trigger, interaction) {
-    trigger.name = interaction.fields.getTextInputValue('trigger_name');
-    trigger.description = interaction.fields.getTextInputValue('trigger_description');
-    const help = interaction.fields.getTextInputValue('trigger_help');
-    if (help) trigger.help = help;
-}
+function buildTriggerEmbed(trigger, group, data, avatarUrl) {
+    const embed = new EmbedBuilder()
+        .setTitle(trigger.name)
+        .setDescription(trigger.description)
+        .setColor(group.color || data.trigger?.color || '#5865F2');
 
-function updateGroupFromModal(group, interaction) {
-    group.name = interaction.fields.getTextInputValue('group_name');
-    group.displayName = interaction.fields.getTextInputValue('group_displayname');
-    const color = interaction.fields.getTextInputValue('group_color');
-    if (color) group.color = color;
-}
+    if (trigger.help) {
+        embed.addFields({
+            name: 'How to Help',
+            value: trigger.help,
+            inline: false
+        });
+    }
 
-// BUTTON BUILDERS
-function buildEditSaveButtons() {
-    return new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('edit_trigger')
-                .setLabel('Edit')
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji('✏️'),
-            new ButtonBuilder()
-                .setCustomId('save_trigger')
-                .setLabel('Save')
-                .setStyle(ButtonStyle.Success)
-                .setEmoji('💾')
-        );
-}
+    embed.addFields({
+        name: 'Group',
+        value: group.displayName || group.name,
+        inline: true
+    });
 
-function buildGroupEditButtons() {
-    return new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('edit_group')
-                .setLabel('Edit')
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji('✏️'),
-            new ButtonBuilder()
-                .setCustomId('add_banner')
-                .setLabel('Add Banner')
-                .setStyle(ButtonStyle.Secondary)
-                .setEmoji('🖼️'),
-            new ButtonBuilder()
-                .setCustomId('save_group')
-                .setLabel('Save')
-                .setStyle(ButtonStyle.Success)
-                .setEmoji('💾')
-        );
+    if (avatarUrl) {
+        embed.setThumbnail(avatarUrl);
+    }
+
+    return embed;
 }

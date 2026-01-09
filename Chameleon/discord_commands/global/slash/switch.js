@@ -1,14 +1,14 @@
 // (/switch) - Systemiser Switch Command
 // Manages front switching, layers, and shift statuses
 
-const { 
-    SlashCommandBuilder, 
-    EmbedBuilder, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle, 
-    ModalBuilder, 
-    TextInputBuilder, 
+const {
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
     TextInputStyle,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder
@@ -31,42 +31,52 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('switch')
         .setDescription('Manage front switching and shift statuses')
+
+        // MANAGE subcommand
         .addSubcommand(sub => sub
-            .setName('in')
-            .setDescription('Open the switch-in form to change who is fronting'))
-        .addSubcommand(sub => sub
-            .setName('out')
-            .setDescription('Switch out an entity from front')
+            .setName('manage')
+            .setDescription('Switch in and out of front')
+            .addStringOption(opt => opt
+                .setName('action')
+                .setDescription('What to do')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'In - Open switch-in form', value: 'in' },
+                    { name: 'Out - Switch out an entity', value: 'out' },
+                    { name: 'Status - Update shift status', value: 'status' }
+                ))
             .addStringOption(opt => opt
                 .setName('entity')
-                .setDescription('Name of alter/state/group to switch out')
-                .setRequired(true)
-                .setAutocomplete(true)))
-        .addSubcommand(sub => sub
-            .setName('status')
-            .setDescription('Update shift status for a fronting entity')
-            .addStringOption(opt => opt
-                .setName('entity')
-                .setDescription('Name of alter/state/group currently fronting')
-                .setRequired(true)
+                .setDescription('Entity name (required for out/status)')
+                .setRequired(false)
                 .setAutocomplete(true))
             .addStringOption(opt => opt
                 .setName('new_status')
-                .setDescription('New status for this shift')
-                .setRequired(true)))
+                .setDescription('New status (required for status action)')
+                .setRequired(false)))
+
+        // VIEW subcommand
         .addSubcommand(sub => sub
-            .setName('history')
-            .setDescription('View recent switch history')
+            .setName('view')
+            .setDescription('View switch information')
+            .addStringOption(opt => opt
+                .setName('action')
+                .setDescription('What to view')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'History - View recent switches', value: 'history' }
+                ))
             .addIntegerOption(opt => opt
                 .setName('limit')
-                .setDescription('Number of recent switches to show (default: 10)')
+                .setDescription('Number of recent switches (default: 10)')
                 .setMinValue(1)
                 .setMaxValue(50))),
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
+        const action = interaction.options.getString('action');
         const { user, system, isNew } = await utils.getOrCreateUserAndSystem(interaction);
-        
+
         if (isNew) {
             return utils.handleNewUserFlow(interaction, 'switch');
         }
@@ -78,42 +88,26 @@ module.exports = {
             });
         }
 
-        switch (subcommand) {
-            case 'in':
-                return handleSwitchIn(interaction, system);
-            case 'out':
-                return handleSwitchOut(interaction, system);
-            case 'status':
-                return handleStatus(interaction, system);
-            case 'history':
-                return handleHistory(interaction, system);
-            default:
-                return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
+        // Route based on subcommand and action
+        if (subcommand === 'manage') {
+            if (action === 'in') {
+                return await handleSwitchIn(interaction, user, system);
+            } else if (action === 'out') {
+                return await handleSwitchOut(interaction, user, system);
+            } else if (action === 'status') {
+                return await handleStatus(interaction, user, system);
+            }
+        } else if (subcommand === 'view') {
+            if (action === 'history') {
+                return await handleHistory(interaction, user, system);
+            }
         }
     },
 
     async autocomplete(interaction) {
-        const { system } = await utils.getOrCreateUserAndSystem(interaction);
-        if (!system) return interaction.respond([]);
-
-        const focusedOption = interaction.options.getFocused(true);
-        const searchValue = focusedOption.value.toLowerCase();
-
-        // Get all fronting entities for autocomplete
-        const fronters = await getFrontingEntities(system);
-        
-        const choices = fronters
-            .filter(f => f.name.toLowerCase().includes(searchValue))
-            .slice(0, 25)
-            .map(f => ({
-                name: `${f.name} (${f.type})`,
-                value: f.name
-            }));
-
-        return interaction.respond(choices);
+        return handleAutocomplete(interaction);
     },
 
-    // Export handlers for bot.js
     handleButtonInteraction,
     handleSelectMenu,
     handleModalSubmit
@@ -125,11 +119,11 @@ module.exports = {
 
 async function handleSwitchIn(interaction, system) {
     const sessionId = utils.generateSessionId();
-    
+
     // Get current front data for prefilling
     const currentLayers = system.front?.layers || [];
     const layerNames = currentLayers.map(l => l.name || 'Unnamed').join(', ');
-    
+
     // Build prefilled fronter list
     let prefillFronters = '';
     for (const layer of currentLayers) {
@@ -209,7 +203,7 @@ async function handleSwitchIn(interaction, system) {
 
 async function handleSwitchOut(interaction, system) {
     const entityName = interaction.options.getString('entity');
-    
+
     await interaction.deferReply({ ephemeral: true });
 
     // Find the entity
@@ -222,7 +216,7 @@ async function handleSwitchOut(interaction, system) {
 
     // Find and close the active shift for this entity
     const closed = await closeEntityShift(entity._id, type, system);
-    
+
     if (!closed) {
         return interaction.editReply({
             content: `❌ **${utils.getDisplayName(entity)}** is not currently fronting.`
@@ -250,7 +244,7 @@ async function handleSwitchOut(interaction, system) {
 async function handleStatus(interaction, system) {
     const entityName = interaction.options.getString('entity');
     const newStatus = interaction.options.getString('new_status');
-    
+
     await interaction.deferReply({ ephemeral: true });
 
     // Find the entity
@@ -271,7 +265,7 @@ async function handleStatus(interaction, system) {
 
     // Close the current status and add new one
     const now = new Date();
-    
+
     // Close the last status entry
     if (activeShift.statuses && activeShift.statuses.length > 0) {
         const lastStatus = activeShift.statuses[activeShift.statuses.length - 1];
@@ -306,7 +300,7 @@ async function handleStatus(interaction, system) {
 
 async function handleHistory(interaction, system) {
     const limit = interaction.options.getInteger('limit') || 10;
-    
+
     await interaction.deferReply({ ephemeral: true });
 
     // Get all shift IDs from all layers
@@ -335,10 +329,10 @@ async function handleHistory(interaction, system) {
     for (const shift of shifts) {
         const startTime = Math.floor(shift.startTime.getTime() / 1000);
         const endTime = shift.endTime ? Math.floor(shift.endTime.getTime() / 1000) : null;
-        
+
         const typeEmoji = shift.s_type === 'alter' ? '🎭' : (shift.s_type === 'state' ? '🔄' : '👥');
         const status = shift.statuses?.[shift.statuses.length - 1]?.status || 'No status';
-        
+
         if (endTime) {
             historyText += `${typeEmoji} **${shift.type_name}** - <t:${startTime}:R> to <t:${endTime}:R>\n`;
         } else {
@@ -377,9 +371,9 @@ async function handleModalSubmit(interaction) {
     const session = utils.getSession(sessionId);
 
     if (!session) {
-        return interaction.reply({ 
-            content: '❌ Session expired. Please try again.', 
-            ephemeral: true 
+        return interaction.reply({
+            content: '❌ Session expired. Please try again.',
+            ephemeral: true
         });
     }
 
@@ -396,10 +390,10 @@ async function handleModalSubmit(interaction) {
 
         // Parse layer names
         const layerNames = layerNamesInput.split(',').map(n => n.trim()).filter(Boolean);
-        
+
         // Parse fronters (comma = same layer, newline = next layer)
         const layerLines = frontersInput.split('\n').map(line => line.trim()).filter(Boolean);
-        const frontersByLayer = layerLines.map(line => 
+        const frontersByLayer = layerLines.map(line =>
             line.split(',').map(name => name.trim()).filter(Boolean)
         );
 
@@ -423,7 +417,7 @@ async function handleModalSubmit(interaction) {
         for (let layerIndex = 0; layerIndex < frontersByLayer.length; layerIndex++) {
             const fronterNames = frontersByLayer[layerIndex];
             const layerName = layerNames[layerIndex] || `Layer ${layerIndex + 1}`;
-            
+
             const layer = {
                 _id: new mongoose.Types.ObjectId(),
                 name: layerName,
@@ -434,7 +428,7 @@ async function handleModalSubmit(interaction) {
             for (const fronterName of fronterNames) {
                 // Find the entity
                 const { entity, type } = await findEntityByName(fronterName, system);
-                
+
                 if (!entity) {
                     errors.push(`"${fronterName}" not found`);
                     continue;
@@ -504,7 +498,7 @@ async function handleModalSubmit(interaction) {
                 const emoji = f.type === 'alter' ? '🎭' : (f.type === 'state' ? '🔄' : '👥');
                 return `${emoji} ${f.name}`;
             }).join('\n');
-            
+
             embed.addFields({
                 name: layer.name,
                 value: fronterList || '*Empty*',
@@ -576,7 +570,7 @@ async function findEntityByName(name, system) {
  */
 async function getFrontingEntities(system) {
     const fronters = [];
-    
+
     for (const layer of system.front?.layers || []) {
         for (const shiftId of layer.shifts || []) {
             const shift = await Shift.findById(shiftId);
@@ -590,7 +584,7 @@ async function getFrontingEntities(system) {
             }
         }
     }
-    
+
     return fronters;
 }
 
@@ -618,7 +612,7 @@ async function closeEntityShift(entityId, type, system) {
 
     const now = new Date();
     shift.endTime = now;
-    
+
     // Close last status
     if (shift.statuses && shift.statuses.length > 0) {
         const lastStatus = shift.statuses[shift.statuses.length - 1];
@@ -636,13 +630,13 @@ async function closeEntityShift(entityId, type, system) {
  */
 async function closeAllActiveShifts(system) {
     const now = new Date();
-    
+
     for (const layer of system.front?.layers || []) {
         for (const shiftId of layer.shifts || []) {
             const shift = await Shift.findById(shiftId);
             if (shift && !shift.endTime) {
                 shift.endTime = now;
-                
+
                 // Close last status
                 if (shift.statuses && shift.statuses.length > 0) {
                     const lastStatus = shift.statuses[shift.statuses.length - 1];
@@ -650,7 +644,7 @@ async function closeAllActiveShifts(system) {
                         lastStatus.endTime = now;
                     }
                 }
-                
+
                 await shift.save();
             }
         }

@@ -76,103 +76,60 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('note')
         .setDescription('Manage your notes')
-        .addSubcommand(sub => sub
-            .setName('create')
-            .setDescription('Create a new note'))
+
+        // VIEW subcommand
         .addSubcommand(sub => sub
             .setName('view')
-            .setDescription('View a note')
+            .setDescription('View notes')
+            .addStringOption(opt => opt
+                .setName('action')
+                .setDescription('What to view')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'List - Show all notes', value: 'list' },
+                    { name: 'Show - View specific note', value: 'show' }
+                ))
             .addStringOption(opt => opt
                 .setName('note_id')
-                .setDescription('Note ID to view')
-                .setRequired(true)
-                .setAutocomplete(true)))
-        .addSubcommand(sub => sub
-            .setName('edit')
-            .setDescription('Edit a note')
-            .addStringOption(opt => opt
-                .setName('note_id')
-                .setDescription('Note ID to edit')
-                .setRequired(true)
-                .setAutocomplete(true)))
-        .addSubcommand(sub => sub
-            .setName('delete')
-            .setDescription('Delete a note (owner only)')
-            .addStringOption(opt => opt
-                .setName('note_id')
-                .setDescription('Note ID to delete')
-                .setRequired(true)
-                .setAutocomplete(true)))
-        .addSubcommand(sub => sub
-            .setName('list')
-            .setDescription('List your notes')
+                .setDescription('Note ID (required for "show")')
+                .setRequired(false)
+                .setAutocomplete(true))
             .addStringOption(opt => opt
                 .setName('filter')
-                .setDescription('Filter notes')
+                .setDescription('Filter notes (list only)')
                 .addChoices(
                     { name: 'All', value: 'all' },
                     { name: 'Owned', value: 'owned' },
                     { name: 'Shared with me', value: 'shared' },
                     { name: 'Pinned', value: 'pinned' }
                 )))
+
+        // MANAGE subcommand
         .addSubcommand(sub => sub
-            .setName('share')
-            .setDescription('Share a note with another user')
+            .setName('manage')
+            .setDescription('Create, edit, and delete notes')
             .addStringOption(opt => opt
-                .setName('note_id')
-                .setDescription('Note ID to share')
-                .setRequired(true)
-                .setAutocomplete(true))
-            .addUserOption(opt => opt
-                .setName('user')
-                .setDescription('User to share with')
-                .setRequired(true))
-            .addStringOption(opt => opt
-                .setName('access')
-                .setDescription('Access level')
+                .setName('action')
+                .setDescription('What to do')
                 .setRequired(true)
                 .addChoices(
-                    { name: 'Read & Write', value: 'rw' },
-                    { name: 'Read Only', value: 'r' }
-                )))
-        .addSubcommand(sub => sub
-            .setName('unshare')
-            .setDescription('Remove someone\'s access to a note')
+                    { name: 'Create - New note', value: 'create' },
+                    { name: 'Edit - Modify note', value: 'edit' },
+                    { name: 'Delete - Remove note', value: 'delete' },
+                    { name: 'Pin - Pin/unpin note', value: 'pin' },
+                    { name: 'Color - Change color', value: 'color' },
+                    { name: 'Tags - Edit tags', value: 'tags' }
+                ))
             .addStringOption(opt => opt
                 .setName('note_id')
-                .setDescription('Note ID')
-                .setRequired(true)
-                .setAutocomplete(true))
-            .addUserOption(opt => opt
-                .setName('user')
-                .setDescription('User to remove access from')
-                .setRequired(true)))
-        .addSubcommand(sub => sub
-            .setName('transfer')
-            .setDescription('Transfer note ownership (owner only)')
-            .addStringOption(opt => opt
-                .setName('note_id')
-                .setDescription('Note ID to transfer')
-                .setRequired(true)
-                .setAutocomplete(true))
-            .addUserOption(opt => opt
-                .setName('user')
-                .setDescription('New owner')
-                .setRequired(true)))
-        .addSubcommand(sub => sub
-            .setName('color')
-            .setDescription('Change note color (owner only)')
-            .addStringOption(opt => opt
-                .setName('note_id')
-                .setDescription('Note ID')
-                .setRequired(true)
+                .setDescription('Note ID (required for most actions)')
+                .setRequired(false)
                 .setAutocomplete(true))
             .addStringOption(opt => opt
                 .setName('color')
-                .setDescription('Color')
-                .setRequired(true)
+                .setDescription('Color (for color action)')
                 .addChoices(
-                    { name: '🔵 Default (Blurple)', value: 'default' },
+                    { name: '🔵 Default', value: 'default' },
                     { name: '🔴 Red', value: 'red' },
                     { name: '🟠 Orange', value: 'orange' },
                     { name: '🟡 Yellow', value: 'yellow' },
@@ -181,139 +138,131 @@ module.exports = {
                     { name: '🟣 Purple', value: 'purple' },
                     { name: '🩷 Pink', value: 'pink' },
                     { name: '⚪ Gray', value: 'gray' }
-                )))
+                ))
+            .addStringOption(opt => opt
+                .setName('tags')
+                .setDescription('Tags (comma-separated, for tags action)')
+                .setRequired(false)))
+
+        // SHARE subcommand
         .addSubcommand(sub => sub
-            .setName('pin')
-            .setDescription('Pin or unpin a note')
+            .setName('share')
+            .setDescription('Share and manage note access')
+            .addStringOption(opt => opt
+                .setName('action')
+                .setDescription('What to do')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Add - Share with user', value: 'add' },
+                    { name: 'Remove - Remove access', value: 'remove' },
+                    { name: 'Transfer - Transfer ownership', value: 'transfer' }
+                ))
             .addStringOption(opt => opt
                 .setName('note_id')
                 .setDescription('Note ID')
                 .setRequired(true)
-                .setAutocomplete(true)))
+                .setAutocomplete(true))
+            .addUserOption(opt => opt
+                .setName('user')
+                .setDescription('User to share with/remove/transfer to')
+                .setRequired(true))
+            .addStringOption(opt => opt
+                .setName('access')
+                .setDescription('Access level (for add action)')
+                .addChoices(
+                    { name: 'Read & Write', value: 'rw' },
+                    { name: 'Read Only', value: 'r' }
+                )))
+
+        // MEDIA subcommand
         .addSubcommand(sub => sub
-            .setName('tags')
-            .setDescription('Edit tags on a note')
+            .setName('media')
+            .setDescription('Manage note media')
+            .addStringOption(opt => opt
+                .setName('action')
+                .setDescription('What to do')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Add - Add media to note', value: 'add' },
+                    { name: 'Remove - Remove media from note', value: 'remove' }
+                ))
             .addStringOption(opt => opt
                 .setName('note_id')
                 .setDescription('Note ID')
                 .setRequired(true)
                 .setAutocomplete(true))
             .addStringOption(opt => opt
-                .setName('tags')
-                .setDescription('Tags (comma-separated)')
-                .setRequired(true)))
-        .addSubcommandGroup(group => group
-            .setName('media')
-            .setDescription('Manage note media')
-            .addSubcommand(sub => sub
-                .setName('add')
-                .setDescription('Add media to a note')
-                .addStringOption(opt => opt
-                    .setName('note_id')
-                    .setDescription('Note ID')
-                    .setRequired(true)
-                    .setAutocomplete(true))
-                .addStringOption(opt => opt
-                    .setName('url')
-                    .setDescription('Media URL')
-                    .setRequired(true))
-                .addStringOption(opt => opt
-                    .setName('caption')
-                    .setDescription('Caption for the media')))
-            .addSubcommand(sub => sub
-                .setName('remove')
-                .setDescription('Remove media from a note')
-                .addStringOption(opt => opt
-                    .setName('note_id')
-                    .setDescription('Note ID')
-                    .setRequired(true)
-                    .setAutocomplete(true))
-                .addIntegerOption(opt => opt
-                    .setName('position')
-                    .setDescription('Media position (1-based)')
-                    .setRequired(true)
-                    .setMinValue(1)))),
+                .setName('url')
+                .setDescription('Media URL (for add action)')
+                .setRequired(false))
+            .addStringOption(opt => opt
+                .setName('caption')
+                .setDescription('Caption (for add action)')
+                .setRequired(false))
+            .addIntegerOption(opt => opt
+                .setName('position')
+                .setDescription('Media position (for remove action)')
+                .setMinValue(1))),
 
     async execute(interaction) {
-        const subcommandGroup = interaction.options.getSubcommandGroup(false);
         const subcommand = interaction.options.getSubcommand();
-
+        const action = interaction.options.getString('action');
         const { user, system, isNew } = await utils.getOrCreateUserAndSystem(interaction);
 
         if (isNew) {
             return utils.handleNewUserFlow(interaction, 'note');
         }
 
-        // Route to appropriate handler
-        if (subcommandGroup === 'media') {
-            if (subcommand === 'add') return handleMediaAdd(interaction, user, system);
-            if (subcommand === 'remove') return handleMediaRemove(interaction, user, system);
+        // Route based on subcommand and action
+        if (subcommand === 'view') {
+            if (action === 'list') {
+                return await handleList(interaction, user, system);
+            } else if (action === 'show') {
+                return await handleView(interaction, user, system);
+            }
+        } else if (subcommand === 'manage') {
+            if (action === 'create') {
+                return await handleCreate(interaction, user, system);
+            } else if (action === 'edit') {
+                return await handleEdit(interaction, user, system);
+            } else if (action === 'delete') {
+                return await handleDelete(interaction, user, system);
+            } else if (action === 'pin') {
+                return await handlePin(interaction, user, system);
+            } else if (action === 'color') {
+                return await handleColor(interaction, user, system);
+            } else if (action === 'tags') {
+                return await handleTags(interaction, user, system);
+            }
+        } else if (subcommand === 'share') {
+            if (action === 'add') {
+                return await handleShare(interaction, user, system);
+            } else if (action === 'remove') {
+                return await handleUnshare(interaction, user, system);
+            } else if (action === 'transfer') {
+                return await handleTransfer(interaction, user, system);
+            }
+        } else if (subcommand === 'media') {
+            if (action === 'add') {
+                return await handleMediaAdd(interaction, user, system);
+            } else if (action === 'remove') {
+                return await handleMediaRemove(interaction, user, system);
+            }
         }
 
-        switch (subcommand) {
-            case 'create':
-                return handleCreate(interaction, user, system);
-            case 'view':
-                return handleView(interaction, user, system);
-            case 'edit':
-                return handleEdit(interaction, user, system);
-            case 'delete':
-                return handleDelete(interaction, user, system);
-            case 'list':
-                return handleList(interaction, user, system);
-            case 'share':
-                return handleShare(interaction, user, system);
-            case 'unshare':
-                return handleUnshare(interaction, user, system);
-            case 'transfer':
-                return handleTransfer(interaction, user, system);
-            case 'color':
-                return handleColor(interaction, user, system);
-            case 'pin':
-                return handlePin(interaction, user, system);
-            case 'tags':
-                return handleTags(interaction, user, system);
-            default:
-                return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
-        }
+        return interaction.reply({
+            content: '❌ Unknown action.',
+            ephemeral: true
+        });
     },
 
-    // Autocomplete for note_id
     async autocomplete(interaction) {
-        const focusedOption = interaction.options.getFocused(true);
-
-        if (focusedOption.name === 'note_id') {
-            const user = await User.findOne({ discordID: interaction.user.id });
-            if (!user) return interaction.respond([]);
-
-            // Get notes user has access to
-            const notes = await Note.find({
-                $or: [
-                    { 'users.owner.userID': user._id },
-                    { 'users.rwAccess.userID': user._id },
-                    { 'users.rAccess.userID': user._id }
-                ]
-            }).limit(25);
-
-            const filtered = notes
-                .filter(note => {
-                    const title = note.title || 'Untitled';
-                    return title.toLowerCase().includes(focusedOption.value.toLowerCase()) ||
-                        note.id.includes(focusedOption.value);
-                })
-                .map(note => ({
-                    name: `${note.pinned ? '📌 ' : ''}${note.title || 'Untitled'} (${note.id.slice(-6)})`,
-                    value: note.id
-                }));
-
-            return interaction.respond(filtered.slice(0, 25));
-        }
+        return handleAutocomplete(interaction);
     },
 
-    // Export handlers for bot.js
     handleButtonInteraction,
-    handleSelectMenu,
-    handleModalSubmit
+    handleModalSubmit,
+    handleSelectMenu
 };
 
 // ============================================
