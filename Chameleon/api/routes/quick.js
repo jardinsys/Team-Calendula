@@ -1,158 +1,156 @@
-// Quick Actions Routes
-// Handles quickswitch and quicknote for both Discord embeds and webapp
+// Quick Action Routes
+// Chameleon/webapp/api/routes/quick.js
 
 const express = require('express');
-const mongoose = require('mongoose');
 const router = express.Router();
+const mongoose = require('mongoose');
+const System = require('../../../../schemas/system');
+const Alter = require('../../../../schemas/alter');
+const State = require('../../../../schemas/state');
+const Group = require('../../../../schemas/group');
+const Note = require('../../../../schemas/note');
+const { Shift } = require('../../../../schemas/front');
 
-const { authMiddleware } = require('../middleware/auth');
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
-const Note = require('../../schemas/note');
-const { Shift } = require('../../schemas/front');
+// Helper to get display name
+function getDisplayName(entity) {
+    return entity?.name?.display || entity?.name?.indexable || 'Unknown';
+}
 
-// ===========================================
-// QUICK SWITCH
-// ===========================================
+// ==========================================
+// GET /api/quick/switch
+// Get entities for quick switch menu
+// ==========================================
 
-/**
- * GET /api/quick/switch
- * Get current front and quick-select entities
- */
-router.get('/switch', authMiddleware, async (req, res) => {
+router.get('/switch', async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
-        const system = await System.findById(user?.systemID);
-        
+        const system = await System.findById(req.user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'System not found' });
         }
         
-        // Get current fronters
-        const currentFront = [];
-        for (const layer of system.front?.layers || []) {
-            for (const shiftId of layer.shifts || []) {
-                const shift = await Shift.findById(shiftId);
-                if (shift && !shift.endTime) {
-                    let entity = null;
-                    
-                    if (shift.s_type === 'alter') {
-                        entity = await Alter.findById(shift.ID);
-                    } else if (shift.s_type === 'state') {
-                        entity = await State.findById(shift.ID);
-                    } else if (shift.s_type === 'group') {
-                        entity = await Group.findById(shift.ID);
-                    }
-                    
-                    if (entity) {
-                        const currentStatus = shift.statuses?.[shift.statuses.length - 1];
-                        currentFront.push({
-                            _id: entity._id,
-                            type: shift.s_type,
-                            name: entity.name?.display || entity.name?.indexable,
-                            avatar: entity.avatar?.url || entity.discord?.image?.avatar?.url,
-                            color: entity.color,
-                            layer: layer.name,
-                            status: currentStatus?.status,
-                            startTime: shift.startTime
-                        });
-                    }
-                }
-            }
-        }
-        
-        // Get recent/favorite entities for quick access
+        // Get recent proxies first (most used entities)
         const recentProxies = system.proxy?.recentProxies || [];
         const quickEntities = [];
         
-        for (const proxy of recentProxies.slice(0, 12)) {
-            const parts = proxy.split(':');
-            const type = parts[0];
-            const entityId = parts[1];
-            
-            if (!type || !entityId) continue;
-            
+        // Add from recent proxies
+        for (const proxy of recentProxies.slice(0, 15)) {
+            const [type, id] = proxy.split(':');
             let entity = null;
+            
             if (type === 'alter') {
-                entity = await Alter.findById(entityId);
+                entity = await Alter.findById(id).select('name color avatar');
             } else if (type === 'state') {
-                entity = await State.findById(entityId);
+                entity = await State.findById(id).select('name color avatar');
             } else if (type === 'group') {
-                entity = await Group.findById(entityId);
+                entity = await Group.findById(id).select('name color avatar type');
+                if (entity?.type?.canFront === 'no') continue;
             }
             
-            if (entity && !quickEntities.find(e => e._id === entity._id)) {
+            if (entity) {
                 quickEntities.push({
                     _id: entity._id,
-                    type,
-                    name: entity.name?.display || entity.name?.indexable,
-                    avatar: entity.avatar?.url || entity.discord?.image?.avatar?.url,
+                    name: getDisplayName(entity),
+                    type: type,
                     color: entity.color,
-                    pronouns: entity.pronouns
+                    avatar: entity.avatar?.url
                 });
             }
         }
         
-        res.json({
-            currentFront,
-            quickEntities,
-            status: system.front?.status,
-            battery: system.battery,
-            caution: system.front?.caution
-        });
-    } catch (err) {
-        console.error('[Quick Switch] Get error:', err);
-        res.status(500).json({ error: err.message });
+        // If not enough, add remaining alters/states
+        if (quickEntities.length < 15) {
+            const existingIds = new Set(quickEntities.map(e => e._id.toString()));
+            
+            const alters = await Alter.find({ 
+                _id: { $in: system.alters?.IDs || [] } 
+            }).select('name color avatar').limit(20);
+            
+            for (const alter of alters) {
+                if (!existingIds.has(alter._id.toString()) && quickEntities.length < 20) {
+                    quickEntities.push({
+                        _id: alter._id,
+                        name: getDisplayName(alter),
+                        type: 'alter',
+                        color: alter.color,
+                        avatar: alter.avatar?.url
+                    });
+                    existingIds.add(alter._id.toString());
+                }
+            }
+            
+            const states = await State.find({ 
+                _id: { $in: system.states?.IDs || [] } 
+            }).select('name color avatar').limit(10);
+            
+            for (const state of states) {
+                if (!existingIds.has(state._id.toString()) && quickEntities.length < 25) {
+                    quickEntities.push({
+                        _id: state._id,
+                        name: getDisplayName(state),
+                        type: 'state',
+                        color: state.color,
+                        avatar: state.avatar?.url
+                    });
+                }
+            }
+        }
+        
+        res.json({ quickEntities });
+        
+    } catch (error) {
+        console.error('Quick switch get error:', error);
+        res.status(500).json({ error: 'Failed to get quick switch data' });
     }
 });
 
-/**
- * POST /api/quick/switch
- * Execute a quick switch
- * Body: { entities: [{ id, type }], status?, battery? }
- */
-router.post('/switch', authMiddleware, async (req, res) => {
+// ==========================================
+// POST /api/quick/switch
+// Perform a quick switch
+// ==========================================
+
+router.post('/switch', async (req, res) => {
     try {
         const { entities, status, battery } = req.body;
         
-        const user = await User.findById(req.userId);
-        const system = await System.findById(user?.systemID);
-        
+        const system = await System.findById(req.user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'System not found' });
         }
         
-        // End current shifts
+        const now = new Date();
+        
+        // Close all active shifts
         for (const layer of system.front?.layers || []) {
             for (const shiftId of layer.shifts || []) {
                 const shift = await Shift.findById(shiftId);
                 if (shift && !shift.endTime) {
-                    shift.endTime = new Date();
+                    shift.endTime = now;
+                    if (shift.statuses?.length > 0) {
+                        shift.statuses[shift.statuses.length - 1].endTime = now;
+                    }
                     await shift.save();
                 }
             }
         }
         
-        // Initialize front structure if needed
+        // Ensure layer exists
         if (!system.front) system.front = {};
-        if (!system.front.layers?.length) {
-            system.front.layers = [{ 
-                _id: new mongoose.Types.ObjectId(), 
-                name: 'Main', 
-                shifts: [] 
+        if (!system.front.layers || system.front.layers.length === 0) {
+            system.front.layers = [{
+                _id: new mongoose.Types.ObjectId(),
+                name: 'Main',
+                shifts: []
             }];
         }
         
-        const mainLayer = system.front.layers[0];
-        mainLayer.shifts = [];
+        system.front.layers[0].shifts = [];
         
-        // Create new shifts for each entity
-        const newFronters = [];
-        for (const { id, type } of entities || []) {
-            // Validate entity exists
+        // Create new shifts
+        const successes = [];
+        
+        for (const entityInfo of entities || []) {
+            const { id, type } = entityInfo;
+            
             let entity = null;
             if (type === 'alter') {
                 entity = await Alter.findById(id);
@@ -168,73 +166,78 @@ router.post('/switch', authMiddleware, async (req, res) => {
                 _id: new mongoose.Types.ObjectId(),
                 s_type: type,
                 ID: id,
-                type_name: entity.name?.display || entity.name?.indexable,
-                startTime: new Date(),
-                statuses: status ? [{ 
-                    status, 
-                    startTime: new Date(),
+                type_name: getDisplayName(entity),
+                startTime: now,
+                endTime: null,
+                statuses: [{
+                    status: null,
+                    startTime: now,
+                    endTime: null,
                     hidden: 'n'
-                }] : []
+                }]
             });
             
             await shift.save();
-            mainLayer.shifts.push(shift._id);
-            newFronters.push({
-                name: entity.name?.display || entity.name?.indexable,
-                type
-            });
+            system.front.layers[0].shifts.push(shift._id);
             
             // Update recent proxies
             const proxyKey = `${type}:${id}`;
-            system.proxy = system.proxy || {};
-            system.proxy.recentProxies = system.proxy.recentProxies || [];
-            system.proxy.recentProxies = system.proxy.recentProxies.filter(p => !p.startsWith(proxyKey));
+            if (!system.proxy) system.proxy = {};
+            if (!system.proxy.recentProxies) system.proxy.recentProxies = [];
+            system.proxy.recentProxies = system.proxy.recentProxies.filter(p => p !== proxyKey);
             system.proxy.recentProxies.unshift(proxyKey);
             system.proxy.recentProxies = system.proxy.recentProxies.slice(0, 15);
+            
+            successes.push({
+                _id: entity._id,
+                name: getDisplayName(entity),
+                type,
+                color: entity.color
+            });
         }
         
         // Update status and battery
         if (status !== undefined) system.front.status = status;
-        if (battery !== undefined && !isNaN(battery)) {
-            system.battery = Math.min(100, Math.max(0, battery));
-        }
+        if (battery !== undefined) system.battery = battery;
         
         await system.save();
         
-        const message = newFronters.length > 0 
-            ? `Switched to: ${newFronters.map(f => f.name).join(', ')}`
-            : 'Switched out (no one fronting)';
-        
-        res.json({ 
-            success: true, 
-            message,
-            fronters: newFronters
+        res.json({
+            success: true,
+            fronters: successes,
+            status: system.front.status,
+            battery: system.battery
         });
-    } catch (err) {
-        console.error('[Quick Switch] Post error:', err);
-        res.status(500).json({ error: err.message });
+        
+    } catch (error) {
+        console.error('Quick switch error:', error);
+        res.status(500).json({ error: 'Failed to switch' });
     }
 });
 
-/**
- * POST /api/quick/switch/out
- * Quick switch-out (no one fronting)
- */
-router.post('/switch/out', authMiddleware, async (req, res) => {
+// ==========================================
+// POST /api/quick/switch/out
+// Switch out (clear front)
+// ==========================================
+
+router.post('/switch/out', async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
-        const system = await System.findById(user?.systemID);
-        
+        const system = await System.findById(req.user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'System not found' });
         }
         
-        // End all current shifts
+        const now = new Date();
+        
+        // Close all active shifts
         for (const layer of system.front?.layers || []) {
             for (const shiftId of layer.shifts || []) {
                 const shift = await Shift.findById(shiftId);
                 if (shift && !shift.endTime) {
-                    shift.endTime = new Date();
+                    shift.endTime = now;
+                    if (shift.statuses?.length > 0) {
+                        shift.statuses[shift.statuses.length - 1].endTime = now;
+                    }
                     await shift.save();
                 }
             }
@@ -243,166 +246,113 @@ router.post('/switch/out', authMiddleware, async (req, res) => {
         
         await system.save();
         
-        res.json({ success: true, message: 'Switched out - no one fronting' });
-    } catch (err) {
-        console.error('[Quick Switch] Out error:', err);
-        res.status(500).json({ error: err.message });
+        res.json({ success: true, message: 'Switched out' });
+        
+    } catch (error) {
+        console.error('Switch out error:', error);
+        res.status(500).json({ error: 'Failed to switch out' });
     }
 });
 
-// ===========================================
-// QUICK NOTE
-// ===========================================
+// ==========================================
+// GET /api/quick/notes
+// Get recent notes
+// ==========================================
 
-/**
- * GET /api/quick/notes
- * Get recent notes for quick access
- */
-router.get('/notes', authMiddleware, async (req, res) => {
+router.get('/notes', async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
-        const noteIds = user?.notes?.notes || [];
+        const notes = await Note.find({
+            $or: [
+                { 'author.userID': req.user._id },
+                { 'users.owner.userID': req.user._id }
+            ]
+        })
+        .sort({ updatedAt: -1 })
+        .limit(10)
+        .select('id title tags pinned updatedAt');
         
-        const notes = await Note.find({ _id: { $in: noteIds } })
-            .sort({ pinned: -1, updatedAt: -1 })
-            .limit(15)
-            .select('id title tags pinned updatedAt createdAt');
+        res.json({ notes });
         
-        res.json({
-            notes: notes.map(n => ({
-                _id: n._id,
-                id: n.id,
-                title: n.title,
-                tags: n.tags,
-                pinned: n.pinned,
-                updatedAt: n.updatedAt
-            })),
-            tags: user?.notes?.tags || []
-        });
-    } catch (err) {
-        console.error('[Quick Notes] Get error:', err);
-        res.status(500).json({ error: err.message });
+    } catch (error) {
+        console.error('Quick notes error:', error);
+        res.status(500).json({ error: 'Failed to get notes' });
     }
 });
 
-/**
- * POST /api/quick/notes
- * Create a quick note
- * Body: { title, content, tags?, linkedEntity?: { id, type } }
- */
-router.post('/notes', authMiddleware, async (req, res) => {
+// ==========================================
+// POST /api/quick/notes
+// Create quick note
+// ==========================================
+
+router.post('/notes', async (req, res) => {
     try {
-        const { title, content, tags, linkedEntity } = req.body;
+        const { title, content, tags } = req.body;
         
-        const user = await User.findById(req.userId);
+        if (!content) {
+            return res.status(400).json({ error: 'Content required' });
+        }
         
         const note = new Note({
             _id: new mongoose.Types.ObjectId(),
             title: title || `Quick Note - ${new Date().toLocaleDateString()}`,
-            content: content || '',
+            content,
             tags: tags || [],
-            pinned: false,
-            author: {
-                userID: user._id,
-                ...(linkedEntity?.type === 'alter' && { alterIDs: [linkedEntity.id] }),
-                ...(linkedEntity?.type === 'state' && { stateIDs: [linkedEntity.id] }),
-                ...(linkedEntity?.type === 'group' && { groupIDs: [linkedEntity.id] })
-            },
-            users: {
-                owner: { userID: user._id }
-            },
+            author: { userID: req.user._id },
+            users: { owner: { userID: req.user._id } },
             createdAt: new Date(),
             updatedAt: new Date()
         });
         
         await note.save();
         
-        // Add note to user's collection
-        user.notes = user.notes || { tags: [], notes: [] };
-        user.notes.notes.push(note._id);
+        res.status(201).json(note);
         
-        // Add new tags to user's tag collection
-        if (tags?.length) {
-            for (const tag of tags) {
-                if (!user.notes.tags.includes(tag)) {
-                    user.notes.tags.push(tag);
-                }
-            }
-        }
-        
-        await user.save();
-        
-        res.status(201).json({
-            success: true,
-            note: {
-                _id: note._id,
-                id: note.id,
-                title: note.title,
-                content: note.content,
-                tags: note.tags
-            }
-        });
-    } catch (err) {
-        console.error('[Quick Notes] Create error:', err);
-        res.status(500).json({ error: err.message });
+    } catch (error) {
+        console.error('Create quick note error:', error);
+        res.status(500).json({ error: 'Failed to create note' });
     }
 });
 
-/**
- * PATCH /api/quick/notes/:noteId/append
- * Append content to an existing note
- * Body: { content }
- */
-router.patch('/notes/:noteId/append', authMiddleware, async (req, res) => {
+// ==========================================
+// PATCH /api/quick/notes/:id/append
+// Append to note
+// ==========================================
+
+router.patch('/notes/:id/append', async (req, res) => {
     try {
-        const { noteId } = req.params;
         const { content } = req.body;
         
         if (!content) {
-            return res.status(400).json({ error: 'Content is required' });
+            return res.status(400).json({ error: 'Content required' });
         }
         
-        // Find note by snowflake ID or MongoDB ID
-        let note = await Note.findOne({ id: noteId });
-        if (!note && mongoose.Types.ObjectId.isValid(noteId)) {
-            note = await Note.findById(noteId);
-        }
-        
+        const note = await Note.findById(req.params.id);
         if (!note) {
             return res.status(404).json({ error: 'Note not found' });
         }
         
-        // Verify ownership
-        const userId = req.userId.toString();
-        const isOwner = note.users?.owner?.userID?.toString() === userId ||
-                       note.author?.userID?.toString() === userId;
-        const canEdit = isOwner || 
+        // Check access
+        const userId = req.user._id.toString();
+        const canEdit = note.users?.owner?.userID?.toString() === userId ||
+                       note.author?.userID?.toString() === userId ||
                        note.users?.rwAccess?.some(a => a.userID?.toString() === userId);
         
         if (!canEdit) {
-            return res.status(403).json({ error: 'You cannot edit this note' });
+            return res.status(403).json({ error: 'No permission to edit' });
         }
         
-        // Append content with timestamp
-        const timestamp = new Date().toLocaleString();
-        const separator = note.content ? '\n\n---\n\n' : '';
-        note.content = (note.content || '') + separator + `*${timestamp}*\n${content}`;
+        // Append with timestamp
+        const timestamp = `\n\n---\n**${new Date().toLocaleString()}**\n`;
+        note.content = (note.content || '') + timestamp + content;
         note.updatedAt = new Date();
         
         await note.save();
         
-        res.json({
-            success: true,
-            note: {
-                _id: note._id,
-                id: note.id,
-                title: note.title,
-                updatedAt: note.updatedAt
-            }
-        });
-    } catch (err) {
-        console.error('[Quick Notes] Append error:', err);
-        res.status(500).json({ error: err.message });
+        res.json(note);
+        
+    } catch (error) {
+        console.error('Append note error:', error);
+        res.status(500).json({ error: 'Failed to append to note' });
     }
 });
 

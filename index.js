@@ -1,20 +1,6 @@
 const config = require("./config.json");
 const path = require("path");
 
-// Load environment variables
-/*const tokens = {
-    prune: config.discordTokens.prune,
-    sucre: config.discordTokens.sucre,
-    trigin: config.discordTokens.trigin,
-    system: config.discordTokens.system
-}; */
-/*const bots = [
-    { bot: "./Plum/bot.js", token: tokens.prune, argument: "prune", name: "Prune 🎨" },
-    { bot: "./Sugar/bot.js", token: tokens.sucre, argument: "sucre", name: "Sucre 💌" },
-    { bot: "./TigerLily/bot.js", token: tokens.trigin, argument: "trigin", name: "TrigIn 🐯" },
-    { bot: "./Chameleon/bot.js", token: tokens.system, argument: "system", name: "Systemiser 🎡" }
-];*/
-
 const bots = [
     { bot: "./Plum/bot.js", deploy: "./Plum/deploy-command.js", argument: "prune", name: "Prune 🎨" },
     { bot: "./Sugar/bot.js", deploy: "./Sugar/deploy-command.js", argument: "sucre", name: "Sucre 💌" },
@@ -58,31 +44,58 @@ if (args.includes("-d")) {
     if (args.includes("-only")) return;
 }
 
+// ==========================================
+// START WEBAPP SERVER
+// ==========================================
+
+// Start webapp unless "-noweb" flag is passed
+if (!args.includes("-noweb")) {
+    try {
+        const webapp = require("./Chameleon/webapp/server");
+        webapp.start()
+            .then(() => {
+                console.log(`✔ Webapp API started on port ${webapp.PORT}`);
+            })
+            .catch(err => {
+                console.error("❌ Failed to start Webapp API");
+                console.error(err);
+            });
+    } catch (err) {
+        console.error("❌ Failed to load Webapp API");
+        console.error(err);
+    }
+}
+
+// ==========================================
+// START DISCORD BOTS
+// ==========================================
+
 if (selectedBots.length === 0) {
-    if ((args.length === 1 && !["-d", "-only"].includes(args[0]))
-        || (args.length === 2 && args != ["-d", "-only"])
-        || args.length > 2) {
-        console.log(`Invalid argument(s) detected. These are the following avaulable arguments for to call a specific bot:`);
-        for (const bot of bots) console.log(bot.argument + ", for " + bot.name);
-        console.log(`You can also include these arguments:
-            -d : to also deploy the commands of all or specific bot(s) connected.
-            -only : if calling -d too, only deploy the commands and dont start the bot.`);
+    if ((args.length === 1 && !["-d", "-only", "-noweb"].includes(args[0]))
+        || (args.length === 2 && !args.every(a => ["-d", "-only", "-noweb"].includes(a)))
+        || args.length > 3) {
+        console.log(`Invalid argument(s) detected. Available arguments for specific bots:`);
+        for (const bot of bots) console.log(`  ${bot.argument} - ${bot.name}`);
+        console.log(`\nAdditional flags:
+    -d      : Deploy commands for all or specific bot(s)
+    -only   : With -d, only deploy commands without starting bots
+    -noweb  : Don't start the webapp API server`);
         return;
     } else {
         let AllBotsOnline = true;
-    console.log("Launching Discord bots...");
-    for (const bot of bots) {
-        try {
-            console.log(`✔ Starting ${bot.name}`);
-            require(path.resolve(bot.bot));
-        } catch (err) {
-            console.error(`❌ Failed to start ${bot.name}`);
-            console.error(err);
-            AllBotsOnline = false;
+        console.log("Launching Discord bots...");
+        for (const bot of bots) {
+            try {
+                console.log(`✔ Starting ${bot.name}`);
+                require(path.resolve(bot.bot));
+            } catch (err) {
+                console.error(`❌ Failed to start ${bot.name}`);
+                console.error(err);
+                AllBotsOnline = false;
+            }
         }
-    }
-    if (AllBotsOnline) console.log(`All Discord Bots On Deck! 😎👍`);
-    return;
+        if (AllBotsOnline) console.log(`All Discord Bots On Deck! 😎👍`);
+        return;
     }
 } else { 
     for (const bot of selectedBots) {

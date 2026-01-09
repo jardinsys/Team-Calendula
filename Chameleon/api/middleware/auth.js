@@ -1,76 +1,109 @@
 // Authentication Middleware
-// Verifies JWT tokens for protected routes
+// Chameleon/webapp/api/middleware/auth.js
 
 const jwt = require('jsonwebtoken');
-const config = require('../../../config.json');
+const config = require('../../../../config.json');
+const User = require('../../../../schemas/user');
+const System = require('../../../../schemas/system');
 
-const JWT_SECRET = config.jwtSecret;
+const JWT_SECRET = config.jwtSecret || 'change-this-secret';
 
 /**
- * Required authentication middleware
- * Fails with 401 if no valid token
+ * Middleware to verify JWT token and attach user to request
  */
-const authMiddleware = async (req, res, next) => {
+async function authenticateToken(req, res, next) {
     try {
-        const authHeader = req.headers.authorization;
-        
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        // Get token from header
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1]; // "Bearer TOKEN"
+
+        if (!token) {
             return res.status(401).json({ error: 'No token provided' });
         }
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
-        req.userId = decoded.userId;
-        req.discordId = decoded.discordId;
-        
-        next();
-    } catch (err) {
-        if (err.name === 'TokenExpiredError') {
-            return res.status(401).json({ error: 'Token expired' });
-        }
-        res.status(401).json({ error: 'Invalid token' });
-    }
-};
 
-/**
- * Optional authentication middleware
- * Continues even without token, but populates req.userId if valid
- */
-const optionalAuthMiddleware = async (req, res, next) => {
-    try {
-        const authHeader = req.headers.authorization;
-        
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.split(' ')[1];
-            const decoded = jwt.verify(token, JWT_SECRET);
-            req.userId = decoded.userId;
-            req.discordId = decoded.discordId;
+        // Verify token
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (err) {
+            if (err.name === 'TokenExpiredError') {
+                return res.status(401).json({ error: 'Token expired' });
+            }
+            return res.status(401).json({ error: 'Invalid token' });
         }
-        
+
+        // Find user
+        const user = await User.findById(decoded.userId);
+        if (!user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+
+        // Attach user info to request
+        req.user = {
+            _id: user._id,
+            discordID: user.discordID,
+            systemID: user.systemID,
+            userType: user.type || 'basic'
+        };
+
+        // If user has a system, attach system info
+        if (user.systemID) {
+            const system = await System.findById(user.systemID);
+            if (system) {
+                req.system = system;
+            }
+        }
+
         next();
-    } catch (err) {
-        // Continue without auth on error
-        next();
+    } catch (error) {
+        console.error('Auth middleware error:', error);
+        return res.status(500).json({ error: 'Authentication error' });
     }
-};
+}
 
 /**
  * Generate a JWT token for a user
  */
-const generateToken = (user) => {
+function generateToken(user) {
     return jwt.sign(
-        { 
-            userId: user._id.toString(), 
-            discordId: user.discordID 
+        {
+            userId: user._id.toString(),
+            discordID: user.discordID
         },
         JWT_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: '7d' } // Token valid for 7 days
     );
-};
+}
 
-module.exports = { 
-    authMiddleware, 
-    optionalAuthMiddleware,
-    generateToken 
+/**
+ * Optional auth - doesn't fail if no token, just doesn't attach user
+ */
+async function optionalAuth(req, res, next) {
+    try {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1];
+
+        if (token) {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const user = await User.findById(decoded.userId);
+            if (user) {
+                req.user = {
+                    _id: user._id,
+                    discordID: user.discordID,
+                    systemID: user.systemID,
+                    userType: user.type || 'basic'
+                };
+            }
+        }
+    } catch (err) {
+        // Ignore errors - user just won't be attached
+    }
+    next();
+}
+
+module.exports = {
+    authenticateToken,
+    generateToken,
+    optionalAuth,
+    JWT_SECRET
 };
