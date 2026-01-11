@@ -10,7 +10,7 @@ const trigR2 = new S3Client({
     }
 });
 
-const sysDiscR2 = new S3Client({
+const sysDiscR2 = new S3Client({ // MAIN INFO
     region: "auto",
     endpoint: `https://${config.r2.system.accountID}.r2.cloudflarestorage.com`,
     credentials: {
@@ -19,7 +19,7 @@ const sysDiscR2 = new S3Client({
     }
 });
 
-const sysAppR2 = new S3Client({
+const sysAppR2 = new S3Client({ // APP SPECIFIC INFO (Ex: Themes)
     region: "auto",
     endpoint: `https://${config.r2.system.accountID}.r2.cloudflarestorage.com`,
     credentials: {
