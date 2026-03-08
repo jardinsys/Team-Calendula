@@ -1,0 +1,1 @@
+// Checks user informations that is expansive like Premium
