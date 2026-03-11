@@ -240,13 +240,14 @@ async function getOrCreateUserAndSystem(context) {
     let isNew = false;
 
     if (!user) {
-        user = new User({
+        createNewUserAndSystem(discordId);
+        /*user = new User({
             _id: new mongoose.Types.ObjectId(),
             discordID: discordId,
             joinedAt: new Date()
         });
         await user.save();
-        isNew = true;
+        isNew = true;*/
     }
 
     if (user.systemID) {
@@ -291,18 +292,18 @@ async function handleNewUserFlow(interaction, entityType) {
         .setColor(ENTITY_COLORS.system)
         .setTitle('👋 Welcome to Systemiser!')
         .setDescription(
-            'It looks like you don\'t have a system set up yet.\n\n' +
-            'Would you like to create one now?'
+            'It looks like you don\'t have a system set up.\n\n' +
+            'If you have one, would you like to register yours now?'
         );
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`new_user_has_system_${entityType}`)
-            .setLabel('Yes, create my system')
+            .setLabel('Yes, register my system!')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
             .setCustomId(`new_user_no_system_${entityType}`)
-            .setLabel('Not now')
+            .setLabel('No, thank you.')
             .setStyle(ButtonStyle.Secondary)
     );
 

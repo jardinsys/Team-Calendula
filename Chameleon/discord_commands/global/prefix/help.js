@@ -291,8 +291,8 @@ function proxyHelp() {
                 name: 'Format', value:
                     'Proxy tags use `text` as a placeholder for your message.\n' +
                     'Examples:\n' +
-                    '• `luna:text` → `luna: Hello!` becomes a message\n' +
-                    '• `text -l` → `Hello! -l` becomes a message\n' +
+                    '• `bird:text` → `bird: Hello!` becomes a message\n' +
+                    '• `text -b` → `Hello -b` becomes a message\n' +
                     '• `[text]` → `[Hello!]` becomes a message', inline: false
             },
             {

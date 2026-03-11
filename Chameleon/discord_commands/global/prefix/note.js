@@ -24,6 +24,8 @@
 //   sys!note <id> delete -confirm        - Confirm deletion
 //   sys!note tags                        - List all your tags
 //   sys!note search <query>              - Search notes by title/content/tags
+// 
+// NOTE FOR LATER: it might be best to insentivise people to use the embeded app, but note commands be for very quick notes
 
 const { EmbedBuilder } = require('discord.js');
 const mongoose = require('mongoose');

@@ -697,7 +697,7 @@ async function handleDelete(message, parsed) {
     user.systemID = undefined;
     await user.save();
 
-    return utils.success(message, 'Your system has been deleted.');
+    return utils.success(message, 'Your system has been deleted. Thank you for using Systemiser and good luck on your mental health journey 💙');
 }
 
 async function handleId(message, parsed) {

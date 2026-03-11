@@ -524,14 +524,14 @@ async function handleEdit(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
 
-    if (!alter) {
+    if (!alter || alter.systemID !== system._id.toString()) {
         return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
     }
-
+/*
     if (alter.systemID !== system._id.toString()) {
         return await interaction.reply({ content: '❌ This alter does not belong to your system.', ephemeral: true });
     }
-
+*/
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
         type: 'edit',

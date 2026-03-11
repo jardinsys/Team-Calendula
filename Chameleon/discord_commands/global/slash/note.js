@@ -4,7 +4,7 @@
 //
 // Commands:
 // /note create - Create a new note
-// /note view [note_id] - View a note with pagination
+// /note view [note_id] - View a note with pagination 
 // /note edit [note_id] - Edit title/content
 // /note delete [note_id] - Delete a note (owner only)
 // /note list [filter] - List your notes (owned, shared, all)
@@ -14,8 +14,10 @@
 // /note color [note_id] [color] - Change note color (owner only)
 // /note pin [note_id] - Pin/unpin a note
 // /note tags [note_id] [tags] - Edit tags on a note
-// /note media add [note_id] - Add media to note
-// /note media remove [note_id] [position] - Remove media
+// /note media add [note_id] - Add media to note (warn organization is best on webapp)
+// /note media remove [note_id] [position] - Remove media (warn organization is best on webapp)
+// 
+// NOTE FOR LATER: it might be best to insentivise people to use the embeded app, but note commands be for very quick notes
 
 const {
     SlashCommandBuilder,
