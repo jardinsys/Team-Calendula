@@ -325,7 +325,7 @@ async function handleNewUserFlow(interaction, entityType) {
         .setTitle('👋 Welcome to Systemiser!')
         .setDescription(
             'It looks like you don\'t have a system set up.\n\n' +
-            'If you have one, would you like to register yours now?'
+            'If you have/are one, would you like to register yours now?'
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -356,14 +356,14 @@ async function handleNewUserButton(interaction) {
             .setColor(ENTITY_COLORS.success)
             .setTitle('✅ System Created!')
             .setDescription(
-                'Your system has been created!\n\n' +
-                'Use `/system edit` to customize your system, or `/alter new` to create your first alter.'
+                'Your system has been registered!\n\n' +
+                'Use `/system edit` to customize your system\'s profile, or `/alter new` to register an first alter.'
             );
 
         await interaction.update({ embeds: [embed], components: [] });
     } else if (customId.startsWith('new_user_no_system_')) {
         await interaction.update({
-            content: 'No problem! Come back when you\'re ready to set up your system.',
+            content: 'No problem! Come back when you\'re ready.',
             embeds: [],
             components: []
         });
