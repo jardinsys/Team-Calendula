@@ -246,6 +246,11 @@ async function buildFrontEmbed(system, user, interaction, isOwner, closedCharAll
 async function handleButtonInteraction(interaction) {
     const customId = interaction.customId;
 
+    // Handle new user flow buttons
+    if (customId.startsWith('new_user_')) {
+        return await utils.handleNewUserButton(interaction);
+    }
+
     // Handle switch button - redirect to switch command
     if (customId.startsWith('front_switch_')) {
         // Import and execute switch command's switch-in handler

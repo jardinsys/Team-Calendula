@@ -6,6 +6,7 @@ const { MongoClient } = require('mongodb');
 const dbConnection = require('./database');
 const token = config.discordTokens.system;
 const prefixes = ['sys!', 'sys;'];
+const utils = require('./discord_commands/functions/bot_utils');
 
 // Create New client instance
 const client = new Client({
@@ -193,13 +194,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 			// Systemiser commands - route based on customId prefix
 			// new_user_ buttons can come from any systemiser command
 			if (customId.startsWith('new_user_')) {
-				// Extract entity type from customId (e.g., new_user_has_system_alter -> alter)
-				const parts = customId.split('_');
-				const entityType = parts[parts.length - 1]; // Last part is entity type
-				const cmd = interaction.client.commands.get(entityType);
-				if (cmd?.handleButtonInteraction) {
-					return await cmd.handleButtonInteraction(interaction);
-				}
+				return await utils.handleNewUserButton(interaction);
 			}
 
 			// System command buttons

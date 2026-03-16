@@ -240,21 +240,36 @@ async function getOrCreateUserAndSystem(context) {
     let isNew = false;
 
     if (!user) {
-        createNewUserAndSystem(discordId);
-        /*user = new User({
-            _id: new mongoose.Types.ObjectId(),
-            discordID: discordId,
-            joinedAt: new Date()
-        });
-        await user.save();
-        isNew = true;*/
+        user, system = createNewUserAndSystem(discordId);
+        isNew = true;
     }
 
-    if (user.systemID) {
+    if (user.systemID && !isNew) {
         system = await System.findById(user.systemID);
     }
 
     return { user, system, isNew };
+}
+
+/**
+ * Get or create user for an interaction or message
+ * Works with both slash commands (interaction) and prefix commands (message)
+ * @param {Interaction|Message} context - Discord interaction or message
+ * @returns {Promise<{user: User, system: System, isNew: boolean}>}
+ */
+async function getOrCreateUserAndSystem(context) {
+    // Handle both interaction and message contexts
+    const discordId = context.user?.id || context.author?.id;
+
+    let user = await User.findOne({ discordID: discordId });
+    let isNew = false;
+
+    if (!user) {
+        user = createNewUser(discordId);
+        isNew = true;
+    }
+
+    return { user, isNew };
 }
 
 /**
@@ -280,6 +295,23 @@ async function createNewUserAndSystem(discordId) {
     await system.save();
 
     return { user, system };
+}
+
+/**
+ * Create a new user
+ * @param {string} discordId - Discord user ID
+ * @returns {Promise<{user: User}>}
+ */
+async function createNewUserAndSystem(discordId) {
+    const user = new User({
+        _id: new mongoose.Types.ObjectId(),
+        discordID: discordId,
+        joinedAt: new Date()
+    });
+
+    await user.save();
+
+    return user;
 }
 
 /**

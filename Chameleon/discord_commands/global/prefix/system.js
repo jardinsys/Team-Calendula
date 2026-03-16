@@ -674,8 +674,8 @@ async function handleFrontHistory(message, parsed) {
 }
 
 async function handleDelete(message, parsed) {
-    const { user, system } = await utils.getOrCreateUserAndSystem(message);
-    if (!await utils.requireSystem(message, system)) return;
+    //const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    //if (!await utils.requireSystem(message, system)) return;
 
     // Require confirmation
     if (!parsed.confirm) {
@@ -683,6 +683,22 @@ async function handleDelete(message, parsed) {
             '⚠️ **Warning:** This will permanently delete your system and all associated data (alters, states, groups).\n\n' +
             'To confirm, use: `sys!system delete -confirm`'
         );
+    }
+
+    // Look up user directly — don't use getOrCreateUserAndSystem (it may create a new one)
+    const discordId = message.author.id;
+    const user = await User.findOne({ discordID: discordId });
+
+    if (!user || !user.systemID) {
+        return utils.error(message, 'You don\'t have a system yet.');
+    }
+
+    const system = await System.findById(user.systemID);
+    if (!system) {
+        // System missing but user has a dangling reference — clean it up
+        user.systemID = null;
+        await user.save();
+        return utils.error(message, 'No system found. Your account has been cleaned up.');
     }
 
     // Delete all associated entities
@@ -694,7 +710,7 @@ async function handleDelete(message, parsed) {
     await System.deleteOne({ _id: system._id });
     
     // Unlink user
-    user.systemID = undefined;
+    user.systemID = null;
     await user.save();
 
     return utils.success(message, 'Your system has been deleted. Thank you for using Systemiser and good luck on your mental health journey 💙');
