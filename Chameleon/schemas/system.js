@@ -180,7 +180,8 @@ const systemSchema = new mongoose.Schema({
         recentProxies: [String],
         lastProxyTime: Date,
         break: Boolean,
-        style: { type: String, default: "off" }
+        style: { type: String, default: "off" },
+        caseSensitive: Boolean
     },
     setting: {
         autoshareNotestoUsers: { type: Boolean, default: false },
