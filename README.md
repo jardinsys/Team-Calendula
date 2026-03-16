@@ -135,6 +135,6 @@ Systemiser uses MongoDB with the following main collections:
 
 ## 📜 License
 
-This project is doesn't have a license yet...
+This project will be under a Source‑Available License (this does not mean "open-source").
 
 ---
