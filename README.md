@@ -6,8 +6,8 @@ A collection of Discord bots and web applications built for various purposes. Th
 
 | Bot | Folder | Description |
 |-----|--------|-------------|
-| **Systemiser** 🎡 | `Chameleon/` | Plural/DID system management (main project) |
-| **TrigIn** 🐯 | `TigerLily/` | Trigger tracking & management |
+| **Systemiser** 🎡 | `Chameleon/` | Dissociative Disorder system management |
+| **TrigIn** 🐯 | `TigerLily/` | Trigger and Intro display & management |
 | **Sucre** 💌 | `Sugar/` | Utility bot |
 | **Prune** 🎨 | `Plum/` | Utility bot |
 
@@ -15,14 +15,14 @@ A collection of Discord bots and web applications built for various purposes. Th
 
 ## 🎡 Systemiser (Chameleon)
 
-**Systemiser** is a feature-rich Discord bot and web application designed to help individuals with Dissociative Identity Disorder (DID), OSDD, and other plural experiences manage their systems.
+**Systemiser** is a feature-rich Discord bot and web application designed to help individuals with all types of dissociative disorders. It is not only for those that would use the term "System"
 
 ### ✨ Key Features
 
 #### 👥 System Management
-- **Alters** - Full alter/headmate profiles with names, pronouns, descriptions, avatars, colors, birthdays, and custom fields
-- **States** - Track mental states, moods, or conditions (anxiety, dissociation, etc.) separately from alters
-- **Groups** - Organize alters and states into subsystems, groups, or categories
+- **Alters** - Full alter/headmate profiles (System-focused)
+- **States** - Track mental states, moods, or conditions (dissociation, regression, agitation, etc.) separately from alters (Non-system Category)
+- **Groups** - Organize alters and states into subsystems, groups, and categories
 - **Custom Synonyms** - Use your preferred terminology (headmates, parts, members, etc.)
 
 #### 🎭 Proxy System
@@ -64,7 +64,7 @@ A collection of Discord bots and web applications built for various purposes. Th
 - **Channel Restrictions** - Enable/disable proxying per channel
 - **Proxy Logging** - Log proxy events to a designated channel
 - **Admin Roles** - Designate server admins for Systemiser
-- **Blacklist** - Disable proxying for specific users
+- **Blacklist** - Disable proxying for server users
 
 ### 🖥️ Commands
 
