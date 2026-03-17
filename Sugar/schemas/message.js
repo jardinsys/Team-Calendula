@@ -8,7 +8,7 @@ const snowflake = new Snowflake({
 
 const messageSchema = new mongoose.Schema({
     // Message Info
-    _id: {
+    id: {
         type: String,
         default: () => snowflake.generate(),
         unique: true
