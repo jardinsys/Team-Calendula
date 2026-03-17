@@ -7,7 +7,7 @@ const snowflake = new Snowflake({
 });
 
 const userSchema = new mongoose.Schema({
-    _id: { type: mongoose.Schema.Types.ObjectId, unique: true },
+    id: { type: mongoose.Schema.Types.ObjectId, unique: true },
     discordID: { type: String, unique: true },
     joinedAt: { type: Date, default: Date.now },
     connection: {

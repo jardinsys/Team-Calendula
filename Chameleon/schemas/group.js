@@ -10,7 +10,7 @@ const snowflake = new Snowflake({
 });
 
 const groupSchema = new mongoose.Schema({
-    _id: {
+    id: {
         type: String,
         default: () => snowflake.generate(),
         unique: true

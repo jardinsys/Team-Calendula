@@ -11,7 +11,7 @@ const snowflake = new Snowflake({
 });
 
 const systemSchema = new mongoose.Schema({
-    _id: {
+    id: {
         type: String,
         default: () => snowflake.generate(),
         unique: true

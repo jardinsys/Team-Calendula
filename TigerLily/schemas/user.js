@@ -5,7 +5,7 @@ const { triggerGroupSchema } = require('./trigger');
 
 const userSchema = new mongoose.Schema({
     //User Info
-    _id: { type: mongoose.Schema.Types.ObjectId, unique: true },
+    id: { type: mongoose.Schema.Types.ObjectId, unique: true },
     discordId: { type: String, unique: true },
     createdAt: { type: Date, default: Date.now },
     pronouns: String,
