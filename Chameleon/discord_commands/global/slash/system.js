@@ -66,9 +66,9 @@ module.exports = {
                 .setName('action')
                 .setRequired(true)
                 .addChoices(
-                    {name: 'Edit - Modify system information', value: 'edit'},
-                    {name: 'Settings - Open system settings', value: 'settings'}
-                ))), 
+                    { name: 'Edit - Modify system information', value: 'edit' },
+                    { name: 'Settings - Open system settings', value: 'settings' }
+                ))),
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
@@ -112,7 +112,7 @@ module.exports = {
 /**
  * Build the system card embed
  */
-async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, showFull = false, user) {
+async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, showFull = false,) {
     const embed = new EmbedBuilder();
 
     // Get display values - system.color or none
@@ -125,17 +125,10 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     // Header/Author
     const avatar = system.discord?.image?.avatar?.url || system.avatar?.url;
 
-    embed.setAuthor({
-        name: system.name?.indexable || 'Unknown System', //Change "Unknown System to (internal) Username or Discord Username"
-        iconURL: avatar || undefined
-    });
-
-    embed.setTitle(displayName || 'Unknown System');
+    if (avatar) embed.setThumbnail(avatar)
+    if (displayName) embed.setTitle(displayName || '');
     if (color) embed.setColor(color);
-
-    if (description) {
-        embed.setDescription(description);
-    }
+    embed.setDescription(description || '*There is no Description*'); // this needs to change later to include additions of information from basic info
 
     // Get counts
     const alterCount = system.alters?.IDs?.length || 0;
@@ -163,19 +156,10 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
 
     // System Type field
     let typeInfo = '';
-    if (system.sys_type?.name && system.sys_type.name !== 'None') {
-        typeInfo += `**Type:** ${system.sys_type.name}\n`;
-    }
-    if (system.sys_type?.dd?.DSM) {
-        typeInfo += `**DSM:** ${system.sys_type.dd.DSM}\n`;
-    }
-    if (system.sys_type?.dd?.ICD) {
-        typeInfo += `**ICD:** ${system.sys_type.dd.ICD}\n`;
-    }
-    if (system.sys_type?.isSystem !== undefined) {
-        typeInfo += `**Is a system:** ${system.sys_type.isSystem ? 'Yes' : 'No'}\n`;
-    }
-
+    if (system.sys_type?.name && system.sys_type.name !== 'None') typeInfo += `**Type:** ${system.sys_type.name}\n`;
+    if (system.sys_type?.dd?.DSM) typeInfo += `**DSM:** ${system.sys_type.dd.DSM}\n`;
+    if (system.sys_type?.dd?.ICD) typeInfo += `**ICD:** ${system.sys_type.dd.ICD}\n`;
+    if (system.sys_type?.isSystem !== undefined) typeInfo += `**Is a system:** ${system.sys_type.isSystem ? 'Yes' : 'No'}\n`;
     if (typeInfo) {
         embed.addFields({
             name: '🏷️ System Type',
@@ -302,15 +286,11 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     }
 
     // Thumbnail/Avatar
-    if (avatar) {
-        embed.setThumbnail(avatar);
-    }
+    if (avatar) embed.setThumbnail(avatar);
 
     // Banner
     const banner = system.discord?.image?.banner?.url;
-    if (banner) {
-        embed.setImage(banner);
-    }
+    if (banner) embed.setImage(banner);
 
     return embed;
 }
@@ -792,28 +772,27 @@ async function handleButtonInteraction(interaction) {
     const customId = interaction.customId;
 
     // Handle new user flow buttons
-    if (customId.startsWith('new_user_')) {
-        return await utils.handleNewUserButton(interaction, 'system');
-    }
+    if (customId.startsWith('new_user_')) return await utils.handleNewUserButton(interaction, 'system');
 
-    // Handle menu buttons
-    if (customId === 'system_menu_show') {    
-        const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
-        const mockInteraction = {
-            ...interaction,
-            options: { getUser: () => null, getString: () => null }
-        };
-        return await handleShow(mockInteraction, user, system);
-    }
+    if (customId.startsWith('system_menu_')) {
+        let { user, system } = await utils.getOrCreateUserAndSystem(interaction);
 
-    if (customId === 'system_menu_edit') {
-        const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
-        return await handleEdit(interaction, user, system);
-    }
+        // Handle menu buttons
+        if (customId === 'system_menu_show') {
+            const mockInteraction = {
+                ...interaction,
+                options: { getUser: () => null, getString: () => null }
+            };
+            return await handleShow(mockInteraction, user, system);
+        }
 
-    if (customId === 'system_menu_settings') {
-        const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
-        return await handleSettings(interaction, user, system);
+        if (customId === 'system_menu_edit') {
+            return await handleEdit(interaction, user, system);
+        }
+
+        if (customId === 'system_menu_settings') {
+            return await handleSettings(interaction, user, system);
+        }
     }
 
     // Extract session ID from custom ID
@@ -827,13 +806,12 @@ async function handleButtonInteraction(interaction) {
         });
     }
 
-    const system = await System.findById(session.systemId);
-    const user = await User.findById(session.discordID)
+    let system = await System.findById(session.systemId);
 
     // Handle show full info
     if (customId.startsWith('system_show_full_')) {
         const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
-        const embed = await buildSystemCard(system, null, closedCharAllowed, true, user);
+        const embed = await buildSystemCard(system, null, closedCharAllowed, true);
         return await interaction.update({ embeds: [embed], components: [] });
     }
 
@@ -848,6 +826,8 @@ async function handleButtonInteraction(interaction) {
     }
 
     // Handle sync buttons for edit
+
+    if (customId.startsWith('system_edit')) {
     if (customId.startsWith('system_edit_sync_')) {
         session.syncWithDiscord = customId.includes('_yes_');
         session.id = sessionId;
@@ -970,7 +950,7 @@ async function handleButtonInteraction(interaction) {
             embeds: [],
             components: []
         });
-    }
+    }}
 
     // ============================================
     // SETTINGS BUTTONS
