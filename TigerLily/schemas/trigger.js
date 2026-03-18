@@ -3,6 +3,7 @@ const mediaSchema = require('../../media.js');
 
 const triggerSchema = new mongoose.Schema({
     name: String,
+    level: String,
     description: String,
     help: String
 });
