@@ -868,7 +868,7 @@ function buildSyncConfirmation(entityType, entityName, sessionId, action = 'edit
             : `✅ ${capitalize(entityType)} Updated!`)
         .setDescription(
             `**${entityName}** has been ${action === 'new' ? 'created' : 'updated'}.\n\n` +
-            'Would you like to sync Discord-specific settings?'
+            `Would you like to sync ${capitalize(entityType)} app settings with Discord?` //Check if this doesnt need to be "entityName"
         );
 
     const buttons = new ActionRowBuilder().addComponents(

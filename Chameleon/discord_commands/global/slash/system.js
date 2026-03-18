@@ -30,11 +30,8 @@ const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
-
-// Import shared utilities
 const utils = require('../../functions/bot_utils');
 
-// Use DSM and ICD types from utils
 const { DSM_TYPES, ICD_TYPES, ENTITY_COLORS, getSystemEmbedColor } = utils;
 
 module.exports = {
@@ -109,9 +106,7 @@ module.exports = {
 // EMBED BUILDERS
 // ============================================
 
-/**
- * Build the system card embed
- */
+//Build the system card embed
 async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, showFull = false,) {
     const embed = new EmbedBuilder();
 
@@ -128,7 +123,7 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     if (avatar) embed.setThumbnail(avatar)
     if (displayName) embed.setTitle(displayName || '');
     if (color) embed.setColor(color);
-    embed.setDescription(description || '*There is no Description*'); // this needs to change later to include additions of information from basic info
+    if (description) embed.setDescription(description); // Maybe later change later to include additions of information from basic info
 
     // Get counts
     const alterCount = system.alters?.IDs?.length || 0;
@@ -295,20 +290,14 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     return embed;
 }
 
-/**
- * Build the edit interface for a system
- */
+//Build the edit interface for a system
 function buildEditInterface(system, session) {
     const embed = new EmbedBuilder()
-        .setTitle(`Editing: ${utils.getDisplayName(system)}`)
+        .setTitle(`Editing System Info of ${utils.getDisplayName(system)}`)
         .setDescription(session.mode
             ? `Currently in **${session.mode.toUpperCase()} MODE**\n\nSelect what you would like to edit.`
-            : 'Select what you would like to edit from the dropdown menu below.'
-        );
-
-    // Use system color if available
-    const color = getSystemEmbedColor(system);
-    if (color) embed.setColor(color);
+            : 'Select what you would like to edit from the dropdown menu below.')
+        .setColor(ENTITY_COLORS.system);
 
     // Edit options dropdown
     const selectMenu = new StringSelectMenuBuilder()
@@ -373,7 +362,7 @@ function buildEditInterface(system, session) {
             .setEmoji('🏠')
     );
 
-    // Action buttons
+    // Action buttons (Does not seem clear, may need to change later)
     const actionRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`system_edit_settings_${session.id}`)
@@ -400,12 +389,9 @@ function buildEditInterface(system, session) {
     return { embed, components: [selectRow, modeRow, actionRow] };
 }
 
-/**
- * Build the settings interface
- */
+//Build the settings interface
 function buildSettingsInterface(system, session) {
     const embed = new EmbedBuilder()
-
         .setTitle(`⚙️ System Settings`)
         .setDescription('Configure your system settings below.');
 
@@ -422,7 +408,7 @@ function buildSettingsInterface(system, session) {
             inline: true
         },
         {
-            name: 'Auto-share Notes',
+            name: 'Auto-share Notes to Alt Accounts?',
             value: system.setting?.autoshareNotestoUsers ? 'Yes' : 'No',
             inline: true
         },
@@ -488,12 +474,9 @@ function buildSettingsInterface(system, session) {
     return { embed, components: [row1, row2, row3] };
 }
 
-/**
- * Build privacy buckets management interface
- */
+// Build privacy buckets management interface
 function buildBucketsInterface(system, session) {
     const embed = new EmbedBuilder()
-
         .setTitle('🔒 Privacy Buckets')
         .setDescription('Manage your privacy buckets. Each bucket can contain friends with specific privacy levels.');
 
@@ -539,12 +522,9 @@ function buildBucketsInterface(system, session) {
     return { embed, components: [row] };
 }
 
-/**
- * Build conditions management interface
- */
+// Build conditions management interface(Check Later for understanding)
 function buildConditionsInterface(system, session) {
     const embed = new EmbedBuilder()
-
         .setTitle('📋 Conditions Management')
         .setDescription('Manage conditions for alters and states.');
 
@@ -613,22 +593,21 @@ function buildConditionsInterface(system, session) {
 // COMMAND HANDLERS
 // ============================================
 
-/**
- * Handle /system menu
- */
+// Handle /system menu
 async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
 
         .setTitle('🎡 System Management')
         .setDescription('Select a button to start managing your system.')
-        .setFooter({ text: 'Use the buttons below to navigate' });
+        .setFooter({ text: 'Use the buttons below to navigate' })
+        .setColor(ENTITY_COLORS.system);
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('system_menu_show')
             .setLabel('Show System')
             .setStyle(ButtonStyle.Primary)
-            .setEmoji('👁️'),
+            .setEmoji('🔍'),
         new ButtonBuilder()
             .setCustomId('system_menu_edit')
             .setLabel('Edit System')
@@ -644,9 +623,7 @@ async function handleMenu(interaction, user, system) {
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
 }
 
-/**
- * Handle /system show
- */
+// Handle /system show
 async function handleShow(interaction, currentUser, currentSystem) {
     const targetUser = interaction.options.getUser('user');
     const targetUserId = interaction.options.getString('userid');
@@ -661,7 +638,6 @@ async function handleShow(interaction, currentUser, currentSystem) {
         const discordId = targetUser?.id || targetUserId;
 
         const otherUser = await User.findOne({ discordID: discordId });
-
         if (!otherUser || !otherUser.systemID) {
             return await interaction.reply({
                 content: '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...',
@@ -670,7 +646,6 @@ async function handleShow(interaction, currentUser, currentSystem) {
         }
 
         targetSystem = await System.findById(otherUser.systemID);
-
         if (!targetSystem) {
             return await interaction.reply({
                 content: '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...',
@@ -691,7 +666,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
 
     if (!targetSystem) {
         return await interaction.reply({
-            content: '❌ No system found. Use `/system` to set up your system first.',
+            content: '❌ No system found. Use `/system` if you want to register a system.',
             ephemeral: true
         });
     }
@@ -729,9 +704,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     await interaction.reply({ embeds: [embed], components: buttons, ephemeral: true });
 }
 
-/**
- * Handle /system edit
- */
+// Handle /system edit
 async function handleEdit(interaction, user, system) {
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -740,7 +713,7 @@ async function handleEdit(interaction, user, system) {
         systemId: system._id,
         userId: user._id,
         mode: null,
-        syncWithDiscord: system.syncWithApps?.discord || false
+        syncWithDiscord: system.syncWithApps?.discord || true
     });
 
     // Show sync confirmation
@@ -748,9 +721,7 @@ async function handleEdit(interaction, user, system) {
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
 }
 
-/**
- * Handle /system settings
- */
+// Handle /system settings
 async function handleSettings(interaction, user, system) {
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -2157,9 +2128,7 @@ async function handleModalSubmit(interaction) {
     }
 }
 
-/**
- * Build the proxy settings embed
- */
+// Build the proxy settings embed
 function buildProxySettingsEmbed(system) {
     const getLayoutDisplay = (layout) => {
         if (!layout) return '*Not set*';
@@ -2199,9 +2168,7 @@ function buildProxySettingsEmbed(system) {
         );
 }
 
-/**
- * Build proxy settings components
- */
+// Build proxy settings components
 function buildProxySettingsComponents(sessionId) {
     const proxySelect = new StringSelectMenuBuilder()
         .setCustomId(`system_edit_proxy_select_${sessionId}`)
@@ -2240,9 +2207,7 @@ function buildProxySettingsComponents(sessionId) {
     return [proxySelectRow, proxyBackRow];
 }
 
-/**
- * Helper to find entity by name for system proxy style validation
- */
+// Helper to find entity by name for system proxy style validation
 async function findEntityByNameForSystem(name, system) {
     const searchName = name.toLowerCase();
 
