@@ -7,12 +7,16 @@
 // (/alter show user:[@user] userID:[string] alter_name:[string]) (click button to show all info in ephemeral)
 // (/alter show alter_name:[string])
 
+// (OLD)
 // (/alter new alter_name:[string])
 // (/alter delete alter_name:[string])
 // (/alter dormant alter_name:[string])
 
 // (/alter alter_name:[string] edit (have the select menu of what to edit (card info, personal info, proxy info, image info, caution info ) and have a buttons to (enter mask mode, open alter settings, edit groups, edit states))
 // (/alter alter_name:[string] settings
+
+// (NEW)
+// (/alter manage [new/edit/settings] alter_name:[string]) (delete will be in settings)
 
 const {
     SlashCommandBuilder,
@@ -30,8 +34,6 @@ const {
 const Alter = require('../../../schemas/alter');
 const System = require('../../../schemas/system');
 const Group = require('../../../schemas/group');
-
-// Import shared utilities
 const utils = require('../../functions/bot_utils');
 
 module.exports = {

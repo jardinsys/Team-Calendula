@@ -4,8 +4,13 @@
 // (/system)
 // (/system show) (click button to show all info in ephemeral)
 // (/system show user:[@user] userID:[string])
+
+//(OLD)
 // (/system edit)
 // (/system settings)
+
+//(NEW)
+//(/system manage (edit/settings))
 
 const {
     SlashCommandBuilder,
@@ -48,12 +53,22 @@ module.exports = {
             .addStringOption(opt => opt
                 .setName('userid')
                 .setDescription('Discord User ID (for users outside the server)')))
-        .addSubcommand(sub => sub
+        /*.addSubcommand(sub => sub // Delete start
             .setName('edit')
             .setDescription('Edit your system'))
         .addSubcommand(sub => sub
             .setName('settings')
-            .setDescription('Open system settings')),
+            .setDescription('Open system settings'))*/ // Delete end
+        .addSubcommand(sub => sub
+            .setName('manage')
+            .setDescription('Edit system information or Settings')
+            .setStringOption(opt => opt
+                .setName('action')
+                .setRequired(true)
+                .addChoices(
+                    {name: 'Edit - Modify system information', value: 'edit'},
+                    {name: 'Settings - Open system settings', value: 'settings'}
+                ))), 
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
@@ -76,8 +91,9 @@ module.exports = {
         const handlers = {
             menu: handleMenu,
             show: handleShow,
-            edit: handleEdit,
-            settings: handleSettings
+            manage: handleManage
+            //edit: handleEdit,
+            //settings: handleSettings
         };
 
         await handlers[subcommand](interaction, user, system);
@@ -96,7 +112,7 @@ module.exports = {
 /**
  * Build the system card embed
  */
-async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, showFull = false) {
+async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, showFull = false, user) {
     const embed = new EmbedBuilder();
 
     // Get display values - system.color or none
@@ -104,13 +120,13 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     const description = utils.getDiscordOrDefault(system, 'description');
     const displayName = closedCharAllowed
         ? (system.name?.display || system.name?.indexable)
-        : (system.name?.closedNameDisplay || system.name?.display || system.name?.indexable);
+        : (system.name?.closedNameDisplay || system.name?.indexable);
 
     // Header/Author
     const avatar = system.discord?.image?.avatar?.url || system.avatar?.url;
 
     embed.setAuthor({
-        name: system.name?.indexable || 'Unknown System',
+        name: system.name?.indexable || 'Unknown System', //Change "Unknown System to (internal) Username or Discord Username"
         iconURL: avatar || undefined
     });
 
@@ -668,7 +684,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
 
         if (!otherUser || !otherUser.systemID) {
             return await interaction.reply({
-                content: '❌ This user does not have a system to show. They may not have set up a system in this application...',
+                content: '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...',
                 ephemeral: true
             });
         }
@@ -677,7 +693,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
 
         if (!targetSystem) {
             return await interaction.reply({
-                content: '❌ This user does not have a system to show. They may not have set up a system in this application...',
+                content: '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...',
                 ephemeral: true
             });
         }
@@ -685,7 +701,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         // Check if blocked
         if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) {
             return await interaction.reply({
-                content: '❌ This user does not have a system to show. They may not have set up a system in this application...',
+                content: '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...',
                 ephemeral: true
             });
         }
@@ -704,7 +720,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
 
     // Build the card
-    const embed = await buildSystemCard(targetSystem, privacyBucket, closedCharAllowed, false);
+    const embed = await buildSystemCard(targetSystem, privacyBucket, closedCharAllowed, false, targetUserId);
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -781,7 +797,7 @@ async function handleButtonInteraction(interaction) {
     }
 
     // Handle menu buttons
-    if (customId === 'system_menu_show') {
+    if (customId === 'system_menu_show') {    
         const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
         const mockInteraction = {
             ...interaction,
@@ -812,11 +828,12 @@ async function handleButtonInteraction(interaction) {
     }
 
     const system = await System.findById(session.systemId);
+    const user = await User.findById(session.discordID)
 
     // Handle show full info
     if (customId.startsWith('system_show_full_')) {
         const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
-        const embed = await buildSystemCard(system, null, closedCharAllowed, true);
+        const embed = await buildSystemCard(system, null, closedCharAllowed, true, user);
         return await interaction.update({ embeds: [embed], components: [] });
     }
 

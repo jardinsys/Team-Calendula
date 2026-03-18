@@ -255,9 +255,9 @@ async function getOrCreateUserAndSystem(context) {
  * Get or create user for an interaction or message
  * Works with both slash commands (interaction) and prefix commands (message)
  * @param {Interaction|Message} context - Discord interaction or message
- * @returns {Promise<{user: User, system: System, isNew: boolean}>}
+ * @returns {Promise<{user: User, isNew: boolean}>}
  */
-async function getOrCreateUserAndSystem(context) {
+async function getOrCreateUser(context) {
     // Handle both interaction and message contexts
     const discordId = context.user?.id || context.author?.id;
 
@@ -302,7 +302,7 @@ async function createNewUserAndSystem(discordId) {
  * @param {string} discordId - Discord user ID
  * @returns {Promise<{user: User}>}
  */
-async function createNewUserAndSystem(discordId) {
+async function createNewUser(discordId) {
     const user = new User({
         _id: new mongoose.Types.ObjectId(),
         discordID: discordId,
@@ -319,7 +319,7 @@ async function createNewUserAndSystem(discordId) {
  * @param {Interaction} interaction 
  * @param {string} entityType - 'system', 'alter', 'state', or 'group'
  */
-async function handleNewUserFlow(interaction, entityType) {
+async function handleNewUserFlow(interaction, entityType) { //Change this later to have "System"
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.system)
         .setTitle('👋 Welcome to Systemiser!')

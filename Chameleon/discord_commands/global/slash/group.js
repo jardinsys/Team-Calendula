@@ -7,11 +7,15 @@
 // (/group show user:[user]userID:[string] group_name:[string]) (click button to show all info in ephemeral)
 // (/group show group_name:[string])
 
+// (OLD)
 // (/group new group_name:[string])
 // (/group delete group_name:[string])
 
 // (/group group_name:[string] edit (have the select menu of what to edit (card info, personal info, proxy info, image info, caution info ) and have a buttons to (enter mask mode, open group settings, edit groups, edit states))
 // (/group group_name:[string] settings
+
+// (NEW)
+// (/group manage action:(new/edit/add/remove/settings) group_name:[string]) (delete will be in settings)
 
 const {
     SlashCommandBuilder,
