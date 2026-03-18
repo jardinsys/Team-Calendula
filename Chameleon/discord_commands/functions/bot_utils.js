@@ -573,7 +573,7 @@ function getDisplayName(entity, closedCharAllowed = true) {
     if (!closedCharAllowed && entity.name?.closedNameDisplay) {
         return entity.name.closedNameDisplay;
     }
-    return entity.name?.display || entity.name?.indexable || 'Unknown';
+    return entity.name?.display || entity.name?.indexable || false;
 }
 
 /**
