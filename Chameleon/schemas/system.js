@@ -30,7 +30,7 @@ const systemSchema = new mongoose.Schema({
         closedNameDisplay: String
     },
     sys_type: {
-        name: { type: String, default: "None" },
+        name: String,
         dd: {
             DSM: { type: String, enum: ["DID", "Amnesia", "Dereal/Depers", "OSDD-1A", "OSDD-1B", "OSDD-2", "OSDD-3", "OSDD-4", "UDD"] },
             ICD: { type: String, enum: ["P-DID", "Trance", "DNSD", "Possession Trance", "SDS"] },

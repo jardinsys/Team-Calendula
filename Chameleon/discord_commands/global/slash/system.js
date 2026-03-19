@@ -799,129 +799,130 @@ async function handleButtonInteraction(interaction) {
     // Handle sync buttons for edit
 
     if (customId.startsWith('system_edit')) {
-    if (customId.startsWith('system_edit_sync_')) {
-        session.syncWithDiscord = customId.includes('_yes_');
-        session.id = sessionId;
+        if (customId.startsWith('system_edit_sync_')) {
+            session.syncWithDiscord = customId.includes('_yes_');
+            session.id = sessionId;
 
-        // Update system's sync setting
-        system.syncWithApps = { discord: session.syncWithDiscord };
-        await system.save();
+            // Update system's sync setting
+            system.syncWithApps = { discord: session.syncWithDiscord };
+            await system.save();
 
-        // Show edit interface
-        const { embed, components } = buildEditInterface(system, session);
-        return await interaction.update({ embeds: [embed], components });
-    }
+            // Show edit interface
+            const { embed, components } = buildEditInterface(system, session);
+            return await interaction.update({ embeds: [embed], components });
+        }
 
-    // Handle mode toggles
-    if (customId.startsWith('system_edit_mode_mask_')) {
-        session.mode = session.mode === 'mask' ? null : 'mask';
-        const { embed, components } = buildEditInterface(system, session);
-        return await interaction.update({ embeds: [embed], components });
-    }
+        // Handle mode toggles
+        if (customId.startsWith('system_edit_mode_mask_')) {
+            session.mode = session.mode === 'mask' ? null : 'mask';
+            const { embed, components } = buildEditInterface(system, session);
+            return await interaction.update({ embeds: [embed], components });
+        }
 
-    if (customId.startsWith('system_edit_mode_server_')) {
-        session.mode = session.mode === 'server' ? null : 'server';
-        const { embed, components } = buildEditInterface(system, session);
-        return await interaction.update({ embeds: [embed], components });
-    }
+        if (customId.startsWith('system_edit_mode_server_')) {
+            session.mode = session.mode === 'server' ? null : 'server';
+            const { embed, components } = buildEditInterface(system, session);
+            return await interaction.update({ embeds: [embed], components });
+        }
 
-    // Handle edit -> settings transition
-    if (customId.startsWith('system_edit_settings_')) {
-        session.type = 'settings';
-        const { embed, components } = buildSettingsInterface(system, session);
-        return await interaction.update({ embeds: [embed], components });
-    }
+        // Handle edit -> settings transition
+        if (customId.startsWith('system_edit_settings_')) {
+            session.type = 'settings';
+            const { embed, components } = buildSettingsInterface(system, session);
+            return await interaction.update({ embeds: [embed], components });
+        }
 
-    // Handle edit -> conditions transition
-    if (customId.startsWith('system_edit_conditions_')) {
-        const { embed, components } = buildConditionsInterface(system, session);
-        return await interaction.update({ embeds: [embed], components });
-    }
+        // Handle edit -> conditions transition
+        if (customId.startsWith('system_edit_conditions_')) {
+            const { embed, components } = buildConditionsInterface(system, session);
+            return await interaction.update({ embeds: [embed], components });
+        }
 
-    // Handle proxy layout help
-    if (customId.startsWith('system_edit_proxy_help_')) {
-        const helpEmbed = new EmbedBuilder()
+        // Handle proxy layout help
+        if (customId.startsWith('system_edit_proxy_help_')) {
+            const helpEmbed = new EmbedBuilder()
 
-            .setTitle('📝 Proxy Layout Help')
-            .setDescription('Each entity type (alter, state, group) has its own layout. The layout determines how the sender name appears when proxying messages.')
-            .addFields(
-                {
-                    name: '📋 Available Placeholders',
-                    value: '`{name}` - Display name of the alter/state/group\n' +
-                        '`{sys-name}` - System display name\n' +
-                        '`{tag1}`, `{tag2}`, `{tag3}`... - **System** tag array items\n' +
-                        '`{pronouns}` - Entity pronouns joined by separator\n' +
-                        '`{caution}` - Entity caution type',
-                    inline: false
-                },
-                {
-                    name: '✍️ Signoff Placeholders',
-                    value: '`{a-sign1}`, `{a-sign2}`... - Alter signoffs\n' +
-                        '`{st-sign1}`, `{st-sign2}`... - State signoffs\n' +
-                        '`{g-sign1}`, `{g-sign2}`... - Group signoffs\n\n' +
-                        '**You can mix signoffs!** E.g., `{tag1}{a-sign1}{name}{g-sign1}`\n' +
-                        '*Only the current entity type\'s signoffs fill in; others become empty.*',
-                    inline: false
-                },
-                {
-                    name: '💡 Example Layouts',
-                    value: 'System tags: 🌙, ✨\nAlter "Luna" signoffs: 💫\n\n' +
-                        '`{tag1} {name} {a-sign1}` → 🌙 Luna 💫\n' +
-                        '`{tag1}{name}{tag2}` → 🌙Luna✨\n' +
-                        '`[{sys-name}] {name}` → [My System] Luna',
-                    inline: false
-                },
-                {
-                    name: '⚙️ Proxy Style Options',
-                    value: '`off` - Only proxy when a pattern is matched\n' +
-                        '`last` - Auto-proxy as most recent proxy used\n' +
-                        '`front` - Auto-proxy as current fronter (if single)\n' +
-                        '`[entity name]` - Always proxy as specific entity',
-                    inline: false
-                },
-                {
-                    name: '📝 Setting Up Tags & Signoffs',
-                    value: '**System Tags:** Edit in System → Card Info or Proxy Settings\n' +
-                        '**Entity Signoffs:** Edit in alter/state/group Proxy Info\n' +
-                        '• Enter one per line (emojis recommended!)\n' +
-                        '• They become `{tag1}`, `{a-sign1}`, etc.',
-                    inline: false
-                }
+                .setTitle('📝 Proxy Layout Help')
+                .setDescription('Each entity type (alter, state, group) has its own layout. The layout determines how the sender name appears when proxying messages.')
+                .addFields(
+                    {
+                        name: '📋 Available Placeholders',
+                        value: '`{name}` - Display name of the alter/state/group\n' +
+                            '`{sys-name}` - System display name\n' +
+                            '`{tag1}`, `{tag2}`, `{tag3}`... - **System** tag array items\n' +
+                            '`{pronouns}` - Entity pronouns joined by separator\n' +
+                            '`{caution}` - Entity caution type',
+                        inline: false
+                    },
+                    {
+                        name: '✍️ Signoff Placeholders',
+                        value: '`{a-sign1}`, `{a-sign2}`... - Alter signoffs\n' +
+                            '`{st-sign1}`, `{st-sign2}`... - State signoffs\n' +
+                            '`{g-sign1}`, `{g-sign2}`... - Group signoffs\n\n' +
+                            '**You can mix signoffs!** E.g., `{tag1}{a-sign1}{name}{g-sign1}`\n' +
+                            '*Only the current entity type\'s signoffs fill in; others become empty.*',
+                        inline: false
+                    },
+                    {
+                        name: '💡 Example Layouts',
+                        value: 'System tags: 🌙, ✨\nAlter "Luna" signoffs: 💫\n\n' +
+                            '`{tag1} {name} {a-sign1}` → 🌙 Luna 💫\n' +
+                            '`{tag1}{name}{tag2}` → 🌙Luna✨\n' +
+                            '`[{sys-name}] {name}` → [My System] Luna',
+                        inline: false
+                    },
+                    {
+                        name: '⚙️ Proxy Style Options',
+                        value: '`off` - Only proxy when a pattern is matched\n' +
+                            '`last` - Auto-proxy as most recent proxy used\n' +
+                            '`front` - Auto-proxy as current fronter (if single)\n' +
+                            '`[entity name]` - Always proxy as specific entity',
+                        inline: false
+                    },
+                    {
+                        name: '📝 Setting Up Tags & Signoffs',
+                        value: '**System Tags:** Edit in System → Card Info or Proxy Settings\n' +
+                            '**Entity Signoffs:** Edit in alter/state/group Proxy Info\n' +
+                            '• Enter one per line (emojis recommended!)\n' +
+                            '• They become `{tag1}`, `{a-sign1}`, etc.',
+                        inline: false
+                    }
+                );
+
+            const backButton = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`system_edit_proxy_help_back_${sessionId}`)
+                    .setLabel('Back to Edit')
+                    .setStyle(ButtonStyle.Secondary)
             );
 
-        const backButton = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`system_edit_proxy_help_back_${sessionId}`)
-                .setLabel('Back to Edit')
-                .setStyle(ButtonStyle.Secondary)
-        );
+            return await interaction.update({ embeds: [helpEmbed], components: [backButton] });
+        }
 
-        return await interaction.update({ embeds: [helpEmbed], components: [backButton] });
+        // Handle back from proxy help
+        if (customId.startsWith('system_edit_proxy_help_back_')) {
+            session.id = sessionId;
+            const { embed, components } = buildEditInterface(system, session);
+            return await interaction.update({ embeds: [embed], components });
+        }
+
+        // Handle back from proxy settings
+        if (customId.startsWith('system_edit_proxy_back_')) {
+            session.id = sessionId;
+            const { embed, components } = buildEditInterface(system, session);
+            return await interaction.update({ content: null, embeds: [embed], components });
+        }
+
+        // Handle edit done
+        if (customId.startsWith('system_edit_done_')) {
+            utils.deleteSession(sessionId);
+            return await interaction.update({
+                content: '✅ Editing complete!',
+                embeds: [],
+                components: []
+            });
+        }
     }
-
-    // Handle back from proxy help
-    if (customId.startsWith('system_edit_proxy_help_back_')) {
-        session.id = sessionId;
-        const { embed, components } = buildEditInterface(system, session);
-        return await interaction.update({ embeds: [embed], components });
-    }
-
-    // Handle back from proxy settings
-    if (customId.startsWith('system_edit_proxy_back_')) {
-        session.id = sessionId;
-        const { embed, components } = buildEditInterface(system, session);
-        return await interaction.update({ content: null, embeds: [embed], components });
-    }
-
-    // Handle edit done
-    if (customId.startsWith('system_edit_done_')) {
-        utils.deleteSession(sessionId);
-        return await interaction.update({
-            content: '✅ Editing complete!',
-            embeds: [],
-            components: []
-        });
-    }}
 
     // ============================================
     // SETTINGS BUTTONS
@@ -1304,7 +1305,7 @@ async function handleSelectMenu(interaction) {
                             .setLabel('Alter Layout')
                             .setStyle(TextInputStyle.Paragraph)
                             .setValue(system.proxy?.layout?.alter || '')
-                            .setPlaceholder('{tag1}{name}{a-sign1} - Use {name}, {sys-name}, {tag#}, {a-sign#}, {pronouns}, {caution}')
+                            .setPlaceholder('{a-sign1}{name}{tag1} - Use {name}, {sys-name}, {tag#}, {a-sign#}, {pronouns}, {caution}')
                             .setRequired(false)
                             .setMaxLength(200)
                     )
@@ -1323,7 +1324,7 @@ async function handleSelectMenu(interaction) {
                             .setLabel('State Layout')
                             .setStyle(TextInputStyle.Paragraph)
                             .setValue(system.proxy?.layout?.state || '')
-                            .setPlaceholder('{tag1}{name}{st-sign1} - Use {name}, {sys-name}, {tag#}, {st-sign#}, {pronouns}, {caution}')
+                            .setPlaceholder('{st-sign1}{name}{tag1} - Use {name}, {sys-name}, {tag#}, {st-sign#}, {pronouns}, {caution}')
                             .setRequired(false)
                             .setMaxLength(200)
                     )
@@ -1342,7 +1343,7 @@ async function handleSelectMenu(interaction) {
                             .setLabel('Group Layout')
                             .setStyle(TextInputStyle.Paragraph)
                             .setValue(system.proxy?.layout?.group || '')
-                            .setPlaceholder('{tag1}{name}{g-sign1} - Use {name}, {sys-name}, {tag#}, {g-sign#}, {pronouns}, {caution}')
+                            .setPlaceholder('{g-sign1}{name}{tag1} - Use {name}, {sys-name}, {tag#}, {g-sign#}, {pronouns}, {caution}')
                             .setRequired(false)
                             .setMaxLength(200)
                     )
@@ -1385,9 +1386,7 @@ async function handleSelectMenu(interaction) {
     }
 
     // Handle edit menu selection
-    if (!interaction.customId.startsWith('system_edit_select_')) {
-        return;
-    }
+    if (!interaction.customId.startsWith('system_edit_select_')) return;
 
     let modal;
 
@@ -1442,9 +1441,9 @@ async function handleSelectMenu(interaction) {
                         .setLabel('System Type Name')
                         .setStyle(TextInputStyle.Short)
                         .setValue(system.sys_type?.name || '')
-                        .setPlaceholder('e.g., Traumagenic, Endogenic, Mixed')
+                        .setPlaceholder('Example: Traumagenic (Leave blank if you don\'t label yourself with a "type".)')
                         .setRequired(false)
-                        .setMaxLength(50)
+                        .setMaxLength(100)
                 ),
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
@@ -1494,7 +1493,7 @@ async function handleSelectMenu(interaction) {
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
                         .setCustomId('plural')
-                        .setLabel('Plural Term (e.g., alters, headmates, parts)')
+                        .setLabel('Plural Term (e.g., alters, headmates, parts, collective)')
                         .setStyle(TextInputStyle.Short)
                         .setValue(system.alterSynonym?.plural || 'alters')
                         .setRequired(false)
@@ -1543,7 +1542,9 @@ async function handleSelectMenu(interaction) {
                         .setCustomId('avatar_url')
                         .setLabel('Avatar URL')
                         .setStyle(TextInputStyle.Short)
-                        .setValue(imageTarget?.avatar?.url || imageTarget?.image?.avatar?.url || system.avatar?.url || '')
+                        .setValue(system.avatar?.url || '')
+                        .setPlaceholder('(If you have an image URL you want to use, place here)')
+                        //.setValue(imageTarget?.avatar?.url || imageTarget?.image?.avatar?.url || system.avatar?.url || '')
                         .setRequired(false)
                 ),
                 new ActionRowBuilder().addComponents(
@@ -1551,7 +1552,9 @@ async function handleSelectMenu(interaction) {
                         .setCustomId('banner_url')
                         .setLabel('Banner URL')
                         .setStyle(TextInputStyle.Short)
-                        .setValue(imageTarget?.image?.banner?.url || system.discord?.image?.banner?.url || '')
+                        .setValue(system.avatar?.url || '')
+                        .setPlaceholder('(If you have an image URL you want to use, place here)')
+                        // .setValue(imageTarget?.image?.banner?.url || system.discord?.image?.banner?.url || '')
                         .setRequired(false)
                 )
             );
@@ -1650,7 +1653,7 @@ async function handleSelectMenu(interaction) {
                         .setLabel('Proxy Style & Break')
                         .setDescription('Edit auto-proxy style and break status')
                         .setValue('style_break')
-                        .setEmoji('⚙️')
+                        .setEmoji('🆔')
                 );
 
             const proxySelectRow = new ActionRowBuilder().addComponents(proxySelect);
@@ -1693,9 +1696,10 @@ async function handleSelectMenu(interaction) {
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
                         .setCustomId('social_battery')
-                        .setLabel('Social Battery (0-100)')
+                        .setLabel('Social Battery')
                         .setStyle(TextInputStyle.Short)
                         .setValue(system.battery !== undefined ? String(system.battery) : '')
+                        .setPlaceholder('Enter a number from 0-100')
                         .setRequired(false)
                         .setMaxLength(3)
                 )
@@ -1890,236 +1894,236 @@ async function handleModalSubmit(interaction) {
     // ============================================
     // EDIT MODALS
     // ============================================
+    if (interaction.customId.startsWith('system_edit')) {
+        // Card info modal
+        if (interaction.customId.startsWith('system_edit_card_modal_')) {
+            const displayName = interaction.fields.getTextInputValue('display_name');
+            const description = interaction.fields.getTextInputValue('description');
+            const color = interaction.fields.getTextInputValue('color');
 
-    // Card info modal
-    if (interaction.customId.startsWith('system_edit_card_modal_')) {
-        const displayName = interaction.fields.getTextInputValue('display_name');
-        const description = interaction.fields.getTextInputValue('description');
-        const color = interaction.fields.getTextInputValue('color');
+            utils.updateEntityProperty(system, session, 'name.display', displayName);
+            utils.updateEntityProperty(system, session, 'description', description);
+            utils.updateEntityProperty(system, session, 'color', color);
 
-        utils.updateEntityProperty(system, session, 'name.display', displayName);
-        utils.updateEntityProperty(system, session, 'description', description);
-        utils.updateEntityProperty(system, session, 'color', color);
-
-        await system.save();
-    }
-
-    // Type info modal
-    if (interaction.customId.startsWith('system_edit_type_modal_')) {
-        const typeName = interaction.fields.getTextInputValue('type_name');
-        const dsmType = interaction.fields.getTextInputValue('dsm_type');
-        const icdType = interaction.fields.getTextInputValue('icd_type');
-        const isSystem = interaction.fields.getTextInputValue('called_system');
-
-        if (!system.sys_type) system.sys_type = { dd: {} };
-        if (!system.sys_type.dd) system.sys_type.dd = {};
-
-        system.sys_type.name = typeName || 'None';
-
-        // Validate DSM type
-        if (dsmType && DSM_TYPES.includes(dsmType)) {
-            system.sys_type.dd.DSM = dsmType;
-        } else if (!dsmType) {
-            system.sys_type.dd.DSM = undefined;
+            await system.save();
         }
 
-        // Validate ICD type
-        if (icdType && ICD_TYPES.includes(icdType)) {
-            system.sys_type.dd.ICD = icdType;
-        } else if (!icdType) {
-            system.sys_type.dd.ICD = undefined;
-        }
+        // Type info modal
+        if (interaction.customId.startsWith('system_edit_type_modal_')) {
+            const typeName = interaction.fields.getTextInputValue('type_name');
+            const dsmType = interaction.fields.getTextInputValue('dsm_type');
+            const icdType = interaction.fields.getTextInputValue('icd_type');
+            const isSystem = interaction.fields.getTextInputValue('called_system');
 
-        system.sys_type.isSystem = isSystem?.toLowerCase() === 'yes';
+            if (!system.sys_type) system.sys_type = { dd: {} };
+            if (!system.sys_type.dd) system.sys_type.dd = {};
 
-        await system.save();
-    }
+            system.sys_type.name = typeName || 'None';
 
-    // Terminology modal
-    if (interaction.customId.startsWith('system_edit_terminology_modal_')) {
-        const singular = interaction.fields.getTextInputValue('singular');
-        const plural = interaction.fields.getTextInputValue('plural');
-
-        if (!system.alterSynonym) system.alterSynonym = {};
-        system.alterSynonym.singular = singular || 'alter';
-        system.alterSynonym.plural = plural || 'alters';
-
-        await system.save();
-    }
-
-    // Personal info modal
-    if (interaction.customId.startsWith('system_edit_personal_modal_')) {
-        const birthday = interaction.fields.getTextInputValue('birthday');
-        const timezone = interaction.fields.getTextInputValue('timezone');
-
-        if (birthday) {
-            const date = new Date(birthday);
-            if (!isNaN(date.getTime())) {
-                system.birthday = date;
+            // Validate DSM type
+            if (dsmType && DSM_TYPES.includes(dsmType)) {
+                system.sys_type.dd.DSM = dsmType;
+            } else if (!dsmType) {
+                system.sys_type.dd.DSM = undefined;
             }
-        } else {
-            system.birthday = undefined;
+
+            // Validate ICD type
+            if (icdType && ICD_TYPES.includes(icdType)) {
+                system.sys_type.dd.ICD = icdType;
+            } else if (!icdType) {
+                system.sys_type.dd.ICD = undefined;
+            }
+
+            system.sys_type.isSystem = isSystem?.toLowerCase() === 'yes';
+
+            await system.save();
         }
 
-        system.timezone = timezone || undefined;
+        // Terminology modal
+        if (interaction.customId.startsWith('system_edit_terminology_modal_')) {
+            const singular = interaction.fields.getTextInputValue('singular');
+            const plural = interaction.fields.getTextInputValue('plural');
 
-        await system.save();
-    }
+            if (!system.alterSynonym) system.alterSynonym = {};
+            system.alterSynonym.singular = singular || 'alter';
+            system.alterSynonym.plural = plural || 'alters';
 
-    // Image info modal
-    if (interaction.customId.startsWith('system_edit_image_modal_')) {
-        const avatarUrl = interaction.fields.getTextInputValue('avatar_url');
-        const bannerUrl = interaction.fields.getTextInputValue('banner_url');
-
-        if (session.mode === 'mask') {
-            if (!system.mask) system.mask = { discord: { image: {} } };
-            if (!system.mask.discord) system.mask.discord = { image: {} };
-            if (!system.mask.discord.image) system.mask.discord.image = {};
-            if (avatarUrl) system.mask.avatar = { url: avatarUrl };
-            if (bannerUrl) system.mask.discord.image.banner = { url: bannerUrl };
-        } else if (!session.syncWithDiscord) {
-            if (!system.discord) system.discord = { image: {} };
-            if (!system.discord.image) system.discord.image = {};
-            if (avatarUrl) system.discord.image.avatar = { url: avatarUrl };
-            if (bannerUrl) system.discord.image.banner = { url: bannerUrl };
-        } else {
-            if (avatarUrl) system.avatar = { url: avatarUrl };
-            if (!system.discord) system.discord = { image: {} };
-            if (!system.discord.image) system.discord.image = {};
-            if (bannerUrl) system.discord.image.banner = { url: bannerUrl };
+            await system.save();
         }
 
-        await system.save();
-    }
+        // Personal info modal
+        if (interaction.customId.startsWith('system_edit_personal_modal_')) {
+            const birthday = interaction.fields.getTextInputValue('birthday');
+            const timezone = interaction.fields.getTextInputValue('timezone');
 
-    // Caution info modal
-    if (interaction.customId.startsWith('system_edit_caution_modal_')) {
-        if (!system.caution) system.caution = {};
-
-        const cautionType = interaction.fields.getTextInputValue('caution_type');
-        const cautionDetail = interaction.fields.getTextInputValue('caution_detail');
-        const triggerNames = interaction.fields.getTextInputValue('trigger_names');
-
-        system.caution.c_type = cautionType || undefined;
-        system.caution.detail = cautionDetail || undefined;
-
-        if (triggerNames) {
-            system.caution.triggers = utils.parseCommaSeparated(triggerNames).map(name => ({ name }));
-        } else {
-            system.caution.triggers = [];
-        }
-
-        await system.save();
-    }
-
-    // Proxy layout modals (alter, state, group)
-    if (interaction.customId.startsWith('system_edit_proxy_layout_')) {
-        if (!system.proxy) system.proxy = {};
-        if (!system.proxy.layout || typeof system.proxy.layout === 'string') {
-            // Convert from legacy string format to object format
-            const oldLayout = typeof system.proxy.layout === 'string' ? system.proxy.layout : '';
-            system.proxy.layout = {
-                alter: oldLayout,
-                state: oldLayout,
-                group: oldLayout
-            };
-        }
-
-        const layout = interaction.fields.getTextInputValue('layout');
-
-        if (interaction.customId.includes('_alter_modal_')) {
-            system.proxy.layout.alter = layout || '';
-        } else if (interaction.customId.includes('_state_modal_')) {
-            system.proxy.layout.state = layout || '';
-        } else if (interaction.customId.includes('_group_modal_')) {
-            system.proxy.layout.group = layout || '';
-        }
-
-        await system.save();
-
-        // Return to proxy settings interface
-        session.id = sessionId;
-        const proxyEmbed = buildProxySettingsEmbed(system);
-        const proxyComponents = buildProxySettingsComponents(sessionId);
-        return await interaction.update({
-            content: '✅ Layout saved!',
-            embeds: [proxyEmbed],
-            components: proxyComponents
-        });
-    }
-
-    // Proxy style modal
-    if (interaction.customId.startsWith('system_edit_proxy_style_modal_')) {
-        if (!system.proxy) system.proxy = {};
-
-        const style = interaction.fields.getTextInputValue('proxy_style')?.toLowerCase()?.trim();
-        const onBreak = interaction.fields.getTextInputValue('proxy_break');
-
-        // Validate proxy style
-        const validStyles = ['off', 'last', 'front'];
-        if (validStyles.includes(style)) {
-            system.proxy.style = style;
-        } else if (style) {
-            // Check if it's an entity name (specify mode)
-            const { entity, type } = await findEntityByNameForSystem(style, system);
-            if (entity) {
-                system.proxy.style = entity.name?.indexable || style;
+            if (birthday) {
+                const date = new Date(birthday);
+                if (!isNaN(date.getTime())) {
+                    system.birthday = date;
+                }
             } else {
-                // Invalid entity name, show warning
-                system.proxy.break = onBreak?.toLowerCase() === 'yes';
-                await system.save();
-
-                session.id = sessionId;
-                const proxyEmbed = buildProxySettingsEmbed(system);
-                const proxyComponents = buildProxySettingsComponents(sessionId);
-                return await interaction.update({
-                    content: `⚠️ Could not find an alter/state/group named "${style}". Proxy style was not changed.\n\nValid options: \`off\`, \`last\`, \`front\`, or an entity's indexable name.`,
-                    embeds: [proxyEmbed],
-                    components: proxyComponents
-                });
+                system.birthday = undefined;
             }
-        } else {
-            system.proxy.style = 'off';
+
+            system.timezone = timezone || undefined;
+
+            await system.save();
         }
 
-        system.proxy.break = onBreak?.toLowerCase() === 'yes';
+        // Image info modal
+        if (interaction.customId.startsWith('system_edit_image_modal_')) {
+            const avatarUrl = interaction.fields.getTextInputValue('avatar_url');
+            const bannerUrl = interaction.fields.getTextInputValue('banner_url');
 
-        await system.save();
-
-        // Return to proxy settings interface
-        session.id = sessionId;
-        const proxyEmbed = buildProxySettingsEmbed(system);
-        const proxyComponents = buildProxySettingsComponents(sessionId);
-        return await interaction.update({
-            content: '✅ Settings saved!',
-            embeds: [proxyEmbed],
-            components: proxyComponents
-        });
-    }
-
-    // Front info modal
-    if (interaction.customId.startsWith('system_edit_front_modal_')) {
-        if (!system.front) system.front = {};
-
-        const status = interaction.fields.getTextInputValue('front_status');
-        const caution = interaction.fields.getTextInputValue('front_caution');
-        const battery = interaction.fields.getTextInputValue('social_battery');
-
-        system.front.status = status || undefined;
-        system.front.caution = caution || undefined;
-
-        if (battery) {
-            const batteryNum = parseInt(battery);
-            if (!isNaN(batteryNum) && batteryNum >= 0 && batteryNum <= 100) {
-                system.battery = batteryNum;
+            if (session.mode === 'mask') {
+                if (!system.mask) system.mask = { discord: { image: {} } };
+                if (!system.mask.discord) system.mask.discord = { image: {} };
+                if (!system.mask.discord.image) system.mask.discord.image = {};
+                if (avatarUrl) system.mask.avatar = { url: avatarUrl };
+                if (bannerUrl) system.mask.discord.image.banner = { url: bannerUrl };
+            } else if (!session.syncWithDiscord) {
+                if (!system.discord) system.discord = { image: {} };
+                if (!system.discord.image) system.discord.image = {};
+                if (avatarUrl) system.discord.image.avatar = { url: avatarUrl };
+                if (bannerUrl) system.discord.image.banner = { url: bannerUrl };
+            } else {
+                if (avatarUrl) system.avatar = { url: avatarUrl };
+                if (!system.discord) system.discord = { image: {} };
+                if (!system.discord.image) system.discord.image = {};
+                if (bannerUrl) system.discord.image.banner = { url: bannerUrl };
             }
-        } else {
-            system.battery = undefined;
+
+            await system.save();
         }
 
-        await system.save();
-    }
+        // Caution info modal
+        if (interaction.customId.startsWith('system_edit_caution_modal_')) {
+            if (!system.caution) system.caution = {};
 
+            const cautionType = interaction.fields.getTextInputValue('caution_type');
+            const cautionDetail = interaction.fields.getTextInputValue('caution_detail');
+            const triggerNames = interaction.fields.getTextInputValue('trigger_names');
+
+            system.caution.c_type = cautionType || undefined;
+            system.caution.detail = cautionDetail || undefined;
+
+            if (triggerNames) {
+                system.caution.triggers = utils.parseCommaSeparated(triggerNames).map(name => ({ name }));
+            } else {
+                system.caution.triggers = [];
+            }
+
+            await system.save();
+        }
+
+        // Proxy layout modals (alter, state, group)
+        if (interaction.customId.startsWith('system_edit_proxy_layout_')) {
+            if (!system.proxy) system.proxy = {};
+            if (!system.proxy.layout || typeof system.proxy.layout === 'string') {
+                // Convert from legacy string format to object format
+                const oldLayout = typeof system.proxy.layout === 'string' ? system.proxy.layout : '';
+                system.proxy.layout = {
+                    alter: oldLayout,
+                    state: oldLayout,
+                    group: oldLayout
+                };
+            }
+
+            const layout = interaction.fields.getTextInputValue('layout');
+
+            if (interaction.customId.includes('_alter_modal_')) {
+                system.proxy.layout.alter = layout || '';
+            } else if (interaction.customId.includes('_state_modal_')) {
+                system.proxy.layout.state = layout || '';
+            } else if (interaction.customId.includes('_group_modal_')) {
+                system.proxy.layout.group = layout || '';
+            }
+
+            await system.save();
+
+            // Return to proxy settings interface
+            session.id = sessionId;
+            const proxyEmbed = buildProxySettingsEmbed(system);
+            const proxyComponents = buildProxySettingsComponents(sessionId);
+            return await interaction.update({
+                content: '✅ Layout saved!',
+                embeds: [proxyEmbed],
+                components: proxyComponents
+            });
+        }
+
+        // Proxy style modal
+        if (interaction.customId.startsWith('system_edit_proxy_style_modal_')) {
+            if (!system.proxy) system.proxy = {};
+
+            const style = interaction.fields.getTextInputValue('proxy_style')?.toLowerCase()?.trim();
+            const onBreak = interaction.fields.getTextInputValue('proxy_break');
+
+            // Validate proxy style
+            const validStyles = ['off', 'last', 'front'];
+            if (validStyles.includes(style)) {
+                system.proxy.style = style;
+            } else if (style) {
+                // Check if it's an entity name (specify mode)
+                const { entity, type } = await findEntityByNameForSystem(style, system);
+                if (entity) {
+                    system.proxy.style = entity.name?.indexable || style;
+                } else {
+                    // Invalid entity name, show warning
+                    system.proxy.break = onBreak?.toLowerCase() === 'yes';
+                    await system.save();
+
+                    session.id = sessionId;
+                    const proxyEmbed = buildProxySettingsEmbed(system);
+                    const proxyComponents = buildProxySettingsComponents(sessionId);
+                    return await interaction.update({
+                        content: `⚠️ Could not find an alter/state/group named "${style}". Proxy style was not changed.\n\nValid options: \`off\`, \`last\`, \`front\`, or an entity's indexable name.`,
+                        embeds: [proxyEmbed],
+                        components: proxyComponents
+                    });
+                }
+            } else {
+                system.proxy.style = 'off';
+            }
+
+            system.proxy.break = onBreak?.toLowerCase() === 'yes';
+
+            await system.save();
+
+            // Return to proxy settings interface
+            session.id = sessionId;
+            const proxyEmbed = buildProxySettingsEmbed(system);
+            const proxyComponents = buildProxySettingsComponents(sessionId);
+            return await interaction.update({
+                content: '✅ Settings saved!',
+                embeds: [proxyEmbed],
+                components: proxyComponents
+            });
+        }
+
+        // Front info modal
+        if (interaction.customId.startsWith('system_edit_front_modal_')) {
+            if (!system.front) system.front = {};
+
+            const status = interaction.fields.getTextInputValue('front_status');
+            const caution = interaction.fields.getTextInputValue('front_caution');
+            const battery = interaction.fields.getTextInputValue('social_battery');
+
+            system.front.status = status || undefined;
+            system.front.caution = caution || undefined;
+
+            if (battery) {
+                const batteryNum = parseInt(battery);
+                if (!isNaN(batteryNum) && batteryNum >= 0 && batteryNum <= 100) {
+                    system.battery = batteryNum;
+                }
+            } else {
+                system.battery = undefined;
+            }
+
+            await system.save();
+        }
+    }
     // Return to edit interface for edit modals
     if (interaction.customId.includes('_edit_') && !interaction.customId.includes('settings') && !interaction.customId.includes('proxy_layout') && !interaction.customId.includes('proxy_style')) {
         session.id = sessionId;
@@ -2159,12 +2163,12 @@ function buildProxySettingsEmbed(system) {
                 name: '⚙️ Proxy Style',
                 value: system.proxy?.style || 'off',
                 inline: true
-            },
+            }, /*
             {
-                name: '🛑 On Break',
+                name: '🛑 Break',
                 value: system.proxy?.break ? 'Yes' : 'No',
                 inline: true
-            }
+            }*/ //This use of break is incorrect, it needs to be labeled as a break when a proxy is stopped
         );
 }
 
@@ -2191,7 +2195,7 @@ function buildProxySettingsComponents(sessionId) {
                 .setEmoji('👥'),
             new StringSelectMenuOptionBuilder()
                 .setLabel('Proxy Style & Break')
-                .setDescription('Edit auto-proxy style and break status')
+                .setDescription('Edit auto-proxy style and break patterns') //again error with break
                 .setValue('style_break')
                 .setEmoji('⚙️')
         );
