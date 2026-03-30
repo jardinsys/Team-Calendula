@@ -240,7 +240,7 @@ async function getOrCreateUserAndSystem(context) {
     let isNew = false;
 
     if (!user) {
-        user, system = createNewUserAndSystem(discordId);
+        ({ user, system } = await createNewUserAndSystem(discordId));
         isNew = true;
     }
 
@@ -265,7 +265,7 @@ async function getOrCreateUser(context) {
     let isNew = false;
 
     if (!user) {
-        user = createNewUser(discordId);
+        user = await createNewUser(discordId);
         isNew = true;
     }
 
@@ -573,7 +573,7 @@ function getDisplayName(entity, closedCharAllowed = true) {
     if (!closedCharAllowed && entity.name?.closedNameDisplay) {
         return entity.name.closedNameDisplay;
     }
-    return entity.name?.display || entity.name?.indexable || false;
+    return entity.name?.display || entity.name?.indexable || '';
 }
 
 /**

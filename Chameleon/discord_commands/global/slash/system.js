@@ -38,9 +38,9 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('system')
         .setDescription('Manage your system')
-        .addSubcommand(sub => sub
+        /*.addSubcommand(sub => sub
             .setName('menu')
-            .setDescription('Open the system management menu'))
+            .setDescription('Open the system management menu'))*/
         .addSubcommand(sub => sub
             .setName('show')
             .setDescription('Show system details')
@@ -50,17 +50,12 @@ module.exports = {
             .addStringOption(opt => opt
                 .setName('userid')
                 .setDescription('Discord User ID (for users outside the server)')))
-        /*.addSubcommand(sub => sub // Delete start
-            .setName('edit')
-            .setDescription('Edit your system'))
-        .addSubcommand(sub => sub
-            .setName('settings')
-            .setDescription('Open system settings'))*/ // Delete end
         .addSubcommand(sub => sub
             .setName('manage')
             .setDescription('Edit system information or Settings')
-            .setStringOption(opt => opt
+            .addStringOption(opt => opt
                 .setName('action')
+                .setDescription('Choose what to manage')
                 .setRequired(true)
                 .addChoices(
                     { name: 'Edit - Modify system information', value: 'edit' },
@@ -86,11 +81,9 @@ module.exports = {
 
         // Route to appropriate handler
         const handlers = {
-            menu: handleMenu,
+            //menu: handleMenu,
             show: handleShow,
             manage: handleManage
-            //edit: handleEdit,
-            //settings: handleSettings
         };
 
         await handlers[subcommand](interaction, user, system);
@@ -197,8 +190,9 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
 
     // Battery/Social Battery
     if (system.battery !== undefined && system.battery !== null) {
+        emoji = system.battery >= 40 ? '🔋' : '🪫';
         embed.addFields({
-            name: '🔋 Social Battery',
+            name: `${emoji} Social Battery`,
             value: `${system.battery}%`,
             inline: true
         });
@@ -593,7 +587,7 @@ function buildConditionsInterface(system, session) {
 // COMMAND HANDLERS
 // ============================================
 
-// Handle /system menu
+/*// Handle /system menu
 async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
 
@@ -621,7 +615,7 @@ async function handleMenu(interaction, user, system) {
     );
 
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
-}
+}*/
 
 // Handle /system show
 async function handleShow(interaction, currentUser, currentSystem) {
@@ -685,7 +679,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         isOwner
     });
 
-    // Only show action buttons if owner
+    /*// Only show action buttons if owner
     const buttons = isOwner ? [
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -701,38 +695,37 @@ async function handleShow(interaction, currentUser, currentSystem) {
         )
     ] : [];
 
-    await interaction.reply({ embeds: [embed], components: buttons, ephemeral: true });
+    await interaction.reply({ embeds: [embed], components: buttons, ephemeral: true }); */
+
+    await interaction.reply({ embeds: [embed], ephemeral: false });
 }
 
-// Handle /system edit
-async function handleEdit(interaction, user, system) {
-    // Create session
+async function handleManage(interaction, user, system) {
     const sessionId = utils.generateSessionId(interaction.user.id);
-    utils.setSession(sessionId, {
-        type: 'edit',
-        systemId: system._id,
-        userId: user._id,
-        mode: null,
-        syncWithDiscord: system.syncWithApps?.discord || true
-    });
+    const action = interaction.options.getString('action');
 
-    // Show sync confirmation
-    const { embed, buttons } = utils.buildSyncConfirmation('system', utils.getDisplayName(system), sessionId, 'edit');
-    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
-}
+    if (action === 'edit') {
+        utils.setSession(sessionId, {
+            type: 'edit',
+            systemId: system._id,
+            userId: user._id,
+            mode: null,
+            syncWithDiscord: system.syncWithApps?.discord || true
+        });
 
-// Handle /system settings
-async function handleSettings(interaction, user, system) {
-    // Create session
-    const sessionId = utils.generateSessionId(interaction.user.id);
-    utils.setSession(sessionId, {
-        type: 'settings',
-        systemId: system._id,
-        userId: user._id
-    });
+        const { embed, buttons } = utils.buildSyncConfirmation('system', utils.getDisplayName(system), sessionId, 'edit');
+        await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+    }
+    else if (action === 'settings') {
+        utils.setSession(sessionId, {
+            type: 'settings',
+            systemId: system._id,
+            userId: user._id
+        });
 
-    const { embed, components } = buildSettingsInterface(system, { id: sessionId });
-    await interaction.reply({ embeds: [embed], components, ephemeral: true });
+        const { embed, components } = buildSettingsInterface(system, { id: sessionId });
+        await interaction.reply({ embeds: [embed], components, ephemeral: true });
+    }
 }
 
 // ============================================
@@ -758,11 +751,13 @@ async function handleButtonInteraction(interaction) {
         }
 
         if (customId === 'system_menu_edit') {
-            return await handleEdit(interaction, user, system);
+            const mockInteractionEdit = { ...interaction, options: { getString: () => 'edit' } };
+            return await handleManage(mockInteractionEdit, user, system);
         }
 
         if (customId === 'system_menu_settings') {
-            return await handleSettings(interaction, user, system);
+            const mockInteractionSettings = { ...interaction, options: { getString: () => 'settings' } };
+            return await handleManage(mockInteractionSettings, user, system);
         }
     }
 
