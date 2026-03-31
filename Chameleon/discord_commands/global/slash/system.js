@@ -738,7 +738,7 @@ async function handleButtonInteraction(interaction) {
     // Handle new user flow buttons
     if (customId.startsWith('new_user_')) return await utils.handleNewUserButton(interaction, 'system');
 
-    if (customId.startsWith('system_menu_')) {
+    /*if (customId.startsWith('system_menu_')) {
         let { user, system } = await utils.getOrCreateUserAndSystem(interaction);
 
         // Handle menu buttons
@@ -759,7 +759,7 @@ async function handleButtonInteraction(interaction) {
             const mockInteractionSettings = { ...interaction, options: { getString: () => 'settings' } };
             return await handleManage(mockInteractionSettings, user, system);
         }
-    }
+    }*/
 
     // Extract session ID from custom ID
     const sessionId = utils.extractSessionId(customId);

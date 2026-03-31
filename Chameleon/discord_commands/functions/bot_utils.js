@@ -52,48 +52,23 @@ const activeSessions = new Map();
 // SESSION MANAGEMENT
 // ============================================
 
-/**
- * Generate a unique session ID
- * @param {string} userId - Discord user ID
- * @returns {string} Unique session ID
- */
-function generateSessionId(userId) {
-    return `${userId}_${Date.now()}`;
-}
+// Generate a unique session ID
+function generateSessionId(userId) { return `${userId}_${Date.now()}`; }
 
-/**
- * Get a session by ID
- * @param {string} sessionId 
- * @returns {Object|undefined}
- */
-function getSession(sessionId) {
-    return activeSessions.get(sessionId);
-}
+// Get a session by ID
+function getSession(sessionId) { return activeSessions.get(sessionId); }
 
-/**
- * Set/update a session
- * @param {string} sessionId 
- * @param {Object} data 
- */
+// Set/update a session
 function setSession(sessionId, data) {
     activeSessions.set(sessionId, data);
     // Auto-cleanup after 15 minutes
     setTimeout(() => activeSessions.delete(sessionId), 15 * 60 * 1000);
 }
 
-/**
- * Delete a session
- * @param {string} sessionId 
- */
-function deleteSession(sessionId) {
-    activeSessions.delete(sessionId);
-}
+// Delete a session
+function deleteSession(sessionId) { activeSessions.delete(sessionId); }
 
-/**
- * Extract session ID from a custom ID string
- * @param {string} customId - Button/modal custom ID
- * @returns {string} Session ID
- */
+// Extract session ID from a custom ID string
 function extractSessionId(customId) {
     const parts = customId.split('_');
     return parts.slice(-2).join('_');
@@ -103,15 +78,14 @@ function extractSessionId(customId) {
 // PREFIX COMMAND ARGUMENT PARSING
 // ============================================
 
-/**
- * Parse prefix command arguments into structured data
+/* Parse prefix command arguments into structured data
  * Supports: key:value pairs, flags (-flag), quoted strings, and positional args
  * ALL KEYS AND FLAGS ARE CASE-INSENSITIVE
  * 
  * Examples:
- *   "luna name:Luna color:#FF0000" -> { _positional: ['luna'], name: 'Luna', color: '#FF0000' }
- *   "luna -private" -> { _positional: ['luna'], private: true }
- *   'luna description:"A friendly alter"' -> { _positional: ['luna'], description: 'A friendly alter' }
+ *   "bird name:bird color:#FF0000" -> { _positional: ['bird'], name: 'bird', color: '#FF0000' }
+ *   "bird -private" -> { _positional: ['bird'], private: true }
+ *   'bird description:"A friendly alter"' -> { _positional: ['bird'], description: 'A friendly alter' }
  * 
  * @param {string[]} args - Array of arguments from message.content.split(' ')
  * @returns {Object} Parsed arguments object
@@ -188,8 +162,7 @@ function parseArgs(args) {
     return result;
 }
 
-/**
- * Extract target system from args (handles @mention, user ID, or defaults to self)
+/* Extract target system from args (handles @mention, user ID, or defaults to self)
  * @param {Message} message - Discord message object
  * @param {Object} parsedArgs - Parsed arguments
  * @returns {Promise<{user: User, system: System, targetUserId: string}|null>}
@@ -225,8 +198,7 @@ async function resolveTargetSystem(message, parsedArgs) {
 // USER AND SYSTEM MANAGEMENT
 // ============================================
 
-/**
- * Get or create user and system for an interaction or message
+/* Get or create user and system for an interaction or message
  * Works with both slash commands (interaction) and prefix commands (message)
  * @param {Interaction|Message} context - Discord interaction or message
  * @returns {Promise<{user: User, system: System, isNew: boolean}>}
@@ -251,16 +223,32 @@ async function getOrCreateUserAndSystem(context) {
     return { user, system, isNew };
 }
 
-/**
- * Get or create user for an interaction or message
- * Works with both slash commands (interaction) and prefix commands (message)
- * @param {Interaction|Message} context - Discord interaction or message
- * @returns {Promise<{user: User, isNew: boolean}>}
- */
-async function getOrCreateUser(context) {
+async function getUser(context) {
+    const discordId = context.user?.id || context.author?.id;
+    let user = await User.findOne({ discordID: discordId });
+    return user;
+}
+
+async function getSystem(context) {
     // Handle both interaction and message contexts
     const discordId = context.user?.id || context.author?.id;
 
+    let user = await User.findOne({ discordID: discordId });
+    let system = null;
+
+    if (!user) return null;
+
+    if (user.systemID) {
+        system = await System.findById(user.systemID);
+    }
+
+    return { user, system, isNew };
+}
+
+// Get or create user for an interaction or message
+async function getOrCreateUser(context) {
+    // Handle both interaction and message contexts
+    const discordId = context.user?.id || context.author?.id;
     let user = await User.findOne({ discordID: discordId });
     let isNew = false;
 
@@ -272,11 +260,7 @@ async function getOrCreateUser(context) {
     return { user, isNew };
 }
 
-/**
- * Create a new user and system
- * @param {string} discordId - Discord user ID
- * @returns {Promise<{user: User, system: System}>}
- */
+// Create a new user and system
 async function createNewUserAndSystem(discordId) {
     const user = new User({
         _id: new mongoose.Types.ObjectId(),
@@ -297,11 +281,23 @@ async function createNewUserAndSystem(discordId) {
     return { user, system };
 }
 
-/**
- * Create a new user
- * @param {string} discordId - Discord user ID
- * @returns {Promise<{user: User}>}
- */
+async function createSystem(discordId) {
+    let user = await User.findOne({ discordID: discordId });
+
+    const system = new System({
+        users: [user._id],
+        metadata: { joinedAt: new Date() }
+    });
+
+    user.systemID = system._id;
+
+    await user.save();
+    await system.save();
+
+    return { user, system };
+}
+
+// Create a new user
 async function createNewUser(discordId) {
     const user = new User({
         _id: new mongoose.Types.ObjectId(),
@@ -314,8 +310,7 @@ async function createNewUser(discordId) {
     return user;
 }
 
-/**
- * Handle new user flow for slash commands
+/* Handle new user flow for slash commands
  * @param {Interaction} interaction 
  * @param {string} entityType - 'system', 'alter', 'state', or 'group'
  */
@@ -342,10 +337,7 @@ async function handleNewUserFlow(interaction, entityType) { //Change this later 
     await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
 }
 
-/**
- * Handle new user button interaction
- * @param {Interaction} interaction 
- */
+// Handle new user button interaction
 async function handleNewUserButton(interaction) {
     const customId = interaction.customId;
 
@@ -370,8 +362,7 @@ async function handleNewUserButton(interaction) {
     }
 }
 
-/**
- * Require that the user has a system, send error if not
+/* Require that the user has a system, send error if not
  * Works with both interactions and messages
  * @param {Interaction|Message} context - Discord interaction or message
  * @param {System} system - System object
@@ -398,17 +389,12 @@ async function requireSystem(context, system) {
 // ENTITY SEARCH (CASE-INSENSITIVE)
 // ============================================
 
-/**
- * Escape special regex characters
- * @param {string} str 
- * @returns {string}
- */
+// Escape special regex characters
 function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/**
- * Find an entity (alter/state/group) by name or ID (case-insensitive)
+/* Find an entity (alter/state/group) by name or ID (case-insensitive)
  * @param {string} identifier - Name, alias, or ID
  * @param {System} system - System to search in
  * @param {string} entityType - 'alter', 'state', 'group', or 'any'
@@ -448,8 +434,7 @@ async function findEntity(identifier, system, entityType = 'any') {
     return null;
 }
 
-/**
- * Find an alter by name (case-insensitive) - backward compatibility
+/* Find an alter by name (case-insensitive) - backward compatibility
  * @param {string} name - Name to search for
  * @param {System} system - System to search in
  * @returns {Promise<Alter|null>}
@@ -459,8 +444,7 @@ async function findAlterByName(name, system) {
     return result?.entity || null;
 }
 
-/**
- * Find a state by name (case-insensitive) - backward compatibility
+/* Find a state by name (case-insensitive) - backward compatibility
  * @param {string} name - Name to search for
  * @param {System} system - System to search in
  * @returns {Promise<State|null>}
@@ -470,8 +454,7 @@ async function findStateByName(name, system) {
     return result?.entity || null;
 }
 
-/**
- * Find a group by name (case-insensitive) - backward compatibility
+/* Find a group by name (case-insensitive) - backward compatibility
  * @param {string} name - Name to search for
  * @param {System} system - System to search in
  * @returns {Promise<Group|null>}
@@ -481,8 +464,7 @@ async function findGroupByName(name, system) {
     return result?.entity || null;
 }
 
-/**
- * Find multiple entities by names/IDs
+/* Find multiple entities by names/IDs
  * @param {string[]} identifiers - Array of names, aliases, or IDs
  * @param {System} system - System to search in
  * @returns {Promise<{found: Array<{entity: Object, type: string}>, notFound: string[]}>}
@@ -507,8 +489,7 @@ async function findMultipleEntities(identifiers, system) {
 // PRIVACY AND VISIBILITY
 // ============================================
 
-/**
- * Get the privacy bucket for a viewer
+/* Get the privacy bucket for a viewer
  * @param {System} system - The system being viewed
  * @param {string} viewerDiscordId - The viewer's Discord ID
  * @param {string} viewerFriendId - The viewer's Friend ID (optional)
@@ -527,8 +508,7 @@ function getPrivacyBucket(system, viewerDiscordId, viewerFriendId) {
     return system.privacyBuckets.find(b => b.name === 'Default') || null;
 }
 
-/**
- * Check if an entity should be visible based on privacy settings
+/* Check if an entity should be visible based on privacy settings
  * @param {Object} entity - The entity (alter/state/group) to check
  * @param {PrivacyBucket} privacyBucket - The viewer's privacy bucket
  * @param {boolean} isOwner - Whether the viewer is the owner
@@ -545,8 +525,7 @@ function shouldShowEntity(entity, privacyBucket, isOwner, showFullList = false) 
     return true;
 }
 
-/**
- * Check if user is blocked by another user
+/* Check if user is blocked by another user
  * @param {User} targetUser - The user being viewed
  * @param {string} viewerDiscordId - The viewer's Discord ID
  * @param {string} viewerFriendId - The viewer's Friend ID
@@ -563,62 +542,44 @@ function isBlocked(targetUser, viewerDiscordId, viewerFriendId) {
 // DISPLAY HELPERS
 // ============================================
 
-/**
- * Get the display name for an entity, respecting closedChar settings
+/* Get the display name for an entity, respecting closedChar settings
  * @param {Object} entity - Entity with name property
  * @param {boolean} closedCharAllowed - Whether closed characters are allowed
  * @returns {string}
  */
 function getDisplayName(entity, closedCharAllowed = true) {
-    if (!closedCharAllowed && entity.name?.closedNameDisplay) {
-        return entity.name.closedNameDisplay;
-    }
+    if (!closedCharAllowed && entity.name?.closedNameDisplay) return entity.name.closedNameDisplay;
     return entity.name?.display || entity.name?.indexable || '';
 }
 
-/**
- * Get a property from discord element or fall back to base property
+/* Get a property from discord element or fall back to base property
  * @param {Object} entity - The entity
  * @param {string} property - Property name to get
  * @returns {*}
  */
 function getDiscordOrDefault(entity, property) {
     const discordValue = entity.discord?.[property];
-    if (discordValue !== undefined && discordValue !== null && discordValue !== '') {
-        return discordValue;
-    }
+    if (discordValue !== undefined && discordValue !== null && discordValue !== '') return discordValue;
     return entity[property];
 }
 
-/**
- * Check if closedCharAllowed for a guild
- * @param {Guild} guild - Discord guild object
- * @returns {Promise<boolean>}
- */
+// Check if closedCharAllowed for a guild
 async function checkClosedCharAllowed(guild) {
     if (!guild) return true;
     const guildSettings = await Guild.findOne({ id: guild.id });
     return guildSettings?.settings?.closedCharAllowed !== false;
 }
 
-/**
- * Validate an indexable name
- * @param {string} name 
- * @returns {boolean}
- */
-function isValidIndexableName(name) {
-    return INDEXABLE_NAME_REGEX.test(name);
-}
+// Validate an indexable name
+function isValidIndexableName(name) { return INDEXABLE_NAME_REGEX.test(name); }
 
 // ============================================
 // PREFIX COMMAND RESPONSE HELPERS
+//  * @param {Message} message - Discord message to reply to
+//  * @param {string} text - message text
 // ============================================
 
-/**
- * Send a quick success message (for prefix commands)
- * @param {Message} message - Discord message to reply to
- * @param {string} text - Success message text
- */
+// Success Message
 async function success(message, text) {
     return message.reply({
         embeds: [new EmbedBuilder()
@@ -627,11 +588,7 @@ async function success(message, text) {
     });
 }
 
-/**
- * Send a quick error message (for prefix commands)
- * @param {Message} message - Discord message to reply to
- * @param {string} text - Error message text
- */
+// Error Message
 async function error(message, text) {
     return message.reply({
         embeds: [new EmbedBuilder()
@@ -640,11 +597,7 @@ async function error(message, text) {
     });
 }
 
-/**
- * Send an info message (for prefix commands)
- * @param {Message} message - Discord message to reply to
- * @param {string} text - Info message text
- */
+// Info
 async function info(message, text) {
     return message.reply({
         embeds: [new EmbedBuilder()
@@ -653,8 +606,7 @@ async function info(message, text) {
     });
 }
 
-/**
- * Build a help embed for a command
+/* Build a help embed for a command
  * @param {string} commandName - Name of the command
  * @param {string} description - Command description
  * @param {Array<{usage: string, description: string}>} subcommands - List of subcommands
@@ -680,18 +632,13 @@ function buildHelpEmbed(commandName, description, subcommands) {
 // FORMATTING UTILITIES
 // ============================================
 
-/**
- * Capitalize first letter of a string
- * @param {string} str 
- * @returns {string}
- */
+// Capitalize
 function capitalize(str) {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-/**
- * Format a field value, handling empty/null values
+/* Format a field value, handling empty/null values
  * @param {*} value - Value to format
  * @param {string} defaultText - Default text if value is empty
  * @returns {string}
@@ -706,8 +653,7 @@ function formatValue(value, defaultText = '*Not set*') {
     return String(value);
 }
 
-/**
- * Format a date for display
+/* Format a date for display
  * @param {Date|string} date 
  * @returns {string}
  */
@@ -717,8 +663,7 @@ function formatDate(date) {
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-/**
- * Format proxies for display (with code formatting)
+/* Format proxies for display (with code formatting)
  * @param {string[]} proxies 
  * @returns {string}
  */
@@ -727,8 +672,7 @@ function formatProxies(proxies) {
     return proxies.map(p => `\`${p}\``).join(', ');
 }
 
-/**
- * Parse comma-separated string into array
+/* Parse comma-separated string into array
  * @param {string} str 
  * @returns {string[]}
  */
@@ -740,8 +684,7 @@ function parseCommaSeparated(str) {
 // Alias for parseCommaSeparated
 const parseList = parseCommaSeparated;
 
-/**
- * Parse newline-separated string into array
+/* Parse newline-separated string into array
  * @param {string} str 
  * @returns {string[]}
  */
@@ -757,21 +700,13 @@ const parseNewlineList = parseNewlineSeparated;
 // VALIDATION HELPERS
 // ============================================
 
-/**
- * Check if a string is a valid hex color
- * @param {string} str 
- * @returns {boolean}
- */
+// Check if a string is a valid hex color
 function isValidColor(str) {
     if (!str) return false;
     return /^#?[0-9A-Fa-f]{6}$/.test(str);
 }
 
-/**
- * Normalize a hex color (ensure # prefix, uppercase)
- * @param {string} color 
- * @returns {string|null}
- */
+// Normalize a hex color (ensure # prefix, uppercase)
 function normalizeColor(color) {
     if (!color) return null;
     color = color.replace('#', '');
@@ -785,8 +720,7 @@ function normalizeColor(color) {
 // LIST BUILDING HELPERS
 // ============================================
 
-/**
- * Build pagination buttons for lists
+/* Build pagination buttons for lists
  * @param {number} totalItems - Total number of items
  * @param {number} currentPage - Current page (0-indexed)
  * @param {boolean} isOwner - Whether viewer is owner
@@ -828,8 +762,7 @@ function buildListButtons(totalItems, currentPage, isOwner, showFullList, sessio
     return rows;
 }
 
-/**
- * Get items for current page
+/* Get items for current page
  * @param {Array} items - All items
  * @param {number} page - Current page (0-indexed)
  * @returns {Array}
@@ -839,21 +772,14 @@ function getPageItems(items, page) {
     return items.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 }
 
-/**
- * Calculate total pages
- * @param {number} totalItems 
- * @returns {number}
- */
-function getTotalPages(totalItems) {
-    return Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
-}
+// Calculate total pages
+function getTotalPages(totalItems) { return Math.ceil(totalItems / ITEMS_PER_PAGE) || 1; }
 
 // ============================================
 // SYNC HELPERS
 // ============================================
 
-/**
- * Build the sync confirmation embed and buttons
+/* Build the sync confirmation embed and buttons
  * @param {string} entityType - 'alter', 'state', 'group', or 'system'
  * @param {string} entityName - Name of the entity
  * @param {string} sessionId - Session ID
@@ -889,8 +815,7 @@ function buildSyncConfirmation(entityType, entityName, sessionId, action = 'edit
 // EDIT HELPERS
 // ============================================
 
-/**
- * Get the correct target for editing based on current mode
+/* Get the correct target for editing based on current mode
  * @param {Object} entity - The entity being edited
  * @param {Object} session - Session data containing mode
  * @returns {Object}
@@ -906,8 +831,7 @@ function getEditTarget(entity, session) {
     return entity.discord || entity;
 }
 
-/**
- * Update an entity property based on current mode
+/* Update an entity property based on current mode
  * @param {Object} entity - The entity to update
  * @param {Object} session - Session data
  * @param {string} property - Property path to update
@@ -937,8 +861,7 @@ function updateEntityProperty(entity, session, property, value) {
 // CONDITION MANAGEMENT
 // ============================================
 
-/**
- * Ensure a condition exists in the system
+/* Ensure a condition exists in the system
  * @param {System} system - System to update
  * @param {string} entityType - 'alter', 'state', or 'group'
  * @param {string} conditionName - Name of the condition
@@ -967,8 +890,7 @@ async function ensureConditionExists(system, entityType, conditionName) {
 // PROXY VALIDATION
 // ============================================
 
-/**
- * Check if a proxy pattern already exists in the system
+/* Check if a proxy pattern already exists in the system
  * @param {string} proxy - The proxy pattern to check
  * @param {System} system - The system to check
  * @param {string} excludeEntityId - Entity ID to exclude from check
@@ -1007,8 +929,7 @@ async function checkProxyExists(proxy, system, excludeEntityId = null) {
     return { exists: false, entity: null, type: null };
 }
 
-/**
- * Validate proxy patterns
+/* Validate proxy patterns
  * @param {string[]} proxies - Array of proxy patterns
  * @returns {{valid: boolean, errors: string[]}}
  */
@@ -1027,8 +948,7 @@ function validateProxies(proxies) {
     return { valid: errors.length === 0, errors };
 }
 
-/**
- * Get proxy layout help text
+/* Get proxy layout help text
  * @returns {string}
  */
 function getProxyLayoutHelp() {
@@ -1047,8 +967,7 @@ function getProxyLayoutHelp() {
 You can mix signoff types! E.g., \`{tag1}{a-sign1}{name}{g-sign1}\``;
 }
 
-/**
- * Get proxy style options for select menu
+/* Get proxy style options for select menu
  * @returns {Array<{label: string, value: string, description: string}>}
  */
 function getProxyStyleOptions() {

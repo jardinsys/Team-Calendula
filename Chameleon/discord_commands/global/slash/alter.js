@@ -61,10 +61,11 @@ module.exports = {
                 .setName('user')
                 .setDescription('View another user\'s alters')
                 .setRequired(false))
-            .addBooleanOption(opt => opt
+            /*.addBooleanOption(opt => opt
                 .setName('show_all')
                 .setDescription('Show hidden alters (list only)')
-                .setRequired(false)))
+                .setRequired(false))*/
+            )
 
         // MANAGE subcommand
         .addSubcommand(sub => sub
@@ -75,32 +76,31 @@ module.exports = {
                 .setDescription('What to do')
                 .setRequired(true)
                 .addChoices(
-                    { name: 'New - Create new alter', value: 'new' },
-                    { name: 'Edit - Modify existing alter', value: 'edit' },
+                    { name: 'New - Create new alter profile', value: 'new' },
+                    { name: 'Edit - Modify info for existing alter', value: 'edit' },
+                    { name: 'Settings - Edit settings for existing alter'},
                     { name: 'Dormant - Mark alter as dormant', value: 'dormant' },
                     { name: 'Delete - Remove alter permanently', value: 'delete' }
                 ))
             .addStringOption(opt => opt
                 .setName('alter_name')
-                .setDescription('Alter name (required for edit/dormant/delete)')
-                .setRequired(false)))
+                .setDescription('Give Alter name (indexable version preferred)')
+                .setRequired(true)))
 
         // SETTINGS subcommand
-        .addSubcommand(sub => sub
+        /*.addSubcommand(sub => sub
             .setName('settings')
             .setDescription('Configure alter settings')
             .addStringOption(opt => opt
                 .setName('alter_name')
                 .setDescription('Alter name')
-                .setRequired(true))),
+                .setRequired(true)))*/,
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const { user, system, isNew } = await utils.getOrCreateUserAndSystem(interaction);
 
-        if (isNew) {
-            return await utils.handleNewUserFlow(interaction, 'alter');
-        }
+        if (isNew) return await utils.handleNewUserFlow(interaction, 'alter');
 
         if (!system && subcommand !== 'view') {
             return await interaction.reply({
@@ -112,25 +112,18 @@ module.exports = {
         // Route based on subcommand and action
         if (subcommand === 'view') {
             const action = interaction.options.getString('action');
-            if (action === 'list') {
-                return await handleShowList(interaction, user, system);
-            } else if (action === 'show') {
-                return await handleShow(interaction, user, system);
-            }
+            if      (action === 'list') return await handleShowList(interaction, user, system);
+            else if (action === 'show') return await handleShow(interaction, user, system);
         } else if (subcommand === 'manage') {
             const action = interaction.options.getString('action');
-            if (action === 'new') {
-                return await handleNew(interaction, user, system);
-            } else if (action === 'edit') {
-                return await handleEdit(interaction, user, system);
-            } else if (action === 'dormant') {
-                return await handleDormant(interaction, user, system);
-            } else if (action === 'delete') {
-                return await handleDelete(interaction, user, system);
-            }
-        } else if (subcommand === 'settings') {
+            if      (action === 'new')      return await handleNew(interaction, user, system);
+            else if (action === 'edit')     return await handleEdit(interaction, user, system);
+            else if (action === 'settings') return await handleSettings(interaction, user, system);
+            else if (action === 'dormant')  return await handleDormant(interaction, user, system);
+            else if (action === 'delete')   return await handleDelete(interaction, user, system);
+        } /*else if (subcommand === 'settings') {
             return await handleSettings(interaction, user, system);
-        }
+        }*/
     },
 
     handleButtonInteraction,
@@ -330,7 +323,7 @@ function buildEditInterface(alter, session, system = null) {
 // COMMAND HANDLERS
 // ============================================
 
-async function handleMenu(interaction, user, system) {
+/*async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
         .setTitle('🎭 Alter Management')
         .setDescription('Select a button to start managing your alters.')
@@ -346,7 +339,7 @@ async function handleMenu(interaction, user, system) {
     );
 
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
-}
+}*/
 
 async function handleShowList(interaction, currentUser, currentSystem) {
     const targetUser = interaction.options.getUser('user');
@@ -529,11 +522,11 @@ async function handleEdit(interaction, user, system) {
     if (!alter || alter.systemID !== system._id.toString()) {
         return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
     }
-/*
+
     if (alter.systemID !== system._id.toString()) {
         return await interaction.reply({ content: '❌ This alter does not belong to your system.', ephemeral: true });
     }
-*/
+
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
         type: 'edit',
