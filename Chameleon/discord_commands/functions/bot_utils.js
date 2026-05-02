@@ -216,9 +216,7 @@ async function getOrCreateUserAndSystem(context) {
         isNew = true;
     }
 
-    if (user.systemID && !isNew) {
-        system = await System.findById(user.systemID);
-    }
+    if (user.systemID && !isNew) system = await System.findById(user.systemID);
 
     return { user, system, isNew };
 }
@@ -238,10 +236,8 @@ async function getSystem(context) {
 
     if (!user) return null;
 
-    if (user.systemID) {
-        system = await System.findById(user.systemID);
-    }
-
+    if (user.systemID) system = await System.findById(user.systemID);
+    
     return { user, system, isNew };
 }
 
@@ -253,7 +249,7 @@ async function getOrCreateUser(context) {
     let isNew = false;
 
     if (!user) {
-        user = await createNewUser(discordId);
+        user = await createUser(discordId);
         isNew = true;
     }
 
@@ -298,7 +294,7 @@ async function createSystem(discordId) {
 }
 
 // Create a new user
-async function createNewUser(discordId) {
+async function createUser(discordId) {
     const user = new User({
         _id: new mongoose.Types.ObjectId(),
         discordID: discordId,
