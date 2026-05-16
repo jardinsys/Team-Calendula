@@ -22,9 +22,7 @@ const Group = require('../../schemas/group');
 const Guild = require('../../schemas/guild');
 const { PrivacyBucket } = require('../../schemas/settings');
 
-// ============================================
-// CONSTANTS
-// ============================================
+// ==== CONSTANTS ===== 
 
 const ITEMS_PER_PAGE = 10;
 const INDEXABLE_NAME_REGEX = /^[a-zA-Z0-9\-_]+$/;
@@ -45,14 +43,12 @@ const ENTITY_COLORS = {
 const DSM_TYPES = ['DID', 'Amnesia', 'Dereal/Depers', 'OSDD-1A', 'OSDD-1B', 'OSDD-2', 'OSDD-3', 'OSDD-4', 'UDD'];
 const ICD_TYPES = ['P-DID', 'Trance', 'DNSD', 'Possession Trance', 'SDS'];
 
-// Session storage for multi-step interactions
+// Session storage (for multi-step interactions)
 const activeSessions = new Map();
 
-// ============================================
-// SESSION MANAGEMENT
-// ============================================
+// ==== SESSION MANAGEMENT ====
 
-// Generate a unique session ID
+// Generate Session ID
 function generateSessionId(userId) { return `${userId}_${Date.now()}`; }
 
 // Get a session by ID
@@ -74,9 +70,7 @@ function extractSessionId(customId) {
     return parts.slice(-2).join('_');
 }
 
-// ============================================
-// PREFIX COMMAND ARGUMENT PARSING
-// ============================================
+// ==== PREFIX COMMAND ARGUMENT PARSING ====
 
 /* Parse prefix command arguments into structured data
  * Supports: key:value pairs, flags (-flag), quoted strings, and positional args
@@ -85,7 +79,7 @@ function extractSessionId(customId) {
  * Examples:
  *   "bird name:bird color:#FF0000" -> { _positional: ['bird'], name: 'bird', color: '#FF0000' }
  *   "bird -private" -> { _positional: ['bird'], private: true }
- *   'bird description:"A friendly alter"' -> { _positional: ['bird'], description: 'A friendly alter' }
+ *   'bird description:"Our little blue bird"' -> { _positional: ['bird'], description: 'Our little blue bird' }
  * 
  * @param {string[]} args - Array of arguments from message.content.split(' ')
  * @returns {Object} Parsed arguments object
@@ -194,9 +188,7 @@ async function resolveTargetSystem(message, parsedArgs) {
     return { user, system, targetUserId };
 }
 
-// ============================================
-// USER AND SYSTEM MANAGEMENT
-// ============================================
+// ==== USER AND SYSTEM MANAGEMENT ====
 
 /* Get or create user and system for an interaction or message
  * Works with both slash commands (interaction) and prefix commands (message)
@@ -302,7 +294,6 @@ async function createUser(discordId) {
     });
 
     await user.save();
-
     return user;
 }
 
@@ -313,10 +304,10 @@ async function createUser(discordId) {
 async function handleNewUserFlow(interaction, entityType) { //Change this later to have "System"
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.system)
-        .setTitle('👋 Welcome to Systemiser!')
+        .setTitle('Hihi! Welcome to Systemiser! 👋')
         .setDescription(
-            'It looks like you don\'t have a system set up.\n\n' +
-            'If you have/are one, would you like to register yours now?'
+            'It looks like you don\'t have a system set up. 😅\n\n' +
+            'If you need to, would you like to register yours now?'
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -344,14 +335,15 @@ async function handleNewUserButton(interaction) {
             .setColor(ENTITY_COLORS.success)
             .setTitle('✅ System Created!')
             .setDescription(
-                'Your system has been registered!\n\n' +
-                'Use `/system edit` to customize your system\'s profile, or `/alter new` to register an first alter.'
+                'Your system has been registered! 👍\n\n' +
+                'Use `/system edit` to customize your system\'s profile, or `/alter new` to register an first alter.\n'+
+                'If you need any help, feel free to use `/help`'
             );
-
         await interaction.update({ embeds: [embed], components: [] });
+
     } else if (customId.startsWith('new_user_no_system_')) {
         await interaction.update({
-            content: 'No problem! Come back when you\'re ready.',
+            content: 'No problem! Come back when you\'re ready. 💙',
             embeds: [],
             components: []
         });
@@ -369,11 +361,9 @@ async function requireSystem(context, system) {
         const errorMsg = 'You don\'t have a system set up yet. Use `sys!system new` or `/system` to create one.';
 
         // Check if it's an interaction or message
-        if (context.reply && context.author) {
-            // It's a message
+        if (context.reply && context.author) { // It's a message
             await error(context, errorMsg);
-        } else if (context.reply) {
-            // It's an interaction
+        } else if (context.reply) { // It's an interaction
             await context.reply({ content: `❌ ${errorMsg}`, ephemeral: true });
         }
         return false;
@@ -381,14 +371,10 @@ async function requireSystem(context, system) {
     return true;
 }
 
-// ============================================
-// ENTITY SEARCH (CASE-INSENSITIVE)
-// ============================================
+// ==== ENTITY SEARCH (CASE-INSENSITIVE) ====
 
 // Escape special regex characters
-function escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+function escapeRegex(str) { return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 /* Find an entity (alter/state/group) by name or ID (case-insensitive)
  * @param {string} identifier - Name, alias, or ID
@@ -441,8 +427,6 @@ async function findAlterByName(name, system) {
 }
 
 /* Find a state by name (case-insensitive) - backward compatibility
- * @param {string} name - Name to search for
- * @param {System} system - System to search in
  * @returns {Promise<State|null>}
  */
 async function findStateByName(name, system) {
@@ -451,8 +435,6 @@ async function findStateByName(name, system) {
 }
 
 /* Find a group by name (case-insensitive) - backward compatibility
- * @param {string} name - Name to search for
- * @param {System} system - System to search in
  * @returns {Promise<Group|null>}
  */
 async function findGroupByName(name, system) {
@@ -460,7 +442,7 @@ async function findGroupByName(name, system) {
     return result?.entity || null;
 }
 
-/* Find multiple entities by names/IDs
+/* Find as many entities as possible by names/IDs
  * @param {string[]} identifiers - Array of names, aliases, or IDs
  * @param {System} system - System to search in
  * @returns {Promise<{found: Array<{entity: Object, type: string}>, notFound: string[]}>}
@@ -481,9 +463,7 @@ async function findMultipleEntities(identifiers, system) {
     return { found, notFound };
 }
 
-// ============================================
-// PRIVACY AND VISIBILITY
-// ============================================
+// ==== PRIVACY AND VISIBILITY ====
 
 /* Get the privacy bucket for a viewer
  * @param {System} system - The system being viewed
@@ -534,9 +514,7 @@ function isBlocked(targetUser, viewerDiscordId, viewerFriendId) {
     );
 }
 
-// ============================================
-// DISPLAY HELPERS
-// ============================================
+// ==== DISPLAY HELPERS ====
 
 /* Get the display name for an entity, respecting closedChar settings
  * @param {Object} entity - Entity with name property
@@ -624,9 +602,7 @@ function buildHelpEmbed(commandName, description, subcommands) {
     return embed;
 }
 
-// ============================================
-// FORMATTING UTILITIES
-// ============================================
+// ==== FORMATTING UTILITIES ====
 
 // Capitalize
 function capitalize(str) {
@@ -640,12 +616,8 @@ function capitalize(str) {
  * @returns {string}
  */
 function formatValue(value, defaultText = '*Not set*') {
-    if (value === null || value === undefined || value === '') {
-        return defaultText;
-    }
-    if (Array.isArray(value)) {
-        return value.length > 0 ? value.join(', ') : defaultText;
-    }
+    if (value === null || value === undefined || value === '') { return defaultText; }
+    if (Array.isArray(value)) { return value.length > 0 ? value.join(', ') : defaultText; }
     return String(value);
 }
 
@@ -692,9 +664,7 @@ function parseNewlineSeparated(str) {
 // Alias for parseNewlineSeparated
 const parseNewlineList = parseNewlineSeparated;
 
-// ============================================
-// VALIDATION HELPERS
-// ============================================
+// ==== VALIDATION HELPERS (colors for now) ====
 
 // Check if a string is a valid hex color
 function isValidColor(str) {
@@ -707,14 +677,12 @@ function normalizeColor(color) {
     if (!color) return null;
     color = color.replace('#', '');
     if (/^[0-9A-Fa-f]{6}$/.test(color)) {
-        return `#${color.toUpperCase()}`;
+        return `#${color.toLowerCase()}`;
     }
     return null;
 }
 
-// ============================================
-// LIST BUILDING HELPERS
-// ============================================
+// ==== LIST BUILDING HELPERS ====
 
 /* Build pagination buttons for lists
  * @param {number} totalItems - Total number of items
@@ -807,9 +775,7 @@ function buildSyncConfirmation(entityType, entityName, sessionId, action = 'edit
     return { embed, buttons };
 }
 
-// ============================================
-// EDIT HELPERS
-// ============================================
+// ==== EDIT HELPERS ====
 
 /* Get the correct target for editing based on current mode
  * @param {Object} entity - The entity being edited
@@ -817,9 +783,7 @@ function buildSyncConfirmation(entityType, entityName, sessionId, action = 'edit
  * @returns {Object}
  */
 function getEditTarget(entity, session) {
-    if (session?.mode === 'mask') {
-        return entity.mask || entity;
-    }
+    if (session?.mode === 'mask') return entity.mask || entity;
     if (session?.mode === 'server' && session?.serverId) {
         const serverSettings = entity.discord?.server?.find(s => s.id === session.serverId);
         return serverSettings || entity.discord || entity;
@@ -835,27 +799,19 @@ function getEditTarget(entity, session) {
  */
 function updateEntityProperty(entity, session, property, value) {
     const target = session?.mode === 'mask' ? 'mask' : 'discord';
-
-    if (!entity[target]) {
-        entity[target] = {};
-    }
+    if (!entity[target]) entity[target] = {};
 
     const parts = property.split('.');
     let current = entity[target];
 
     for (let i = 0; i < parts.length - 1; i++) {
-        if (!current[parts[i]]) {
-            current[parts[i]] = {};
-        }
+        if (!current[parts[i]]) current[parts[i]] = {};
         current = current[parts[i]];
     }
-
     current[parts[parts.length - 1]] = value;
 }
 
-// ============================================
-// CONDITION MANAGEMENT
-// ============================================
+// ==== CONDITION MANAGEMENT ====
 
 /* Ensure a condition exists in the system
  * @param {System} system - System to update
@@ -868,9 +824,8 @@ async function ensureConditionExists(system, entityType, conditionName) {
 
     const exists = conditions.some(c => c.name?.toLowerCase() === conditionName.toLowerCase());
     if (!exists) {
-        if (!system[`${entityType}s`]) {
-            system[`${entityType}s`] = { conditions: [], IDs: [] };
-        }
+        if (!system[`${entityType}s`]) system[`${entityType}s`] = { conditions: [], IDs: [] };
+        
         system[`${entityType}s`].conditions.push({
             name: conditionName,
             settings: {
@@ -882,9 +837,7 @@ async function ensureConditionExists(system, entityType, conditionName) {
     }
 }
 
-// ============================================
-// PROXY VALIDATION
-// ============================================
+// ==== PROXY VALIDATION ====
 
 /* Check if a proxy pattern already exists in the system
  * @param {string} proxy - The proxy pattern to check
@@ -899,27 +852,24 @@ async function checkProxyExists(proxy, system, excludeEntityId = null) {
     const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
     for (const alter of alters) {
         if (alter._id.toString() === excludeEntityId) continue;
-        if (alter.proxy?.some(p => p.toLowerCase() === proxyLower)) {
+        if (alter.proxy?.some(p => p.toLowerCase() === proxyLower))
             return { exists: true, entity: alter, type: 'alter' };
-        }
     }
 
     // Check states
     const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
     for (const state of states) {
         if (state._id.toString() === excludeEntityId) continue;
-        if (state.proxy?.some(p => p.toLowerCase() === proxyLower)) {
+        if (state.proxy?.some(p => p.toLowerCase() === proxyLower)) 
             return { exists: true, entity: state, type: 'state' };
-        }
     }
 
     // Check groups
     const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
     for (const group of groups) {
         if (group._id.toString() === excludeEntityId) continue;
-        if (group.proxy?.some(p => p.toLowerCase() === proxyLower)) {
+        if (group.proxy?.some(p => p.toLowerCase() === proxyLower)) 
             return { exists: true, entity: group, type: 'group' };
-        }
     }
 
     return { exists: false, entity: null, type: null };
@@ -933,12 +883,10 @@ function validateProxies(proxies) {
     const errors = [];
 
     for (const proxy of proxies) {
-        if (!proxy.includes('text')) {
+        if (!proxy.includes('text')) 
             errors.push(`Proxy "${proxy}" must contain "text" as a placeholder`);
-        }
-        if (proxy.length > 100) {
-            errors.push(`Proxy "${proxy}" is too long (max 100 characters)`);
-        }
+        if (proxy.length > 100) 
+            errors.push(`Proxy "${proxy}" is too long (max 100 characters)!!! How would you even remember that??? 😰`);
     }
 
     return { valid: errors.length === 0, errors };
@@ -975,10 +923,7 @@ function getProxyStyleOptions() {
     ];
 }
 
-// ============================================
-// EXPORTS
-// ============================================
-
+// ==== EXPORTS ====
 module.exports = {
     // Constants
     ITEMS_PER_PAGE,
