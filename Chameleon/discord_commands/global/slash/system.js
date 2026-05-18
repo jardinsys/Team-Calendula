@@ -95,9 +95,7 @@ module.exports = {
     handleSelectMenu
 };
 
-// ============================================
-// EMBED BUILDERS
-// ============================================
+// ==== EMBED BUILDERS ====
 
 //Build the system card embed
 async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, showFull = false,) {
@@ -583,11 +581,9 @@ function buildConditionsInterface(system, session) {
     return { embed, components: [row] };
 }
 
-// ============================================
-// COMMAND HANDLERS
-// ============================================
+// ==== COMMAND HANDLERS ====
 
-/*// Handle /system menu
+/*// Handle /system menu (not command to use anymore)
 async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
 
@@ -630,11 +626,12 @@ async function handleShow(interaction, currentUser, currentSystem) {
     if (targetUser || targetUserId) {
         isOwner = false;
         const discordId = targetUser?.id || targetUserId;
+        const dont_show_system_message = '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...'
 
         const otherUser = await User.findOne({ discordID: discordId });
         if (!otherUser || !otherUser.systemID) {
             return await interaction.reply({
-                content: '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...',
+                content: dont_show_system_message,
                 ephemeral: true
             });
         }
@@ -642,7 +639,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         targetSystem = await System.findById(otherUser.systemID);
         if (!targetSystem) {
             return await interaction.reply({
-                content: '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...',
+                content: dont_show_system_message,
                 ephemeral: true
             });
         }
@@ -650,7 +647,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         // Check if blocked
         if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) {
             return await interaction.reply({
-                content: '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...',
+                content: dont_show_system_message,
                 ephemeral: true
             });
         }
@@ -679,7 +676,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         isOwner
     });
 
-    /*// Only show action buttons if owner
+    /*// Only show action buttons if owner // Not using anymore, just want to show
     const buttons = isOwner ? [
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -728,9 +725,7 @@ async function handleManage(interaction, user, system) {
     }
 }
 
-// ============================================
-// BUTTON INTERACTION HANDLER
-// ============================================
+// ==== BUTTON INTERACTION HANDLER ====
 
 async function handleButtonInteraction(interaction) {
     const customId = interaction.customId;
@@ -738,7 +733,7 @@ async function handleButtonInteraction(interaction) {
     // Handle new user flow buttons
     if (customId.startsWith('new_user_')) return await utils.handleNewUserButton(interaction, 'system');
 
-    /*if (customId.startsWith('system_menu_')) {
+    /*if (customId.startsWith('system_menu_')) { // not using menu
         let { user, system } = await utils.getOrCreateUserAndSystem(interaction);
 
         // Handle menu buttons
@@ -792,7 +787,6 @@ async function handleButtonInteraction(interaction) {
     }
 
     // Handle sync buttons for edit
-
     if (customId.startsWith('system_edit')) {
         if (customId.startsWith('system_edit_sync_')) {
             session.syncWithDiscord = customId.includes('_yes_');
@@ -919,9 +913,7 @@ async function handleButtonInteraction(interaction) {
         }
     }
 
-    // ============================================
-    // SETTINGS BUTTONS
-    // ============================================
+    // == SETTINGS BUTTONS ==
 
     // Closed name
     if (customId.startsWith('system_settings_closedname_')) {
@@ -1018,9 +1010,7 @@ async function handleButtonInteraction(interaction) {
         return await interaction.update({ embeds: [embed], components });
     }
 
-    // ============================================
-    // PRIVACY BUCKETS BUTTONS
-    // ============================================
+    // == PRIVACY BUCKETS BUTTONS ==
 
     // Add bucket
     if (customId.startsWith('system_buckets_add_')) {
@@ -1118,9 +1108,7 @@ async function handleButtonInteraction(interaction) {
         return await interaction.update({ embeds: [embed], components });
     }
 
-    // ============================================
-    // CONDITIONS BUTTONS
-    // ============================================
+    // == CONDITIONS BUTTONS ==
 
     // Add alter condition
     if (customId.startsWith('system_conditions_alter_add_')) {
@@ -1205,9 +1193,7 @@ async function handleButtonInteraction(interaction) {
     }
 }
 
-// ============================================
-// SELECT MENU HANDLER
-// ============================================
+// ==== SELECT MENU HANDLER ====
 
 async function handleSelectMenu(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
@@ -1711,9 +1697,7 @@ async function handleSelectMenu(interaction) {
     await interaction.showModal(modal);
 }
 
-// ============================================
-// MODAL SUBMIT HANDLER
-// ============================================
+// ==== MODAL SUBMIT HANDLER ====
 
 async function handleModalSubmit(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
@@ -1728,9 +1712,7 @@ async function handleModalSubmit(interaction) {
 
     const system = await System.findById(session.systemId);
 
-    // ============================================
-    // SETTINGS MODALS
-    // ============================================
+    // ---- SETTINGS MODALS ----
 
     // Closed name modal
     if (interaction.customId.startsWith('system_settings_closedname_modal_')) {
@@ -1765,9 +1747,7 @@ async function handleModalSubmit(interaction) {
         return await interaction.update({ embeds: [embed], components });
     }
 
-    // ============================================
-    // BUCKETS MODALS
-    // ============================================
+    // ---- BUCKETS MODALS ----
 
     // Add bucket modal
     if (interaction.customId.startsWith('system_buckets_add_modal_')) {
@@ -1818,9 +1798,7 @@ async function handleModalSubmit(interaction) {
         });
     }
 
-    // ============================================
-    // CONDITIONS MODALS
-    // ============================================
+    // ---- CONDITIONS MODALS ----
 
     // Alter condition modal
     if (interaction.customId.startsWith('system_conditions_alter_modal_')) {
@@ -1886,9 +1864,7 @@ async function handleModalSubmit(interaction) {
         return await interaction.update({ embeds: [embed], components });
     }
 
-    // ============================================
-    // EDIT MODALS
-    // ============================================
+    // ---- EDIT MODALS ----
     if (interaction.customId.startsWith('system_edit')) {
         // Card info modal
         if (interaction.customId.startsWith('system_edit_card_modal_')) {
@@ -2135,7 +2111,6 @@ function buildProxySettingsEmbed(system) {
     };
 
     return new EmbedBuilder()
-
         .setTitle('💬 Proxy Settings')
         .setDescription('Select which proxy setting you want to edit.')
         .addFields(
