@@ -16,6 +16,7 @@
 // (/alter alter_name:[string] settings
 
 // (NEW)
+// (/alter view [list/show])
 // (/alter manage [new/edit/settings] alter_name:[string]) (delete will be in settings)
 
 const {
@@ -44,13 +45,13 @@ module.exports = {
         // VIEW subcommand
         .addSubcommand(sub => sub
             .setName('view')
-            .setDescription('View alter information')
+            .setDescription('View alter-focused information')
             .addStringOption(opt => opt
                 .setName('action')
                 .setDescription('What to view')
                 .setRequired(true)
                 .addChoices(
-                    { name: 'List - Show all alters', value: 'list' },
+                    { name: 'List - View all alters', value: 'list' },
                     { name: 'Show - View specific alter details', value: 'show' }
                 ))
             .addStringOption(opt => opt
@@ -70,7 +71,7 @@ module.exports = {
         // MANAGE subcommand
         .addSubcommand(sub => sub
             .setName('manage')
-            .setDescription('Create, edit, and delete alters')
+            .setDescription('Create, edit, and delete alter information')
             .addStringOption(opt => opt
                 .setName('action')
                 .setDescription('What to do')
@@ -78,7 +79,7 @@ module.exports = {
                 .addChoices(
                     { name: 'New - Create new alter profile', value: 'new' },
                     { name: 'Edit - Modify info for existing alter', value: 'edit' },
-                    { name: 'Settings - Edit settings for existing alter'},
+                    { name: 'Settings - Edit settings for existing alter', value: 'settings'},
                     { name: 'Dormant - Mark alter as dormant', value: 'dormant' },
                     { name: 'Delete - Remove alter permanently', value: 'delete' }
                 ))
@@ -102,28 +103,22 @@ module.exports = {
 
         if (isNew) return await utils.handleNewUserFlow(interaction, 'alter');
 
-        if (!system && subcommand !== 'view') {
+        if (!system && subcommand !== 'view') 
             return await interaction.reply({
                 content: '❌ You need to set up a system first. Use `/system` to get started.',
                 ephemeral: true
             });
-        }
 
-        // Route based on subcommand and action
-        if (subcommand === 'view') {
-            const action = interaction.options.getString('action');
-            if      (action === 'list') return await handleShowList(interaction, user, system);
-            else if (action === 'show') return await handleShow(interaction, user, system);
-        } else if (subcommand === 'manage') {
-            const action = interaction.options.getString('action');
-            if      (action === 'new')      return await handleNew(interaction, user, system);
-            else if (action === 'edit')     return await handleEdit(interaction, user, system);
-            else if (action === 'settings') return await handleSettings(interaction, user, system);
-            else if (action === 'dormant')  return await handleDormant(interaction, user, system);
-            else if (action === 'delete')   return await handleDelete(interaction, user, system);
-        } /*else if (subcommand === 'settings') {
-            return await handleSettings(interaction, user, system);
-        }*/
+        const action = interaction.options.getString('action');
+        switch (action) {
+            case 'list': return await handleShowList(interaction, user, system); break;
+            case 'show': return await handleShow(interaction, user, system); break;
+            case 'new': return await handleNew(interaction, user, system); break;
+            case 'edit': return await handleEdit(interaction, user, system); break;
+            case 'settings': return await handleSettings(interaction, user, system); break;
+            case 'dormant': return await handleDormant(interaction, user, system); break;
+            case 'delete': return await handleDelete(interaction, user, system); break;
+        }
     },
 
     handleButtonInteraction,
@@ -131,9 +126,7 @@ module.exports = {
     handleSelectMenu
 };
 
-// ============================================
-// EMBED BUILDERS (Alter-specific)
-// ============================================
+// ==== EMBED BUILDERS ====
 
 function buildAlterListEmbed(alters, page, system, showFullList) {
     const pageAlters = utils.getPageItems(alters, page);
@@ -178,22 +171,16 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
     // Header/Author
     const proxyAvatar = alter.discord?.image?.proxyAvatar?.url || alter.avatar?.url;
     const systemDisplayName = utils.getDisplayName(system, closedCharAllowed);
-
     embed.setAuthor({
-        name: `${alter.name?.indexable || 'Unknown'} (from ${systemDisplayName})`,
+        name: `${alter.name?.indexable || 'unknown'} (from ${systemDisplayName})`,
         iconURL: proxyAvatar || undefined
     });
 
-    embed.setTitle(displayName || 'Unknown Alter');
+    embed.setTitle(displayName || '*No Name*');
     if (color) embed.setColor(color);
+    if (description) embed.setDescription(description); 
 
-    if (description) {
-        embed.setDescription(description);
-    }
-
-    // Get groups for this alter
-    const groups = await Group.find({ _id: { $in: alter.groupsIDs || [] } });
-
+    const groups = await Group.find({ _id: { $in: alter.groupsIDs || [] } }); // Get groups for this alter
     // Organize groups by type
     const groupsByType = {};
     for (const group of groups) {
@@ -202,41 +189,31 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
         groupsByType[typeName].push(utils.getDisplayName(group, closedCharAllowed));
     }
 
-    // Identification Info field
-    let identificationInfo = '';
-    for (const [type, groupNames] of Object.entries(groupsByType)) {
-        identificationInfo += `**${type}:** ${groupNames.join(', ')}\n`;
-    }
-    if (alter.signoff) identificationInfo += `**Sign-off:** ${alter.signoff}\n`;
-    if (alter.proxy?.length > 0) {
-        identificationInfo += `**Proxies:** ${utils.formatProxies(alter.proxy)}\n`;
-    }
-    identificationInfo += `**Display Name:** ${displayName}\n`;
-
-    if (identificationInfo) {
-        embed.addFields({
-            name: '🏷️ Identification',
-            value: identificationInfo.trim() || 'None',
-            inline: false
-        });
-    }
-
     // Personal Info field
     let personalInfo = '';
-    if (alter.pronouns?.length > 0) {
-        personalInfo += `**Pronouns:** ${alter.pronouns.join(', ')}\n`;
-    }
-    if (alter.birthday) {
-        personalInfo += `**Birthday:** ${utils.formatDate(alter.birthday)}\n`;
-    }
-    if (alter.name?.aliases?.length > 0) {
-        personalInfo += `**Aliases:** ${alter.name.aliases.join(', ')}\n`;
-    }
-
+    if (alter.pronouns?.length > 0) personalInfo += `**Pronouns:** ${alter.pronouns.join(', ')}\n`;
+    if (alter.birthday) personalInfo += `**Birthday:** ${utils.formatDate(alter.birthday)}\n`;
+    if (alter.name?.aliases?.length > 0) personalInfo += `**Aliases:** ${alter.name.aliases.join(', ')}\n`;
     if (personalInfo) {
         embed.addFields({
             name: '👤 Personal Info',
             value: personalInfo.trim(),
+            inline: false
+        });
+    }
+
+    // Identification Info field
+    let identificationInfo = '';
+    //identificationInfo += `**Display Name:** ${displayName}\n`;
+    if (alter.signoff) identificationInfo += `**Sign-off:** ${alter.signoff}\n`;
+    if (alter.proxy?.length > 0) identificationInfo += `**Proxies:** ${utils.formatProxies(alter.proxy)}\n`; 
+    for (const [type, groupNames] of Object.entries(groupsByType)) {
+        identificationInfo += `**${type}:** ${groupNames.join(', ')}\n`;
+    }
+    if (identificationInfo) {
+        embed.addFields({
+            name: '🏷️ ID\'s',
+            value: identificationInfo.trim() || 'None',
             inline: false
         });
     }
@@ -248,14 +225,11 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
         if (alter.caution.detail) cautionInfo += `**Details:** ${alter.caution.detail}\n`;
         if (alter.caution.triggers?.length > 0) {
             const triggerNames = alter.caution.triggers.map(t => t.name).filter(Boolean);
-            if (triggerNames.length > 0) {
-                cautionInfo += `**Triggers:** ${triggerNames.join(', ')}\n`;
-            }
+            if (triggerNames.length > 0) cautionInfo += `**Triggers:** ${triggerNames.join(', ')}\n`;
         }
-
         if (cautionInfo) {
             embed.addFields({
-                name: '⚠️ Caution',
+                name: '⚠️ Cautions',
                 value: cautionInfo.trim(),
                 inline: false
             });
@@ -264,9 +238,7 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
 
     // Thumbnail
     const avatar = alter.discord?.image?.avatar?.url || alter.avatar?.url;
-    if (avatar) {
-        embed.setThumbnail(avatar);
-    }
+    if (avatar) embed.setThumbnail(avatar);
 
     return embed;
 }
@@ -319,9 +291,7 @@ function buildEditInterface(alter, session, system = null) {
     return { embed, components: [selectRow, modeRow, actionRow] };
 }
 
-// ============================================
-// COMMAND HANDLERS
-// ============================================
+// ==== COMMAND HANDLERS ====
 
 /*async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
@@ -402,9 +372,8 @@ async function handleShowList(interaction, currentUser, currentSystem) {
     // Get all alters for this system
     const alters = await Alter.find({ _id: { $in: targetSystem.alters?.IDs || [] } });
 
-    if (alters.length === 0) {
+    if (alters.length === 0) 
         return await interaction.reply({ content: '📭 No alters found in this system.', ephemeral: true });
-    }
 
     // Filter alters based on visibility
     const visibleAlters = alters.filter(alter => utils.shouldShowEntity(alter, privacyBucket, isOwner, false));
@@ -441,31 +410,19 @@ async function handleShow(interaction, currentUser, currentSystem) {
 
         const User = require('../../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
-        if (!otherUser || !otherUser.systemID) {
-            return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
-        }
+        if (!otherUser || !otherUser.systemID) return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
 
         targetSystem = await System.findById(otherUser.systemID);
-        if (!targetSystem) {
-            return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
-        }
+        if (!targetSystem) return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
 
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 
-    if (!targetSystem) {
-        return await interaction.reply({ content: '❌ No system found.', ephemeral: true });
-    }
+    if (!targetSystem) return await interaction.reply({ content: '❌ No system found.', ephemeral: true });
 
     const alter = await utils.findAlterByName(alterName, targetSystem);
-
-    if (!alter) {
-        return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
-    }
-
-    if (!isOwner && !utils.shouldShowEntity(alter, privacyBucket, isOwner)) {
-        return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
-    }
+    if (!alter) return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
+    if (!isOwner && !utils.shouldShowEntity(alter, privacyBucket, isOwner)) return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
 
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
     const embed = await buildAlterCard(alter, targetSystem, privacyBucket, closedCharAllowed);
@@ -498,7 +455,7 @@ async function handleNew(interaction, user, system) {
     const existingAlter = await utils.findAlterByName(alterName, system);
     if (existingAlter) {
         return await interaction.reply({
-            content: '❌ An alter with this name already exists in your system.',
+            content: '❌ An alter with this indexable name already exists in your system.',
             ephemeral: true
         });
     }
@@ -519,13 +476,8 @@ async function handleEdit(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
 
-    if (!alter || alter.systemID !== system._id.toString()) {
-        return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
-    }
-
-    if (alter.systemID !== system._id.toString()) {
-        return await interaction.reply({ content: '❌ This alter does not belong to your system.', ephemeral: true });
-    }
+    if (!alter || alter.systemID !== system._id.toString()) return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
+    if (alter.systemID !== system._id.toString()) return await interaction.reply({ content: '❌ This alter does not belong to your system.', ephemeral: true });
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
@@ -533,7 +485,7 @@ async function handleEdit(interaction, user, system) {
         alterId: alter._id,
         systemId: system._id,
         mode: null,
-        syncWithDiscord: alter.syncWithApps?.discord || false
+        syncWithDiscord: alter.syncWithApps?.discord || true
     });
 
     const { embed, buttons } = utils.buildSyncConfirmation('alter', utils.getDisplayName(alter), sessionId, 'edit');
@@ -544,9 +496,7 @@ async function handleDormant(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
 
-    if (!alter) {
-        return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
-    }
+    if (!alter) return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
 
     alter.condition = 'dormant';
     await alter.save();
@@ -561,9 +511,7 @@ async function handleDelete(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
 
-    if (!alter) {
-        return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
-    }
+    if (!alter) return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
@@ -592,9 +540,7 @@ async function handleSettings(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
 
-    if (!alter) {
-        return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
-    }
+    if (!alter) return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
@@ -626,19 +572,15 @@ async function handleSettings(interaction, user, system) {
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
 }
 
-// ============================================
-// BUTTON HANDLER
-// ============================================
+// ==== BUTTON HANDLER ====
 
 async function handleButtonInteraction(interaction) {
     const customId = interaction.customId;
 
     // Handle new user flow
-    if (customId.startsWith('new_user_')) {
-        return await utils.handleNewUserButton(interaction, 'alter');
-    }
+    if (customId.startsWith('new_user_')) return await utils.handleNewUserButton(interaction, 'alter');
 
-    // Menu buttons
+    /*// Menu buttons
     if (customId === 'alter_menu_showlist') {
         const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
         // Create a mock interaction with empty options
@@ -647,22 +589,16 @@ async function handleButtonInteraction(interaction) {
             options: { getUser: () => null, getString: () => null }
         };
         return await handleShowList(mockInteraction, user, system);
-    }
+    }*/
 
     const sessionId = utils.extractSessionId(customId);
     const session = utils.getSession(sessionId);
 
-    if (!session) {
-        return await interaction.reply({ content: '❌ Session expired. Please start again.', ephemeral: true });
-    }
+    if (!session) return await interaction.reply({ content: '❌ Session expired. Please start again.', ephemeral: true });
 
     // List navigation
-    if (customId.startsWith('alter_list_prev_')) {
-        session.page = Math.max(0, session.page - 1);
-    }
-    if (customId.startsWith('alter_list_next_')) {
-        session.page = Math.min(utils.getTotalPages((session.showFullList ? session.allAlters : session.alters).length) - 1, session.page + 1);
-    }
+    if (customId.startsWith('alter_list_prev_')) session.page = Math.max(0, session.page - 1);
+    if (customId.startsWith('alter_list_next_')) session.page = Math.min(utils.getTotalPages((session.showFullList ? session.allAlters : session.alters).length) - 1, session.page + 1);
     if (customId.startsWith('alter_list_toggle_')) {
         session.showFullList = !session.showFullList;
         session.page = 0;
@@ -721,12 +657,8 @@ async function handleButtonInteraction(interaction) {
     }
 
     // Edit mode toggles
-    if (customId.startsWith('alter_edit_mode_mask_')) {
-        session.mode = session.mode === 'mask' ? null : 'mask';
-    }
-    if (customId.startsWith('alter_edit_mode_server_')) {
-        session.mode = session.mode === 'server' ? null : 'server';
-    }
+    if (customId.startsWith('alter_edit_mode_mask_')) session.mode = session.mode === 'mask' ? null : 'mask';
+    if (customId.startsWith('alter_edit_mode_server_')) session.mode = session.mode === 'server' ? null : 'server';
     if (customId.startsWith('alter_edit_mode_')) {
         const alter = await Alter.findById(session.alterId);
         const { embed, components } = buildEditInterface(alter, session);
@@ -751,7 +683,12 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('alter_delete_condition_')) {
         const modal = new ModalBuilder().setCustomId(`alter_condition_modal_${sessionId}`).setTitle('Change Condition');
         modal.addComponents(new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('condition_name').setLabel('Condition Name').setStyle(TextInputStyle.Short).setPlaceholder('e.g., dormant, inactive, sleeping').setRequired(true).setMaxLength(50)
+            new TextInputBuilder().setCustomId('condition_name')
+                                  .setLabel('Condition Name')
+                                  .setStyle(TextInputStyle.Short)
+                                  .setPlaceholder('e.g., dormant, inactive, sleeping')
+                                  .setRequired(true)
+                                  .setMaxLength(50)
         ));
         return await interaction.showModal(modal);
     }
@@ -773,25 +710,27 @@ async function handleButtonInteraction(interaction) {
     // Settings buttons
     if (customId.startsWith('alter_settings_closedname_')) {
         const alter = await Alter.findById(session.alterId);
-        const modal = new ModalBuilder().setCustomId(`alter_settings_closedname_modal_${sessionId}`).setTitle('Edit Closed Name Display');
+        const modal = new ModalBuilder().setCustomId(`alter_settings_closedname_modal_${sessionId}`)
+                                        .setTitle('Edit Closed Name Display');
         modal.addComponents(new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId('closed_name').setLabel('Closed Name Display').setStyle(TextInputStyle.Short).setValue(alter.name?.closedNameDisplay || '').setRequired(false).setMaxLength(100)
+            new TextInputBuilder().setCustomId('closed_name')
+                                  .setLabel('Closed Name Display')
+                                  .setStyle(TextInputStyle.Short)
+                                  .setValue(alter.name?.closedNameDisplay || '')
+                                  .setRequired(false)
+                                  .setMaxLength(100)
         ));
         return await interaction.showModal(modal);
     }
 }
 
-// ============================================
-// SELECT MENU HANDLER
-// ============================================
+// ==== SELECT MENU HANDLER ====
 
 async function handleSelectMenu(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
     const session = utils.getSession(sessionId);
 
-    if (!session) {
-        return await interaction.reply({ content: '❌ Session expired. Please start again.', ephemeral: true });
-    }
+    if (!session) return await interaction.reply({ content: '❌ Session expired. Please start again.', ephemeral: true });    
 
     const alter = await Alter.findById(session.alterId);
     const value = interaction.values[0];
@@ -848,17 +787,13 @@ async function handleSelectMenu(interaction) {
     await interaction.showModal(modalBuilders[value]());
 }
 
-// ============================================
-// MODAL SUBMIT HANDLER
-// ============================================
+// ==== MODAL SUBMIT HANDLER ====
 
 async function handleModalSubmit(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
     const session = utils.getSession(sessionId);
 
-    if (!session) {
-        return await interaction.reply({ content: '❌ Session expired. Please start again.', ephemeral: true });
-    }
+    if (!session) return await interaction.reply({ content: '❌ Session expired. Please start again.', ephemeral: true });
 
     const alter = await Alter.findById(session.alterId);
 
@@ -939,7 +874,6 @@ async function handleModalSubmit(interaction) {
                     components
                 });
             }
-
             alter.proxy = valid;
         } else {
             alter.proxy = [];
