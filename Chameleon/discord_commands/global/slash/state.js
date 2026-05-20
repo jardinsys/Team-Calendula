@@ -16,6 +16,7 @@
 // (/state state_name:[string] settings
 
 // (NEW)
+// (/state view [list/show])
 // (/state manage [new/edit/settings] state_name:[string]) (delete will be in settings)
 const {
     SlashCommandBuilder,
@@ -52,7 +53,7 @@ module.exports = {
                 .setDescription('What to view')
                 .setRequired(true)
                 .addChoices(
-                    { name: 'List - Show all states', value: 'list' },
+                    { name: 'List - View all states', value: 'list' },
                     { name: 'Show - View specific state details', value: 'show' }
                 ))
             .addStringOption(opt => opt
@@ -63,10 +64,11 @@ module.exports = {
                 .setName('user')
                 .setDescription('View another user\'s states')
                 .setRequired(false))
-            .addBooleanOption(opt => opt
+            /*.addBooleanOption(opt => opt
                 .setName('show_all')
                 .setDescription('Show hidden states (list only)')
-                .setRequired(false)))
+                .setRequired(false))*/
+            )
 
         // MANAGE subcommand
         .addSubcommand(sub => sub
@@ -79,6 +81,7 @@ module.exports = {
                 .addChoices(
                     { name: 'New - Create new state', value: 'new' },
                     { name: 'Edit - Modify existing state', value: 'edit' },
+                    { name: 'Settings - Edit settings for existing state', value: 'settings'},
                     { name: 'Remission - Mark state as in remission', value: 'remission' },
                     { name: 'Delete - Remove state permanently', value: 'delete' }
                 ))
@@ -87,51 +90,36 @@ module.exports = {
                 .setDescription('State name (required for edit/remission/delete)')
                 .setRequired(false)))
 
-        // SETTINGS subcommand
+        /*// SETTINGS subcommand
         .addSubcommand(sub => sub
             .setName('settings')
             .setDescription('Configure state settings')
             .addStringOption(opt => opt
                 .setName('state_name')
                 .setDescription('State name')
-                .setRequired(true))),
+                .setRequired(true)),*/,
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const { user, system, isNew } = await utils.getOrCreateUserAndSystem(interaction);
 
-        if (isNew) {
-            return await utils.handleNewUserFlow(interaction, 'state');
-        }
+        if (isNew) return await utils.handleNewUserFlow(interaction, 'state');
 
-        if (!system && subcommand !== 'view') {
+        if (!system && subcommand !== 'view')
             return await interaction.reply({
                 content: '❌ You need to set up a system first. Use `/system` to get started.',
                 ephemeral: true
             });
-        }
 
-        // Route based on subcommand and action
-        if (subcommand === 'view') {
-            const action = interaction.options.getString('action');
-            if (action === 'list') {
-                return await handleShowList(interaction, user, system);
-            } else if (action === 'show') {
-                return await handleShow(interaction, user, system);
-            }
-        } else if (subcommand === 'manage') {
-            const action = interaction.options.getString('action');
-            if (action === 'new') {
-                return await handleNew(interaction, user, system);
-            } else if (action === 'edit') {
-                return await handleEdit(interaction, user, system);
-            } else if (action === 'remission') {
-                return await handleRemission(interaction, user, system);
-            } else if (action === 'delete') {
-                return await handleDelete(interaction, user, system);
-            }
-        } else if (subcommand === 'settings') {
-            return await handleSettings(interaction, user, system);
+        const action = interaction.options.getString('action');
+        switch (action) {
+            case 'list': return await handleShowList(interaction, user, system); break;
+            case 'show': return await handleShow(interaction, user, system); break;
+            case 'new': return await handleNew(interaction, user, system); break;
+            case 'edit': return await handleEdit(interaction, user, system); break;
+            case 'settings': return await handleSettings(interaction, user, system); break;
+            case 'remission': return await handleRemission(interaction, user, system); break;
+            case 'delete': return await handleDelete(interaction, user, system); break;
         }
     },
 
@@ -140,13 +128,9 @@ module.exports = {
     handleSelectMenu
 };
 
-// ============================================
-// EMBED BUILDERS (State-specific)
-// ============================================
+// ==== EMBED BUILDERS (State-specific) =====
 
-/**
- * Build the state list embed
- */
+// Build the state list embed
 function buildStateListEmbed(states, page, system, showFullList) {
     const pageStates = utils.getPageItems(states, page);
     const totalPages = utils.getTotalPages(states.length);
@@ -180,9 +164,7 @@ function buildStateListEmbed(states, page, system, showFullList) {
     return embed;
 }
 
-/**
- * Build the state card embed
- */
+// Build the state card embed
 async function buildStateCard(state, system, privacyBucket, closedCharAllowed = true) {
     const embed = new EmbedBuilder();
 
@@ -204,10 +186,7 @@ async function buildStateCard(state, system, privacyBucket, closedCharAllowed = 
 
     embed.setTitle(displayName || 'Unknown State');
     if (color) embed.setColor(color);
-
-    if (description) {
-        embed.setDescription(description);
-    }
+    if (description) embed.setDescription(description);
 
     // Get groups for this state
     const groups = await Group.find({ _id: { $in: state.groupIDs || [] } });
@@ -226,21 +205,11 @@ async function buildStateCard(state, system, privacyBucket, closedCharAllowed = 
 
     // Identification Info field
     let identificationInfo = '';
-
-    for (const [type, groupNames] of Object.entries(groupsByType)) {
-        identificationInfo += `**${type}:** ${groupNames.join(', ')}\n`;
-    }
-
-    if (state.signoff) {
-        identificationInfo += `**Sign-off:** ${state.signoff}\n`;
-    }
-
-    if (state.proxy?.length > 0) {
-        identificationInfo += `**Proxies:** ${utils.formatProxies(state.proxy)}\n`;
-    }
-
-    identificationInfo += `**Display Name:** ${displayName}\n`;
-
+    for (const [type, groupNames] of Object.entries(groupsByType)) identificationInfo += `**${type}:** ${groupNames.join(', ')}\n`;
+    if (state.signoff) identificationInfo += `**Sign-off:** ${state.signoff}\n`;
+    if (state.proxy?.length > 0) identificationInfo += `**Proxies:** ${utils.formatProxies(state.proxy)}\n`;
+    //identificationInfo += `**Display Name:** ${displayName}\n`;
+    if (state.name?.aliases?.length > 0) identificationInfo += `**Aliases:** ${state.name.aliases.join(', ')}\n`;
     if (identificationInfo) {
         embed.addFields({
             name: '🏷️ Identification',
@@ -258,32 +227,16 @@ async function buildStateCard(state, system, privacyBucket, closedCharAllowed = 
         });
     }
 
-    // Personal Info field (aliases only for states)
-    if (state.name?.aliases?.length > 0) {
-        embed.addFields({
-            name: '👤 Personal Info',
-            value: `**Aliases:** ${state.name.aliases.join(', ')}`,
-            inline: false
-        });
-    }
-
     // Caution field
     if (state.caution && (state.caution.c_type || state.caution.detail || state.caution.triggers?.length > 0)) {
         let cautionInfo = '';
 
-        if (state.caution.c_type) {
-            cautionInfo += `**Type:** ${state.caution.c_type}\n`;
-        }
-        if (state.caution.detail) {
-            cautionInfo += `**Details:** ${state.caution.detail}\n`;
-        }
+        if (state.caution.c_type) cautionInfo += `**Type:** ${state.caution.c_type}\n`;
+        if (state.caution.detail) cautionInfo += `**Details:** ${state.caution.detail}\n`;
         if (state.caution.triggers?.length > 0) {
             const triggerNames = state.caution.triggers.map(t => t.name).filter(Boolean);
-            if (triggerNames.length > 0) {
-                cautionInfo += `**Triggers:** ${triggerNames.join(', ')}\n`;
-            }
+            if (triggerNames.length > 0) cautionInfo += `**Triggers:** ${triggerNames.join(', ')}\n`;
         }
-
         if (cautionInfo) {
             embed.addFields({
                 name: '⚠️ Caution',
@@ -295,16 +248,12 @@ async function buildStateCard(state, system, privacyBucket, closedCharAllowed = 
 
     // Thumbnail
     const avatar = state.discord?.image?.avatar?.url || state.avatar?.url;
-    if (avatar) {
-        embed.setThumbnail(avatar);
-    }
+    if (avatar) embed.setThumbnail(avatar);
 
     return embed;
 }
 
-/**
- * Build the edit interface for a state
- */
+// Build the edit interface for a state
 function buildEditInterface(state, session, system = null) {
     const embed = new EmbedBuilder()
         .setTitle(`Editing: ${utils.getDisplayName(state)}`)
@@ -392,13 +341,9 @@ function buildEditInterface(state, session, system = null) {
     return { embed, components: [selectRow, modeRow, actionRow] };
 }
 
-// ============================================
-// COMMAND HANDLERS
-// ============================================
+// ==== COMMAND HANDLERS ====
 
-/**
- * Handle /state menu
- */
+// Handle /state menu
 async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
         .setTitle('🔄 State Management')
@@ -425,12 +370,11 @@ async function handleMenu(interaction, user, system) {
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
 }
 
-/**
- * Handle /state showlist
- */
+// Handle /state showlist
 async function handleShowList(interaction, currentUser, currentSystem) {
     const targetUser = interaction.options.getUser('user');
     const targetUserId = interaction.options.getString('userid');
+    const refuse_list_message = '❌ This user does not have a state list to show. They may not have a system set up in this application, have not allowed you to view their list, or you might be blocked...';
 
     let targetSystem = currentSystem;
     let isOwner = true;
@@ -444,54 +388,32 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         const User = require('../../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
 
-        if (!otherUser || !otherUser.systemID) {
-            return await interaction.reply({
-                content: '❌ This user does not have a state list to show. They may not have a system set up in this application...',
-                ephemeral: true
-            });
-        }
+        if (!otherUser || !otherUser.systemID) return await interaction.reply({ content: refuse_list_message, ephemeral: true });
 
         targetSystem = await System.findById(otherUser.systemID);
 
-        if (!targetSystem) {
-            return await interaction.reply({
-                content: '❌ This user does not have a state list to show. They may not have a system set up in this application...',
-                ephemeral: true
-            });
-        }
+        if (!targetSystem) return await interaction.reply({ content: refuse_list_message, ephemeral: true });
 
         // Check if blocked
-        if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) {
-            return await interaction.reply({
-                content: '❌ This user does not have a state list to show. They may not have a system set up in this application...',
-                ephemeral: true
-            });
-        }
+        if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) 
+            return await interaction.reply({ content: refuse_list_message, ephemeral: true });
 
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 
-    if (!targetSystem) {
-        return await interaction.reply({
-            content: '❌ No system found. Use `/system` to set up your system first.',
-            ephemeral: true
-        });
-    }
+    if (!targetSystem) return await interaction.reply({ content: '❌ No system/person found. Use `/system` to set up your system first.', ephemeral: true });
 
     // Get all states for this system
     const states = await State.find({ _id: { $in: targetSystem.states?.IDs || [] } });
 
-    if (states.length === 0) {
-        return await interaction.reply({
-            content: '📭 No states found in this system.',
-            ephemeral: true
-        });
-    }
+    //if (states.length === 0) return await interaction.reply({ content: '📭 No states registered for this system.', ephemeral: true });
 
     // Filter states based on visibility
     const visibleStates = states.filter(state =>
         utils.shouldShowEntity(state, privacyBucket, isOwner, false)
-    );
+    ); 
+
+    if (states.length === 0 || visibleStates.length === 0) return await interaction.reply({ content: '📭 No states registered for this system.', ephemeral: true });
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -508,12 +430,10 @@ async function handleShowList(interaction, currentUser, currentSystem) {
     const embed = buildStateListEmbed(visibleStates, 0, targetSystem, false);
     const buttons = utils.buildListButtons(visibleStates.length, 0, isOwner, false, sessionId, 'state');
 
-    await interaction.reply({ embeds: [embed], components: buttons, ephemeral: true });
+    await interaction.reply({ embeds: [embed], components: buttons, ephemeral: false });
 }
 
-/**
- * Handle /state show
- */
+// Handle /state show
 async function handleShow(interaction, currentUser, currentSystem) {
     const stateName = interaction.options.getString('state_name');
     const targetUser = interaction.options.getUser('user');
@@ -530,50 +450,22 @@ async function handleShow(interaction, currentUser, currentSystem) {
 
         const User = require('../../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
-
-        if (!otherUser || !otherUser.systemID) {
-            return await interaction.reply({
-                content: '❌ State cannot be found.',
-                ephemeral: true
-            });
-        }
+        if (!otherUser || !otherUser.systemID) return await interaction.reply({ content: '❌ State cannot be found.', ephemeral: true });
 
         targetSystem = await System.findById(otherUser.systemID);
-
-        if (!targetSystem) {
-            return await interaction.reply({
-                content: '❌ State cannot be found.',
-                ephemeral: true
-            });
-        }
+        if (!targetSystem) return await interaction.reply({ content: '❌ State cannot be found.', ephemeral: true });
 
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 
-    if (!targetSystem) {
-        return await interaction.reply({
-            content: '❌ No system found.',
-            ephemeral: true
-        });
-    }
+    if (!targetSystem) return await interaction.reply({ content: '❌ No registered system/person found.', ephemeral: true });
 
     // Find the state
     const state = await utils.findStateByName(stateName, targetSystem);
-
-    if (!state) {
-        return await interaction.reply({
-            content: '❌ State cannot be found.',
-            ephemeral: true
-        });
-    }
+    if (!state) return await interaction.reply({ content: '❌ State cannot be found.', ephemeral: true });
 
     // Check visibility
-    if (!isOwner && !utils.shouldShowEntity(state, privacyBucket, isOwner)) {
-        return await interaction.reply({
-            content: '❌ State cannot be found.',
-            ephemeral: true
-        });
-    }
+    if (!isOwner && !utils.shouldShowEntity(state, privacyBucket, isOwner)) return await interaction.reply({ content: '❌ State cannot be found.', ephemeral: true });
 
     // Check closed character settings
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
@@ -601,31 +493,20 @@ async function handleShow(interaction, currentUser, currentSystem) {
         )
     ] : [];
 
-    await interaction.reply({ embeds: [embed], components: buttons, ephemeral: true });
+    await interaction.reply({ embeds: [embed], components: buttons, ephemeral: false });
 }
 
-/**
- * Handle /state new
- */
+// Handle /state new
 async function handleNew(interaction, user, system) {
     const stateName = interaction.options.getString('state_name');
 
     // Validate name format
-    if (!utils.isValidIndexableName(stateName)) {
-        return await interaction.reply({
-            content: '❌ Indexable names can only include standard letters, numbers, hyphens, and underscores.',
-            ephemeral: true
-        });
-    }
+    if (!utils.isValidIndexableName(stateName)) 
+        return await interaction.reply({ content: '❌ Indexable names can only include standard letters, numbers, hyphens, and underscores.', ephemeral: true });
 
     // Check if state already exists
     const existingState = await utils.findStateByName(stateName, system);
-    if (existingState) {
-        return await interaction.reply({
-            content: '❌ A state with this name already exists in your system.',
-            ephemeral: true
-        });
-    }
+    if (existingState) return await interaction.reply({ content: '❌ A state with this name already exists in your system.', ephemeral: true });
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -641,27 +522,14 @@ async function handleNew(interaction, user, system) {
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
 }
 
-/**
- * Handle /state edit
- */
+// Handle /state edit
 async function handleEdit(interaction, user, system) {
     const stateName = interaction.options.getString('state_name');
     const state = await utils.findStateByName(stateName, system);
-
-    if (!state) {
-        return await interaction.reply({
-            content: '❌ State not found in your system.',
-            ephemeral: true
-        });
-    }
+    if (!state) return await interaction.reply({ content: '❌ State not found in your system.', ephemeral: true });
 
     // Verify ownership
-    if (state.systemID !== system._id.toString()) {
-        return await interaction.reply({
-            content: '❌ This state does not belong to your system.',
-            ephemeral: true
-        });
-    }
+    if (state.systemID !== system._id.toString()) return await interaction.reply({ content: '❌ This state does not belong to your system.', ephemeral: true });
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -670,7 +538,7 @@ async function handleEdit(interaction, user, system) {
         stateId: state._id,
         systemId: system._id,
         mode: null,
-        syncWithDiscord: state.syncWithApps?.discord || false
+        syncWithDiscord: state.syncWithApps?.discord || true
     });
 
     // Show sync confirmation
@@ -678,43 +546,26 @@ async function handleEdit(interaction, user, system) {
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
 }
 
-/**
- * Handle /state remission
- */
+// Handle /state remission
 async function handleRemission(interaction, user, system) {
     const stateName = interaction.options.getString('state_name');
     const state = await utils.findStateByName(stateName, system);
-
-    if (!state) {
-        return await interaction.reply({
-            content: '❌ State not found in your system.',
-            ephemeral: true
-        });
-    }
+    if (!state) return await interaction.reply({ content: '❌ State not found in your system.', ephemeral: true });
 
     // Update condition
     state.condition = 'remission';
     await state.save();
-
     await interaction.reply({
         content: `✅ **${utils.getDisplayName(state)}** has been marked as in remission.`,
         ephemeral: true
     });
 }
 
-/**
- * Handle /state delete
- */
+//Handle /state delete
 async function handleDelete(interaction, user, system) {
     const stateName = interaction.options.getString('state_name');
     const state = await utils.findStateByName(stateName, system);
-
-    if (!state) {
-        return await interaction.reply({
-            content: '❌ State not found in your system.',
-            ephemeral: true
-        });
-    }
+    if (!state) return await interaction.reply({ content: '❌ State not found in your system.', ephemeral: true });
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -730,7 +581,7 @@ async function handleDelete(interaction, user, system) {
         .setTitle('⚠️ Delete State Confirmation')
         .setDescription(
             `Are you sure you want to delete **${utils.getDisplayName(state)}**?\n\n` +
-            `If this state is simply inactive, you can mark it as in remission or another condition instead.`
+            `If this state is simply inactive, you can mark it as in remission or another condition instead. 😅`
         )
         .setFooter({ text: 'This action cannot be undone!' });
 
@@ -756,19 +607,11 @@ async function handleDelete(interaction, user, system) {
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
 }
 
-/**
- * Handle /state settings
- */
+// Handle /state settings
 async function handleSettings(interaction, user, system) {
     const stateName = interaction.options.getString('state_name');
     const state = await utils.findStateByName(stateName, system);
-
-    if (!state) {
-        return await interaction.reply({
-            content: '❌ State not found in your system.',
-            ephemeral: true
-        });
-    }
+    if (!state) return await interaction.reply({ content: '❌ State not found in your system.', ephemeral: true });
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -826,17 +669,14 @@ async function handleSettings(interaction, user, system) {
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
 }
 
-// ============================================
-// BUTTON INTERACTION HANDLER
-// ============================================
+// ==== BUTTON INTERACTION HANDLER ====
 
 async function handleButtonInteraction(interaction) {
     const customId = interaction.customId;
 
     // Handle new user flow buttons
-    if (customId.startsWith('new_user_')) {
+    if (customId.startsWith('new_user_')) 
         return await utils.handleNewUserButton(interaction, 'state');
-    }
 
     // Handle menu buttons
     if (customId === 'state_menu_showlist') {
@@ -852,17 +692,11 @@ async function handleButtonInteraction(interaction) {
     const sessionId = utils.extractSessionId(customId);
     const session = utils.getSession(sessionId);
 
-    if (!session) {
-        return await interaction.reply({
-            content: '❌ Session expired. Please start again.',
-            ephemeral: true
-        });
-    }
+    if (!session) return await interaction.reply({ content: '❌ Session expired. Please start again.', ephemeral: true });
 
     // Handle list navigation
-    if (customId.startsWith('state_list_prev_')) {
+    if (customId.startsWith('state_list_prev_')) 
         session.page = Math.max(0, session.page - 1);
-    }
 
     if (customId.startsWith('state_list_next_')) {
         const states = session.showFullList ? session.allStates : session.states;
@@ -890,25 +724,19 @@ async function handleButtonInteraction(interaction) {
 
         // Add metadata
         let metadataInfo = '';
-        if (state.metadata?.addedAt) {
+        if (state.metadata?.addedAt) 
             metadataInfo += `**Added:** ${utils.formatDate(state.metadata.addedAt)}\n`;
-        }
-        if (state.genesisDate) {
+        if (state.genesisDate) 
             metadataInfo += `**Genesis Date:** ${utils.formatDate(state.genesisDate)}\n`;
-        }
-        if (state.addedAt) {
+        if (state.addedAt) 
             metadataInfo += `**Added At:** ${utils.formatDate(state.addedAt)}\n`;
-        }
-        if (state.discord?.metadata?.messageCount) {
+        if (state.discord?.metadata?.messageCount)
             metadataInfo += `**Discord Messages:** ${state.discord.metadata.messageCount}\n`;
-        }
-        if (state.discord?.metadata?.lastMessageTime) {
+        if (state.discord?.metadata?.lastMessageTime)
             metadataInfo += `**Last Message:** ${utils.formatDate(state.discord.metadata.lastMessageTime)}\n`;
-        }
 
-        if (metadataInfo) {
+        if (metadataInfo)
             embed.addFields({ name: '📊 Metadata', value: metadataInfo.trim(), inline: false });
-        }
 
         return await interaction.update({ embeds: [embed], components: [] });
     }
@@ -957,14 +785,10 @@ async function handleButtonInteraction(interaction) {
     }
 
     // Handle mode toggles
-    if (customId.startsWith('state_edit_mode_mask_')) {
+    if (customId.startsWith('state_edit_mode_mask_')) 
         session.mode = session.mode === 'mask' ? null : 'mask';
-    }
-
-    if (customId.startsWith('state_edit_mode_server_')) {
+    if (customId.startsWith('state_edit_mode_server_')) 
         session.mode = session.mode === 'server' ? null : 'server';
-    }
-
     if (customId.startsWith('state_edit_mode_')) {
         const state = await State.findById(session.stateId);
         const { embed, components } = buildEditInterface(state, session);
@@ -1087,20 +911,12 @@ async function handleButtonInteraction(interaction) {
     }
 }
 
-// ============================================
-// SELECT MENU HANDLER
-// ============================================
+// ==== SELECT MENU HANDLER ====
 
 async function handleSelectMenu(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
     const session = utils.getSession(sessionId);
-
-    if (!session) {
-        return await interaction.reply({
-            content: '❌ Session expired. Please start again.',
-            ephemeral: true
-        });
-    }
+    if (!session) return await interaction.reply({ content: '❌ Session expired. Please start again.', ephemeral: true });
 
     const state = await State.findById(session.stateId);
     const value = interaction.values[0];
@@ -1289,29 +1105,19 @@ async function handleSelectMenu(interaction) {
             break;
 
         default:
-            return await interaction.reply({
-                content: '❌ Unknown option selected.',
-                ephemeral: true
-            });
+            return await interaction.reply({ content: '❌ Unknown option selected.', ephemeral: true });
     }
 
     await interaction.showModal(modal);
 }
 
-// ============================================
-// MODAL SUBMIT HANDLER
-// ============================================
+// ==== MODAL SUBMIT HANDLER ====
 
 async function handleModalSubmit(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
     const session = utils.getSession(sessionId);
 
-    if (!session) {
-        return await interaction.reply({
-            content: '❌ Session expired. Please start again.',
-            ephemeral: true
-        });
-    }
+    if (!session) return await interaction.reply({ content: '❌ Session expired. Please start again.', ephemeral: true });
 
     const state = await State.findById(session.stateId);
 
@@ -1361,9 +1167,7 @@ async function handleModalSubmit(interaction) {
             const alter = allAlters.find(a =>
                 a.name?.indexable?.toLowerCase() === name.toLowerCase()
             );
-            if (alter) {
-                matchingAlterIds.push(alter._id.toString());
-            }
+            if (alter) matchingAlterIds.push(alter._id.toString());
         }
 
         state.alters = matchingAlterIds;
@@ -1417,9 +1221,7 @@ async function handleModalSubmit(interaction) {
             }
 
             state.proxy = valid;
-        } else {
-            state.proxy = [];
-        }
+        } else state.proxy = [];
 
         if (signoff !== undefined) state.signoff = signoff || undefined;
         await state.save();
@@ -1466,11 +1268,9 @@ async function handleModalSubmit(interaction) {
         state.caution.c_type = cautionType || undefined;
         state.caution.detail = cautionDetail || undefined;
 
-        if (triggerNames) {
+        if (triggerNames) 
             state.caution.triggers = utils.parseCommaSeparated(triggerNames).map(name => ({ name }));
-        } else {
-            state.caution.triggers = [];
-        }
+        else state.caution.triggers = [];
 
         await state.save();
     }
