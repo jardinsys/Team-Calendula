@@ -86,49 +86,29 @@ module.exports = {
                 .setDescription('Group name (required for edit/delete)')
                 .setRequired(false)))
 
-        // SETTINGS subcommand
+/*        // SETTINGS subcommand
         .addSubcommand(sub => sub
             .setName('settings')
             .setDescription('Configure group settings')
             .addStringOption(opt => opt
                 .setName('group_name')
                 .setDescription('Group name')
-                .setRequired(true))),
+                .setRequired(true))),*/,
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const { user, system, isNew } = await utils.getOrCreateUserAndSystem(interaction);
 
-        if (isNew) {
-            return await utils.handleNewUserFlow(interaction, 'group');
-        }
+        if (isNew) return await utils.handleNewUserFlow(interaction, 'group');
+        if (!system && subcommand !== 'view') return await interaction.reply({ content: '❌ You need to set up a system first. Use `/system` to get started.', ephemeral: true });
 
-        if (!system && subcommand !== 'view') {
-            return await interaction.reply({
-                content: '❌ You need to set up a system first. Use `/system` to get started.',
-                ephemeral: true
-            });
-        }
-
-        // Route based on subcommand and action
-        if (subcommand === 'view') {
-            const action = interaction.options.getString('action');
-            if (action === 'list') {
-                return await handleShowList(interaction, user, system);
-            } else if (action === 'show') {
-                return await handleShow(interaction, user, system);
-            }
-        } else if (subcommand === 'manage') {
-            const action = interaction.options.getString('action');
-            if (action === 'new') {
-                return await handleNew(interaction, user, system);
-            } else if (action === 'edit') {
-                return await handleEdit(interaction, user, system);
-            } else if (action === 'delete') {
-                return await handleDelete(interaction, user, system);
-            }
-        } else if (subcommand === 'settings') {
-            return await handleSettings(interaction, user, system);
+        const action = interaction.options.getString('action');
+        switch (action) {
+            case 'list': return await handleShowList(interaction, user, system);
+            case 'show': return await handleShow(interaction, user, system);
+            case 'new': return await handleNew(interaction, user, system);
+            case 'edit': return await handleEdit(interaction, user, system);
+            case 'delete': return await handleDelete(interaction, user, system);
         }
     },
 
@@ -137,9 +117,7 @@ module.exports = {
     handleSelectMenu
 };
 
-// ============================================
-// EMBED BUILDERS
-// ============================================
+// ==== EMBED BUILDERS ====
 
 function buildGroupListEmbed(groups, page, system, showFullList) {
     const pageGroups = utils.getPageItems(groups, page);
@@ -213,9 +191,8 @@ async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = 
         let cautionInfo = '';
         if (group.caution.c_type) cautionInfo += `**Type:** ${group.caution.c_type}\n`;
         if (group.caution.detail) cautionInfo += `**Details:** ${group.caution.detail}\n`;
-        if (group.caution.triggers?.length) {
+        if (group.caution.triggers?.length) 
             cautionInfo += `**Triggers:** ${group.caution.triggers.map(t => t.name).filter(Boolean).join(', ')}\n`;
-        }
         if (cautionInfo) embed.addFields({ name: '⚠️ Caution', value: cautionInfo.trim(), inline: false });
     }
 
@@ -272,9 +249,7 @@ function buildEditInterface(group, session) {
     return { embed, components: [selectRow, modeRow, actionRow] };
 }
 
-// ============================================
-// COMMAND HANDLERS
-// ============================================
+// ==== COMMAND HANDLERS ====
 
 async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
@@ -307,30 +282,21 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         const User = require('../../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
 
-        if (!otherUser?.systemID) {
-            return await interaction.reply({ content: '❌ This user does not have a group list to show.', ephemeral: true });
-        }
+        if (!otherUser?.systemID) return await interaction.reply({ content: '❌ This user does not have a group list to show.', ephemeral: true });
 
         targetSystem = await System.findById(otherUser.systemID);
-        if (!targetSystem) {
-            return await interaction.reply({ content: '❌ This user does not have a group list to show.', ephemeral: true });
-        }
+        if (!targetSystem) return await interaction.reply({ content: '❌ This user does not have a group list to show.', ephemeral: true });
 
-        if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) {
+        if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) 
             return await interaction.reply({ content: '❌ This user does not have a group list to show.', ephemeral: true });
-        }
 
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 
-    if (!targetSystem) {
-        return await interaction.reply({ content: '❌ No system found.', ephemeral: true });
-    }
+    if (!targetSystem) return await interaction.reply({ content: '❌ No system found.', ephemeral: true });
 
     const groups = await Group.find({ _id: { $in: targetSystem.groups?.IDs || [] } });
-    if (groups.length === 0) {
-        return await interaction.reply({ content: '📭 No groups found.', ephemeral: true });
-    }
+    if (groups.length === 0) return await interaction.reply({ content: '📭 No groups found.', ephemeral: true });
 
     const visibleGroups = groups.filter(g => utils.shouldShowEntity(g, privacyBucket, isOwner, false));
 
@@ -366,26 +332,19 @@ async function handleShow(interaction, currentUser, currentSystem) {
         const User = require('../../../schemas/user');
         const otherUser = await User.findOne({ discordID: discordId });
 
-        if (!otherUser?.systemID) {
-            return await interaction.reply({ content: '❌ Group cannot be found.', ephemeral: true });
-        }
+        if (!otherUser?.systemID) return await interaction.reply({ content: '❌ Group cannot be found.', ephemeral: true });
 
         targetSystem = await System.findById(otherUser.systemID);
-        if (!targetSystem) {
-            return await interaction.reply({ content: '❌ Group cannot be found.', ephemeral: true });
-        }
+        if (!targetSystem) return await interaction.reply({ content: '❌ Group cannot be found.', ephemeral: true });
 
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 
-    if (!targetSystem) {
-        return await interaction.reply({ content: '❌ No system found.', ephemeral: true });
-    }
+    if (!targetSystem) return await interaction.reply({ content: '❌ No system found.', ephemeral: true });
 
     const group = await utils.findGroupByName(groupName, targetSystem);
-    if (!group || (!isOwner && !utils.shouldShowEntity(group, privacyBucket, isOwner))) {
+    if (!group || (!isOwner && !utils.shouldShowEntity(group, privacyBucket, isOwner))) 
         return await interaction.reply({ content: '❌ Group cannot be found.', ephemeral: true });
-    }
 
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
     const embed = await buildGroupCard(group, targetSystem, privacyBucket, closedCharAllowed);
@@ -403,13 +362,8 @@ async function handleShow(interaction, currentUser, currentSystem) {
 async function handleNew(interaction, user, system) {
     const groupName = interaction.options.getString('group_name');
 
-    if (!utils.isValidIndexableName(groupName)) {
-        return await interaction.reply({ content: '❌ Invalid name format. Use only letters, numbers, hyphens, and underscores.', ephemeral: true });
-    }
-
-    if (await utils.findGroupByName(groupName, system)) {
-        return await interaction.reply({ content: '❌ A group with this name already exists.', ephemeral: true });
-    }
+    if (!utils.isValidIndexableName(groupName)) return await interaction.reply({ content: '❌ Invalid name format. Use only letters, numbers, hyphens, and underscores.', ephemeral: true });
+    if (await utils.findGroupByName(groupName, system)) return await interaction.reply({ content: '❌ A group with this name already exists.', ephemeral: true });
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, { type: 'new', groupName: groupName.toLowerCase(), systemId: system._id, userId: user._id });
@@ -422,13 +376,8 @@ async function handleEdit(interaction, user, system) {
     const groupName = interaction.options.getString('group_name');
     const group = await utils.findGroupByName(groupName, system);
 
-    if (!group) {
-        return await interaction.reply({ content: '❌ Group not found.', ephemeral: true });
-    }
-
-    if (group.systemID !== system._id.toString()) {
-        return await interaction.reply({ content: '❌ This group does not belong to your system.', ephemeral: true });
-    }
+    if (!group) return await interaction.reply({ content: '❌ Group not found.', ephemeral: true });
+    if (group.systemID !== system._id.toString()) return await interaction.reply({ content: '❌ This group does not belong to your system.', ephemeral: true });
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, { type: 'edit', groupId: group._id, systemId: system._id, mode: null, syncWithDiscord: group.syncWithApps?.discord || false });
@@ -441,9 +390,7 @@ async function handleDelete(interaction, user, system) {
     const groupName = interaction.options.getString('group_name');
     const group = await utils.findGroupByName(groupName, system);
 
-    if (!group) {
-        return await interaction.reply({ content: '❌ Group not found.', ephemeral: true });
-    }
+    if (!group) return await interaction.reply({ content: '❌ Group not found.', ephemeral: true });
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, { type: 'delete', groupId: group._id, systemId: system._id });
@@ -469,9 +416,7 @@ async function handleSettings(interaction, user, system) {
     const groupName = interaction.options.getString('group_name');
     const group = await utils.findGroupByName(groupName, system);
 
-    if (!group) {
-        return await interaction.reply({ content: '❌ Group not found.', ephemeral: true });
-    }
+    if (!group) return await interaction.reply({ content: '❌ Group not found.', ephemeral: true });
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, { type: 'settings', groupId: group._id, systemId: system._id });
@@ -496,16 +441,12 @@ async function handleSettings(interaction, user, system) {
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
 }
 
-// ============================================
-// BUTTON HANDLER
-// ============================================
+// ==== BUTTON HANDLER ====
 
 async function handleButtonInteraction(interaction) {
     const customId = interaction.customId;
 
-    if (customId.startsWith('new_user_')) {
-        return await utils.handleNewUserButton(interaction, 'group');
-    }
+    if (customId.startsWith('new_user_'))  return await utils.handleNewUserButton(interaction, 'group');
 
     if (customId === 'group_menu_showlist') {
         const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
@@ -515,9 +456,7 @@ async function handleButtonInteraction(interaction) {
     const sessionId = utils.extractSessionId(customId);
     const session = utils.getSession(sessionId);
 
-    if (!session) {
-        return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
-    }
+    if (!session) return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
 
     // List navigation
     if (customId.startsWith('group_list_prev_')) session.page = Math.max(0, session.page - 1);
@@ -613,17 +552,13 @@ async function handleButtonInteraction(interaction) {
     }
 }
 
-// ============================================
-// SELECT MENU HANDLER
-// ============================================
+// ==== SELECT MENU HANDLER ====
 
 async function handleSelectMenu(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
     const session = utils.getSession(sessionId);
 
-    if (!session) {
-        return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
-    }
+    if (!session) return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
 
     const group = await Group.findById(session.groupId);
     const value = interaction.values[0];
@@ -688,17 +623,13 @@ async function handleSelectMenu(interaction) {
     await interaction.showModal(modal);
 }
 
-// ============================================
-// MODAL HANDLER
-// ============================================
+// ==== MODAL HANDLER ====
 
 async function handleModalSubmit(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
     const session = utils.getSession(sessionId);
 
-    if (!session) {
-        return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
-    }
+    if (!session) return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
 
     const group = await Group.findById(session.groupId);
 
@@ -760,9 +691,7 @@ async function handleModalSubmit(interaction) {
             }
 
             group.proxy = valid;
-        } else {
-            group.proxy = [];
-        }
+        } else group.proxy = [];   
 
         group.signoff = signoff || undefined;
         await group.save();
