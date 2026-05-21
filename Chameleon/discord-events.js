@@ -1,0 +1,1 @@
+//check joins and check leaves, if leave remove server stuff on alters, systems, states exc
