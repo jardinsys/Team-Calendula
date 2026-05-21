@@ -39,13 +39,24 @@ module.exports = {
             .addUserOption(opt => opt
                 .setName('user')
                 .setDescription('User to view'))
-            .addStringOption(opt => opt
+/*            .addStringOption(opt => opt
                 .setName('userid')
-                .setDescription('Discord User ID (for users outside the server)')))
+                .setDescription('Discord User ID (for users outside the server)'))*/)
         .addSubcommand(sub => sub
             .setName('edit')
-            .setDescription('Edit your profile'))
-        .addSubcommand(sub => sub
+            .setDescription('Edit your profile')
+            .addStringOption(opt => opt
+                .setName('status')
+                .setDescription('Update your Status')
+                .setRequired(false)
+                .setMaxLength(100))
+            .addIntegerOption(opt => opt
+                .setName('battery')
+                .setDescription('Update your social battery level (0-100)')
+                .setRequired(false)
+                .setMinValue(0)
+                .setMaxValue(100))
+/*        .addSubcommand(sub => sub
             .setName('status')
             .setDescription('Quick update your current status')
             .addStringOption(opt => opt
@@ -61,27 +72,20 @@ module.exports = {
                 .setDescription('Social battery level (0-100)')
                 .setRequired(true)
                 .setMinValue(0)
-                .setMaxValue(100))),
+                .setMaxValue(100))*/),
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const { user, system, isNew } = await utils.getOrCreateUserAndSystem(interaction);
 
-        if (isNew) {
-            return utils.handleNewUserFlow(interaction, 'profile');
-        }
+        if (isNew) return utils.handleNewUserFlow(interaction, 'profile');
 
         switch (subcommand) {
-            case 'show':
-                return handleShow(interaction, user, system);
-            case 'edit':
-                return handleEdit(interaction, user, system);
-            case 'status':
-                return handleQuickStatus(interaction, user, system);
-            case 'battery':
-                return handleQuickBattery(interaction, user, system);
-            default:
-                return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
+            case 'show': return handleShow(interaction, user, system);
+            case 'edit': return handleEdit(interaction, user, system);
+/*            case 'status': return handleQuickStatus(interaction, user, system);
+            case 'battery': return handleQuickBattery(interaction, user, system); */
+            default: return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
         }
     },
 
@@ -91,9 +95,7 @@ module.exports = {
     handleModalSubmit
 };
 
-// ============================================
-// SHOW - View profile
-// ============================================
+// ==== SHOW - View profile ====
 
 async function handleShow(interaction, currentUser, currentSystem) {
     const targetDiscordUser = interaction.options.getUser('user');
@@ -108,32 +110,17 @@ async function handleShow(interaction, currentUser, currentSystem) {
     if (targetDiscordUser || targetUserId) {
         isOwner = false;
         const discordId = targetDiscordUser?.id || targetUserId;
-
         user = await User.findOne({ discordID: discordId });
+        if (!user) return interaction.reply({ content: '❌ This user hasn\'t set up a profile yet.', ephemeral: true });
 
-        if (!user) {
-            return interaction.reply({
-                content: '❌ This user hasn\'t set up a profile yet.',
-                ephemeral: true
-            });
-        }
-
-        if (user.systemID) {
-            system = await System.findById(user.systemID);
-        }
+        if (user.systemID) system = await System.findById(user.systemID);
 
         // Check if blocked
-        if (currentUser && utils.isBlocked(user, interaction.user.id, currentUser.friendID)) {
-            return interaction.reply({
-                content: '❌ This user\'s profile is not available.',
-                ephemeral: true
-            });
-        }
+        if (currentUser && utils.isBlocked(user, interaction.user.id, currentUser.friendID)) 
+            return interaction.reply({ content: '❌ This user\'s profile is not available.', ephemeral: true });
 
         // Get privacy bucket for system data visibility
-        if (system) {
-            privacyBucket = utils.getPrivacyBucket(system, interaction.user.id, interaction.guildId);
-        }
+        if (system) privacyBucket = utils.getPrivacyBucket(system, interaction.user.id, interaction.guildId);
     }
 
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
@@ -168,11 +155,16 @@ async function handleShow(interaction, currentUser, currentSystem) {
     return interaction.editReply({ embeds: [embed], components });
 }
 
-// ============================================
-// EDIT - Edit profile interface
-// ============================================
+// ==== EDIT - Edit profile interface ====
 
 async function handleEdit(interaction, user, system) {
+    //If status and/or battery are entered, let those auto update and then ask if further editing is needed
+    const statusText = interaction.options.getString('status') || '';
+    const batteryLevel = interaction.options.getInteger('battery') || undefined;
+
+    if (!system) {} // update edit interface to include new user 
+
+
     const sessionId = utils.generateSessionId(interaction.user.id);
 
     utils.setSession(sessionId, {
@@ -181,7 +173,7 @@ async function handleEdit(interaction, user, system) {
         type: 'profile_edit'
     });
 
-    const embed = buildEditInterface(user, system, sessionId);
+    const embed = buildEditInterface(user, system, sessionId,);
     const components = buildEditComponents(sessionId);
 
     return interaction.reply({ embeds: [embed], components, ephemeral: true });
@@ -235,9 +227,7 @@ async function handleQuickBattery(interaction, user, system) {
     });
 }
 
-// ============================================
-// BUILD PROFILE EMBED
-// ============================================
+// ==== BUILD PROFILE EMBED ====
 
 async function buildProfileEmbed(user, system, interaction, isOwner, privacyBucket = null, closedCharAllowed = true) {
     const displayName = user.discord?.name?.display || interaction.user?.displayName || 'Unknown';
@@ -247,14 +237,10 @@ async function buildProfileEmbed(user, system, interaction, isOwner, privacyBuck
         .setThumbnail(interaction.user?.displayAvatarURL() || null)
         .setTimestamp();
 
-    // Use system color if available
     const profileColor = utils.getSystemEmbedColor(system);
     if (profileColor) embed.setColor(profileColor);
 
-    // Description from user
-    if (user.discord?.description) {
-        embed.setDescription(user.discord.description);
-    }
+    if (user.discord?.description) embed.setDescription(user.discord.description);
 
     // Basic Info field
     let basicInfo = '';
@@ -262,13 +248,9 @@ async function buildProfileEmbed(user, system, interaction, isOwner, privacyBuck
         const separator = user.pronounSeperator || '/';
         basicInfo += `**Pronouns:** ${user.pronouns.join(separator)}\n`;
     }
-    if (user.friendID && isOwner) {
-        // Only show friend ID to owner
-        basicInfo += `**Friend ID:** \`${user.friendID}\`\n`;
-    }
-    if (basicInfo) {
-        embed.addFields({ name: '📋 Info', value: basicInfo.trim(), inline: true });
-    }
+    // Only show friend ID to owner
+    if (user.friendID && isOwner) basicInfo += `**Friend ID:** \`${user.friendID}\`\n`; 
+    if (basicInfo) embed.addFields({ name: '📋 Info', value: basicInfo.trim(), inline: true });
 
     // Current Status field (from system.front) - check privacy
     if (system) {
@@ -278,19 +260,14 @@ async function buildProfileEmbed(user, system, interaction, isOwner, privacyBuck
 
         if (showFrontInfo) {
             let statusInfo = '';
-            if (system.front?.status) {
-                statusInfo += `**Status:** ${system.front.status}\n`;
-            }
+            if (system.front?.status) statusInfo += `**Status:** ${system.front.status}\n`;
             if (system.battery !== undefined && system.battery !== null) {
                 const batteryEmoji = getBatteryEmoji(system.battery);
                 statusInfo += `**Social Battery:** ${batteryEmoji} ${system.battery}%\n`;
             }
-            if (system.front?.caution) {
-                statusInfo += `**⚠️ Caution:** ${system.front.caution}\n`;
-            }
-            if (statusInfo) {
-                embed.addFields({ name: '💭 Current Status', value: statusInfo.trim(), inline: true });
-            }
+            if (system.front?.caution) statusInfo += `**⚠️ Caution:** ${system.front.caution}\n`;
+            
+            if (statusInfo) embed.addFields({ name: '💭 Current Status', value: statusInfo.trim(), inline: true });
         }
     }
 
@@ -299,12 +276,8 @@ async function buildProfileEmbed(user, system, interaction, isOwner, privacyBuck
         let proxyInfo = '';
         const proxyStyle = system.proxy?.style || 'off';
         proxyInfo += `**Auto-proxy:** ${proxyStyle}\n`;
-        if (system.proxy?.break) {
-            proxyInfo += `**🛑 On Break:** Yes\n`;
-        }
-        if (proxyInfo) {
-            embed.addFields({ name: '💬 Proxy', value: proxyInfo.trim(), inline: true });
-        }
+        if (system.proxy?.break) proxyInfo += `**🛑 On Break:** Yes\n`;
+        if (proxyInfo) embed.addFields({ name: '💬 Proxy', value: proxyInfo.trim(), inline: true });
     }
 
     // Account Info field
@@ -313,25 +286,17 @@ async function buildProfileEmbed(user, system, interaction, isOwner, privacyBuck
         const joinedTimestamp = Math.floor(new Date(user.joinedAt).getTime() / 1000);
         accountInfo += `**Joined:** <t:${joinedTimestamp}:R>\n`;
     }
-    if (user.friends?.length > 0 && isOwner) {
-        // Only show friend count to owner
-        accountInfo += `**Friends:** ${user.friends.length}\n`;
-    }
-    if (accountInfo) {
-        embed.addFields({ name: '📊 Account', value: accountInfo.trim(), inline: true });
-    }
+    // Only show friend count to owner
+    if (user.friends?.length > 0 && isOwner) accountInfo += `**Friends:** ${user.friends.length}\n`;
+    if (accountInfo) embed.addFields({ name: '📊 Account', value: accountInfo.trim(), inline: true });
 
     // Footer
-    embed.setFooter({
-        text: isOwner ? 'Your profile' : `${displayName}'s profile`
-    });
+    //embed.setFooter({ text: isOwner ? 'Your profile' : `${displayName}'s profile` });
 
     return embed;
 }
 
-// ============================================
-// BUILD EDIT INTERFACE
-// ============================================
+// ==== BUILD EDIT INTERFACE ====
 
 function buildEditInterface(user, system, sessionId) {
     const displayName = user.discord?.name?.display || 'Unknown';
@@ -347,12 +312,8 @@ function buildEditInterface(user, system, sessionId) {
     // Show current values
     let currentValues = '';
 
-    if (user.discord?.name?.display) {
-        currentValues += `**Display Name:** ${user.discord.name.display}\n`;
-    }
-    if (user.pronouns?.length > 0) {
-        currentValues += `**Pronouns:** ${user.pronouns.join(user.pronounSeperator || '/')}\n`;
-    }
+    if (user.discord?.name?.display) currentValues += `**Display Name:** ${user.discord.name.display}\n`;
+    if (user.pronouns?.length > 0) currentValues += `**Pronouns:** ${user.pronouns.join(user.pronounSeperator || '/')}\n`;
     if (user.discord?.description) {
         const desc = user.discord.description.length > 50
             ? user.discord.description.substring(0, 47) + '...'
@@ -361,17 +322,11 @@ function buildEditInterface(user, system, sessionId) {
     }
 
     if (system) {
-        if (system.front?.status) {
-            currentValues += `**Status:** ${system.front.status}\n`;
-        }
-        if (system.battery !== undefined) {
-            currentValues += `**Battery:** ${system.battery}%\n`;
-        }
+        if (system.front?.status) currentValues += `**Status:** ${system.front.status}\n`;
+        if (system.battery !== undefined) currentValues += `**Battery:** ${system.battery}%\n`;
     }
 
-    if (currentValues) {
-        embed.addFields({ name: '📋 Current Values', value: currentValues.trim(), inline: false });
-    }
+    if (currentValues) embed.addFields({ name: '📋 Current Values', value: currentValues.trim(), inline: false });
 
     return embed;
 }
@@ -426,9 +381,7 @@ async function handleButtonInteraction(interaction) {
     // Handle edit button from show
     if (customId.startsWith('profile_edit_') && !customId.includes('select') && !customId.includes('done')) {
         const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
-        if (!user) {
-            return interaction.reply({ content: '❌ User not found.', ephemeral: true });
-        }
+        if (!user) return interaction.reply({ content: '❌ User not found.', ephemeral: true });
 
         const sessionId = utils.generateSessionId(interaction.user.id);
         utils.setSession(sessionId, {
@@ -680,8 +633,7 @@ async function handleSelectMenu(interaction) {
             );
             break;
 
-        default:
-            return;
+        default: return;
     }
 
     return interaction.showModal(modal);
@@ -695,12 +647,8 @@ async function handleModalSubmit(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
     const session = utils.getSession(sessionId);
 
-    if (!session) {
-        return interaction.reply({
-            content: '❌ Session expired. Please try again.',
-            ephemeral: true
-        });
-    }
+    if (!session) return interaction.reply({ content: '❌ Session expired. Please try again.', ephemeral: true });
+    
 
     const user = await User.findById(session.userId);
     const system = session.systemId ? await System.findById(session.systemId) : null;
@@ -717,9 +665,7 @@ async function handleModalSubmit(interaction) {
         if (!user.discord.name) user.discord.name = {};
 
         if (displayName) user.discord.name.display = displayName;
-        if (pronounsInput) {
-            user.pronouns = utils.parseCommaSeparated(pronounsInput);
-        }
+        if (pronounsInput) user.pronouns = utils.parseCommaSeparated(pronounsInput);
         if (pronounSeparator) user.pronounSeperator = pronounSeparator;
         if (bio !== undefined) user.discord.description = bio || undefined;
 
@@ -744,12 +690,8 @@ async function handleModalSubmit(interaction) {
 
             if (batteryInput) {
                 const batteryNum = parseInt(batteryInput);
-                if (!isNaN(batteryNum) && batteryNum >= 0 && batteryNum <= 100) {
-                    system.battery = batteryNum;
-                }
-            } else {
-                system.battery = undefined;
-            }
+                if (!isNaN(batteryNum) && batteryNum >= 0 && batteryNum <= 100) system.battery = batteryNum;
+            } else system.battery = undefined;
 
             await system.save();
         }
@@ -769,17 +711,12 @@ async function handleModalSubmit(interaction) {
 
             // Validate proxy style
             const validStyles = ['off', 'last', 'front'];
-            if (validStyles.includes(proxyStyle?.toLowerCase())) {
-                system.proxy.style = proxyStyle.toLowerCase();
-            } else if (proxyStyle) {
+            if (validStyles.includes(proxyStyle?.toLowerCase())) system.proxy.style = proxyStyle.toLowerCase();
+            else if (proxyStyle) {
                 // Check if it's a valid entity name (specify mode)
                 const { entity } = await utils.findEntityByName(proxyStyle, system);
-                if (entity) {
-                    system.proxy.style = proxyStyle;
-                } else {
-                    // Invalid entity name, keep as is or set to off
-                    system.proxy.style = system.proxy.style || 'off';
-                }
+                if (entity) system.proxy.style = proxyStyle;
+                else system.proxy.style = system.proxy.style || 'off'; // Invalid entity name, keep as is or set to off
             }
 
             system.proxy.break = proxyBreak?.toLowerCase() === 'yes';

@@ -15,11 +15,7 @@ const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const User = require('../../../schemas/user');
 const { Shift } = require('../../../schemas/front');
-
-// Import shared utilities
 const utils = require('../../functions/bot_utils');
-
-// Constants
 const ENTITY_COLORS = utils.ENTITY_COLORS;
 
 module.exports = {
@@ -29,9 +25,9 @@ module.exports = {
         .addUserOption(opt => opt
             .setName('user')
             .setDescription('View front for another user'))
-        .addStringOption(opt => opt
+/*        .addStringOption(opt => opt
             .setName('userid')
-            .setDescription('Discord User ID (for users outside the server)')),
+            .setDescription('Discord User ID (for users outside the server)'))*/,
 
     async execute(interaction) {
         // Determine whose front to show
@@ -39,32 +35,19 @@ module.exports = {
         let targetUserId = interaction.options.getString('userid');
 
         // Default to the command user
-        if (!targetUser && !targetUserId) {
-            targetUserId = interaction.user.id;
-        } else if (targetUser) {
-            targetUserId = targetUser.id;
-        }
+        if (!targetUser && !targetUserId) targetUserId = interaction.user.id;
+        else if (targetUser) targetUserId = targetUser.id;
 
         // Get the user and system
         const user = await User.findOne({ discordID: targetUserId });
 
         if (!user) {
-            if (targetUserId === interaction.user.id) {
-                return utils.handleNewUserFlow(interaction, 'front');
-            }
-            return interaction.reply({
-                content: '❌ That user hasn\'t set up a system yet.',
-                ephemeral: true
-            });
+            if (targetUserId === interaction.user.id) return utils.handleNewUserFlow(interaction, 'front');
+            return interaction.reply({ content: '❌ That user hasn\'t registered a system.', ephemeral: true });
         }
 
         const system = await System.findById(user.systemID);
-        if (!system) {
-            return interaction.reply({
-                content: '❌ System not found.',
-                ephemeral: true
-            });
-        }
+        if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
 
         // Check privacy (if viewing another user's front)
         const isOwner = targetUserId === interaction.user.id;
@@ -74,12 +57,7 @@ module.exports = {
             const currentUser = await User.findOne({ discordID: interaction.user.id });
 
             // Check if blocked
-            if (currentUser && utils.isBlocked(user, interaction.user.id, currentUser.friendID)) {
-                return interaction.reply({
-                    content: '❌ This user\'s front information is not available.',
-                    ephemeral: true
-                });
-            }
+            if (currentUser && utils.isBlocked(user, interaction.user.id, currentUser.friendID)) return interaction.reply({ content: '❌ This user\'s front information is not available.', ephemeral: true });
 
             // Check privacy bucket
             const privacyBucket = utils.getPrivacyBucket(system, interaction.user.id, interaction.guildId);
@@ -126,18 +104,14 @@ module.exports = {
     handleButtonInteraction
 };
 
-// ============================================
-// BUILD FRONT EMBED
-// ============================================
+// ==== BUILD FRONT EMBED ====
 
 async function buildFrontEmbed(system, user, interaction, isOwner, closedCharAllowed = true) {
     // Get display name - respect closed character settings
     let systemName;
-    if (!closedCharAllowed && system.name?.closedNameDisplay) {
-        systemName = system.name.closedNameDisplay;
-    } else {
-        systemName = system.name?.display || system.name?.indexable || 'Unknown System';
-    }
+    if (!closedCharAllowed && system.name?.closedNameDisplay) systemName = system.name.closedNameDisplay;
+    else systemName = system.name?.display || system.name?.indexable || 'Unknown System';
+
     const userName = user.discord?.name?.display || interaction.user?.displayName || 'Unknown User';
 
     const embed = new EmbedBuilder()
@@ -149,40 +123,29 @@ async function buildFrontEmbed(system, user, interaction, isOwner, closedCharAll
     if (frontColor) embed.setColor(frontColor);
 
     // Set thumbnail to system avatar
-    if (system.avatar?.url || system.discord?.image?.avatar?.url) {
-        embed.setThumbnail(system.avatar?.url || system.discord?.image?.avatar?.url);
-    }
+    if (system.avatar?.url || system.discord?.image?.avatar?.url) embed.setThumbnail(system.avatar?.url || system.discord?.image?.avatar?.url);
 
     // Build description with main status and battery
     let description = '';
 
-    if (system.front?.status) {
-        description += `**Status:** ${system.front.status}\n`;
-    }
-
+    if (system.front?.status) description += `**Status:** ${system.front.status}\n`;
     if (system.battery !== undefined && system.battery !== null) {
         const batteryEmoji = getBatteryEmoji(system.battery);
         description += `**Social Battery:** ${batteryEmoji} ${system.battery}%\n`;
     }
-
-    if (system.front?.caution) {
-        description += `**⚠️ Caution:** ${system.front.caution}\n`;
-    }
-
-    if (description) {
-        embed.setDescription(description.trim());
-    }
+    if (system.front?.caution) description += `**⚠️ Caution:** ${system.front.caution}\n`;
+    if (description) embed.setDescription(description.trim());
 
     // Get fronters by layer
     const layers = system.front?.layers || [];
 
-    if (layers.length === 0) {
+    if (layers.length === 0) 
         embed.addFields({
             name: '📭 No Front Data',
             value: 'No one is currently marked as fronting.\nUse `/switch in` to set the current front.',
             inline: false
         });
-    } else {
+    else {
         // Add a field for each layer
         for (const layer of layers) {
             const layerName = layer.name || 'Front';
@@ -204,14 +167,10 @@ async function buildFrontEmbed(system, user, interaction, isOwner, closedCharAll
                 let fronterLine = `${emoji} **${displayName}**`;
 
                 // Add pronouns if available
-                if (entityInfo?.pronouns?.length > 0) {
-                    fronterLine += ` (${entityInfo.pronouns.join('/')})`;
-                }
+                if (entityInfo?.pronouns?.length > 0) fronterLine += ` (${entityInfo.pronouns.join('/')})`;
 
                 // Add status if available
-                if (currentStatus?.status) {
-                    fronterLine += `\n   └ *${currentStatus.status}*`;
-                }
+                if (currentStatus?.status) fronterLine += `\n   └ *${currentStatus.status}*`;
 
                 // Add duration
                 const duration = getShiftDuration(shift.startTime);
@@ -239,17 +198,13 @@ async function buildFrontEmbed(system, user, interaction, isOwner, closedCharAll
     return embed;
 }
 
-// ============================================
-// BUTTON HANDLER
-// ============================================
+// ==== BUTTON HANDLER ====
 
 async function handleButtonInteraction(interaction) {
     const customId = interaction.customId;
 
     // Handle new user flow buttons
-    if (customId.startsWith('new_user_')) {
-        return await utils.handleNewUserButton(interaction);
-    }
+    if (customId.startsWith('new_user_')) return await utils.handleNewUserButton(interaction);
 
     // Handle switch button - redirect to switch command
     if (customId.startsWith('front_switch_')) {
@@ -266,21 +221,11 @@ async function handleButtonInteraction(interaction) {
         const systemId = customId.replace('front_refresh_', '');
         const system = await System.findById(systemId);
 
-        if (!system) {
-            return interaction.reply({
-                content: '❌ System not found.',
-                ephemeral: true
-            });
-        }
+        if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
 
         // Check ownership
         const user = await User.findOne({ systemID: systemId, discordID: interaction.user.id });
-        if (!user) {
-            return interaction.reply({
-                content: '❌ You can only refresh your own front view.',
-                ephemeral: true
-            });
-        }
+        if (!user) return interaction.reply({ content: '❌ You can only refresh your own front view.', ephemeral: true });
 
         // Rebuild the embed
         const embed = await buildFrontEmbed(system, user, interaction, true);
@@ -302,13 +247,8 @@ async function handleButtonInteraction(interaction) {
     }
 }
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-/**
- * Get entity info for a fronter
- */
+// ==== HELPER FUNCTIONS ====
+// Get entity info for a fronter
 async function getEntityInfo(entityId, type, system, closedCharAllowed = true) {
     try {
         let entity = null;
@@ -329,11 +269,8 @@ async function getEntityInfo(entityId, type, system, closedCharAllowed = true) {
 
         // Respect closedCharAllowed for name display
         let displayName;
-        if (!closedCharAllowed && entity.name?.closedNameDisplay) {
-            displayName = entity.name.closedNameDisplay;
-        } else {
-            displayName = entity.name?.display || entity.name?.indexable || 'Unknown';
-        }
+        if (!closedCharAllowed && entity.name?.closedNameDisplay) displayName = entity.name.closedNameDisplay;
+        else displayName = entity.name?.display || entity.name?.indexable || 'Unknown';
 
         return {
             name: displayName,
@@ -341,14 +278,10 @@ async function getEntityInfo(entityId, type, system, closedCharAllowed = true) {
             avatar: entity.avatar?.url || entity.discord?.image?.avatar?.url,
             color: entity.color
         };
-    } catch (error) {
-        return null;
-    }
+    } catch (error) { return null; }
 }
 
-/**
- * Get battery emoji based on percentage
- */
+// Get battery emoji based on percentage
 function getBatteryEmoji(battery) {
     if (battery >= 80) return '🔋';
     if (battery >= 60) return '🔋';
@@ -357,9 +290,7 @@ function getBatteryEmoji(battery) {
     return '🪫';
 }
 
-/**
- * Get human-readable shift duration
- */
+// Get human-readable shift duration
 function getShiftDuration(startTime) {
     const now = new Date();
     const start = new Date(startTime);

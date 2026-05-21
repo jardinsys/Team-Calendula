@@ -69,71 +69,47 @@ module.exports = {
     handleModalSubmit
 };
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
+// ==== HELPER FUNCTIONS ====
 
-/**
- * Verify the user owns the message and get the record
- */
+// Verify the user owns the message and get the record
 async function verifyMessageOwnership(interaction, messageId) {
     const messageRecord = await Message.findOne({
         discord_webhook_message_id: messageId,
         discord_channel_id: interaction.channelId
     });
-
-    if (!messageRecord) {
-        return {
-            error: '❌ Message not found. Make sure you\'re using this command in the same channel as the message.'
-        };
-    }
-
+    if (!messageRecord) return { error: '❌ Message not found. Make sure you\'re using this command in the same channel as the message.' };
     // Verify the user is the one who sent the message
-    if (messageRecord.discord_user_id !== interaction.user.id) {
-        return {
-            error: '❌ You can only manage messages that you sent.'
-        };
-    }
+    if (messageRecord.discord_user_id !== interaction.user.id) return { error: '❌ You can only manage messages that you sent.' }; 
 
     return { messageRecord };
 }
 
-/**
- * Find an entity (alter/state/group) by name
- */
+// Find an entity (alter/state/group) by name
 async function findEntityByName(name, system) {
     const searchName = name.toLowerCase();
 
     // Search alters first
     const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
     let entity = alters.find(a => a.name?.indexable?.toLowerCase() === searchName);
-    if (!entity) {
-        entity = alters.find(a => a.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
-    }
+    if (!entity) entity = alters.find(a => a.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
     if (entity) return { entity, type: 'alter' };
 
     // Search states
     const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
     entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName);
-    if (!entity) {
-        entity = states.find(s => s.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
-    }
+    if (!entity) entity = states.find(s => s.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
     if (entity) return { entity, type: 'state' };
 
     // Search groups
     const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
     entity = groups.find(g => g.name?.indexable?.toLowerCase() === searchName);
-    if (!entity) {
-        entity = groups.find(g => g.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
-    }
+    if (!entity) entity = groups.find(g => g.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
     if (entity) return { entity, type: 'group' };
 
     return { entity: null, type: null };
 }
 
-/**
- * Get the webhook for the channel
- */
+// Get the webhook for the channel
 async function getOrCreateWebhook(channel) {
     // Check for existing Systemiser webhook
     const webhooks = await channel.fetchWebhooks();
@@ -150,22 +126,16 @@ async function getOrCreateWebhook(channel) {
     return webhook;
 }
 
-// ============================================
-// COMMAND HANDLERS
-// ============================================
+// ==== COMMAND HANDLERS ====
 
-/**
- * Handle /message delete
- */
+// Handle /message delete
 async function handleDelete(interaction) {
     const messageId = interaction.options.getString('message_id');
 
     await interaction.deferReply({ ephemeral: true });
 
     const { messageRecord, error } = await verifyMessageOwnership(interaction, messageId);
-    if (error) {
-        return await interaction.editReply({ content: error });
-    }
+    if (error) return await interaction.editReply({ content: error });
 
     try {
         // Get the webhook message and delete it
@@ -175,36 +145,26 @@ async function handleDelete(interaction) {
         // Delete the database record
         await Message.findByIdAndDelete(messageRecord._id);
 
-        await interaction.editReply({
-            content: '✅ Message deleted successfully.'
-        });
+        //await interaction.editReply({ content: '✅ Message deleted successfully.' , ephemeral: true});
     } catch (err) {
         console.error('Error deleting message:', err);
 
         if (err.code === 10008) {
             // Message not found - already deleted
             await Message.findByIdAndDelete(messageRecord._id);
-            return await interaction.editReply({
-                content: '⚠️ Message was already deleted. Database record cleaned up.'
-            });
+            return await interaction.editReply({ content: '⚠️ Message was already deleted.', ephemeral: true });
         }
 
-        await interaction.editReply({
-            content: '❌ Failed to delete message. It may have already been deleted or you may lack permissions.'
-        });
+        await interaction.editReply({ content: '❌ Failed to delete message. It may have already been deleted or you may lack permissions.', ephemeral: true });
     }
 }
 
-/**
- * Handle /message edit
- */
+// Handle /message edit
 async function handleEdit(interaction) {
     const messageId = interaction.options.getString('message_id');
 
     const { messageRecord, error } = await verifyMessageOwnership(interaction, messageId);
-    if (error) {
-        return await interaction.reply({ content: error, ephemeral: true });
-    }
+    if (error) return await interaction.reply({ content: error, ephemeral: true });
 
     // Create session for the edit
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -235,9 +195,7 @@ async function handleEdit(interaction) {
     await interaction.showModal(modal);
 }
 
-/**
- * Handle /message reproxy
- */
+// Handle /message reproxy
 async function handleReproxy(interaction) {
     const messageId = interaction.options.getString('message_id');
     const entityName = interaction.options.getString('entity_name');
@@ -245,26 +203,19 @@ async function handleReproxy(interaction) {
     await interaction.deferReply({ ephemeral: true });
 
     const { messageRecord, error } = await verifyMessageOwnership(interaction, messageId);
-    if (error) {
-        return await interaction.editReply({ content: error });
-    }
+    if (error) return await interaction.editReply({ content: error, ephemeral: true });
 
     // Get user and system
     const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
-    if (!system) {
-        return await interaction.editReply({
-            content: '❌ You need to set up a system first.'
-        });
-    }
+    if (!system) return await interaction.editReply({ content: '❌ You need to set up a system first.', ephemeral: true });
 
     // Find the new entity
     const { entity, type } = await findEntityByName(entityName, system);
-    if (!entity) {
+    if (!entity) 
         return await interaction.editReply({
             content: `❌ Could not find an alter, state, or group named "${entityName}".\n` +
-                'Make sure you\'re using the indexable name or an alias.'
+                'Make sure you\'re using the indexable name or an alias.', ephemeral: true
         });
-    }
 
     try {
         const webhook = await getOrCreateWebhook(interaction.channel);
@@ -290,20 +241,14 @@ async function handleReproxy(interaction) {
         messageRecord.proxy_id = entity._id.toString();
         await messageRecord.save();
 
-        await interaction.editReply({
-            content: `✅ Message reproxied to **${utils.getDisplayName(entity)}** (${type}).`
-        });
+        await interaction.editReply({ content: `✅ Message reproxied to **${utils.getDisplayName(entity)}** (${type}).`, ephemeral: true });
     } catch (err) {
         console.error('Error reproxying message:', err);
-        await interaction.editReply({
-            content: '❌ Failed to reproxy message. ' + (err.message || 'Unknown error.')
-        });
+        await interaction.editReply({ content: '❌ Failed to reproxy message. ' + (err.message || 'Unknown error.'), ephemeral: true });
     }
 }
 
-/**
- * Get display info for proxying (avatar and name)
- */
+// Get display info for proxying (avatar and name)
 async function getProxyDisplayInfo(entity, type, system, guild) {
     let avatarUrl = null;
     let displayName = 'Unknown';
@@ -334,22 +279,16 @@ async function getProxyDisplayInfo(entity, type, system, guild) {
         avatarUrl = system.avatar.url;
         displayName = entity.name?.display || entity.name?.indexable;
     }
-    else {
-        displayName = entity.name?.display || entity.name?.indexable || entity._id;
-    }
+    else displayName = entity.name?.display || entity.name?.indexable || entity._id;
 
     // Apply proxy layout if configured (entity-type-specific)
     const layout = getLayoutForEntityType(system, type);
-    if (layout) {
-        displayName = formatProxyLayout(layout, entity, type, system);
-    }
+    if (layout) displayName = formatProxyLayout(layout, entity, type, system);
 
     return { avatarUrl, displayName };
 }
 
-/**
- * Get the appropriate layout for an entity type
- */
+// Get the appropriate layout for an entity type
 function getLayoutForEntityType(system, type) {
     // Check for entity-type-specific layout first
     if (typeof system.proxy?.layout === 'object') {
@@ -359,31 +298,19 @@ function getLayoutForEntityType(system, type) {
     return system.proxy?.layout || null;
 }
 
-/**
- * Check if entity should be masked for a guild
- */
+// Check if entity should be masked for a guild
 function shouldMask(entity, system, guildId) {
     // Check entity-level mask settings
     const entityMaskTo = entity.setting?.mask?.maskTo || [];
     const entityMaskExclude = entity.setting?.mask?.maskExclude || [];
 
-    // Check if guild is in maskTo list
-    if (entityMaskTo.some(m => m.discordGuildID === guildId)) {
-        return true;
-    }
-
-    // Check if guild is excluded
-    if (entityMaskExclude.some(m => m.discordGuildID === guildId)) {
-        return false;
-    }
+    if (entityMaskTo.some(m => m.discordGuildID === guildId)) return true;
+    if (entityMaskExclude.some(m => m.discordGuildID === guildId)) return false;
 
     // Check system-level mask settings
     const systemMaskTo = system.setting?.mask?.maskTo || [];
     const systemMaskExclude = system.setting?.mask?.maskExclude || [];
-
-    if (systemMaskTo.some(m => m.discordGuildID === guildId)) {
-        return true;
-    }
+    if (systemMaskTo.some(m => m.discordGuildID === guildId)) return true;
 
     return false;
 }
@@ -408,9 +335,8 @@ function formatProxyLayout(layout, entity, type, system) {
 
     // Replace {tag1}, {tag2}, etc. with SYSTEM tags (unlimited based on array length)
     const tags = system.discord?.tag?.normal || [];
-    for (let i = 0; i < Math.max(tags.length, 20); i++) {
+    for (let i = 0; i < Math.max(tags.length, 20); i++) 
         result = result.replace(new RegExp(`{tag${i + 1}}`, 'gi'), tags[i] || '');
-    }
 
     // Parse signoffs (stored as newline-separated string on the entity)
     const signoffs = entity.signoff ? entity.signoff.split('\n').map(s => s.trim()).filter(Boolean) : [];
@@ -425,17 +351,14 @@ function formatProxyLayout(layout, entity, type, system) {
     const currentPrefix = type === 'alter' ? 'a-sign' : (type === 'state' ? 'st-sign' : 'g-sign');
 
     // Replace current entity's signoffs with its prefix
-    for (let i = 0; i < Math.max(signoffs.length, 20); i++) {
+    for (let i = 0; i < Math.max(signoffs.length, 20); i++) 
         result = result.replace(new RegExp(`{${currentPrefix}${i + 1}}`, 'gi'), signoffs[i] || '');
-    }
 
     // Clear any other entity type signoffs that weren't filled (they don't apply to this entity)
     const otherPrefixes = ['a-sign', 'st-sign', 'g-sign'].filter(p => p !== currentPrefix);
-    for (const prefix of otherPrefixes) {
-        for (let i = 0; i < 20; i++) {
-            result = result.replace(new RegExp(`{${prefix}${i + 1}}`, 'gi'), '');
-        }
-    }
+    for (const prefix of otherPrefixes) 
+        for (let i = 0; i < 20; i++) 
+            result = result.replace(new RegExp(`{${prefix}${i + 1}}`, 'gi'), '');  
 
     // Replace {pronouns}
     const pronouns = entity.identity?.pronouns || [];
@@ -452,29 +375,13 @@ function formatProxyLayout(layout, entity, type, system) {
     return result || name;
 }
 
-// ============================================
-// BUTTON INTERACTION HANDLER
-// ============================================
-
-async function handleButtonInteraction(interaction) {
-    // Currently no buttons for message commands
-    // Add handlers here if needed
-}
-
-// ============================================
-// MODAL SUBMIT HANDLER
-// ============================================
+// ==== MODAL SUBMIT HANDLER ====
 
 async function handleModalSubmit(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
     const session = utils.getSession(sessionId);
 
-    if (!session) {
-        return await interaction.reply({
-            content: '❌ Session expired. Please try again.',
-            ephemeral: true
-        });
-    }
+    if (!session) return await interaction.reply({ content: '❌ Session expired. Please try again.', ephemeral: true });
 
     // Handle edit modal
     if (interaction.customId.startsWith('message_edit_modal_')) {
@@ -486,32 +393,18 @@ async function handleModalSubmit(interaction) {
             const webhook = await getOrCreateWebhook(interaction.channel);
 
             // Edit the webhook message
-            await webhook.editMessage(session.messageId, {
-                content: newContent
-            });
+            await webhook.editMessage(session.messageId, { content: newContent });
 
             // Update the database record
-            await Message.findByIdAndUpdate(session.messageRecordId, {
-                content: newContent
-            });
+            await Message.findByIdAndUpdate(session.messageRecordId, { content: newContent });
 
             utils.deleteSession(sessionId);
 
-            await interaction.editReply({
-                content: '✅ Message edited successfully.'
-            });
+            await interaction.editReply({ content: '✅ Message edited successfully.', ephemeral: true });
         } catch (err) {
             console.error('Error editing message:', err);
-
-            if (err.code === 50035) {
-                return await interaction.editReply({
-                    content: '❌ Message content is invalid or too long.'
-                });
-            }
-
-            await interaction.editReply({
-                content: '❌ Failed to edit message. ' + (err.message || 'Unknown error.')
-            });
+            if (err.code === 50035) return await interaction.editReply({ content: '❌ Message content is invalid or too long.', ephemeral: true });  
+            await interaction.editReply({ content: '❌ Failed to edit message. ' + (err.message || 'Unknown error.'), ephemeral: true });
         }
     }
 }
