@@ -67,9 +67,7 @@ module.exports = {
         const { user, system, isNew } = await utils.getOrCreateUserAndSystem(interaction);
 
         // Handle new users
-        if (isNew) {
-            return await utils.handleNewUserFlow(interaction, 'system');
-        }
+        if (isNew) return await utils.handleNewUserFlow(interaction, 'system');
 
         // Check for system (except for viewing commands)
         if (!system && subcommand !== 'show') {
@@ -127,12 +125,8 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     basicInfo += `**States:** ${stateCount}\n`;
     basicInfo += `**Groups:** ${groupCount}\n`;
 
-    if (system.birthday) {
-        basicInfo += `**Birthday:** ${utils.formatDate(system.birthday)}\n`;
-    }
-    if (system.timezone) {
-        basicInfo += `**Timezone:** ${system.timezone}\n`;
-    }
+    if (system.birthday) basicInfo += `**Birthday:** ${utils.formatDate(system.birthday)}\n`;
+    if (system.timezone) basicInfo += `**Timezone:** ${system.timezone}\n`;
 
     embed.addFields({
         name: '📊 Overview',
@@ -157,12 +151,8 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     // Terminology field
     if (system.alterSynonym?.singular || system.alterSynonym?.plural) {
         let termInfo = '';
-        if (system.alterSynonym.singular) {
-            termInfo += `**Singular:** ${system.alterSynonym.singular}\n`;
-        }
-        if (system.alterSynonym.plural) {
-            termInfo += `**Plural:** ${system.alterSynonym.plural}\n`;
-        }
+        if (system.alterSynonym.singular) termInfo += `**Singular:** ${system.alterSynonym.singular}\n`;
+        if (system.alterSynonym.plural) termInfo += `**Plural:** ${system.alterSynonym.plural}\n`;
         embed.addFields({
             name: '📝 Terminology',
             value: termInfo.trim(),
@@ -173,12 +163,8 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     // Front Status field
     if (system.front?.status || system.front?.caution) {
         let frontInfo = '';
-        if (system.front.status) {
-            frontInfo += `**Status:** ${system.front.status}\n`;
-        }
-        if (system.front.caution) {
-            frontInfo += `**Caution:** ${system.front.caution}\n`;
-        }
+        if (system.front.status) frontInfo += `**Status:** ${system.front.status}\n`;
+        if (system.front.caution) frontInfo += `**Caution:** ${system.front.caution}\n`;
         embed.addFields({
             name: '🎭 Current Front',
             value: frontInfo.trim(),
@@ -200,19 +186,12 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     if (system.caution && (system.caution.c_type || system.caution.detail || system.caution.triggers?.length > 0)) {
         let cautionInfo = '';
 
-        if (system.caution.c_type) {
-            cautionInfo += `**Type:** ${system.caution.c_type}\n`;
-        }
-        if (system.caution.detail) {
-            cautionInfo += `**Details:** ${system.caution.detail}\n`;
-        }
+        if (system.caution.c_type) cautionInfo += `**Type:** ${system.caution.c_type}\n`;
+        if (system.caution.detail) cautionInfo += `**Details:** ${system.caution.detail}\n`;
         if (system.caution.triggers?.length > 0) {
             const triggerNames = system.caution.triggers.map(t => t.name).filter(Boolean);
-            if (triggerNames.length > 0) {
-                cautionInfo += `**Triggers:** ${triggerNames.join(', ')}\n`;
-            }
+            if (triggerNames.length > 0) cautionInfo += `**Triggers:** ${triggerNames.join(', ')}\n`;
         }
-
         if (cautionInfo) {
             embed.addFields({
                 name: '⚠️ Caution',
@@ -226,13 +205,8 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     if (showFull) {
         // Metadata
         let metadataInfo = '';
-        if (system.metadata?.joinedAt) {
-            metadataInfo += `**Joined:** ${utils.formatDate(system.metadata.joinedAt)}\n`;
-        }
-        if (system.proxy?.lastProxyTime) {
-            metadataInfo += `**Last Proxy:** ${utils.formatDate(system.proxy.lastProxyTime)}\n`;
-        }
-
+        if (system.metadata?.joinedAt) metadataInfo += `**Joined:** ${utils.formatDate(system.metadata.joinedAt)}\n`;
+        if (system.proxy?.lastProxyTime) metadataInfo += `**Last Proxy:** ${utils.formatDate(system.proxy.lastProxyTime)}\n`;
         if (metadataInfo) {
             embed.addFields({
                 name: '📅 Metadata',
@@ -243,16 +217,9 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
 
         // Proxy Settings (owner only)
         let proxyInfo = '';
-        if (system.proxy?.layout) {
-            proxyInfo += `**Layout:** \`${system.proxy.layout}\`\n`;
-        }
-        if (system.proxy?.style) {
-            proxyInfo += `**Style:** ${system.proxy.style}\n`;
-        }
-        if (system.proxy?.break !== undefined) {
-            proxyInfo += `**On Break:** ${system.proxy.break ? 'Yes' : 'No'}\n`;
-        }
-
+        if (system.proxy?.layout) proxyInfo += `**Layout:** \`${system.proxy.layout}\`\n`;
+        if (system.proxy?.style) proxyInfo += `**Style:** ${system.proxy.style}\n`;
+        if (system.proxy?.break !== undefined) proxyInfo += `**On Break:** ${system.proxy.break ? 'Yes' : 'No'}\n`;
         if (proxyInfo) {
             embed.addFields({
                 name: '💬 Proxy Settings',
@@ -554,9 +521,7 @@ function buildConditionsInterface(system, session) {
 
     // Group types
     let groupTypes = 'None';
-    if (system.groups?.types?.length > 0) {
-        groupTypes = system.groups.types.join(', ');
-    }
+    if (system.groups?.types?.length > 0) groupTypes = system.groups.types.join(', ');
     embed.addFields({
         name: 'Group Types',
         value: groupTypes,
@@ -629,29 +594,14 @@ async function handleShow(interaction, currentUser, currentSystem) {
         const dont_show_system_message = '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...'
 
         const otherUser = await User.findOne({ discordID: discordId });
-        if (!otherUser || !otherUser.systemID) {
-            return await interaction.reply({
-                content: dont_show_system_message,
-                ephemeral: true
-            });
-        }
-
+        if (!otherUser || !otherUser.systemID) return await interaction.reply({ content: dont_show_system_message, ephemeral: true });
+        
         targetSystem = await System.findById(otherUser.systemID);
-        if (!targetSystem) {
-            return await interaction.reply({
-                content: dont_show_system_message,
-                ephemeral: true
-            });
-        }
+        if (!targetSystem) return await interaction.reply({ content: dont_show_system_message, ephemeral: true });        
 
         // Check if blocked
-        if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) {
-            return await interaction.reply({
-                content: dont_show_system_message,
-                ephemeral: true
-            });
-        }
-
+        if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) return await interaction.reply({ content: dont_show_system_message, ephemeral: true });
+        
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 

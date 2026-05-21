@@ -143,15 +143,11 @@ client.on('guildCreate', async guild => {
 	}
 });
 
-// ============================================
-// INTERACTION HANDLING
-// ============================================
+// ==== INTERACTION HANDLING ====
 
 client.on(Events.InteractionCreate, async (interaction) => {
 	
-	// ------------------------------------------
-	// SLASH COMMAND HANDLING
-	// ------------------------------------------
+	// --- SLASH COMMAND HANDLING ----
 	if (interaction.isChatInputCommand()) {
 		const command = interaction.client.commands.get(interaction.commandName);
 
@@ -184,89 +180,67 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		return;
 	}
 
-	// ------------------------------------------
-	// BUTTON INTERACTION HANDLING
-	// ------------------------------------------
+	// ---- BUTTON INTERACTION HANDLING ----
+	// Systemiser commands - route based on customId prefix
 	if (interaction.isButton()) {
 		try {
 			const customId = interaction.customId;
 
-			// Systemiser commands - route based on customId prefix
-			// new_user_ buttons can come from any systemiser command
-			if (customId.startsWith('new_user_')) {
-				return await utils.handleNewUserButton(interaction);
-			}
+			// new_user_ buttons rom any systemiser command
+			if (customId.startsWith('new_user_')) return await utils.handleNewUserButton(interaction);
 
 			// System command buttons
 			if (customId.startsWith('system_')) {
 				const cmd = interaction.client.commands.get('system');
-				if (cmd?.handleButtonInteraction) {
-					return await cmd.handleButtonInteraction(interaction);
-				}
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
 			// Alter command buttons
 			if (customId.startsWith('alter_')) {
 				const cmd = interaction.client.commands.get('alter');
-				if (cmd?.handleButtonInteraction) {
-					return await cmd.handleButtonInteraction(interaction);
-				}
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
 			// State command buttons
 			if (customId.startsWith('state_')) {
 				const cmd = interaction.client.commands.get('state');
-				if (cmd?.handleButtonInteraction) {
-					return await cmd.handleButtonInteraction(interaction);
-				}
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
 			// Group command buttons
 			if (customId.startsWith('group_')) {
 				const cmd = interaction.client.commands.get('group');
-				if (cmd?.handleButtonInteraction) {
-					return await cmd.handleButtonInteraction(interaction);
-				}
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
 			// Switch command buttons
 			if (customId.startsWith('switch_')) {
 				const cmd = interaction.client.commands.get('switch');
-				if (cmd?.handleButtonInteraction) {
-					return await cmd.handleButtonInteraction(interaction);
-				}
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
 			// Front command buttons
 			if (customId.startsWith('front_')) {
 				const cmd = interaction.client.commands.get('front');
-				if (cmd?.handleButtonInteraction) {
-					return await cmd.handleButtonInteraction(interaction);
-				}
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
 			// Message command buttons
 			if (customId.startsWith('message_')) {
 				const cmd = interaction.client.commands.get('message');
-				if (cmd?.handleButtonInteraction) {
-					return await cmd.handleButtonInteraction(interaction);
-				}
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
 			// Profile command buttons
 			if (customId.startsWith('profile_')) {
 				const cmd = interaction.client.commands.get('profile');
-				if (cmd?.handleButtonInteraction) {
-					return await cmd.handleButtonInteraction(interaction);
-				}
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
 			// Note command buttons
 			if (customId.startsWith('note_')) {
 				const cmd = interaction.client.commands.get('note');
-				if (cmd?.handleButtonInteraction) {
-					return await cmd.handleButtonInteraction(interaction);
-				}
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
 			// Add more button handlers here as needed...
@@ -288,9 +262,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		return;
 	}
 
-	// ------------------------------------------
-	// SELECT MENU INTERACTION HANDLING
-	// ------------------------------------------
+	// ---- SELECT MENU INTERACTION HANDLING ----
 	if (interaction.isStringSelectMenu()) {
 		try {
 			const customId = interaction.customId;
@@ -298,57 +270,43 @@ client.on(Events.InteractionCreate, async (interaction) => {
 			// System command select menus
 			if (customId.startsWith('system_')) {
 				const cmd = interaction.client.commands.get('system');
-				if (cmd?.handleSelectMenu) {
-					return await cmd.handleSelectMenu(interaction);
-				}
+				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
 			// Alter command select menus
 			if (customId.startsWith('alter_')) {
 				const cmd = interaction.client.commands.get('alter');
-				if (cmd?.handleSelectMenu) {
-					return await cmd.handleSelectMenu(interaction);
-				}
+				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
 			// State command select menus
 			if (customId.startsWith('state_')) {
 				const cmd = interaction.client.commands.get('state');
-				if (cmd?.handleSelectMenu) {
-					return await cmd.handleSelectMenu(interaction);
-				}
+				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
 			// Group command select menus
 			if (customId.startsWith('group_')) {
 				const cmd = interaction.client.commands.get('group');
-				if (cmd?.handleSelectMenu) {
-					return await cmd.handleSelectMenu(interaction);
-				}
+				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
 			// Switch command select menus
 			if (customId.startsWith('switch_')) {
 				const cmd = interaction.client.commands.get('switch');
-				if (cmd?.handleSelectMenu) {
-					return await cmd.handleSelectMenu(interaction);
-				}
+				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
 			// Front command select menus
 			if (customId.startsWith('front_')) {
 				const cmd = interaction.client.commands.get('front');
-				if (cmd?.handleSelectMenu) {
-					return await cmd.handleSelectMenu(interaction);
-				}
+				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
 			// Profile command select menus
 			if (customId.startsWith('profile_')) {
 				const cmd = interaction.client.commands.get('profile');
-				if (cmd?.handleSelectMenu) {
-					return await cmd.handleSelectMenu(interaction);
-				}
+				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
 			// Note command select menus
@@ -378,9 +336,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		return;
 	}
 
-	// ------------------------------------------
-	// MODAL SUBMIT HANDLING
-	// ------------------------------------------
+	// ---- MODAL SUBMIT HANDLING ----
 	if (interaction.isModalSubmit()) {
 		try {
 			const customId = interaction.customId;
@@ -388,73 +344,55 @@ client.on(Events.InteractionCreate, async (interaction) => {
 			// System command modals
 			if (customId.startsWith('system_')) {
 				const cmd = interaction.client.commands.get('system');
-				if (cmd?.handleModalSubmit) {
-					return await cmd.handleModalSubmit(interaction);
-				}
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
 			// Alter command modals
 			if (customId.startsWith('alter_')) {
 				const cmd = interaction.client.commands.get('alter');
-				if (cmd?.handleModalSubmit) {
-					return await cmd.handleModalSubmit(interaction);
-				}
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
 			// State command modals
 			if (customId.startsWith('state_')) {
 				const cmd = interaction.client.commands.get('state');
-				if (cmd?.handleModalSubmit) {
-					return await cmd.handleModalSubmit(interaction);
-				}
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
 			// Group command modals
 			if (customId.startsWith('group_')) {
 				const cmd = interaction.client.commands.get('group');
-				if (cmd?.handleModalSubmit) {
-					return await cmd.handleModalSubmit(interaction);
-				}
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
 			// Switch command modals
 			if (customId.startsWith('switch_')) {
 				const cmd = interaction.client.commands.get('switch');
-				if (cmd?.handleModalSubmit) {
-					return await cmd.handleModalSubmit(interaction);
-				}
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
 			// Front command modals
 			if (customId.startsWith('front_')) {
 				const cmd = interaction.client.commands.get('front');
-				if (cmd?.handleModalSubmit) {
-					return await cmd.handleModalSubmit(interaction);
-				}
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
 			// Message command modals
 			if (customId.startsWith('message_')) {
 				const cmd = interaction.client.commands.get('message');
-				if (cmd?.handleModalSubmit) {
-					return await cmd.handleModalSubmit(interaction);
-				}
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
 			// Profile command modals
 			if (customId.startsWith('profile_')) {
 				const cmd = interaction.client.commands.get('profile');
-				if (cmd?.handleModalSubmit) {
-					return await cmd.handleModalSubmit(interaction);
-				}
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
 			// Note command modals
 			if (customId.startsWith('note_')) {
 				const cmd = interaction.client.commands.get('note');
-				if (cmd?.handleModalSubmit) {
-					return await cmd.handleModalSubmit(interaction);
-				}
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
 			// Add more modal handlers here as needed...
@@ -476,9 +414,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		return;
 	}
 
-	// ------------------------------------------
-	// AUTOCOMPLETE HANDLING (for future use)
-	// ------------------------------------------
+	// ---- AUTOCOMPLETE HANDLING (for future use) ----
 	if (interaction.isAutocomplete()) {
 		try {
 			const command = interaction.client.commands.get(interaction.commandName);
@@ -492,9 +428,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		return;
 	}
 
-	// ------------------------------------------
-	// CONTEXT MENU HANDLING (Right-click commands)
-	// ------------------------------------------
+	// ---- CONTEXT MENU HANDLING (Right-click commands) ----
 	if (interaction.isMessageContextMenuCommand()) {
 		try {
 			// Look for command by context menu name
@@ -502,9 +436,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				cmd.contextMenuData?.name === interaction.commandName
 			);
 			
-			if (command?.executeContextMenu) {
-				await command.executeContextMenu(interaction);
-			}
+			if (command?.executeContextMenu) await command.executeContextMenu(interaction);
 		} catch (error) {
 			console.error('Context menu error:', error);
 			
@@ -527,10 +459,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 			const command = interaction.client.commands.find(cmd => 
 				cmd.userContextMenuData?.name === interaction.commandName
 			);
-			
-			if (command?.executeUserContextMenu) {
-				await command.executeUserContextMenu(interaction);
-			}
+			if (command?.executeUserContextMenu) await command.executeUserContextMenu(interaction);
 		} catch (error) {
 			console.error('User context menu error:', error);
 		}
@@ -538,9 +467,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 	}
 });
 
-// ============================================
-// MESSAGE HANDLING (Prefix Commands + Proxy)
-// ============================================
+// ==== MESSAGE HANDLING (Prefix Commands + Proxy) ====
 
 // Import proxy message handler
 const proxyMessageHandler = require('./discord_commands/global/proxy-message');

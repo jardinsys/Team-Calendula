@@ -11,10 +11,7 @@ const guildCommands = [];
 
 // Load commands from a specific directory (only .js files with 'data' property)
 function loadCommands(foldersPath, commandArray) {
-    if (!fs.existsSync(foldersPath)) {
-        return; // Skip if directory doesn't exist
-    }
-
+    if (!fs.existsSync(foldersPath)) return; // Skip if directory doesn't exist
     const items = fs.readdirSync(foldersPath);
 
     for (const item of items) {
