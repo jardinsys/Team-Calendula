@@ -186,6 +186,7 @@ async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = 
     let identInfo = `**Alters:** ${alterCount}\n**States:** ${stateCount}\n`;
     if (group.signoff) identInfo += `**Sign-off:** ${group.signoff}\n`;
     if (group.proxy?.length > 0) identInfo += `**Proxies:** ${utils.formatProxies(group.proxy)}\n`;
+    if (group.name?.aliases?.length > 0) identInfo += `**Aliases:** ${group.name.aliases.join(', ')}\n`;
     if (group.type?.name) identInfo += `**Type:** ${group.type.name}\n`;
     if (group.type?.canFront) identInfo += `**Can Front:** ${group.type.canFront}\n`;
 
@@ -227,6 +228,7 @@ function buildEditInterface(group, session, system = null) {
         .addOptions(
             new StringSelectMenuOptionBuilder().setLabel('Card Info').setValue('card_info').setEmoji('🎴'),
             new StringSelectMenuOptionBuilder().setLabel('Type Info').setValue('type_info').setEmoji('📁'),
+            new StringSelectMenuOptionBuilder().setLabel('Aliases').setValue('aliases_info').setEmoji('📝'),
             new StringSelectMenuOptionBuilder().setLabel('Proxy Info').setValue('proxy_info').setEmoji('💬'),
             new StringSelectMenuOptionBuilder().setLabel('Image Info').setValue('image_info').setEmoji('🖼️'),
             new StringSelectMenuOptionBuilder().setLabel('Caution Info').setValue('caution_info').setEmoji('⚠️'),
@@ -446,6 +448,7 @@ async function handleSettings(interaction, user, system) {
         .setDescription('Configure settings for this group.')
         .addFields(
             { name: 'Closed Name', value: group.name?.closedNameDisplay || '*Not set*', inline: true },
+            { name: 'Default Status', value: group.setting?.default_status || '*Not set*', inline: true },
             { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
             { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true },
             { name: 'Sync with Discord', value: group.syncWithApps?.discord ? '✅ Yes' : '🔄 No', inline: true }
@@ -456,6 +459,7 @@ async function handleSettings(interaction, user, system) {
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`group_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
     );
@@ -701,6 +705,7 @@ async function handleButtonInteraction(interaction) {
             .setDescription('Configure settings for this group.')
             .addFields(
                 { name: 'Closed Name', value: group.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Default Status', value: group.setting?.default_status || '*Not set*', inline: true },
                 { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
                 { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true }
             );
@@ -710,6 +715,7 @@ async function handleButtonInteraction(interaction) {
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`group_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭'),
             new ButtonBuilder().setCustomId(`group_settings_back_${sessionId}`).setLabel('Back to Edit').setStyle(ButtonStyle.Danger)
@@ -783,6 +789,7 @@ async function handleButtonInteraction(interaction) {
             .setDescription('Configure settings for this group.')
             .addFields(
                 { name: 'Closed Name', value: group.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Default Status', value: group.setting?.default_status || '*Not set*', inline: true },
                 { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
                 { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true },
                 { name: 'Sync with Discord', value: group.syncWithApps?.discord ? '✅ Yes' : '🔄 No', inline: true }
@@ -793,6 +800,7 @@ async function handleButtonInteraction(interaction) {
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`group_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
         );
@@ -806,6 +814,29 @@ async function handleButtonInteraction(interaction) {
         );
 
         return await interaction.update({ embeds: [embed], components: [buttons, syncRow] });
+    }
+
+    // Settings → Edit Default Status
+    if (customId.startsWith('group_settings_status_')) {
+        const group = await Group.findById(session.groupId);
+
+        const modal = new ModalBuilder()
+            .setCustomId(`group_settings_status_modal_${sessionId}`)
+            .setTitle('Edit Default Status');
+
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('default_status')
+                    .setLabel('Default Status')
+                    .setStyle(TextInputStyle.Short)
+                    .setValue(group.setting?.default_status || '')
+                    .setRequired(false)
+                    .setMaxLength(100)
+            )
+        );
+
+        return await interaction.showModal(modal);
     }
 
     // Mask settings (transition to edit interface with mask mode active)
@@ -829,6 +860,7 @@ async function handleButtonInteraction(interaction) {
             .setDescription('Configure settings for this group.')
             .addFields(
                 { name: 'Closed Name', value: group.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Default Status', value: group.setting?.default_status || '*Not set*', inline: true },
                 { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
                 { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true },
                 { name: 'Sync with Discord', value: group.syncWithApps?.discord ? '✅ Yes' : '🔄 No', inline: true }
@@ -839,6 +871,7 @@ async function handleButtonInteraction(interaction) {
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`group_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
         );
@@ -936,6 +969,21 @@ async function handleSelectMenu(interaction) {
             );
             break;
 
+        case 'aliases_info':
+            modal = new ModalBuilder().setCustomId(`group_edit_aliases_modal_${sessionId}`).setTitle('Edit Aliases');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('aliases')
+                        .setLabel('Aliases (comma-separated)')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setValue(group.name?.aliases?.join(', ') || '')
+                        .setRequired(false)
+                        .setMaxLength(500)
+                )
+            );
+            break;
+
         case 'proxy_info':
             modal = new ModalBuilder().setCustomId(`group_edit_proxy_modal_${sessionId}`).setTitle('Edit Proxy Info');
             modal.addComponents(
@@ -945,10 +993,12 @@ async function handleSelectMenu(interaction) {
             break;
 
         case 'image_info':
+            const imageTarget = utils.getEditTarget(group, session);
             modal = new ModalBuilder().setCustomId(`group_edit_image_modal_${sessionId}`).setTitle('Edit Images');
             modal.addComponents(
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('avatar_url').setLabel('Avatar URL').setStyle(TextInputStyle.Short).setValue(group.avatar?.url || '').setRequired(false)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('banner_url').setLabel('Banner URL').setStyle(TextInputStyle.Short).setValue(group.discord?.image?.banner?.url || '').setRequired(false))
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('avatar_url').setLabel('Avatar URL').setStyle(TextInputStyle.Short).setValue(imageTarget?.avatar?.url || imageTarget?.image?.avatar?.url || group.avatar?.url || '').setRequired(false)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('banner_url').setLabel('Banner URL').setStyle(TextInputStyle.Short).setValue(imageTarget?.image?.banner?.url || group.discord?.image?.banner?.url || '').setRequired(false)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('proxy_avatar_url').setLabel('Proxy Avatar URL').setStyle(TextInputStyle.Short).setValue(imageTarget?.image?.proxyAvatar?.url || group.discord?.image?.proxyAvatar?.url || '').setRequired(false))
             );
             break;
 
@@ -990,6 +1040,13 @@ async function handleModalSubmit(interaction) {
         utils.updateEntityProperty(group, session, 'name.display', interaction.fields.getTextInputValue('display_name'));
         utils.updateEntityProperty(group, session, 'description', interaction.fields.getTextInputValue('description'));
         utils.updateEntityProperty(group, session, 'color', interaction.fields.getTextInputValue('color'));
+        await group.save();
+    }
+
+    if (interaction.customId.startsWith('group_edit_aliases_modal_')) {
+        const aliasesInput = interaction.fields.getTextInputValue('aliases');
+        if (!group.name) group.name = {};
+        group.name.aliases = utils.parseCommaSeparated(aliasesInput);
         await group.save();
     }
 
@@ -1053,19 +1110,27 @@ async function handleModalSubmit(interaction) {
     if (interaction.customId.startsWith('group_edit_image_modal_')) {
         const avatarUrl = interaction.fields.getTextInputValue('avatar_url');
         const bannerUrl = interaction.fields.getTextInputValue('banner_url');
+        const proxyAvatarUrl = interaction.fields.getTextInputValue('proxy_avatar_url');
 
         if (session.mode === 'mask') {
-            if (!group.mask) group.mask = { discord: { image: {} } };
+            if (!group.mask) group.mask = {};
             if (avatarUrl) group.mask.avatar = { url: avatarUrl };
+            if (!group.mask.discord) group.mask.discord = { image: {} };
+            if (!group.mask.discord.image) group.mask.discord.image = {};
             if (bannerUrl) group.mask.discord.image.banner = { url: bannerUrl };
+            if (proxyAvatarUrl) group.mask.discord.image.proxyAvatar = { url: proxyAvatarUrl };
         } else if (!session.syncWithDiscord) {
-            if (!group.discord) group.discord = { image: {} };
+            if (!group.discord) group.discord = {};
+            if (!group.discord.image) group.discord.image = {};
             if (avatarUrl) group.discord.image.avatar = { url: avatarUrl };
             if (bannerUrl) group.discord.image.banner = { url: bannerUrl };
+            if (proxyAvatarUrl) group.discord.image.proxyAvatar = { url: proxyAvatarUrl };
         } else {
             if (avatarUrl) group.avatar = { url: avatarUrl };
-            if (!group.discord) group.discord = { image: {} };
+            if (!group.discord) group.discord = {};
+            if (!group.discord.image) group.discord.image = {};
             if (bannerUrl) group.discord.image.banner = { url: bannerUrl };
+            if (proxyAvatarUrl) group.discord.image.proxyAvatar = { url: proxyAvatarUrl };
         }
         await group.save();
     }
@@ -1139,6 +1204,14 @@ async function handleModalSubmit(interaction) {
         group.name.closedNameDisplay = closedName || null;
         await group.save();
         return await interaction.update({ content: `✅ Closed name: ${closedName || '*Not set*'}`, embeds: [], components: [] });
+    }
+
+    if (interaction.customId.startsWith('group_settings_status_modal_')) {
+        const status = interaction.fields.getTextInputValue('default_status');
+        if (!group.setting) group.setting = {};
+        group.setting.default_status = status || null;
+        await group.save();
+        return await interaction.update({ content: `✅ Default status: ${status || '*Not set*'}`, embeds: [], components: [] });
     }
 
     session.id = sessionId;
