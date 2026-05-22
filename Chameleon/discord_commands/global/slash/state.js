@@ -165,8 +165,10 @@ function buildStateListEmbed(states, page, system, showFullList) {
 }
 
 // Build the state card embed
-async function buildStateCard(state, system, privacyBucket, closedCharAllowed = true) {
+async function buildStateCard(state, system, privacyBucket, closedCharAllowed = true, guildId = null) {
     const embed = new EmbedBuilder();
+
+    const session = { mode: null, syncWithDiscord: state.syncWithApps?.discord, serverId: guildId };
 
     // Color priority: state.color > system.color > none
     const color = utils.getEntityEmbedColor(state, system);
@@ -175,8 +177,8 @@ async function buildStateCard(state, system, privacyBucket, closedCharAllowed = 
         ? (state.name?.display || state.name?.indexable)
         : (state.name?.closedNameDisplay || state.name?.display || state.name?.indexable);
 
-    // Header/Author
-    const proxyAvatar = state.discord?.image?.proxyAvatar?.url || state.avatar?.url;
+    // Header/Author — proxy avatar priority
+    const proxyAvatar = utils.resolveProxyAvatarUrl(state, session);
     const systemDisplayName = utils.getDisplayName(system, closedCharAllowed);
 
     embed.setAuthor({
@@ -246,9 +248,13 @@ async function buildStateCard(state, system, privacyBucket, closedCharAllowed = 
         }
     }
 
-    // Thumbnail
-    const avatar = state.discord?.image?.avatar?.url || state.avatar?.url;
+    // Thumbnail — avatar priority
+    const avatar = utils.resolveAvatarUrl(state, session);
     if (avatar) embed.setThumbnail(avatar);
+
+    // Banner
+    const banner = utils.resolveBannerUrl(state, session);
+    if (banner) embed.setImage(banner);
 
     return embed;
 }
@@ -338,7 +344,19 @@ function buildEditInterface(state, session, system = null) {
             .setEmoji('✅')
     );
 
-    return { embed, components: [selectRow, modeRow, actionRow] };
+    const uploadRow = session.uploadMode
+        ? new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`state_upload_select_${session.id}`)
+                .setPlaceholder('Choose media type to upload...')
+                .addOptions(utils.buildUploadOptions(session)),
+            new ButtonBuilder().setCustomId(`state_upload_back_${session.id}`).setLabel('Back').setStyle(ButtonStyle.Secondary).setEmoji('◀️')
+        )
+        : new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`state_upload_media_${session.id}`).setLabel('Upload Media').setStyle(ButtonStyle.Secondary).setEmoji('📎')
+        );
+
+    return { embed, components: [selectRow, modeRow, actionRow, uploadRow] };
 }
 
 // ==== COMMAND HANDLERS ====
@@ -471,7 +489,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
 
     // Build the card
-    const embed = await buildStateCard(state, targetSystem, privacyBucket, closedCharAllowed);
+    const embed = await buildStateCard(state, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId);
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -528,10 +546,8 @@ async function handleEdit(interaction, user, system) {
     const state = await utils.findStateByName(stateName, system);
     if (!state) return await interaction.reply({ content: '❌ State not found in your system.', ephemeral: true });
 
-    // Verify ownership
     if (state.systemID !== system._id.toString()) return await interaction.reply({ content: '❌ This state does not belong to your system.', ephemeral: true });
 
-    // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
         type: 'edit',
@@ -541,9 +557,9 @@ async function handleEdit(interaction, user, system) {
         syncWithDiscord: state.syncWithApps?.discord || true
     });
 
-    // Show sync confirmation
-    const { embed, buttons } = utils.buildSyncConfirmation('state', utils.getDisplayName(state), sessionId, 'edit');
-    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+    // Go straight to edit interface (sync is managed in settings)
+    const { embed, components } = buildEditInterface(state, { id: sessionId }, system);
+    await interaction.reply({ embeds: [embed], components, ephemeral: true });
 }
 
 // Handle /state remission
@@ -664,9 +680,18 @@ async function handleSettings(interaction, user, system) {
             .setCustomId(`state_settings_mask_${sessionId}`)
             .setLabel('Mask Settings')
             .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🎭')
     );
 
-    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+    const syncRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`state_settings_sync_${sessionId}`)
+            .setLabel(state.syncWithApps?.discord ? 'Synced with Discord' : 'Not Synced')
+            .setStyle(state.syncWithApps?.discord ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setEmoji(state.syncWithApps?.discord ? '✅' : '🔄')
+    );
+
+    await interaction.reply({ embeds: [embed], components: [buttons, syncRow], ephemeral: true });
 }
 
 // ==== BUTTON INTERACTION HANDLER ====
@@ -678,15 +703,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('new_user_')) 
         return await utils.handleNewUserButton(interaction, 'state');
 
-    // Handle menu buttons
-    if (customId === 'state_menu_showlist') {
-        const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
-        const mockInteraction = {
-            ...interaction,
-            options: { getUser: () => null, getString: () => null }
-        };
-        return await handleShowList(mockInteraction, user, system);
-    }
+    // (Removed: state_menu_showlist mock interaction — menu subcommand is commented out, dead code)
 
     // Extract session ID from custom ID
     const sessionId = utils.extractSessionId(customId);
@@ -720,7 +737,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('state_show_full_')) {
         const state = await State.findById(session.stateId);
         const system = await System.findById(session.systemId);
-        const embed = await buildStateCard(state, system, null, true);
+        const embed = await buildStateCard(state, system, null, true, interaction.guildId);
 
         // Add metadata
         let metadataInfo = '';
@@ -785,12 +802,23 @@ async function handleButtonInteraction(interaction) {
     }
 
     // Handle mode toggles
-    if (customId.startsWith('state_edit_mode_mask_')) 
+    if (customId.startsWith('state_edit_mode_mask_')) {
         session.mode = session.mode === 'mask' ? null : 'mask';
-    if (customId.startsWith('state_edit_mode_server_')) 
-        session.mode = session.mode === 'server' ? null : 'server';
-    if (customId.startsWith('state_edit_mode_')) {
         const state = await State.findById(session.stateId);
+        const { embed, components } = buildEditInterface(state, session);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    if (customId.startsWith('state_edit_mode_server_')) {
+        const state = await State.findById(session.stateId);
+        if (session.mode === 'server') {
+            session.mode = null;
+            delete session.serverId;
+        } else {
+            session.mode = 'server';
+            session.serverId = interaction.guildId;
+            utils.ensureServerEntry(state, interaction.guildId, interaction.guild?.name);
+        }
         const { embed, components } = buildEditInterface(state, session);
         return await interaction.update({ embeds: [embed], components });
     }
@@ -803,6 +831,103 @@ async function handleButtonInteraction(interaction) {
             embeds: [],
             components: []
         });
+    }
+
+    // Upload Media → show select menu
+    if (customId.startsWith('state_upload_media_')) {
+        session.uploadMode = true;
+        const state = await State.findById(session.stateId);
+        const { embed, components } = buildEditInterface(state, session, system);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    // Upload Back → return to button
+    if (customId.startsWith('state_upload_back_')) {
+        session.uploadMode = false;
+        const state = await State.findById(session.stateId);
+        const { embed, components } = buildEditInterface(state, session, system);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    // Upload type selected → prompt for attachment
+    if (customId.startsWith('state_upload_select_')) {
+        const value = interaction.values[0];
+
+        const typeMap = {
+            mask_avatar: { fieldLabel: 'mask avatar', mediaType: 'avatar', path: 'mask' },
+            mask_davatar: { fieldLabel: 'mask discord avatar', mediaType: 'avatar', path: 'mask_discord' },
+            mask_proxy: { fieldLabel: 'mask proxy avatar', mediaType: 'proxyAvatar', path: 'mask_discord' },
+            mask_banner: { fieldLabel: 'mask banner', mediaType: 'banner', path: 'mask_discord' },
+            server_avatar: { fieldLabel: 'server avatar', mediaType: 'avatar', path: 'server' },
+            server_banner: { fieldLabel: 'server banner', mediaType: 'banner', path: 'server' },
+            server_proxy: { fieldLabel: 'server proxy avatar', mediaType: 'proxyAvatar', path: 'server' },
+            primary_avatar: { fieldLabel: 'primary avatar', mediaType: 'avatar', path: 'primary' },
+            discord_avatar: { fieldLabel: 'discord avatar', mediaType: 'avatar', path: 'discord' },
+            proxy_avatar: { fieldLabel: 'proxy avatar', mediaType: 'proxyAvatar', path: 'discord' },
+            banner: { fieldLabel: 'banner', mediaType: 'banner', path: 'discord' }
+        };
+
+        const config = typeMap[value];
+        if (!config) {
+            return await interaction.reply({ content: '❌ Invalid upload type.', ephemeral: true });
+        }
+
+        await interaction.reply({
+            content: `📎 Please send the image for your **${config.fieldLabel}**. You have 60 seconds.`,
+            ephemeral: true
+        });
+
+        try {
+            const collected = await interaction.channel.awaitMessages({
+                filter: m => m.author.id === interaction.user.id && m.attachments.size > 0,
+                max: 1,
+                time: 60000,
+                errors: ['time']
+            });
+
+            const attachment = collected.first().attachments.first();
+            const state = await State.findById(session.stateId);
+            const result = await utils.handleAttachmentUpload(attachment, config.fieldLabel, 'State', interaction.user.id);
+
+            if (result.success) {
+                if (config.path === 'mask') {
+                    const oldMedia = state.mask?.avatar;
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    if (!state.mask) state.mask = {};
+                    state.mask.avatar = result.media;
+                } else if (config.path === 'mask_discord') {
+                    if (!state.mask) state.mask = {};
+                    if (!state.mask.discord) state.mask.discord = { image: {} };
+                    if (!state.mask.discord.image) state.mask.discord.image = {};
+                    const oldMedia = state.mask.discord.image[config.mediaType];
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    state.mask.discord.image[config.mediaType] = result.media;
+                } else if (config.path === 'server') {
+                    const serverEntry = utils.ensureServerEntry(state, session.serverId, interaction.guild?.name);
+                    const oldMedia = serverEntry[config.mediaType];
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    serverEntry[config.mediaType] = result.media;
+                } else if (config.path === 'primary') {
+                    const oldMedia = state.avatar;
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    state.avatar = result.media;
+                } else {
+                    if (!state.discord) state.discord = {};
+                    if (!state.discord.image) state.discord.image = {};
+                    const oldMedia = state.discord.image[config.mediaType];
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    state.discord.image[config.mediaType] = result.media;
+                }
+
+                await state.save();
+                const { embed, components } = buildEditInterface(state, session, system);
+                return await interaction.editReply({ content: result.message, embeds: [embed], components });
+            } else {
+                return await interaction.editReply({ content: result.message });
+            }
+        } catch (err) {
+            return await interaction.editReply({ content: '⏰ Upload timed out. Please try again.' });
+        }
     }
 
     // Handle delete buttons
@@ -909,6 +1034,203 @@ async function handleButtonInteraction(interaction) {
 
         return await interaction.showModal(modal);
     }
+
+    // Settings → Mask Settings (transition to edit interface with mask mode active)
+    if (customId.startsWith('state_settings_mask_')) {
+        session.type = 'edit';
+        session.mode = 'mask';
+        const state = await State.findById(session.stateId);
+        const system = await System.findById(session.systemId);
+        const { embed, components } = buildEditInterface(state, session, system);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    // Settings → Toggle Sync with Discord
+    if (customId.startsWith('state_settings_sync_')) {
+        const state = await State.findById(session.stateId);
+        state.syncWithApps = { discord: !state.syncWithApps?.discord };
+        await state.save();
+
+        session.type = 'settings';
+        const embed = new EmbedBuilder()
+            .setTitle(`⚙️ Settings: ${utils.getDisplayName(state)}`)
+            .setDescription('Configure settings for this state.')
+            .addFields(
+                { name: 'Closed Name Display', value: state.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Default Status', value: state.setting?.default_status || '*Not set*', inline: true },
+                { name: 'Current Condition', value: state.condition || '*None*', inline: true },
+                { name: 'Sync with Discord', value: state.syncWithApps?.discord ? '✅ Yes' : '🔄 No', inline: true }
+            );
+
+        const color = utils.getEntityEmbedColor(state, system);
+        if (color) embed.setColor(color);
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`state_settings_closedname_${sessionId}`).setLabel('Edit Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`state_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`state_settings_privacy_${sessionId}`).setLabel('Privacy Settings').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`state_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
+        );
+
+        const syncRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`state_settings_sync_${sessionId}`)
+                .setLabel(state.syncWithApps?.discord ? 'Synced with Discord' : 'Not Synced')
+                .setStyle(state.syncWithApps?.discord ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setEmoji(state.syncWithApps?.discord ? '✅' : '🔄')
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons, syncRow] });
+    }
+
+    // Settings → Privacy Settings
+    if (customId.startsWith('state_settings_privacy_')) {
+        const state = await State.findById(session.stateId);
+        const sys = await System.findById(session.systemId);
+
+        const embed = new EmbedBuilder()
+            .setTitle(`🔒 Privacy Settings: ${utils.getDisplayName(state)}`)
+            .setDescription('Configure who can see what information about this state.');
+
+        if (sys.privacyBuckets?.length > 0) {
+            for (const bucket of sys.privacyBuckets) {
+                const privacy = state.setting?.privacy?.find(p => p.bucket === bucket.name);
+                let status = 'Default (visible)';
+                if (privacy?.settings?.hidden === false) status = '❌ Hidden';
+                else if (privacy?.settings?.hidden === true) status = '✅ Visible';
+                embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
+            }
+        } else {
+            embed.addFields({ name: 'No buckets', value: 'No privacy buckets configured.', inline: false });
+        }
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`state_privacy_toggle_hidden_${sessionId}`).setLabel('Toggle Hidden').setStyle(ButtonStyle.Primary).setEmoji('👁️'),
+            new ButtonBuilder().setCustomId(`state_privacy_back_${sessionId}`).setLabel('Back to Settings').setStyle(ButtonStyle.Danger)
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons] });
+    }
+
+    // Privacy → Toggle Hidden
+    if (customId.startsWith('state_privacy_toggle_hidden_')) {
+        const state = await State.findById(session.stateId);
+        const sys = await System.findById(session.systemId);
+
+        if (!sys.privacyBuckets?.length) {
+            return await interaction.reply({ content: '❌ No privacy buckets configured.', ephemeral: true });
+        }
+
+        const bucketOptions = sys.privacyBuckets.map(b => {
+            const privacy = state.setting?.privacy?.find(p => p.bucket === b.name);
+            const isHidden = privacy?.settings?.hidden === false;
+            return new StringSelectMenuOptionBuilder()
+                .setLabel(`${b.name} (${isHidden ? 'Hidden' : 'Visible'})`)
+                .setValue(b.name)
+                .setEmoji(isHidden ? '❌' : '✅');
+        });
+
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`state_privacy_toggle_select_${sessionId}`)
+            .setPlaceholder('Select bucket to toggle...')
+            .addOptions(bucketOptions);
+
+        return await interaction.update({ content: 'Select a bucket to toggle:', embeds: [], components: [new ActionRowBuilder().addComponents(selectMenu)] });
+    }
+
+    // Privacy → Back to Settings
+    if (customId.startsWith('state_privacy_back_')) {
+        const state = await State.findById(session.stateId);
+        session.type = 'settings';
+
+        const embed = new EmbedBuilder()
+            .setTitle(`⚙️ Settings: ${utils.getDisplayName(state)}`)
+            .setDescription('Configure settings for this state.')
+            .addFields(
+                { name: 'Closed Name Display', value: state.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Default Status', value: state.setting?.default_status || '*Not set*', inline: true },
+                { name: 'Current Condition', value: state.condition || '*None*', inline: true }
+            );
+
+        const color = utils.getEntityEmbedColor(state, system);
+        if (color) embed.setColor(color);
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`state_settings_closedname_${sessionId}`).setLabel('Edit Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`state_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`state_settings_privacy_${sessionId}`).setLabel('Privacy Settings').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`state_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
+        );
+
+        const syncRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`state_settings_sync_${sessionId}`)
+                .setLabel(state.syncWithApps?.discord ? 'Synced with Discord' : 'Not Synced')
+                .setStyle(state.syncWithApps?.discord ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setEmoji(state.syncWithApps?.discord ? '✅' : '🔄')
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons, syncRow] });
+    }
+
+    // Edit → Edit Groups (modal to add/remove group memberships)
+    if (customId.startsWith('state_edit_groups_')) {
+        const state = await State.findById(session.stateId);
+        const currentGroups = await Group.find({ _id: { $in: state.groupIDs || [] } });
+        const currentGroupNames = currentGroups.map(g => g.name?.indexable).filter(Boolean);
+
+        const modal = new ModalBuilder()
+            .setCustomId(`state_edit_groups_modal_${sessionId}`)
+            .setTitle('Edit Group Memberships');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('group_names')
+                .setLabel('Groups (comma-separated indexable names)')
+                .setStyle(TextInputStyle.Paragraph)
+                .setValue(currentGroupNames.join(', '))
+                .setPlaceholder('Enter group names to assign this state to')
+                .setRequired(false)
+                .setMaxLength(1000)
+        ));
+        return await interaction.showModal(modal);
+    }
+
+    // Edit → Settings transition (from buildEditInterface action row)
+    if (customId.startsWith('state_edit_settings_')) {
+        const state = await State.findById(session.stateId);
+        session.type = 'settings';
+
+        const embed = new EmbedBuilder()
+            .setTitle(`⚙️ Settings: ${utils.getDisplayName(state)}`)
+            .setDescription('Configure settings for this state.')
+            .addFields(
+                { name: 'Closed Name Display', value: state.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Default Status', value: state.setting?.default_status || '*Not set*', inline: true },
+                { name: 'Current Condition', value: state.condition || '*None*', inline: true }
+            );
+
+        const color = utils.getEntityEmbedColor(state, system);
+        if (color) embed.setColor(color);
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`state_settings_closedname_${sessionId}`).setLabel('Edit Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`state_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`state_settings_privacy_${sessionId}`).setLabel('Privacy Settings').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`state_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭'),
+            new ButtonBuilder().setCustomId(`state_settings_back_${sessionId}`).setLabel('Back to Edit').setStyle(ButtonStyle.Danger)
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons] });
+    }
+
+    // Settings → Back to Edit
+    if (customId.startsWith('state_settings_back_')) {
+        const state = await State.findById(session.stateId);
+        session.type = 'edit';
+        session.mode = null;
+        const { embed, components } = buildEditInterface(state, session, system);
+        return await interaction.update({ embeds: [embed], components });
+    }
 }
 
 // ==== SELECT MENU HANDLER ====
@@ -917,6 +1239,46 @@ async function handleSelectMenu(interaction) {
     const sessionId = utils.extractSessionId(interaction.customId);
     const session = utils.getSession(sessionId);
     if (!session) return await interaction.reply({ content: '❌ Session expired. Please start again.', ephemeral: true });
+
+    // Privacy toggle select
+    if (interaction.customId.startsWith('state_privacy_toggle_select_')) {
+        const state = await State.findById(session.stateId);
+        const sys = await System.findById(session.systemId);
+        const bucketName = interaction.values[0];
+
+        if (!state.setting) state.setting = {};
+        if (!state.setting.privacy) state.setting.privacy = [];
+
+        let privacy = state.setting.privacy.find(p => p.bucket === bucketName);
+        if (!privacy) {
+            privacy = { bucket: bucketName, settings: {} };
+            state.setting.privacy.push(privacy);
+        }
+
+        privacy.settings.hidden = privacy.settings.hidden === false ? true : false;
+        await state.save();
+
+        const embed = new EmbedBuilder()
+            .setTitle(`🔒 Privacy Settings: ${utils.getDisplayName(state)}`)
+            .setDescription('Configure who can see what information about this state.');
+
+        if (sys.privacyBuckets?.length > 0) {
+            for (const bucket of sys.privacyBuckets) {
+                const p = state.setting?.privacy?.find(pr => pr.bucket === bucket.name);
+                let status = 'Default (visible)';
+                if (p?.settings?.hidden === false) status = '❌ Hidden';
+                else if (p?.settings?.hidden === true) status = '✅ Visible';
+                embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
+            }
+        }
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`state_privacy_toggle_hidden_${sessionId}`).setLabel('Toggle Hidden').setStyle(ButtonStyle.Primary).setEmoji('👁️'),
+            new ButtonBuilder().setCustomId(`state_privacy_back_${sessionId}`).setLabel('Back to Settings').setStyle(ButtonStyle.Danger)
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons] });
+    }
 
     const state = await State.findById(session.stateId);
     const value = interaction.values[0];
@@ -1157,21 +1519,38 @@ async function handleModalSubmit(interaction) {
         const alterNamesInput = interaction.fields.getTextInputValue('alter_names');
         const alterNames = utils.parseCommaSeparated(alterNamesInput);
 
-        // Get system to find alters
         const system = await System.findById(session.systemId);
         const allAlters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
 
-        // Find matching alters by indexable name
         const matchingAlterIds = [];
         for (const name of alterNames) {
-            const alter = allAlters.find(a =>
-                a.name?.indexable?.toLowerCase() === name.toLowerCase()
-            );
+            const alter = allAlters.find(a => a.name?.indexable?.toLowerCase() === name.toLowerCase());
             if (alter) matchingAlterIds.push(alter._id.toString());
         }
 
+        // Calculate diff for reverse sync (alter.states)
+        const oldAlterIds = state.alters || [];
+        const removedAlterIds = oldAlterIds.filter(id => !matchingAlterIds.includes(id));
+        const addedAlterIds = matchingAlterIds.filter(id => !oldAlterIds.includes(id));
+
         state.alters = matchingAlterIds;
         await state.save();
+
+        // Sync reverse: alter.states (connected_id entries)
+        if (removedAlterIds.length > 0) {
+            await Alter.updateMany({ _id: { $in: removedAlterIds } }, { $pull: { states: { connected_id: state._id.toString() } } });
+        }
+        if (addedAlterIds.length > 0) {
+            for (const alterId of addedAlterIds) {
+                const alter = allAlters.find(a => a._id.toString() === alterId);
+                if (alter) {
+                    await Alter.updateOne(
+                        { _id: alterId },
+                        { $addToSet: { states: { connected_id: state._id.toString(), name: { indexable: state.name?.indexable, display: state.name?.display } } } }
+                    );
+                }
+            }
+        }
     }
 
     // Handle aliases modal
@@ -1304,6 +1683,37 @@ async function handleModalSubmit(interaction) {
             embeds: [],
             components: []
         });
+    }
+
+    // Edit groups modal
+    if (interaction.customId.startsWith('state_edit_groups_modal_')) {
+        const groupNamesInput = interaction.fields.getTextInputValue('group_names');
+        const groupNames = utils.parseCommaSeparated(groupNamesInput);
+
+        const system = await System.findById(session.systemId);
+        const allGroups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
+
+        const matchingGroupIds = [];
+        for (const name of groupNames) {
+            const group = allGroups.find(g => g.name?.indexable?.toLowerCase() === name.toLowerCase());
+            if (group) matchingGroupIds.push(group._id.toString());
+        }
+
+        // Calculate diff for reverse sync (group.stateIDs)
+        const oldGroupIds = state.groupIDs || [];
+        const removedGroupIds = oldGroupIds.filter(id => !matchingGroupIds.includes(id));
+        const addedGroupIds = matchingGroupIds.filter(id => !oldGroupIds.includes(id));
+
+        state.groupIDs = matchingGroupIds;
+        await state.save();
+
+        // Sync reverse: group.stateIDs
+        if (removedGroupIds.length > 0) {
+            await Group.updateMany({ _id: { $in: removedGroupIds } }, { $pull: { stateIDs: state._id.toString() } });
+        }
+        if (addedGroupIds.length > 0) {
+            await Group.updateMany({ _id: { $in: addedGroupIds } }, { $addToSet: { stateIDs: state._id.toString() } });
+        }
     }
 
     // Return to edit interface for edit modals

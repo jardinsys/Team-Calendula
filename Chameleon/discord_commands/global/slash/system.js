@@ -77,14 +77,11 @@ module.exports = {
             });
         }
 
-        // Route to appropriate handler
-        const handlers = {
-            //menu: handleMenu,
-            show: handleShow,
-            manage: handleManage
-        };
-
-        await handlers[subcommand](interaction, user, system);
+        // Route to appropriate handler (switch pattern for consistency with alter/state/group)
+        switch (subcommand) {
+            case 'show': return await handleShow(interaction, user, system); break;
+            case 'manage': return await handleManage(interaction, user, system); break;
+        }
     },
 
     // Export interaction handlers for bot.js
@@ -96,8 +93,10 @@ module.exports = {
 // ==== EMBED BUILDERS ====
 
 //Build the system card embed
-async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, showFull = false,) {
+async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, showFull = false, guildId = null) {
     const embed = new EmbedBuilder();
+
+    const session = { mode: null, syncWithDiscord: system.syncWithApps?.discord, serverId: guildId };
 
     // Get display values - system.color or none
     const color = getSystemEmbedColor(system);
@@ -106,13 +105,17 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
         ? (system.name?.display || system.name?.indexable)
         : (system.name?.closedNameDisplay || system.name?.indexable);
 
-    // Header/Author
-    const avatar = system.discord?.image?.avatar?.url || system.avatar?.url;
+    // Header/Author — proxy avatar priority
+    const proxyAvatar = utils.resolveProxyAvatarUrl(system, session);
 
-    if (avatar) embed.setThumbnail(avatar)
+    if (proxyAvatar) embed.setAuthor({ name: system.name?.indexable || '', iconURL: proxyAvatar });
+    const avatar = utils.resolveAvatarUrl(system, session);
+    if (avatar) embed.setThumbnail(avatar);
+    const banner = utils.resolveBannerUrl(system, session);
+    if (banner) embed.setImage(banner);
     if (displayName) embed.setTitle(displayName || '');
     if (color) embed.setColor(color);
-    if (description) embed.setDescription(description); // Maybe later change later to include additions of information from basic info
+    if (description) embed.setDescription(description);
 
     // Get counts
     const alterCount = system.alters?.IDs?.length || 0;
@@ -243,7 +246,6 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     if (avatar) embed.setThumbnail(avatar);
 
     // Banner
-    const banner = system.discord?.image?.banner?.url;
     if (banner) embed.setImage(banner);
 
     return embed;
@@ -345,7 +347,19 @@ function buildEditInterface(system, session) {
             .setEmoji('✅')
     );
 
-    return { embed, components: [selectRow, modeRow, actionRow] };
+    const uploadRow = session.uploadMode
+        ? new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`system_upload_select_${session.id}`)
+                .setPlaceholder('Choose media type to upload...')
+                .addOptions(utils.buildUploadOptions(session)),
+            new ButtonBuilder().setCustomId(`system_upload_back_${session.id}`).setLabel('Back').setStyle(ButtonStyle.Secondary).setEmoji('◀️')
+        )
+        : new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`system_upload_media_${session.id}`).setLabel('Upload Media').setStyle(ButtonStyle.Secondary).setEmoji('📎')
+        );
+
+    return { embed, components: [selectRow, modeRow, actionRow, uploadRow] };
 }
 
 //Build the settings interface
@@ -424,6 +438,11 @@ function buildSettingsInterface(system, session) {
             .setLabel('Default Privacy')
             .setStyle(ButtonStyle.Secondary)
             .setEmoji('👁️'),
+        new ButtonBuilder()
+            .setCustomId(`system_settings_sync_${session.id}`)
+            .setLabel(system.syncWithApps?.discord ? 'Synced' : 'Not Synced')
+            .setStyle(system.syncWithApps?.discord ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setEmoji(system.syncWithApps?.discord ? '✅' : '🔄'),
         new ButtonBuilder()
             .setCustomId(`system_settings_back_${session.id}`)
             .setLabel('Back to Edit')
@@ -546,6 +565,29 @@ function buildConditionsInterface(system, session) {
     return { embed, components: [row] };
 }
 
+// Build the management menu (replaces buildSyncConfirmation for system manage action)
+function buildManagementMenu(system, session, sessionId) {
+    const embed = new EmbedBuilder()
+        .setTitle(`🎡 Managing: ${utils.getDisplayName(system)}`)
+        .setDescription('Choose what you want to do:')
+        .setColor(ENTITY_COLORS.system);
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`system_manage_edit_${sessionId}`)
+            .setLabel('Edit System Info')
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('✏️'),
+        new ButtonBuilder()
+            .setCustomId(`system_manage_settings_${sessionId}`)
+            .setLabel('System Settings')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('⚙️')
+    );
+
+    return { embed, components: [row] };
+}
+
 // ==== COMMAND HANDLERS ====
 
 /*// Handle /system menu (not command to use anymore)
@@ -616,7 +658,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
 
     // Build the card
-    const embed = await buildSystemCard(targetSystem, privacyBucket, closedCharAllowed, false, targetUserId);
+    const embed = await buildSystemCard(targetSystem, privacyBucket, closedCharAllowed, false, interaction.guildId);
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -660,8 +702,10 @@ async function handleManage(interaction, user, system) {
             syncWithDiscord: system.syncWithApps?.discord || true
         });
 
-        const { embed, buttons } = utils.buildSyncConfirmation('system', utils.getDisplayName(system), sessionId, 'edit');
-        await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+        // Use management menu instead of sync confirmation (consistent with alter/state/group flow)
+        const session = utils.getSession(sessionId);
+        const { embed, components } = buildManagementMenu(system, session, sessionId);
+        await interaction.reply({ embeds: [embed], components, ephemeral: true });
     }
     else if (action === 'settings') {
         utils.setSession(sessionId, {
@@ -722,7 +766,7 @@ async function handleButtonInteraction(interaction) {
     // Handle show full info
     if (customId.startsWith('system_show_full_')) {
         const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
-        const embed = await buildSystemCard(system, null, closedCharAllowed, true);
+        const embed = await buildSystemCard(system, null, closedCharAllowed, true, interaction.guildId);
         return await interaction.update({ embeds: [embed], components: [] });
     }
 
@@ -732,8 +776,22 @@ async function handleButtonInteraction(interaction) {
         session.mode = null;
         session.syncWithDiscord = system.syncWithApps?.discord || false;
 
-        const { embed, buttons } = utils.buildSyncConfirmation('system', utils.getDisplayName(system), sessionId, 'edit');
-        return await interaction.update({ embeds: [embed], components: [buttons] });
+        const { embed, components } = buildEditInterface(system, session);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    // Handle management menu buttons (from buildManagementMenu)
+    if (customId.startsWith('system_manage_edit_')) {
+        session.type = 'edit';
+        session.id = sessionId;
+        const { embed, components } = buildEditInterface(system, session);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    if (customId.startsWith('system_manage_settings_')) {
+        session.type = 'settings';
+        const { embed, components } = buildSettingsInterface(system, session);
+        return await interaction.update({ embeds: [embed], components });
     }
 
     // Handle sync buttons for edit
@@ -759,7 +817,14 @@ async function handleButtonInteraction(interaction) {
         }
 
         if (customId.startsWith('system_edit_mode_server_')) {
-            session.mode = session.mode === 'server' ? null : 'server';
+            if (session.mode === 'server') {
+                session.mode = null;
+                delete session.serverId;
+            } else {
+                session.mode = 'server';
+                session.serverId = interaction.guildId;
+                utils.ensureServerEntry(system, interaction.guildId, interaction.guild?.name);
+            }
             const { embed, components } = buildEditInterface(system, session);
             return await interaction.update({ embeds: [embed], components });
         }
@@ -804,10 +869,9 @@ async function handleButtonInteraction(interaction) {
                     },
                     {
                         name: '💡 Example Layouts',
-                        value: 'System tags: 🌙, ✨\nAlter "Luna" signoffs: 💫\n\n' +
-                            '`{tag1} {name} {a-sign1}` → 🌙 Luna 💫\n' +
-                            '`{tag1}{name}{tag2}` → 🌙Luna✨\n' +
-                            '`[{sys-name}] {name}` → [My System] Luna',
+                        value: 'System tag(s): (🎡)\n Alter "Bird" signoff(s): 🪶\n\n' +
+                            '`{tag1} {name}{a-sign1}` → (🎡) Bird🪶\n' +
+                            '`[{sys-name}] {name}` → [Colorwheel System] Bird',
                         inline: false
                     },
                     {
@@ -860,6 +924,100 @@ async function handleButtonInteraction(interaction) {
                 embeds: [],
                 components: []
             });
+        }
+
+        // Upload Media → show select menu
+        if (customId.startsWith('system_upload_media_')) {
+            session.uploadMode = true;
+            const { embed, components } = buildEditInterface(system, session);
+            return await interaction.update({ embeds: [embed], components });
+        }
+
+        // Upload Back → return to button
+        if (customId.startsWith('system_upload_back_')) {
+            session.uploadMode = false;
+            const { embed, components } = buildEditInterface(system, session);
+            return await interaction.update({ embeds: [embed], components });
+        }
+
+        // Upload type selected → prompt for attachment
+        if (customId.startsWith('system_upload_select_')) {
+            const value = interaction.values[0];
+
+            const typeMap = {
+                mask_avatar: { fieldLabel: 'mask avatar', mediaType: 'avatar', path: 'mask' },
+                mask_davatar: { fieldLabel: 'mask discord avatar', mediaType: 'avatar', path: 'mask_discord' },
+                mask_proxy: { fieldLabel: 'mask proxy avatar', mediaType: 'proxyAvatar', path: 'mask_discord' },
+                mask_banner: { fieldLabel: 'mask banner', mediaType: 'banner', path: 'mask_discord' },
+                server_avatar: { fieldLabel: 'server avatar', mediaType: 'avatar', path: 'server' },
+                server_banner: { fieldLabel: 'server banner', mediaType: 'banner', path: 'server' },
+                server_proxy: { fieldLabel: 'server proxy avatar', mediaType: 'proxyAvatar', path: 'server' },
+                primary_avatar: { fieldLabel: 'primary avatar', mediaType: 'avatar', path: 'primary' },
+                discord_avatar: { fieldLabel: 'discord avatar', mediaType: 'avatar', path: 'discord' },
+                proxy_avatar: { fieldLabel: 'proxy avatar', mediaType: 'proxyAvatar', path: 'discord' },
+                banner: { fieldLabel: 'banner', mediaType: 'banner', path: 'discord' }
+            };
+
+            const config = typeMap[value];
+            if (!config) {
+                return await interaction.reply({ content: '❌ Invalid upload type.', ephemeral: true });
+            }
+
+            await interaction.reply({
+                content: `📎 Please send the image for your **${config.fieldLabel}**. You have 60 seconds.`,
+                ephemeral: true
+            });
+
+            try {
+                const collected = await interaction.channel.awaitMessages({
+                    filter: m => m.author.id === interaction.user.id && m.attachments.size > 0,
+                    max: 1,
+                    time: 60000,
+                    errors: ['time']
+                });
+
+                const attachment = collected.first().attachments.first();
+                const result = await utils.handleAttachmentUpload(attachment, config.fieldLabel, 'System', interaction.user.id);
+
+                if (result.success) {
+                    if (config.path === 'mask') {
+                        const oldMedia = system.mask?.avatar;
+                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                        if (!system.mask) system.mask = {};
+                        system.mask.avatar = result.media;
+                    } else if (config.path === 'mask_discord') {
+                        if (!system.mask) system.mask = {};
+                        if (!system.mask.discord) system.mask.discord = { image: {} };
+                        if (!system.mask.discord.image) system.mask.discord.image = {};
+                        const oldMedia = system.mask.discord.image[config.mediaType];
+                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                        system.mask.discord.image[config.mediaType] = result.media;
+                    } else if (config.path === 'server') {
+                        const serverEntry = utils.ensureServerEntry(system, session.serverId, interaction.guild?.name);
+                        const oldMedia = serverEntry[config.mediaType];
+                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                        serverEntry[config.mediaType] = result.media;
+                    } else if (config.path === 'primary') {
+                        const oldMedia = system.avatar;
+                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                        system.avatar = result.media;
+                    } else {
+                        if (!system.discord) system.discord = {};
+                        if (!system.discord.image) system.discord.image = {};
+                        const oldMedia = system.discord.image[config.mediaType];
+                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                        system.discord.image[config.mediaType] = result.media;
+                    }
+
+                    await system.save();
+                    const { embed, components } = buildEditInterface(system, session);
+                    return await interaction.editReply({ content: result.message, embeds: [embed], components });
+                } else {
+                    return await interaction.editReply({ content: result.message });
+                }
+            } catch (err) {
+                return await interaction.editReply({ content: '⏰ Upload timed out. Please try again.' });
+            }
         }
     }
 
@@ -917,6 +1075,91 @@ async function handleButtonInteraction(interaction) {
         return await interaction.update({ embeds: [embed], components });
     }
 
+    // Toggle sync with Discord
+    if (customId.startsWith('system_settings_sync_')) {
+        system.syncWithApps = { discord: !system.syncWithApps?.discord };
+        await system.save();
+
+        const { embed, components } = buildSettingsInterface(system, session);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    // Settings → Default Privacy
+    if (customId.startsWith('system_settings_privacy_')) {
+        const embed = new EmbedBuilder()
+            .setTitle(`👁️ Default Privacy Settings`)
+            .setDescription('Configure default privacy for your system. These settings apply to all entities unless overridden per-bucket.');
+
+        const currentPrivacy = system.setting?.privacy || [];
+        let privacyInfo = '';
+        if (currentPrivacy.length > 0) {
+            for (const p of currentPrivacy) {
+                privacyInfo += `**${p.bucket}:** ${p.settings?.hidden === false ? 'Hidden' : 'Visible'}\n`;
+            }
+        } else {
+            privacyInfo = '*No custom privacy settings configured. All entities are visible by default.*';
+        }
+
+        embed.addFields({ name: 'Current Settings', value: privacyInfo, inline: false });
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`system_privacy_set_visible_${session.id}`).setLabel('Set Visible').setStyle(ButtonStyle.Success).setEmoji('✅'),
+            new ButtonBuilder().setCustomId(`system_privacy_set_hidden_${session.id}`).setLabel('Set Hidden').setStyle(ButtonStyle.Danger).setEmoji('❌'),
+            new ButtonBuilder().setCustomId(`system_privacy_back_${session.id}`).setLabel('Back to Settings').setStyle(ButtonStyle.Secondary)
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons] });
+    }
+
+    // Privacy → Set Visible
+    if (customId.startsWith('system_privacy_set_visible_')) {
+        if (!system.setting) system.setting = {};
+        if (!system.setting.privacy) system.setting.privacy = [];
+
+        // Set all buckets to visible (hidden !== false)
+        if (system.privacyBuckets?.length > 0) {
+            for (const bucket of system.privacyBuckets) {
+                let privacy = system.setting.privacy.find(p => p.bucket === bucket.name);
+                if (!privacy) {
+                    privacy = { bucket: bucket.name, settings: {} };
+                    system.setting.privacy.push(privacy);
+                }
+                privacy.settings.hidden = true;
+            }
+        }
+        await system.save();
+
+        const { embed, components } = buildSettingsInterface(system, session);
+        return await interaction.update({ content: '✅ Default privacy set to visible for all buckets.', embeds: [embed], components });
+    }
+
+    // Privacy → Set Hidden
+    if (customId.startsWith('system_privacy_set_hidden_')) {
+        if (!system.setting) system.setting = {};
+        if (!system.setting.privacy) system.setting.privacy = [];
+
+        if (system.privacyBuckets?.length > 0) {
+            for (const bucket of system.privacyBuckets) {
+                let privacy = system.setting.privacy.find(p => p.bucket === bucket.name);
+                if (!privacy) {
+                    privacy = { bucket: bucket.name, settings: {} };
+                    system.setting.privacy.push(privacy);
+                }
+                privacy.settings.hidden = false;
+            }
+        }
+        await system.save();
+
+        const { embed, components } = buildSettingsInterface(system, session);
+        return await interaction.update({ content: '✅ Default privacy set to hidden for all buckets.', embeds: [embed], components });
+    }
+
+    // Privacy → Back to Settings
+    if (customId.startsWith('system_privacy_back_')) {
+        const { embed, components } = buildSettingsInterface(system, session);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
     // Privacy buckets
     if (customId.startsWith('system_settings_buckets_')) {
         const { embed, components } = buildBucketsInterface(system, session);
@@ -951,6 +1194,14 @@ async function handleButtonInteraction(interaction) {
             embeds: [],
             components: [row]
         });
+    }
+
+    // Settings → Mask Settings (transition to edit interface with mask mode active)
+    if (customId.startsWith('system_settings_mask_')) {
+        session.type = 'edit';
+        session.mode = 'mask';
+        const { embed, components } = buildEditInterface(system, session);
+        return await interaction.update({ embeds: [embed], components });
     }
 
     // Back to edit from settings

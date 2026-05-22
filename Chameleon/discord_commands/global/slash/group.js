@@ -79,6 +79,7 @@ module.exports = {
                 .addChoices(
                     { name: 'New - Create new group', value: 'new' },
                     { name: 'Edit - Modify existing group', value: 'edit' },
+                    { name: 'Settings - Configure group settings', value: 'settings' },
                     { name: 'Delete - Remove group permanently', value: 'delete' }
                 ))
             .addStringOption(opt => opt
@@ -104,11 +105,12 @@ module.exports = {
 
         const action = interaction.options.getString('action');
         switch (action) {
-            case 'list': return await handleShowList(interaction, user, system);
-            case 'show': return await handleShow(interaction, user, system);
-            case 'new': return await handleNew(interaction, user, system);
-            case 'edit': return await handleEdit(interaction, user, system);
-            case 'delete': return await handleDelete(interaction, user, system);
+            case 'list': return await handleShowList(interaction, user, system); break;
+            case 'show': return await handleShow(interaction, user, system); break;
+            case 'new': return await handleNew(interaction, user, system); break;
+            case 'edit': return await handleEdit(interaction, user, system); break;
+            case 'settings': return await handleSettings(interaction, user, system); break;
+            case 'delete': return await handleDelete(interaction, user, system); break;
         }
     },
 
@@ -155,8 +157,10 @@ function buildGroupListEmbed(groups, page, system, showFullList) {
     return embed;
 }
 
-async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = true) {
+async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = true, guildId = null) {
     const embed = new EmbedBuilder();
+
+    const session = { mode: null, syncWithDiscord: group.syncWithApps?.discord, serverId: guildId };
 
     // Color priority: group.color > system.color > none
     const color = utils.getEntityEmbedColor(group, system);
@@ -165,7 +169,7 @@ async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = 
         ? (group.name?.display || group.name?.indexable)
         : (group.name?.closedNameDisplay || group.name?.display || group.name?.indexable);
 
-    const proxyAvatar = group.discord?.image?.proxyAvatar?.url || group.avatar?.url;
+    const proxyAvatar = utils.resolveProxyAvatarUrl(group, session);
     embed.setAuthor({
         name: `${group.name?.indexable || 'Unknown'} (from ${utils.getDisplayName(system, closedCharAllowed)})`,
         iconURL: proxyAvatar || undefined
@@ -196,13 +200,16 @@ async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = 
         if (cautionInfo) embed.addFields({ name: '⚠️ Caution', value: cautionInfo.trim(), inline: false });
     }
 
-    const avatar = group.discord?.image?.avatar?.url || group.avatar?.url;
+    const avatar = utils.resolveAvatarUrl(group, session);
     if (avatar) embed.setThumbnail(avatar);
+
+    const banner = utils.resolveBannerUrl(group, session);
+    if (banner) embed.setImage(banner);
 
     return embed;
 }
 
-function buildEditInterface(group, session) {
+function buildEditInterface(group, session, system = null) {
     const embed = new EmbedBuilder()
         .setTitle(`Editing: ${utils.getDisplayName(group)}`)
         .setDescription(session.mode
@@ -246,17 +253,29 @@ function buildEditInterface(group, session) {
         new ButtonBuilder().setCustomId(`group_edit_done_${session.id}`).setLabel('Done').setStyle(ButtonStyle.Success).setEmoji('✅')
     );
 
-    return { embed, components: [selectRow, modeRow, actionRow] };
+    const uploadRow = session.uploadMode
+        ? new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`group_upload_select_${session.id}`)
+                .setPlaceholder('Choose media type to upload...')
+                .addOptions(utils.buildUploadOptions(session)),
+            new ButtonBuilder().setCustomId(`group_upload_back_${session.id}`).setLabel('Back').setStyle(ButtonStyle.Secondary).setEmoji('◀️')
+        )
+        : new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`group_upload_media_${session.id}`).setLabel('Upload Media').setStyle(ButtonStyle.Secondary).setEmoji('📎')
+        );
+
+    return { embed, components: [selectRow, modeRow, actionRow, uploadRow] };
 }
 
 // ==== COMMAND HANDLERS ====
 
+/*// (Dead code — menu subcommand is commented out, kept for reference)
 async function handleMenu(interaction, user, system) {
     const embed = new EmbedBuilder()
         .setTitle('👥 Group Management')
         .setDescription('Select a button to start managing your groups.');
 
-    // Use system color if available
     const menuColor = utils.getSystemEmbedColor(system);
     if (menuColor) embed.setColor(menuColor);
 
@@ -266,7 +285,7 @@ async function handleMenu(interaction, user, system) {
     );
 
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
-}
+}*/
 
 async function handleShowList(interaction, currentUser, currentSystem) {
     const targetUser = interaction.options.getUser('user');
@@ -347,7 +366,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         return await interaction.reply({ content: '❌ Group cannot be found.', ephemeral: true });
 
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
-    const embed = await buildGroupCard(group, targetSystem, privacyBucket, closedCharAllowed);
+    const embed = await buildGroupCard(group, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId);
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, { type: 'show', groupId: group._id, systemId: targetSystem._id, isOwner });
@@ -382,8 +401,9 @@ async function handleEdit(interaction, user, system) {
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, { type: 'edit', groupId: group._id, systemId: system._id, mode: null, syncWithDiscord: group.syncWithApps?.discord || false });
 
-    const { embed, buttons } = utils.buildSyncConfirmation('group', utils.getDisplayName(group), sessionId, 'edit');
-    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+    // Go straight to edit interface (sync is managed in settings)
+    const { embed, components } = buildEditInterface(group, { id: sessionId }, system);
+    await interaction.reply({ embeds: [embed], components, ephemeral: true });
 }
 
 async function handleDelete(interaction, user, system) {
@@ -423,22 +443,32 @@ async function handleSettings(interaction, user, system) {
 
     const embed = new EmbedBuilder()
         .setTitle(`⚙️ Settings: ${utils.getDisplayName(group)}`)
+        .setDescription('Configure settings for this group.')
         .addFields(
             { name: 'Closed Name', value: group.name?.closedNameDisplay || '*Not set*', inline: true },
             { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
-            { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true }
+            { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true },
+            { name: 'Sync with Discord', value: group.syncWithApps?.discord ? '✅ Yes' : '🔄 No', inline: true }
         );
 
-    // Color priority: group.color > system.color > none
     const settingsColor = utils.getEntityEmbedColor(group, system);
     if (settingsColor) embed.setColor(settingsColor);
 
     const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
     );
 
-    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+    const syncRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`group_settings_sync_${sessionId}`)
+            .setLabel(group.syncWithApps?.discord ? 'Synced with Discord' : 'Not Synced')
+            .setStyle(group.syncWithApps?.discord ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setEmoji(group.syncWithApps?.discord ? '✅' : '🔄')
+    );
+
+    await interaction.reply({ embeds: [embed], components: [buttons, syncRow], ephemeral: true });
 }
 
 // ==== BUTTON HANDLER ====
@@ -448,24 +478,26 @@ async function handleButtonInteraction(interaction) {
 
     if (customId.startsWith('new_user_'))  return await utils.handleNewUserButton(interaction, 'group');
 
-    if (customId === 'group_menu_showlist') {
-        const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
-        return await handleShowList({ ...interaction, options: { getUser: () => null, getString: () => null } }, user, system);
-    }
+    // (Removed: group_menu_showlist mock interaction — menu subcommand is commented out, dead code)
 
     const sessionId = utils.extractSessionId(customId);
     const session = utils.getSession(sessionId);
 
     if (!session) return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
 
+    // Fetch system for color and member operations
+    const system = await System.findById(session.systemId);
+
     // List navigation
     if (customId.startsWith('group_list_prev_')) session.page = Math.max(0, session.page - 1);
-    if (customId.startsWith('group_list_next_')) session.page++;
+    if (customId.startsWith('group_list_next_')) {
+        const groups = session.showFullList ? session.allGroups : session.groups;
+        session.page = Math.min(utils.getTotalPages(groups.length) - 1, session.page + 1);
+    }
     if (customId.startsWith('group_list_toggle_')) { session.showFullList = !session.showFullList; session.page = 0; }
 
     if (customId.startsWith('group_list_')) {
         const groups = session.showFullList ? session.allGroups : session.groups;
-        const system = await System.findById(session.systemId);
         return await interaction.update({
             embeds: [buildGroupListEmbed(groups, session.page, system, session.showFullList)],
             components: utils.buildListButtons(groups.length, session.page, session.isOwner, session.showFullList, sessionId, 'group')
@@ -475,8 +507,7 @@ async function handleButtonInteraction(interaction) {
     // Show full
     if (customId.startsWith('group_show_full_')) {
         const group = await Group.findById(session.groupId);
-        const system = await System.findById(session.systemId);
-        const embed = await buildGroupCard(group, system, null, true);
+        const embed = await buildGroupCard(group, system, null, true, interaction.guildId);
         if (group.metadata?.addedAt) embed.addFields({ name: '📊 Metadata', value: `**Added:** ${utils.formatDate(group.metadata.addedAt)}`, inline: false });
         return await interaction.update({ embeds: [embed], components: [] });
     }
@@ -505,16 +536,29 @@ async function handleButtonInteraction(interaction) {
         }
 
         const group = await Group.findById(session.groupId);
-        const { embed, components } = buildEditInterface(group, session);
+        const { embed, components } = buildEditInterface(group, session, system);
         return await interaction.update({ embeds: [embed], components });
     }
 
     // Mode toggles
-    if (customId.startsWith('group_edit_mode_mask_')) session.mode = session.mode === 'mask' ? null : 'mask';
-    if (customId.startsWith('group_edit_mode_server_')) session.mode = session.mode === 'server' ? null : 'server';
-    if (customId.startsWith('group_edit_mode_')) {
+    if (customId.startsWith('group_edit_mode_mask_')) {
+        session.mode = session.mode === 'mask' ? null : 'mask';
         const group = await Group.findById(session.groupId);
-        const { embed, components } = buildEditInterface(group, session);
+        const { embed, components } = buildEditInterface(group, session, system);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    if (customId.startsWith('group_edit_mode_server_')) {
+        const group = await Group.findById(session.groupId);
+        if (session.mode === 'server') {
+            session.mode = null;
+            delete session.serverId;
+        } else {
+            session.mode = 'server';
+            session.serverId = interaction.guildId;
+            utils.ensureServerEntry(group, interaction.guildId, interaction.guild?.name);
+        }
+        const { embed, components } = buildEditInterface(group, session, system);
         return await interaction.update({ embeds: [embed], components });
     }
 
@@ -524,11 +568,107 @@ async function handleButtonInteraction(interaction) {
         return await interaction.update({ content: '✅ Editing complete!', embeds: [], components: [] });
     }
 
+    // Upload Media → show select menu
+    if (customId.startsWith('group_upload_media_')) {
+        session.uploadMode = true;
+        const group = await Group.findById(session.groupId);
+        const { embed, components } = buildEditInterface(group, session, system);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    // Upload Back → return to button
+    if (customId.startsWith('group_upload_back_')) {
+        session.uploadMode = false;
+        const group = await Group.findById(session.groupId);
+        const { embed, components } = buildEditInterface(group, session, system);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    // Upload type selected → prompt for attachment
+    if (customId.startsWith('group_upload_select_')) {
+        const value = interaction.values[0];
+
+        const typeMap = {
+            mask_avatar: { fieldLabel: 'mask avatar', mediaType: 'avatar', path: 'mask' },
+            mask_davatar: { fieldLabel: 'mask discord avatar', mediaType: 'avatar', path: 'mask_discord' },
+            mask_proxy: { fieldLabel: 'mask proxy avatar', mediaType: 'proxyAvatar', path: 'mask_discord' },
+            mask_banner: { fieldLabel: 'mask banner', mediaType: 'banner', path: 'mask_discord' },
+            server_avatar: { fieldLabel: 'server avatar', mediaType: 'avatar', path: 'server' },
+            server_banner: { fieldLabel: 'server banner', mediaType: 'banner', path: 'server' },
+            server_proxy: { fieldLabel: 'server proxy avatar', mediaType: 'proxyAvatar', path: 'server' },
+            primary_avatar: { fieldLabel: 'primary avatar', mediaType: 'avatar', path: 'primary' },
+            discord_avatar: { fieldLabel: 'discord avatar', mediaType: 'avatar', path: 'discord' },
+            proxy_avatar: { fieldLabel: 'proxy avatar', mediaType: 'proxyAvatar', path: 'discord' },
+            banner: { fieldLabel: 'banner', mediaType: 'banner', path: 'discord' }
+        };
+
+        const config = typeMap[value];
+        if (!config) {
+            return await interaction.reply({ content: '❌ Invalid upload type.', ephemeral: true });
+        }
+
+        await interaction.reply({
+            content: `📎 Please send the image for your **${config.fieldLabel}**. You have 60 seconds.`,
+            ephemeral: true
+        });
+
+        try {
+            const collected = await interaction.channel.awaitMessages({
+                filter: m => m.author.id === interaction.user.id && m.attachments.size > 0,
+                max: 1,
+                time: 60000,
+                errors: ['time']
+            });
+
+            const attachment = collected.first().attachments.first();
+            const group = await Group.findById(session.groupId);
+            const result = await utils.handleAttachmentUpload(attachment, config.fieldLabel, 'Group', interaction.user.id);
+
+            if (result.success) {
+                if (config.path === 'mask') {
+                    const oldMedia = group.mask?.avatar;
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    if (!group.mask) group.mask = {};
+                    group.mask.avatar = result.media;
+                } else if (config.path === 'mask_discord') {
+                    if (!group.mask) group.mask = {};
+                    if (!group.mask.discord) group.mask.discord = { image: {} };
+                    if (!group.mask.discord.image) group.mask.discord.image = {};
+                    const oldMedia = group.mask.discord.image[config.mediaType];
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    group.mask.discord.image[config.mediaType] = result.media;
+                } else if (config.path === 'server') {
+                    const serverEntry = utils.ensureServerEntry(group, session.serverId, interaction.guild?.name);
+                    const oldMedia = serverEntry[config.mediaType];
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    serverEntry[config.mediaType] = result.media;
+                } else if (config.path === 'primary') {
+                    const oldMedia = group.avatar;
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    group.avatar = result.media;
+                } else {
+                    if (!group.discord) group.discord = {};
+                    if (!group.discord.image) group.discord.image = {};
+                    const oldMedia = group.discord.image[config.mediaType];
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    group.discord.image[config.mediaType] = result.media;
+                }
+
+                await group.save();
+                const { embed, components } = buildEditInterface(group, session, system);
+                return await interaction.editReply({ content: result.message, embeds: [embed], components });
+            } else {
+                return await interaction.editReply({ content: result.message });
+            }
+        } catch (err) {
+            return await interaction.editReply({ content: '⏰ Upload timed out. Please try again.' });
+        }
+    }
+
     // Delete
     if (customId.startsWith('group_delete_confirm_')) {
         await Alter.updateMany({ groupsIDs: session.groupId.toString() }, { $pull: { groupsIDs: session.groupId.toString() } });
         await State.updateMany({ groupIDs: session.groupId.toString() }, { $pull: { groupIDs: session.groupId.toString() } });
-        const system = await System.findById(session.systemId);
         system.groups.IDs = system.groups.IDs.filter(id => id !== session.groupId.toString());
         await system.save();
         await Group.findByIdAndDelete(session.groupId);
@@ -550,6 +690,178 @@ async function handleButtonInteraction(interaction) {
         ));
         return await interaction.showModal(modal);
     }
+
+    // Edit → Settings transition (from buildEditInterface action row)
+    if (customId.startsWith('group_edit_settings_')) {
+        const group = await Group.findById(session.groupId);
+        session.type = 'settings';
+
+        const embed = new EmbedBuilder()
+            .setTitle(`⚙️ Settings: ${utils.getDisplayName(group)}`)
+            .setDescription('Configure settings for this group.')
+            .addFields(
+                { name: 'Closed Name', value: group.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
+                { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true }
+            );
+
+        const color = utils.getEntityEmbedColor(group, system);
+        if (color) embed.setColor(color);
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭'),
+            new ButtonBuilder().setCustomId(`group_settings_back_${sessionId}`).setLabel('Back to Edit').setStyle(ButtonStyle.Danger)
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons] });
+    }
+
+    // Settings → Privacy Settings
+    if (customId.startsWith('group_settings_privacy_')) {
+        const group = await Group.findById(session.groupId);
+        const sys = await System.findById(session.systemId);
+
+        const embed = new EmbedBuilder()
+            .setTitle(`🔒 Privacy Settings: ${utils.getDisplayName(group)}`)
+            .setDescription('Configure who can see what information about this group.');
+
+        if (sys.privacyBuckets?.length > 0) {
+            for (const bucket of sys.privacyBuckets) {
+                const privacy = group.setting?.privacy?.find(p => p.bucket === bucket.name);
+                let status = 'Default (visible)';
+                if (privacy?.settings?.hidden === false) status = '❌ Hidden';
+                else if (privacy?.settings?.hidden === true) status = '✅ Visible';
+                embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
+            }
+        } else {
+            embed.addFields({ name: 'No buckets', value: 'No privacy buckets configured.', inline: false });
+        }
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`group_privacy_toggle_hidden_${sessionId}`).setLabel('Toggle Hidden').setStyle(ButtonStyle.Primary).setEmoji('👁️'),
+            new ButtonBuilder().setCustomId(`group_privacy_back_${sessionId}`).setLabel('Back to Settings').setStyle(ButtonStyle.Danger)
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons] });
+    }
+
+    // Privacy → Toggle Hidden
+    if (customId.startsWith('group_privacy_toggle_hidden_')) {
+        const group = await Group.findById(session.groupId);
+        const sys = await System.findById(session.systemId);
+
+        if (!sys.privacyBuckets?.length) {
+            return await interaction.reply({ content: '❌ No privacy buckets configured.', ephemeral: true });
+        }
+
+        const bucketOptions = sys.privacyBuckets.map(b => {
+            const privacy = group.setting?.privacy?.find(p => p.bucket === b.name);
+            const isHidden = privacy?.settings?.hidden === false;
+            return new StringSelectMenuOptionBuilder()
+                .setLabel(`${b.name} (${isHidden ? 'Hidden' : 'Visible'})`)
+                .setValue(b.name)
+                .setEmoji(isHidden ? '❌' : '✅');
+        });
+
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`group_privacy_toggle_select_${sessionId}`)
+            .setPlaceholder('Select bucket to toggle...')
+            .addOptions(bucketOptions);
+
+        return await interaction.update({ content: 'Select a bucket to toggle:', embeds: [], components: [new ActionRowBuilder().addComponents(selectMenu)] });
+    }
+
+    // Privacy → Back to Settings
+    if (customId.startsWith('group_privacy_back_')) {
+        const group = await Group.findById(session.groupId);
+        session.type = 'settings';
+
+        const embed = new EmbedBuilder()
+            .setTitle(`⚙️ Settings: ${utils.getDisplayName(group)}`)
+            .setDescription('Configure settings for this group.')
+            .addFields(
+                { name: 'Closed Name', value: group.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
+                { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true },
+                { name: 'Sync with Discord', value: group.syncWithApps?.discord ? '✅ Yes' : '🔄 No', inline: true }
+            );
+
+        const color = utils.getEntityEmbedColor(group, system);
+        if (color) embed.setColor(color);
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
+        );
+
+        const syncRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`group_settings_sync_${sessionId}`)
+                .setLabel(group.syncWithApps?.discord ? 'Synced with Discord' : 'Not Synced')
+                .setStyle(group.syncWithApps?.discord ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setEmoji(group.syncWithApps?.discord ? '✅' : '🔄')
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons, syncRow] });
+    }
+
+    // Mask settings (transition to edit interface with mask mode active)
+    if (customId.startsWith('group_settings_mask_')) {
+        session.type = 'edit';
+        session.mode = 'mask';
+        const group = await Group.findById(session.groupId);
+        const { embed, components } = buildEditInterface(group, session, system);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    // Settings → Toggle Sync with Discord
+    if (customId.startsWith('group_settings_sync_')) {
+        const group = await Group.findById(session.groupId);
+        group.syncWithApps = { discord: !group.syncWithApps?.discord };
+        await group.save();
+
+        session.type = 'settings';
+        const embed = new EmbedBuilder()
+            .setTitle(`⚙️ Settings: ${utils.getDisplayName(group)}`)
+            .setDescription('Configure settings for this group.')
+            .addFields(
+                { name: 'Closed Name', value: group.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
+                { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true },
+                { name: 'Sync with Discord', value: group.syncWithApps?.discord ? '✅ Yes' : '🔄 No', inline: true }
+            );
+
+        const color = utils.getEntityEmbedColor(group, system);
+        if (color) embed.setColor(color);
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
+        );
+
+        const syncRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`group_settings_sync_${sessionId}`)
+                .setLabel(group.syncWithApps?.discord ? 'Synced with Discord' : 'Not Synced')
+                .setStyle(group.syncWithApps?.discord ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setEmoji(group.syncWithApps?.discord ? '✅' : '🔄')
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons, syncRow] });
+    }
+
+    // Settings → Back to Edit
+    if (customId.startsWith('group_settings_back_')) {
+        const group = await Group.findById(session.groupId);
+        session.type = 'edit';
+        session.mode = null;
+        const { embed, components } = buildEditInterface(group, session, system);
+        return await interaction.update({ embeds: [embed], components });
+    }
 }
 
 // ==== SELECT MENU HANDLER ====
@@ -560,7 +872,48 @@ async function handleSelectMenu(interaction) {
 
     if (!session) return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
 
+    // Privacy toggle select
+    if (interaction.customId.startsWith('group_privacy_toggle_select_')) {
+        const group = await Group.findById(session.groupId);
+        const sys = await System.findById(session.systemId);
+        const bucketName = interaction.values[0];
+
+        if (!group.setting) group.setting = {};
+        if (!group.setting.privacy) group.setting.privacy = [];
+
+        let privacy = group.setting.privacy.find(p => p.bucket === bucketName);
+        if (!privacy) {
+            privacy = { bucket: bucketName, settings: {} };
+            group.setting.privacy.push(privacy);
+        }
+
+        privacy.settings.hidden = privacy.settings.hidden === false ? true : false;
+        await group.save();
+
+        const embed = new EmbedBuilder()
+            .setTitle(`🔒 Privacy Settings: ${utils.getDisplayName(group)}`)
+            .setDescription('Configure who can see what information about this group.');
+
+        if (sys.privacyBuckets?.length > 0) {
+            for (const bucket of sys.privacyBuckets) {
+                const p = group.setting?.privacy?.find(pr => pr.bucket === bucket.name);
+                let status = 'Default (visible)';
+                if (p?.settings?.hidden === false) status = '❌ Hidden';
+                else if (p?.settings?.hidden === true) status = '✅ Visible';
+                embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
+            }
+        }
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`group_privacy_toggle_hidden_${sessionId}`).setLabel('Toggle Hidden').setStyle(ButtonStyle.Primary).setEmoji('👁️'),
+            new ButtonBuilder().setCustomId(`group_privacy_back_${sessionId}`).setLabel('Back to Settings').setStyle(ButtonStyle.Danger)
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons] });
+    }
+
     const group = await Group.findById(session.groupId);
+    const system = await System.findById(session.systemId);
     const value = interaction.values[0];
     let modal;
 
@@ -682,7 +1035,7 @@ async function handleModalSubmit(interaction) {
 
                 // Show warning about duplicates
                 session.id = sessionId;
-                const { embed, components } = buildEditInterface(group, session);
+                const { embed, components } = buildEditInterface(group, session, system);
                 return await interaction.update({
                     content: `⚠️ Some proxies were already in use and were skipped:\n${dupList}\n\nValid proxies were saved.`,
                     embeds: [embed],
@@ -728,29 +1081,55 @@ async function handleModalSubmit(interaction) {
 
     if (interaction.customId.startsWith('group_edit_members_modal_')) {
         const system = await System.findById(session.systemId);
-        const alterNames = interaction.fields.getTextInputValue('alter_names');
-        const stateNames = interaction.fields.getTextInputValue('state_names');
+        const alterNamesInput = interaction.fields.getTextInputValue('alter_names');
+        const stateNamesInput = interaction.fields.getTextInputValue('state_names');
 
-        // Update alters
-        await Alter.updateMany({ groupsIDs: group._id.toString() }, { $pull: { groupsIDs: group._id.toString() } });
-        if (alterNames) {
-            for (const name of utils.parseCommaSeparated(alterNames)) {
-                await Alter.updateOne(
-                    { _id: { $in: system.alters?.IDs || [] }, 'name.indexable': name.toLowerCase() },
-                    { $addToSet: { groupsIDs: group._id.toString() } }
-                );
-            }
+        const allAlters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
+        const allStates = await State.find({ _id: { $in: system.states?.IDs || [] } });
+
+        // Calculate new alter membership IDs
+        const newAlterIds = [];
+        for (const name of utils.parseCommaSeparated(alterNamesInput)) {
+            const alter = allAlters.find(a => a.name?.indexable?.toLowerCase() === name.toLowerCase());
+            if (alter) newAlterIds.push(alter._id.toString());
         }
 
-        // Update states
-        await State.updateMany({ groupIDs: group._id.toString() }, { $pull: { groupIDs: group._id.toString() } });
-        if (stateNames) {
-            for (const name of utils.parseCommaSeparated(stateNames)) {
-                await State.updateOne(
-                    { _id: { $in: system.states?.IDs || [] }, 'name.indexable': name.toLowerCase() },
-                    { $addToSet: { groupIDs: group._id.toString() } }
-                );
-            }
+        // Calculate new state membership IDs
+        const newStateIds = [];
+        for (const name of utils.parseCommaSeparated(stateNamesInput)) {
+            const state = allStates.find(s => s.name?.indexable?.toLowerCase() === name.toLowerCase());
+            if (state) newStateIds.push(state._id.toString());
+        }
+
+        // Diff for alters (alter.groupsIDs)
+        const oldAlterIds = group.alterIDs || [];
+        const removedAlterIds = oldAlterIds.filter(id => !newAlterIds.includes(id));
+        const addedAlterIds = newAlterIds.filter(id => !oldAlterIds.includes(id));
+
+        // Diff for states (state.groupIDs)
+        const oldStateIds = group.stateIDs || [];
+        const removedStateIds = oldStateIds.filter(id => !newStateIds.includes(id));
+        const addedStateIds = newStateIds.filter(id => !oldStateIds.includes(id));
+
+        // Update group's own member arrays
+        group.alterIDs = newAlterIds;
+        group.stateIDs = newStateIds;
+        await group.save();
+
+        // Sync reverse: alter.groupsIDs (diff-based)
+        if (removedAlterIds.length > 0) {
+            await Alter.updateMany({ _id: { $in: removedAlterIds } }, { $pull: { groupsIDs: group._id.toString() } });
+        }
+        if (addedAlterIds.length > 0) {
+            await Alter.updateMany({ _id: { $in: addedAlterIds } }, { $addToSet: { groupsIDs: group._id.toString() } });
+        }
+
+        // Sync reverse: state.groupIDs (diff-based)
+        if (removedStateIds.length > 0) {
+            await State.updateMany({ _id: { $in: removedStateIds } }, { $pull: { groupIDs: group._id.toString() } });
+        }
+        if (addedStateIds.length > 0) {
+            await State.updateMany({ _id: { $in: addedStateIds } }, { $addToSet: { groupIDs: group._id.toString() } });
         }
     }
 
@@ -763,6 +1142,6 @@ async function handleModalSubmit(interaction) {
     }
 
     session.id = sessionId;
-    const { embed, components } = buildEditInterface(group, session);
+    const { embed, components } = buildEditInterface(group, session, system);
     await interaction.update({ embeds: [embed], components });
 }

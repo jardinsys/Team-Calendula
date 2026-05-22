@@ -114,6 +114,7 @@ const systemSchema = new mongoose.Schema({
             image: {
                 avatar: mediaSchema,
                 banner: mediaSchema,
+                proxyAvatar: mediaSchema,
             },
             tag: {
                 normal: [String],
@@ -132,6 +133,7 @@ const systemSchema = new mongoose.Schema({
         image: {
             avatar: mediaSchema,
             banner: mediaSchema,
+            proxyAvatar: mediaSchema,
         },
         tag: {
             normal: [String],
@@ -148,6 +150,8 @@ const systemSchema = new mongoose.Schema({
             name: String,
             description: String,
             avatar: mediaSchema,
+            banner: mediaSchema,
+            proxyAvatar: mediaSchema,
             tag: [String],
             pronounSeparator: String,
             proxyStyle: { type: String, default: "off" }

@@ -78,6 +78,8 @@ const groupSchema = new mongoose.Schema({
             name: String,
             description: String,
             avatar: mediaSchema,
+            banner: mediaSchema,
+            proxyAvatar: mediaSchema,
             pronounSeparator: String,
         }],
         metadata: {

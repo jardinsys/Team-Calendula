@@ -12,6 +12,8 @@ const {
     TextInputStyle
 } = require('discord.js');
 const mongoose = require('mongoose');
+const https = require('https');
+const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 // Import schemas
 const System = require('../../schemas/system');
@@ -21,6 +23,19 @@ const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const Guild = require('../../schemas/guild');
 const { PrivacyBucket } = require('../../schemas/settings');
+
+// Import config for R2
+const config = require('../../../../config.json');
+
+// Initialize R2 Client for Systemiser media
+const sysR2 = new S3Client({
+    region: 'auto',
+    endpoint: config.r2.system.endpoint,
+    credentials: {
+        accessKeyId: config.r2.system.accessKeyId,
+        secretAccessKey: config.r2.system.secretAccessKey,
+    },
+});
 
 // ==== CONSTANTS ===== 
 
@@ -923,6 +938,295 @@ function getProxyStyleOptions() {
     ];
 }
 
+// ============================================
+// R2 MEDIA UTILITIES
+// ============================================
+
+/* Upload a file buffer to Cloudflare R2
+ * @param {Buffer} buffer - File content buffer
+ * @param {string} filename - Original filename
+ * @param {string} mimeType - MIME type (e.g., 'image/png', 'image/gif')
+ * @param {string} userId - User's MongoDB _id
+ * @param {string} entityType - 'system', 'alter', 'state', or 'group'
+ * @param {string} field - 'avatar', 'banner', or 'proxyAvatar'
+ * @returns {Object} mediaSchema-compatible object { r2Key, url, filename, mimeType, size, uploadedAt }
+ */
+async function uploadMediaToR2(buffer, filename, mimeType, userId, entityType, field) {
+    try {
+        const ext = filename.split('.').pop() || 'bin';
+        const timestamp = Date.now();
+        const r2Key = `media/${entityType}/${userId}/${field}_${timestamp}.${ext}`;
+
+        const command = new PutObjectCommand({
+            Bucket: config.r2.system.bucketName,
+            Key: r2Key,
+            Body: buffer,
+            ContentType: mimeType,
+        });
+
+        await sysR2.send(command);
+
+        const publicUrl = `${config.r2.system.publicURL}/${r2Key}`;
+
+        return {
+            r2Key: r2Key,
+            url: publicUrl,
+            filename: filename,
+            mimeType: mimeType,
+            size: buffer.length,
+            uploadedAt: new Date()
+        };
+    } catch (error) {
+        console.error('Error uploading media to R2:', error);
+        throw error;
+    }
+}
+
+/* Delete a file from Cloudflare R2
+ * @param {string} r2Key - The R2 object key to delete
+ */
+async function deleteFromR2(r2Key) {
+    try {
+        if (!r2Key) return;
+        const command = new DeleteObjectCommand({
+            Bucket: config.r2.system.bucketName,
+            Key: r2Key,
+        });
+        await sysR2.send(command);
+    } catch (error) {
+        console.error('Error deleting from R2:', error);
+    }
+}
+
+/* Download a file from a URL (e.g., Discord attachment)
+ * @param {string} url - URL to download from
+ * @returns {Promise<Buffer>} File content buffer
+ */
+function downloadFromUrl(url) {
+    return new Promise((resolve, reject) => {
+        https.get(url, (res) => {
+            if (res.statusCode === 302 || res.statusCode === 301) {
+                https.get(res.headers.location, (res2) => {
+                    const chunks = [];
+                    res2.on('data', (chunk) => chunks.push(chunk));
+                    res2.on('end', () => resolve(Buffer.concat(chunks)));
+                    res2.on('error', reject);
+                });
+                return;
+            }
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+            res.on('error', reject);
+        }).on('error', reject);
+    });
+}
+
+/* Process an already-collected attachment: validate, download, upload to R2
+ * @param {Attachment} attachment - Discord attachment object
+ * @param {string} fieldLabel - Label for R2 path (e.g., 'avatar', 'banner')
+ * @param {string} entityType - Entity type for R2 path (e.g., 'Alter', 'State')
+ * @param {string} userId - Discord user ID for R2 path
+ * @returns {Promise<Object>} { success, media?, message }
+ */
+async function handleAttachmentUpload(attachment, fieldLabel, entityType, userId) {
+    if (!attachment?.contentType?.startsWith('image/')) {
+        return { success: false, message: '❌ Not a valid image file. Please send PNG, JPG, GIF, or WEBP.' };
+    }
+
+    try {
+        const buffer = await downloadFromUrl(attachment.url);
+        const media = await uploadMediaToR2(
+            buffer,
+            attachment.name || 'image',
+            attachment.contentType,
+            userId,
+            entityType,
+            fieldLabel
+        );
+        return { success: true, media, message: '✅ Image uploaded successfully!' };
+    } catch (error) {
+        console.error('Error processing attachment upload:', error);
+        return { success: false, message: '❌ Failed to upload image. Try again later.' };
+    }
+}
+
+/* Resolve the correct nested path for a media field based on session mode + sync
+ * @param {Object} entity - The entity document
+ * @param {Object} session - Session data with mode, syncWithDiscord, serverId
+ * @param {string} mediaType - 'avatar' | 'banner' | 'proxyAvatar'
+ * @returns {Object} { target, pathParts } — target is the nested object, pathParts for setting
+ */
+function resolveMediaTarget(entity, session, mediaType) {
+    if (session.mode === 'mask') {
+        if (!entity.mask) entity.mask = {};
+        if (mediaType === 'avatar') return { target: entity.mask, path: ['mask', 'avatar'] };
+        if (!entity.mask.discord) entity.mask.discord = { image: {} };
+        if (!entity.mask.discord.image) entity.mask.discord.image = {};
+        return { target: entity.mask.discord.image, path: ['mask', 'discord', 'image', mediaType] };
+    }
+
+    if (session.mode === 'server' && session.serverId) {
+        if (!entity.discord) entity.discord = {};
+        if (!entity.discord.server) entity.discord.server = [];
+        let serverEntry = entity.discord.server.find(s => s.id === session.serverId);
+        if (!serverEntry) {
+            serverEntry = { id: session.serverId };
+            entity.discord.server.push(serverEntry);
+        }
+        return { target: serverEntry, path: ['discord', 'server', session.serverId, mediaType], serverEntry };
+    }
+
+    if (session.syncWithDiscord && mediaType === 'avatar') {
+        return { target: entity, path: ['avatar'] };
+    }
+
+    if (!entity.discord) entity.discord = {};
+    if (!entity.discord.image) entity.discord.image = {};
+    return { target: entity.discord.image, path: ['discord', 'image', mediaType] };
+}
+
+/* Set a media field on an entity, handling R2 cleanup of old media
+ * @param {Object} entity - The entity document
+ * @param {Object} session - Session data
+ * @param {string} mediaType - 'avatar' | 'banner' | 'proxyAvatar'
+ * @param {Object} mediaObj - The mediaSchema object to set
+ */
+async function setMediaField(entity, session, mediaType, mediaObj) {
+    const { target, path } = resolveMediaTarget(entity, session, mediaType);
+
+    const oldMedia = target[mediaType];
+    if (oldMedia?.r2Key) {
+        await deleteFromR2(oldMedia.r2Key);
+    }
+
+    target[mediaType] = mediaObj;
+}
+
+/* Resolve avatar URL with priority chain:
+ * Server > Mask Proxy > Mask > Proxy > Discord/Primary (sync-dependent) > none
+ * @param {Object} entity - The entity document
+ * @param {Object} session - Session data
+ * @returns {string|null}
+ */
+function resolveAvatarUrl(entity, session) {
+    const serverId = session?.mode === 'server' ? session.serverId : null;
+    const syncWithDiscord = session?.syncWithDiscord ?? entity.syncWithApps?.discord;
+    const serverAvatar = serverId ? entity.discord?.server?.find(s => s.id === serverId)?.avatar?.url : null;
+
+    return serverAvatar
+        || entity.mask?.discord?.image?.proxyAvatar?.url
+        || entity.mask?.avatar?.url
+        || entity.discord?.image?.proxyAvatar?.url
+        || (syncWithDiscord ? entity.avatar?.url : entity.discord?.image?.avatar?.url)
+        || entity.avatar?.url
+        || null;
+}
+
+/* Resolve banner URL with priority chain:
+ * Server > Mask > Discord
+ * @param {Object} entity - The entity document
+ * @param {Object} session - Session data
+ * @returns {string|null}
+ */
+function resolveBannerUrl(entity, session) {
+    const serverId = session?.mode === 'server' ? session.serverId : null;
+    const serverBanner = serverId ? entity.discord?.server?.find(s => s.id === serverId)?.banner?.url : null;
+
+    return serverBanner
+        || entity.mask?.discord?.image?.banner?.url
+        || entity.discord?.image?.banner?.url
+        || null;
+}
+
+/* Resolve proxy avatar URL with priority chain:
+ * Mask Proxy > Proxy > Primary Avatar
+ * @param {Object} entity - The entity document
+ * @param {Object} session - Session data
+ * @returns {string|null}
+ */
+function resolveProxyAvatarUrl(entity, session) {
+    return entity.mask?.discord?.image?.proxyAvatar?.url
+        || entity.discord?.image?.proxyAvatar?.url
+        || entity.avatar?.url
+        || null;
+}
+
+/* Ensure a discord.server entry exists for the current guild
+ * @param {Object} entity - The entity document
+ * @param {string} guildId - Discord guild ID
+ * @param {string} guildName - Discord guild name
+ * @returns {Object} The server entry
+ */
+function ensureServerEntry(entity, guildId, guildName = null) {
+    if (!entity.discord) entity.discord = {};
+    if (!entity.discord.server) entity.discord.server = [];
+    let serverEntry = entity.discord.server.find(s => s.id === guildId);
+    if (!serverEntry) {
+        serverEntry = { id: guildId, name: guildName || 'Unknown Server' };
+        entity.discord.server.push(serverEntry);
+    }
+    return serverEntry;
+}
+
+/* Build upload select menu options based on session mode + sync
+ * @param {Object} session - Session data
+ * @param {string} prefix - Custom ID prefix (e.g., 'alter')
+ * @returns {Array<StringSelectMenuOptionBuilder>}
+ */
+function buildUploadOptions(session) {
+    const options = [];
+
+    if (session.mode === 'mask') {
+        options.push(
+            new StringSelectMenuOptionBuilder().setLabel('Mask Avatar').setValue('mask_avatar').setEmoji('🎭'),
+            new StringSelectMenuOptionBuilder().setLabel('Mask Discord Avatar').setValue('mask_davatar').setEmoji('🎭'),
+            new StringSelectMenuOptionBuilder().setLabel('Mask Proxy Avatar').setValue('mask_proxy').setEmoji('🎭'),
+            new StringSelectMenuOptionBuilder().setLabel('Mask Banner').setValue('mask_banner').setEmoji('🖼️')
+        );
+    } else if (session.mode === 'server') {
+        options.push(
+            new StringSelectMenuOptionBuilder().setLabel('Server Avatar').setValue('server_avatar').setEmoji('🏠'),
+            new StringSelectMenuOptionBuilder().setLabel('Server Banner').setValue('server_banner').setEmoji('🖼️'),
+            new StringSelectMenuOptionBuilder().setLabel('Server Proxy Avatar').setValue('server_proxy').setEmoji('🏠')
+        );
+    } else {
+        if (session.syncWithDiscord) {
+            options.push(
+                new StringSelectMenuOptionBuilder().setLabel('Primary Avatar').setValue('primary_avatar').setEmoji('👤'),
+                new StringSelectMenuOptionBuilder().setLabel('Discord Avatar').setValue('discord_avatar').setEmoji('💬')
+            );
+        } else {
+            options.push(
+                new StringSelectMenuOptionBuilder().setLabel('Discord Avatar').setValue('discord_avatar').setEmoji('💬')
+            );
+        }
+        options.push(
+            new StringSelectMenuOptionBuilder().setLabel('Proxy Avatar').setValue('proxy_avatar').setEmoji('🗣️'),
+            new StringSelectMenuOptionBuilder().setLabel('Banner').setValue('banner').setEmoji('🖼️')
+        );
+    }
+
+    return options;
+}
+
+/* Get embed color for a system
+ * @param {Object} system - System document
+ * @returns {string|null}
+ */
+function getSystemEmbedColor(system) {
+    return system?.color || ENTITY_COLORS.system || null;
+}
+
+/* Get embed color for an entity with priority: entity.color > system.color > default
+ * @param {Object} entity - Entity document (alter/state/group)
+ * @param {Object} system - System document
+ * @returns {string|null}
+ */
+function getEntityEmbedColor(entity, system) {
+    return entity?.color || system?.color || ENTITY_COLORS.system || null;
+}
+
 // ==== EXPORTS ====
 module.exports = {
     // Constants
@@ -1009,5 +1313,22 @@ module.exports = {
     checkProxyExists,
     validateProxies,
     getProxyLayoutHelp,
-    getProxyStyleOptions
+    getProxyStyleOptions,
+
+    // R2 media utilities
+    uploadMediaToR2,
+    deleteFromR2,
+    downloadFromUrl,
+    handleAttachmentUpload,
+    resolveMediaTarget,
+    setMediaField,
+    resolveAvatarUrl,
+    resolveBannerUrl,
+    resolveProxyAvatarUrl,
+    ensureServerEntry,
+    buildUploadOptions,
+
+    // Embed color helpers
+    getSystemEmbedColor,
+    getEntityEmbedColor
 };
