@@ -7,6 +7,7 @@ const dbConnection = require('./database');
 const token = config.discordTokens.system;
 const prefixes = ['sys!', 'sys;'];
 const utils = require('./discord_commands/functions/bot_utils');
+const redis = require('./redis');
 
 // Create New client instance
 const client = new Client({
@@ -21,8 +22,11 @@ const client = new Client({
 client.db = dbConnection;
 
 // Check if Ready
-client.once(Events.ClientReady, (readyClient) => {
+client.once(Events.ClientReady, async (readyClient) => {
 	console.log(`Let our wheels spin... Logged in as ${readyClient.user.tag}`);
+	
+	// Reconcile any unflushed messages from Redis to MongoDB
+	await proxyMessageHandler.reconcileOnStartup();
 });
 console.log('');
 
@@ -509,3 +513,32 @@ client.on(Events.MessageCreate, async (message) => {
 		console.error('Proxy handler error:', error);
 	}
 });
+
+// ==== GRACEFUL SHUTDOWN ====
+
+async function gracefulShutdown(signal) {
+	console.log(`\n[Shutdown] Received ${signal}. Flushing pending writes...`);
+	
+	try {
+		await proxyMessageHandler.flushToMongoDB();
+		console.log('[Shutdown] Flush complete. Closing Redis connection...');
+		await redis.quit();
+		console.log('[Shutdown] Redis connection closed. Exiting.');
+	} catch (err) {
+		console.error('[Shutdown] Error during shutdown:', err);
+	}
+	
+	process.exit(0);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// Windows support (Ctrl+C)
+if (process.platform === 'win32') {
+	const readline = require('readline');
+	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+	rl.on('SIGINT', () => {
+		process.emit('SIGINT');
+	});
+}

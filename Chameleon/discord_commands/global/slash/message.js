@@ -20,6 +20,7 @@ const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
+const redis = require('../../redis');
 
 const utils = require('../../functions/bot_utils');
 
@@ -71,17 +72,57 @@ module.exports = {
 
 // ==== HELPER FUNCTIONS ====
 
+// Get message record from Redis cache first, fallback to MongoDB
+async function getMessageRecord(messageId, channelId) {
+    // Try Redis cache first
+    const cached = await redis.get(`msg:${messageId}`);
+    if (cached) {
+        const data = JSON.parse(cached);
+        if (data.discord_channel_id === channelId) {
+            return { fromCache: true, data };
+        }
+    }
+    
+    // Fall back to MongoDB
+    const record = await Message.findOne({
+        discord_webhook_message_id: messageId,
+        discord_channel_id: channelId
+    });
+    
+    if (record) {
+        // Populate cache for future lookups
+        const cacheData = {
+            _id: record._id.toString(),
+            discord_webhook_message_id: record.discord_webhook_message_id,
+            discord_channel_id: record.discord_channel_id,
+            discord_guild_id: record.discord_guild_id,
+            discord_user_id: record.discord_user_id,
+            system_id: record.system_id,
+            proxy_type: record.proxy_type,
+            proxy_id: record.proxy_id,
+            content: record.content,
+            attachments: record.attachments || [],
+            timestamp: Date.now()
+        };
+        await redis.set(`msg:${messageId}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
+    }
+    
+    return { fromCache: false, data: record };
+}
+
 // Verify the user owns the message and get the record
 async function verifyMessageOwnership(interaction, messageId) {
-    const messageRecord = await Message.findOne({
-        discord_webhook_message_id: messageId,
-        discord_channel_id: interaction.channelId
-    });
-    if (!messageRecord) return { error: '❌ Message not found. Make sure you\'re using this command in the same channel as the message.' };
-    // Verify the user is the one who sent the message
-    if (messageRecord.discord_user_id !== interaction.user.id) return { error: '❌ You can only manage messages that you sent.' }; 
+    const { data: messageRecord, fromCache } = await getMessageRecord(messageId, interaction.channelId);
+    
+    if (!messageRecord) {
+        return { error: '❌ Message not found. Make sure you\'re using this command in the same channel as the message.' };
+    }
+    
+    if (messageRecord.discord_user_id !== interaction.user.id) {
+        return { error: '❌ You can only manage messages that you sent.' };
+    }
 
-    return { messageRecord };
+    return { messageRecord, fromCache };
 }
 
 // Find an entity (alter/state/group) by name
@@ -142,16 +183,21 @@ async function handleDelete(interaction) {
         const webhook = await getOrCreateWebhook(interaction.channel);
         await webhook.deleteMessage(messageId);
 
-        // Delete the database record
-        await Message.findByIdAndDelete(messageRecord._id);
+        // Delete from Redis cache
+        await redis.del(`msg:${messageId}`);
+        
+        // Delete from MongoDB if we have the _id
+        if (messageRecord._id) {
+            await Message.findByIdAndDelete(messageRecord._id);
+        }
 
-        //await interaction.editReply({ content: '✅ Message deleted successfully.' , ephemeral: true});
     } catch (err) {
         console.error('Error deleting message:', err);
 
         if (err.code === 10008) {
             // Message not found - already deleted
-            await Message.findByIdAndDelete(messageRecord._id);
+            await redis.del(`msg:${messageId}`);
+            if (messageRecord._id) await Message.findByIdAndDelete(messageRecord._id);
             return await interaction.editReply({ content: '⚠️ Message was already deleted.', ephemeral: true });
         }
 
@@ -171,7 +217,7 @@ async function handleEdit(interaction) {
     utils.setSession(sessionId, {
         type: 'message_edit',
         messageId: messageId,
-        messageRecordId: messageRecord._id,
+        messageRecordId: messageRecord._id || null,
         channelId: interaction.channelId
     });
 
@@ -236,10 +282,22 @@ async function handleReproxy(interaction) {
             files: originalMessage.attachments.map(a => a.url)
         });
 
-        // Update the database record
-        messageRecord.proxy_type = type;
-        messageRecord.proxy_id = entity._id.toString();
-        await messageRecord.save();
+        // Update Redis cache
+        const cached = await redis.get(`msg:${messageId}`);
+        if (cached) {
+            const data = JSON.parse(cached);
+            data.proxy_type = type;
+            data.proxy_id = entity._id.toString();
+            await redis.set(`msg:${messageId}`, JSON.stringify(data), 'EX', 7 * 24 * 60 * 60);
+        }
+
+        // Update MongoDB if we have the _id
+        if (messageRecord._id) {
+            await Message.findByIdAndUpdate(messageRecord._id, {
+                proxy_type: type,
+                proxy_id: entity._id.toString()
+            });
+        }
 
         await interaction.editReply({ content: `✅ Message reproxied to **${utils.getDisplayName(entity)}** (${type}).`, ephemeral: true });
     } catch (err) {
@@ -395,8 +453,18 @@ async function handleModalSubmit(interaction) {
             // Edit the webhook message
             await webhook.editMessage(session.messageId, { content: newContent });
 
-            // Update the database record
-            await Message.findByIdAndUpdate(session.messageRecordId, { content: newContent });
+            // Update Redis cache
+            const cached = await redis.get(`msg:${session.messageId}`);
+            if (cached) {
+                const data = JSON.parse(cached);
+                data.content = newContent;
+                await redis.set(`msg:${session.messageId}`, JSON.stringify(data), 'EX', 7 * 24 * 60 * 60);
+            }
+
+            // Update MongoDB if we have the _id
+            if (session.messageRecordId) {
+                await Message.findByIdAndUpdate(session.messageRecordId, { content: newContent });
+            }
 
             utils.deleteSession(sessionId);
 

@@ -9,6 +9,7 @@ const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const Guild = require('../../schemas/guild');
+const redis = require('../../redis');
 
 // Import shared utilities (for findEntityByName)
 const utils = require('../functions/bot_utils');
@@ -60,10 +61,8 @@ async function handleProxyMessage(message, client) {
             await sendProxyMessage(message, proxyMatch.entity, proxyMatch.type, system, proxyMatch.content);
             
             // Clear break since we just proxied
-            await System.findByIdAndUpdate(system._id, { 
-                'proxy.break': false,
-                'proxy.lastProxyTime': new Date()
-            });
+            await redis.del(`system:${system._id}:break`);
+            await redis.set(`system:${system._id}:lastProxyTime`, Date.now().toString());
         } else {
             // No explicit proxy - check auto-proxy settings
             // But first check if break is active (after cooldown check)
@@ -89,10 +88,8 @@ async function handleProxyMessage(message, client) {
             // Use auto-proxy
             await sendProxyMessage(message, autoProxy.entity, autoProxy.type, system, message.content);
             
-            // Update last proxy time
-            await System.findByIdAndUpdate(system._id, { 
-                'proxy.lastProxyTime': new Date()
-            });
+            // Update last proxy time (Redis)
+            await redis.set(`system:${system._id}:lastProxyTime`, Date.now().toString());
         }
     } catch (error) {
         console.error('Proxy message error:', error);
@@ -116,8 +113,7 @@ async function handleProxyMessage(message, client) {
  * @returns {Object} { isBreak: boolean, shouldUpdate: boolean }
  */
 async function checkAndUpdateBreakStatus(system) {
-    const cooldownSeconds = system.proxy?.cooldown || 0; // Default no cooldown
-    const lastProxyTime = system.proxy?.lastProxyTime;
+    const cooldownSeconds = system.proxy?.cooldown || 0;
     const currentBreak = system.proxy?.break || false;
     
     // If no cooldown set, don't auto-break
@@ -125,18 +121,17 @@ async function checkAndUpdateBreakStatus(system) {
         return { isBreak: currentBreak, shouldUpdate: false };
     }
     
-    // If no last proxy time, no break from cooldown
-    if (!lastProxyTime) {
+    // Check Redis for last proxy time
+    const lastProxyTimeStr = await redis.get(`system:${system._id}:lastProxyTime`);
+    if (!lastProxyTimeStr) {
         return { isBreak: currentBreak, shouldUpdate: false };
     }
     
-    const now = new Date();
-    const lastProxy = new Date(lastProxyTime);
-    const elapsedSeconds = (now - lastProxy) / 1000;
+    const elapsedSeconds = (Date.now() - parseInt(lastProxyTimeStr)) / 1000;
     
-    // If elapsed time > cooldown, set break to true
+    // If elapsed time > cooldown, set break to true (Redis TTL key)
     if (elapsedSeconds > cooldownSeconds && !currentBreak) {
-        await System.findByIdAndUpdate(system._id, { 'proxy.break': true });
+        await redis.set(`system:${system._id}:break`, '1', 'EX', cooldownSeconds);
         return { isBreak: true, shouldUpdate: true };
     }
     
@@ -166,7 +161,7 @@ function getEffectiveProxyStyle(system, guildId) {
  * @returns {Object|null} - { entity, type, content } or null
  */
 async function findProxyMatch(content, system) {
-    // First check recent proxies (faster lookup)
+    // First check recent proxies (faster lookup via Redis sorted set)
     const recentMatch = await checkRecentProxies(content, system);
     if (recentMatch) return recentMatch;
 
@@ -186,10 +181,23 @@ async function findProxyMatch(content, system) {
 }
 
 /**
- * Check recent proxies for a match
+ * Check recent proxies for a match (Redis sorted set)
  */
 async function checkRecentProxies(content, system) {
-    const recentProxies = system.proxy?.recentProxies || [];
+    const recentProxies = await redis.zrevrange(`system:${system._id}:recentProxies`, 0, 19);
+    
+    if (!recentProxies || recentProxies.length === 0) {
+        // Fallback to MongoDB array if Redis is empty (first run)
+        const fallbackProxies = system.proxy?.recentProxies || [];
+        if (fallbackProxies.length > 0) {
+            // Populate Redis from MongoDB
+            for (let i = 0; i < fallbackProxies.length; i++) {
+                await redis.zadd(`system:${system._id}:recentProxies`, Date.now() - (i * 1000), fallbackProxies[i]);
+            }
+            await redis.expire(`system:${system._id}:recentProxies`, 7 * 24 * 60 * 60);
+        }
+        return null;
+    }
     
     for (const proxyId of recentProxies) {
         // recentProxies format: "type:id:proxy" e.g., "alter:123456:a:"
@@ -316,28 +324,21 @@ async function getAutoProxy(system, guildId) {
     }
 
     if (effectiveStyle === 'last') {
-        // Use the most recent proxy
-        const recentProxies = system.proxy?.recentProxies || [];
-        if (recentProxies.length === 0) return null;
+        // Use the most recent proxy (Redis sorted set)
+        const recentProxies = await redis.zrevrange(`system:${system._id}:recentProxies`, 0, 0);
+        if (!recentProxies || recentProxies.length === 0) {
+            // Fallback to MongoDB array
+            const fallbackProxies = system.proxy?.recentProxies || [];
+            if (fallbackProxies.length === 0) return null;
+            const [type, entityId] = fallbackProxies[0].split(':');
+            let entity = await getEntityById(type, entityId);
+            if (entity) return { entity, type };
+            return null;
+        }
 
         const [type, entityId] = recentProxies[0].split(':');
-        let entity = null;
-
-        switch (type) {
-            case 'alter':
-                entity = await Alter.findById(entityId);
-                break;
-            case 'state':
-                entity = await State.findById(entityId);
-                break;
-            case 'group':
-                entity = await Group.findById(entityId);
-                break;
-        }
-
-        if (entity) {
-            return { entity, type };
-        }
+        let entity = await getEntityById(type, entityId);
+        if (entity) return { entity, type };
     }
 
     if (effectiveStyle === 'front') {
@@ -351,24 +352,18 @@ async function getAutoProxy(system, guildId) {
         // Only auto-proxy if there's exactly one fronter in the top layer
         if (fronters.length !== 1) {
             // Multiple fronters - fall back to 'last' behavior
-            const recentProxies = system.proxy?.recentProxies || [];
-            if (recentProxies.length === 0) return null;
-
-            const [type, entityId] = recentProxies[0].split(':');
-            let entity = null;
-
-            switch (type) {
-                case 'alter':
-                    entity = await Alter.findById(entityId);
-                    break;
-                case 'state':
-                    entity = await State.findById(entityId);
-                    break;
-                case 'group':
-                    entity = await Group.findById(entityId);
-                    break;
+            const recentProxies = await redis.zrevrange(`system:${system._id}:recentProxies`, 0, 0);
+            if (!recentProxies || recentProxies.length === 0) {
+                const fallbackProxies = system.proxy?.recentProxies || [];
+                if (fallbackProxies.length === 0) return null;
+                const [type, entityId] = fallbackProxies[0].split(':');
+                let entity = await getEntityById(type, entityId);
+                if (entity) return { entity, type };
+                return null;
             }
 
+            const [type, entityId] = recentProxies[0].split(':');
+            let entity = await getEntityById(type, entityId);
             if (entity) return { entity, type };
             return null;
         }
@@ -376,19 +371,7 @@ async function getAutoProxy(system, guildId) {
         const fronterId = fronters[0].alterID || fronters[0].stateID || fronters[0].groupID;
         const fronterType = fronters[0].alterID ? 'alter' : (fronters[0].stateID ? 'state' : 'group');
 
-        let entity = null;
-        switch (fronterType) {
-            case 'alter':
-                entity = await Alter.findById(fronterId);
-                break;
-            case 'state':
-                entity = await State.findById(fronterId);
-                break;
-            case 'group':
-                entity = await Group.findById(fronterId);
-                break;
-        }
-
+        let entity = await getEntityById(fronterType, fronterId);
         if (entity) {
             return { entity, type: fronterType };
         }
@@ -404,6 +387,18 @@ async function getAutoProxy(system, guildId) {
     }
 
     return null;
+}
+
+/**
+ * Helper to get entity by type and ID
+ */
+async function getEntityById(type, entityId) {
+    switch (type) {
+        case 'alter': return await Alter.findById(entityId);
+        case 'state': return await State.findById(entityId);
+        case 'group': return await Group.findById(entityId);
+        default: return null;
+    }
 }
 
 // ============================================
@@ -424,8 +419,8 @@ async function sendProxyMessage(originalMessage, entity, type, system, content) 
     const guildSettings = await Guild.findOne({ id: guild.id });
     const closedCharAllowed = guildSettings?.settings?.closedCharAllowed !== false;
 
-    // Get display info
-    const { avatarUrl, displayName } = getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed);
+    // Get display info (with Redis caching)
+    const { avatarUrl, displayName } = await getProxyDisplayInfoCached(entity, type, system, guild, closedCharAllowed);
 
     // Validate content length
     if (content.length > 2000) {
@@ -501,8 +496,9 @@ async function sendProxyMessage(originalMessage, entity, type, system, content) 
         console.error('Could not delete original message:', e);
     }
 
-    // Log the message to database
-    const messageRecord = new Message({
+    // Cache message in Redis (7 day TTL)
+    const cacheData = {
+        _id: null, // Will be set after MongoDB flush
         discord_webhook_message_id: webhookMessage.id,
         discord_channel_id: channel.id,
         discord_guild_id: guild.id,
@@ -514,18 +510,79 @@ async function sendProxyMessage(originalMessage, entity, type, system, content) 
         proxy_matched: entity.proxy?.[0] || null,
         content: content,
         attachments: originalMessage.attachments.map(att => ({
-            url: att.url,
-            name: att.name,
-            size: att.size
-        }))
-    });
-    await messageRecord.save();
+            url: att.url, name: att.name, size: att.size
+        })),
+        timestamp: Date.now()
+    };
 
-    // Update recent proxies
+    await redis.set(`msg:${webhookMessage.id}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
+
+    // Queue for batch MongoDB write
+    queueMessageWrite(cacheData);
+
+    // Queue entity message count update (batched)
+    queueEntityCountUpdate(entity._id.toString(), type);
+
+    // Update recent proxies (Redis sorted set — no MongoDB write)
     await updateRecentProxies(system, entity, type);
 
-    // Update entity message count
-    await updateEntityMessageCount(entity, type);
+    // Update last proxy time (Redis — no MongoDB write)
+    await redis.set(`system:${system._id}:lastProxyTime`, Date.now().toString());
+}
+
+/**
+ * Get display info with Redis caching (two-tier: main, server, mask)
+ * 30-day TTL — cache invalidated explicitly on avatar/name update
+ */
+async function getProxyDisplayInfoCached(entity, type, system, guild, closedCharAllowed = true) {
+    const maskMode = shouldMask(entity, system, guild.id);
+    const serverSettings = entity.discord?.server?.find(s => s.id === guild.id);
+    
+    // Determine cache key based on priority
+    let cacheKey;
+    if (serverSettings) {
+        cacheKey = `display:${entity._id}:server:${guild.id}`;
+    } else if (maskMode) {
+        cacheKey = `display:${entity._id}:mask:${guild.id}`;
+    } else {
+        cacheKey = `display:${entity._id}:main`;
+    }
+    
+    // Try cache first
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+        try {
+            return JSON.parse(cached);
+        } catch (e) {
+            // Cache corrupted, fall through
+        }
+    }
+
+    // Resolve display info via priority chain
+    const result = getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed);
+    
+    // Cache for 30 days
+    redis.set(cacheKey, JSON.stringify(result), 'EX', 30 * 24 * 60 * 60).catch(() => {});
+    
+    return result;
+}
+
+/**
+ * Invalidate all display cache keys for an entity
+ * Call this when entity avatar/name is updated
+ */
+async function invalidateDisplayCache(entityId) {
+    try {
+        const keys = await redis.keys(`display:${entityId}:*`);
+        for (const key of keys) {
+            await redis.del(key);
+        }
+        if (keys.length > 0) {
+            console.log(`[Redis] Invalidated ${keys.length} display cache keys for entity ${entityId}`);
+        }
+    } catch (err) {
+        console.error('[Redis] Cache invalidation error:', err.message);
+    }
 }
 
 /**
@@ -725,26 +782,14 @@ function formatProxyLayout(layout, entity, type, system, closedCharAllowed = tru
 }
 
 /**
- * Update recent proxies in the system
+ * Update recent proxies in Redis sorted set
  */
 async function updateRecentProxies(system, entity, type) {
     const proxyId = `${type}:${entity._id}:${entity.proxy?.[0] || ''}`;
     
-    let recentProxies = system.proxy?.recentProxies || [];
-    
-    // Remove if already exists
-    recentProxies = recentProxies.filter(p => !p.startsWith(`${type}:${entity._id}`));
-    
-    // Add to front
-    recentProxies.unshift(proxyId);
-    
-    // Keep only last 20
-    recentProxies = recentProxies.slice(0, 20);
-
-    await System.findByIdAndUpdate(system._id, {
-        'proxy.recentProxies': recentProxies,
-        'proxy.lastProxyTime': new Date()
-    });
+    await redis.zadd(`system:${system._id}:recentProxies`, Date.now(), proxyId);
+    await redis.zremrangebyrank(`system:${system._id}:recentProxies`, 0, -21); // Keep top 20
+    await redis.expire(`system:${system._id}:recentProxies`, 7 * 24 * 60 * 60); // 7 day TTL
 }
 
 /**
@@ -981,6 +1026,131 @@ function isImageUrl(url) {
 }
 
 // ============================================
+// BATCH MONGODB WRITE QUEUE
+// ============================================
+
+const pendingMessageWrites = [];
+const pendingCountUpdates = {};
+const BATCH_SIZE = 50;
+const FLUSH_INTERVAL = 30 * 1000; // 30 seconds
+
+function queueMessageWrite(data) {
+    pendingMessageWrites.push(data);
+    if (pendingMessageWrites.length >= BATCH_SIZE) {
+        flushToMongoDB().catch(err => console.error('[MongoDB] Flush error:', err));
+    }
+}
+
+function queueEntityCountUpdate(entityId, type) {
+    const key = `${type}:${entityId}`;
+    if (!pendingCountUpdates[key]) {
+        pendingCountUpdates[key] = { entityId, type, count: 0, lastTime: null };
+    }
+    pendingCountUpdates[key].count++;
+    pendingCountUpdates[key].lastTime = new Date();
+}
+
+async function flushToMongoDB() {
+    // Flush messages
+    if (pendingMessageWrites.length > 0) {
+        const batch = pendingMessageWrites.splice(0, pendingMessageWrites.length);
+        try {
+            const results = await Message.insertMany(batch, { ordered: false });
+            // Update Redis cache with real _ids
+            for (let i = 0; i < results.length; i++) {
+                const msgId = batch[i].discord_webhook_message_id;
+                const cached = await redis.get(`msg:${msgId}`);
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    data._id = results[i]._id.toString();
+                    await redis.set(`msg:${msgId}`, JSON.stringify(data), 'KEEPTTL');
+                }
+            }
+            console.log(`[MongoDB] Flushed ${results.length} messages`);
+        } catch (err) {
+            console.error('[MongoDB] Message flush error:', err);
+        }
+    }
+    
+    // Flush entity count updates
+    const countKeys = Object.keys(pendingCountUpdates);
+    if (countKeys.length > 0) {
+        try {
+            await Promise.all(countKeys.map(key => {
+                const { entityId, type, count, lastTime } = pendingCountUpdates[key];
+                const Model = type === 'alter' ? Alter : (type === 'state' ? State : Group);
+                return Model.findByIdAndUpdate(entityId, {
+                    $inc: { 'discord.metadata.messageCount': count },
+                    'discord.metadata.lastMessageTime': lastTime
+                });
+            }));
+            console.log(`[MongoDB] Flushed ${countKeys.length} entity count updates`);
+        } catch (err) {
+            console.error('[MongoDB] Count flush error:', err);
+        }
+        Object.keys(pendingCountUpdates).forEach(k => delete pendingCountUpdates[k]);
+    }
+}
+
+// Auto-flush every 30 seconds
+const flushTimer = setInterval(() => {
+    flushToMongoDB().catch(err => console.error('[MongoDB] Auto-flush error:', err));
+}, FLUSH_INTERVAL);
+
+// ============================================
+// STARTUP RECONCILIATION
+// ============================================
+
+/**
+ * On startup, scan Redis for messages that were cached but never flushed to MongoDB.
+ * This catches messages lost during a crash between cache write and batch flush.
+ */
+async function reconcileOnStartup() {
+    try {
+        console.log('[Redis] Checking for unflushed messages...');
+        let reconciled = 0;
+        
+        // Use SCAN instead of KEYS for production safety
+        let cursor = '0';
+        do {
+            const result = await redis.scan(cursor, 'MATCH', 'msg:*', 'COUNT', 100);
+            cursor = result[0];
+            const keys = result[1];
+            
+            for (const key of keys) {
+                const cached = await redis.get(key);
+                if (!cached) continue;
+                
+                const data = JSON.parse(cached);
+                
+                // If no _id, it was never flushed to MongoDB
+                if (!data._id) {
+                    try {
+                        const result = await Message.create(data);
+                        data._id = result._id.toString();
+                        await redis.set(key, JSON.stringify(data), 'KEEPTTL');
+                        reconciled++;
+                    } catch (err) {
+                        // Skip duplicates (already in MongoDB)
+                        if (err.code !== 11000) {
+                            console.error(`[Redis] Reconciliation error for ${key}:`, err.message);
+                        }
+                    }
+                }
+            }
+        } while (cursor !== '0');
+        
+        if (reconciled > 0) {
+            console.log(`[Redis] Reconciled ${reconciled} unflushed messages to MongoDB`);
+        } else {
+            console.log('[Redis] No unflushed messages found');
+        }
+    } catch (err) {
+        console.error('[Redis] Reconciliation error:', err.message);
+    }
+}
+
+// ============================================
 // EXPORTS
 // ============================================
 
@@ -992,5 +1162,8 @@ module.exports = {
     formatProxyLayout,
     getOrCreateWebhook,
     buildReplyEmbed,
-    extractMediaUrls
+    extractMediaUrls,
+    flushToMongoDB,
+    reconcileOnStartup,
+    invalidateDisplayCache
 };
