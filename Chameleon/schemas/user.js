@@ -55,6 +55,13 @@ const userSchema = new mongoose.Schema({
         addedAt: { type: Date },
         privacyBucket: String
     }],
+    friendRequests: [{
+        fromDiscordID: String,
+        fromFriendID: String,
+        fromName: String,
+        fromSystemName: String,
+        sentAt: { type: Date, default: Date.now }
+    }],
     blocked: [{
         name: {
             indexable: String,
