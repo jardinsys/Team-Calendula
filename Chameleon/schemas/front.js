@@ -10,6 +10,11 @@ const shiftSchema = new mongoose.Schema({
     endTime: Date,
     statuses: [{
         status: String,
+        battery: Number,
+        caution: {
+            c_type: String,
+            detail: String,
+        },
         startTime: { type: Date, default: Date.now },
         endTime: Date,
         layerID: mongoose.Schema.Types.ObjectId,
@@ -25,6 +30,12 @@ const layerSchema = new mongoose.Schema({
     name: String,
     color: String,
     shifts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Shift' }],
+    status: String,
+    battery: Number,
+    caution: {
+        c_type: String,
+        detail: String,
+    },
 });
 
 module.exports = {

@@ -1330,5 +1330,26 @@ module.exports = {
 
     // Embed color helpers
     getSystemEmbedColor,
-    getEntityEmbedColor
+    getEntityEmbedColor,
+
+    // Front management helpers
+    updateRecentProxies,
+    getBatteryEmoji
 };
+
+// Update recent proxies for quick switch menu
+function updateRecentProxies(system, entity, type) {
+    const proxyKey = `${type}:${entity._id}`;
+    if (!system.proxy) system.proxy = {};
+    if (!system.proxy.recentProxies) system.proxy.recentProxies = [];
+    system.proxy.recentProxies = system.proxy.recentProxies.filter(p => !p.startsWith(proxyKey));
+    system.proxy.recentProxies.unshift(proxyKey);
+    system.proxy.recentProxies = system.proxy.recentProxies.slice(0, 15);
+}
+
+// Battery level emoji
+function getBatteryEmoji(battery) {
+    if (battery >= 70) return '🔋';
+    if (battery >= 30) return '🪫';
+    return '⚠️';
+}

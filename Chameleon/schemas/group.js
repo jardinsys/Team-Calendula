@@ -99,6 +99,7 @@ const groupSchema = new mongoose.Schema({
     },
     setting: {
         default_status: String,
+        default_battery: Number,
         mask: {
             maskTo: [{
                 userFriendID: String,
