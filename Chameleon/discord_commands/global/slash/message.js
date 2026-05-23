@@ -1,7 +1,6 @@
 // (/message) - Manage proxied messages
-// (/message delete message_id:[string]) - Delete a proxied message you sent
-// (/message edit message_id:[string]) - Edit a proxied message you sent
-// (/message reproxy message_id:[string] entity_name:[string]) - Change who "sent" a message
+// Unified action pattern: delete, edit, reproxy
+// Auto-detects last proxied message when message_id is omitted
 
 const {
     SlashCommandBuilder,
@@ -28,42 +27,32 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('message')
         .setDescription('Manage your proxied messages')
-        .addSubcommand(sub => sub
-            .setName('delete')
-            .setDescription('Delete a proxied message you sent')
-            .addStringOption(opt => opt
-                .setName('message_id')
-                .setDescription('The message ID to delete')
-                .setRequired(true)))
-        .addSubcommand(sub => sub
-            .setName('edit')
-            .setDescription('Edit a proxied message you sent')
-            .addStringOption(opt => opt
-                .setName('message_id')
-                .setDescription('The message ID to edit')
-                .setRequired(true)))
-        .addSubcommand(sub => sub
-            .setName('reproxy')
-            .setDescription('Change which alter/state/group "sent" a message')
-            .addStringOption(opt => opt
-                .setName('message_id')
-                .setDescription('The message ID to reproxy')
-                .setRequired(true))
-            .addStringOption(opt => opt
-                .setName('entity_name')
-                .setDescription('The name of the alter/state/group to reproxy as')
-                .setRequired(true))),
+        .addStringOption(opt => opt
+            .setName('action')
+            .setDescription('What to do')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Delete - Delete a proxied message', value: 'delete' },
+                { name: 'Edit - Edit a proxied message', value: 'edit' },
+                { name: 'Reproxy - Change which entity sent a message', value: 'reproxy' }
+            ))
+        .addStringOption(opt => opt
+            .setName('message_id')
+            .setDescription('Message ID (leave blank to auto-detect your last message)')
+            .setRequired(false))
+        .addStringOption(opt => opt
+            .setName('entity_name')
+            .setDescription('Entity name to reproxy as (required for reproxy action)')
+            .setRequired(false)),
 
     async execute(interaction) {
-        const subcommand = interaction.options.getSubcommand();
+        const action = interaction.options.getString('action');
 
-        const handlers = {
-            delete: handleDelete,
-            edit: handleEdit,
-            reproxy: handleReproxy
-        };
-
-        await handlers[subcommand](interaction);
+        switch (action) {
+            case 'delete': return await handleDelete(interaction);
+            case 'edit': return await handleEdit(interaction);
+            case 'reproxy': return await handleReproxy(interaction);
+        }
     },
 
     handleButtonInteraction,
@@ -82,13 +71,13 @@ async function getMessageRecord(messageId, channelId) {
             return { fromCache: true, data };
         }
     }
-    
+
     // Fall back to MongoDB
     const record = await Message.findOne({
         discord_webhook_message_id: messageId,
         discord_channel_id: channelId
     });
-    
+
     if (record) {
         // Populate cache for future lookups
         const cacheData = {
@@ -106,18 +95,104 @@ async function getMessageRecord(messageId, channelId) {
         };
         await redis.set(`msg:${messageId}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
     }
-    
+
     return { fromCache: false, data: record };
+}
+
+// Auto-detect the user's last proxied message in the current channel
+// Redis tracking key first, MongoDB fallback
+async function autoDetectLastMessage(interaction) {
+    const userId = interaction.user.id;
+    const channelId = interaction.channelId;
+
+    // Try Redis tracking key first
+    const lastMsgId = await redis.get(`user_msgs:${userId}:${channelId}`);
+    if (lastMsgId) {
+        const cached = await redis.get(`msg:${lastMsgId}`);
+        if (cached) {
+            const data = JSON.parse(cached);
+            if (data.discord_channel_id === channelId && data.discord_user_id === userId) {
+                return { fromCache: true, data };
+            }
+        }
+
+        // Redis tracking key exists but message cache miss — try MongoDB
+        const record = await Message.findOne({
+            discord_webhook_message_id: lastMsgId,
+            discord_channel_id: channelId,
+            discord_user_id: userId
+        });
+
+        if (record) {
+            // Repopulate cache
+            const cacheData = {
+                _id: record._id.toString(),
+                discord_webhook_message_id: record.discord_webhook_message_id,
+                discord_channel_id: record.discord_channel_id,
+                discord_guild_id: record.discord_guild_id,
+                discord_user_id: record.discord_user_id,
+                system_id: record.system_id,
+                proxy_type: record.proxy_type,
+                proxy_id: record.proxy_id,
+                content: record.content,
+                attachments: record.attachments || [],
+                timestamp: Date.now()
+            };
+            await redis.set(`msg:${lastMsgId}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
+            return { fromCache: false, data: record };
+        }
+    }
+
+    // Redis tracking key miss — full MongoDB fallback
+    const record = await Message.findOne({
+        discord_user_id: userId,
+        discord_channel_id: channelId
+    }).sort({ timestamp: -1 });
+
+    if (record) {
+        // Populate both caches
+        const cacheData = {
+            _id: record._id.toString(),
+            discord_webhook_message_id: record.discord_webhook_message_id,
+            discord_channel_id: record.discord_channel_id,
+            discord_guild_id: record.discord_guild_id,
+            discord_user_id: record.discord_user_id,
+            system_id: record.system_id,
+            proxy_type: record.proxy_type,
+            proxy_id: record.proxy_id,
+            content: record.content,
+            attachments: record.attachments || [],
+            timestamp: Date.now()
+        };
+        await redis.set(`msg:${record.discord_webhook_message_id}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
+        await redis.set(`user_msgs:${userId}:${channelId}`, record.discord_webhook_message_id);
+        return { fromCache: false, data: record };
+    }
+
+    return { fromCache: false, data: null };
 }
 
 // Verify the user owns the message and get the record
 async function verifyMessageOwnership(interaction, messageId) {
-    const { data: messageRecord, fromCache } = await getMessageRecord(messageId, interaction.channelId);
-    
-    if (!messageRecord) {
-        return { error: '❌ Message not found. Make sure you\'re using this command in the same channel as the message.' };
+    let result;
+
+    if (messageId) {
+        // Explicit message_id provided
+        result = await getMessageRecord(messageId, interaction.channelId);
+    } else {
+        // Auto-detect last proxied message
+        result = await autoDetectLastMessage(interaction);
     }
-    
+
+    const { data: messageRecord, fromCache } = result;
+
+    if (!messageRecord) {
+        return { error: messageId
+            ? '❌ Message not found. Make sure you\'re using this command in the same channel as the message.'
+            : '❌ No recent proxied messages found in this channel. Please provide a message_id.'
+        };
+    }
+
     if (messageRecord.discord_user_id !== interaction.user.id) {
         return { error: '❌ You can only manage messages that you sent.' };
     }
@@ -169,7 +244,7 @@ async function getOrCreateWebhook(channel) {
 
 // ==== COMMAND HANDLERS ====
 
-// Handle /message delete
+// Handle delete action
 async function handleDelete(interaction) {
     const messageId = interaction.options.getString('message_id');
 
@@ -181,45 +256,67 @@ async function handleDelete(interaction) {
     try {
         // Get the webhook message and delete it
         const webhook = await getOrCreateWebhook(interaction.channel);
-        await webhook.deleteMessage(messageId);
+        await webhook.deleteMessage(messageRecord.discord_webhook_message_id);
 
         // Delete from Redis cache
-        await redis.del(`msg:${messageId}`);
-        
+        await redis.del(`msg:${messageRecord.discord_webhook_message_id}`);
+
         // Delete from MongoDB if we have the _id
         if (messageRecord._id) {
             await Message.findByIdAndDelete(messageRecord._id);
         }
+
+        const autoText = messageId ? '' : ' (auto-detected last message)';
+        return await interaction.editReply({ content: `✅ Message deleted${autoText}.` });
 
     } catch (err) {
         console.error('Error deleting message:', err);
 
         if (err.code === 10008) {
             // Message not found - already deleted
-            await redis.del(`msg:${messageId}`);
+            await redis.del(`msg:${messageRecord.discord_webhook_message_id}`);
             if (messageRecord._id) await Message.findByIdAndDelete(messageRecord._id);
-            return await interaction.editReply({ content: '⚠️ Message was already deleted.', ephemeral: true });
+            return await interaction.editReply({ content: '⚠️ Message was already deleted.' });
         }
 
-        await interaction.editReply({ content: '❌ Failed to delete message. It may have already been deleted or you may lack permissions.', ephemeral: true });
+        return await interaction.editReply({ content: '❌ Failed to delete message. It may have already been deleted or you may lack permissions.' });
     }
 }
 
-// Handle /message edit
+// Handle edit action
 async function handleEdit(interaction) {
     const messageId = interaction.options.getString('message_id');
+    const entityName = interaction.options.getString('entity_name');
 
     const { messageRecord, error } = await verifyMessageOwnership(interaction, messageId);
     if (error) return await interaction.reply({ content: error, ephemeral: true });
 
     // Create session for the edit
-    const sessionId = utils.generateSessionId(interaction.user.id);
-    utils.setSession(sessionId, {
+    const session = {
         type: 'message_edit',
-        messageId: messageId,
+        messageId: messageRecord.discord_webhook_message_id,
         messageRecordId: messageRecord._id || null,
         channelId: interaction.channelId
-    });
+    };
+
+    // If entity_name provided, resolve it now for dual edit+reproxy
+    if (entityName) {
+        const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
+        if (!system) return await interaction.reply({ content: '❌ You need to set up a system first.', ephemeral: true });
+
+        const { entity, type } = await findEntityByName(entityName, system);
+        if (!entity) {
+            return await interaction.reply({
+                content: `❌ Could not find an alter, state, or group named "${entityName}".`,
+                ephemeral: true
+            });
+        }
+
+        session.entityTarget = { entity, type, systemId: system._id };
+    }
+
+    const sessionId = utils.generateSessionId(interaction.user.id);
+    utils.setSession(sessionId, session);
 
     // Show modal for new content
     const modal = new ModalBuilder()
@@ -241,7 +338,7 @@ async function handleEdit(interaction) {
     await interaction.showModal(modal);
 }
 
-// Handle /message reproxy
+// Handle reproxy action
 async function handleReproxy(interaction) {
     const messageId = interaction.options.getString('message_id');
     const entityName = interaction.options.getString('entity_name');
@@ -249,18 +346,22 @@ async function handleReproxy(interaction) {
     await interaction.deferReply({ ephemeral: true });
 
     const { messageRecord, error } = await verifyMessageOwnership(interaction, messageId);
-    if (error) return await interaction.editReply({ content: error, ephemeral: true });
+    if (error) return await interaction.editReply({ content: error });
+
+    if (!entityName) {
+        return await interaction.editReply({ content: '❌ Please provide an entity_name when using the reproxy action.' });
+    }
 
     // Get user and system
     const { user, system } = await utils.getOrCreateUserAndSystem(interaction);
-    if (!system) return await interaction.editReply({ content: '❌ You need to set up a system first.', ephemeral: true });
+    if (!system) return await interaction.editReply({ content: '❌ You need to set up a system first.' });
 
     // Find the new entity
     const { entity, type } = await findEntityByName(entityName, system);
-    if (!entity) 
+    if (!entity)
         return await interaction.editReply({
             content: `❌ Could not find an alter, state, or group named "${entityName}".\n` +
-                'Make sure you\'re using the indexable name or an alias.', ephemeral: true
+                'Make sure you\'re using the indexable name or an alias.'
         });
 
     try {
@@ -271,10 +372,10 @@ async function handleReproxy(interaction) {
         const { avatarUrl, displayName } = await getProxyDisplayInfo(entity, type, system, guild);
 
         // Fetch the original message to get its content
-        const originalMessage = await webhook.fetchMessage(messageId);
+        const originalMessage = await webhook.fetchMessage(messageRecord.discord_webhook_message_id);
 
         // Edit the webhook message with new identity
-        await webhook.editMessage(messageId, {
+        await webhook.editMessage(messageRecord.discord_webhook_message_id, {
             username: displayName,
             avatarURL: avatarUrl,
             content: originalMessage.content,
@@ -283,12 +384,12 @@ async function handleReproxy(interaction) {
         });
 
         // Update Redis cache
-        const cached = await redis.get(`msg:${messageId}`);
+        const cached = await redis.get(`msg:${messageRecord.discord_webhook_message_id}`);
         if (cached) {
             const data = JSON.parse(cached);
             data.proxy_type = type;
             data.proxy_id = entity._id.toString();
-            await redis.set(`msg:${messageId}`, JSON.stringify(data), 'EX', 7 * 24 * 60 * 60);
+            await redis.set(`msg:${messageRecord.discord_webhook_message_id}`, JSON.stringify(data), 'EX', 7 * 24 * 60 * 60);
         }
 
         // Update MongoDB if we have the _id
@@ -299,10 +400,11 @@ async function handleReproxy(interaction) {
             });
         }
 
-        await interaction.editReply({ content: `✅ Message reproxied to **${utils.getDisplayName(entity)}** (${type}).`, ephemeral: true });
+        const autoText = messageId ? '' : ' (auto-detected last message)';
+        return await interaction.editReply({ content: `✅ Message reproxied to **${utils.getDisplayName(entity)}** (${type})${autoText}.` });
     } catch (err) {
         console.error('Error reproxying message:', err);
-        await interaction.editReply({ content: '❌ Failed to reproxy message. ' + (err.message || 'Unknown error.'), ephemeral: true });
+        return await interaction.editReply({ content: '❌ Failed to reproxy message. ' + (err.message || 'Unknown error.') });
     }
 }
 
@@ -393,7 +495,7 @@ function formatProxyLayout(layout, entity, type, system) {
 
     // Replace {tag1}, {tag2}, etc. with SYSTEM tags (unlimited based on array length)
     const tags = system.discord?.tag?.normal || [];
-    for (let i = 0; i < Math.max(tags.length, 20); i++) 
+    for (let i = 0; i < Math.max(tags.length, 20); i++)
         result = result.replace(new RegExp(`{tag${i + 1}}`, 'gi'), tags[i] || '');
 
     // Parse signoffs (stored as newline-separated string on the entity)
@@ -401,7 +503,7 @@ function formatProxyLayout(layout, entity, type, system) {
 
     // Replace ALL signoff types - allows mixing in any layout
     // {a-sign1}, {a-sign2}... for alter signoffs
-    // {st-sign1}, {st-sign2}... for state signoffs  
+    // {st-sign1}, {st-sign2}... for state signoffs
     // {g-sign1}, {g-sign2}... for group signoffs
     // The current entity's signoffs are used for its prefix type
 
@@ -409,14 +511,14 @@ function formatProxyLayout(layout, entity, type, system) {
     const currentPrefix = type === 'alter' ? 'a-sign' : (type === 'state' ? 'st-sign' : 'g-sign');
 
     // Replace current entity's signoffs with its prefix
-    for (let i = 0; i < Math.max(signoffs.length, 20); i++) 
+    for (let i = 0; i < Math.max(signoffs.length, 20); i++)
         result = result.replace(new RegExp(`{${currentPrefix}${i + 1}}`, 'gi'), signoffs[i] || '');
 
     // Clear any other entity type signoffs that weren't filled (they don't apply to this entity)
     const otherPrefixes = ['a-sign', 'st-sign', 'g-sign'].filter(p => p !== currentPrefix);
-    for (const prefix of otherPrefixes) 
-        for (let i = 0; i < 20; i++) 
-            result = result.replace(new RegExp(`{${prefix}${i + 1}}`, 'gi'), '');  
+    for (const prefix of otherPrefixes)
+        for (let i = 0; i < 20; i++)
+            result = result.replace(new RegExp(`{${prefix}${i + 1}}`, 'gi'), '');
 
     // Replace {pronouns}
     const pronouns = entity.identity?.pronouns || [];
@@ -450,29 +552,57 @@ async function handleModalSubmit(interaction) {
         try {
             const webhook = await getOrCreateWebhook(interaction.channel);
 
-            // Edit the webhook message
-            await webhook.editMessage(session.messageId, { content: newContent });
+            // Edit the webhook message content
+            const editPayload = { content: newContent };
+
+            // If reproxy target is included, also update identity
+            if (session.entityTarget) {
+                const { entity, type, systemId } = session.entityTarget;
+                const system = await System.findById(systemId);
+                if (system) {
+                    const guild = interaction.guild;
+                    const { avatarUrl, displayName } = await getProxyDisplayInfo(entity, type, system, guild);
+                    editPayload.username = displayName;
+                    editPayload.avatarURL = avatarUrl;
+                }
+            }
+
+            await webhook.editMessage(session.messageId, editPayload);
 
             // Update Redis cache
             const cached = await redis.get(`msg:${session.messageId}`);
             if (cached) {
                 const data = JSON.parse(cached);
                 data.content = newContent;
+                if (session.entityTarget) {
+                    data.proxy_type = session.entityTarget.type;
+                    data.proxy_id = session.entityTarget.entity._id.toString();
+                }
                 await redis.set(`msg:${session.messageId}`, JSON.stringify(data), 'EX', 7 * 24 * 60 * 60);
             }
 
             // Update MongoDB if we have the _id
             if (session.messageRecordId) {
-                await Message.findByIdAndUpdate(session.messageRecordId, { content: newContent });
+                const updateFields = { content: newContent };
+                if (session.entityTarget) {
+                    updateFields.proxy_type = session.entityTarget.type;
+                    updateFields.proxy_id = session.entityTarget.entity._id.toString();
+                }
+                await Message.findByIdAndUpdate(session.messageRecordId, updateFields);
             }
+
+            const entityName = session.entityTarget ? utils.getDisplayName(session.entityTarget.entity) : null;
+            const response = entityName
+                ? `✅ Message edited and reproxied to **${entityName}**.`
+                : '✅ Message edited successfully.';
 
             utils.deleteSession(sessionId);
 
-            await interaction.editReply({ content: '✅ Message edited successfully.', ephemeral: true });
+            await interaction.editReply({ content: response });
         } catch (err) {
             console.error('Error editing message:', err);
-            if (err.code === 50035) return await interaction.editReply({ content: '❌ Message content is invalid or too long.', ephemeral: true });  
-            await interaction.editReply({ content: '❌ Failed to edit message. ' + (err.message || 'Unknown error.'), ephemeral: true });
+            if (err.code === 50035) return await interaction.editReply({ content: '❌ Message content is invalid or too long.' });
+            await interaction.editReply({ content: '❌ Failed to edit message. ' + (err.message || 'Unknown error.') });
         }
     }
 }

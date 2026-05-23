@@ -38,6 +38,7 @@ const Group = require('../../../schemas/group');
 
 // Import shared utilities
 const utils = require('../../functions/bot_utils');
+const proxyMessageHandler = require('../proxy-message');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -920,6 +921,7 @@ async function handleButtonInteraction(interaction) {
                 }
 
                 await state.save();
+                await proxyMessageHandler.invalidateDisplayCache(state._id);
                 const { embed, components } = buildEditInterface(state, session, system);
                 return await interaction.editReply({ content: result.message, embeds: [embed], components });
             } else {
@@ -1512,6 +1514,7 @@ async function handleModalSubmit(interaction) {
         utils.updateEntityProperty(state, session, 'color', color);
 
         await state.save();
+        await proxyMessageHandler.invalidateDisplayCache(state._id);
     }
 
     // Handle connected alters modal
@@ -1634,6 +1637,7 @@ async function handleModalSubmit(interaction) {
         }
 
         await state.save();
+        await proxyMessageHandler.invalidateDisplayCache(state._id);
     }
 
     // Handle caution info modal
@@ -1662,6 +1666,7 @@ async function handleModalSubmit(interaction) {
         state.name.closedNameDisplay = closedName || null;
 
         await state.save();
+        await proxyMessageHandler.invalidateDisplayCache(state._id);
 
         return await interaction.update({
             content: `✅ Closed name display updated to: ${closedName || '*Not set*'}`,

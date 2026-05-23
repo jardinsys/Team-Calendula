@@ -37,6 +37,7 @@ const State = require('../../../schemas/state');
 
 // Import shared utilities
 const utils = require('../../functions/bot_utils');
+const proxyMessageHandler = require('../proxy-message');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -659,6 +660,7 @@ async function handleButtonInteraction(interaction) {
                 }
 
                 await group.save();
+                await proxyMessageHandler.invalidateDisplayCache(group._id);
                 const { embed, components } = buildEditInterface(group, session, system);
                 return await interaction.editReply({ content: result.message, embeds: [embed], components });
             } else {
@@ -1041,6 +1043,7 @@ async function handleModalSubmit(interaction) {
         utils.updateEntityProperty(group, session, 'description', interaction.fields.getTextInputValue('description'));
         utils.updateEntityProperty(group, session, 'color', interaction.fields.getTextInputValue('color'));
         await group.save();
+        await proxyMessageHandler.invalidateDisplayCache(group._id);
     }
 
     if (interaction.customId.startsWith('group_edit_aliases_modal_')) {
@@ -1133,6 +1136,7 @@ async function handleModalSubmit(interaction) {
             if (proxyAvatarUrl) group.discord.image.proxyAvatar = { url: proxyAvatarUrl };
         }
         await group.save();
+        await proxyMessageHandler.invalidateDisplayCache(group._id);
     }
 
     if (interaction.customId.startsWith('group_edit_caution_modal_')) {
@@ -1203,6 +1207,7 @@ async function handleModalSubmit(interaction) {
         if (!group.name) group.name = {};
         group.name.closedNameDisplay = closedName || null;
         await group.save();
+        await proxyMessageHandler.invalidateDisplayCache(group._id);
         return await interaction.update({ content: `✅ Closed name: ${closedName || '*Not set*'}`, embeds: [], components: [] });
     }
 

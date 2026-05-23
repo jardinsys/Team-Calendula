@@ -184,7 +184,7 @@ async function findProxyMatch(content, system) {
  * Check recent proxies for a match (Redis sorted set)
  */
 async function checkRecentProxies(content, system) {
-    const recentProxies = await redis.zrevrange(`system:${system._id}:recentProxies`, 0, 19);
+    const recentProxies = await redis.zrevrange(`system:${system._id}:recentProxies`, 0, 99);
     
     if (!recentProxies || recentProxies.length === 0) {
         // Fallback to MongoDB array if Redis is empty (first run)
@@ -517,6 +517,9 @@ async function sendProxyMessage(originalMessage, entity, type, system, content) 
 
     await redis.set(`msg:${webhookMessage.id}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
 
+    // Track user's last message per channel for auto-detect in /message commands
+    await redis.set(`user_msgs:${originalMessage.author.id}:${originalMessage.channelId}`, webhookMessage.id);
+
     // Queue for batch MongoDB write
     queueMessageWrite(cacheData);
 
@@ -788,7 +791,7 @@ async function updateRecentProxies(system, entity, type) {
     const proxyId = `${type}:${entity._id}:${entity.proxy?.[0] || ''}`;
     
     await redis.zadd(`system:${system._id}:recentProxies`, Date.now(), proxyId);
-    await redis.zremrangebyrank(`system:${system._id}:recentProxies`, 0, -21); // Keep top 20
+    await redis.zremrangebyrank(`system:${system._id}:recentProxies`, 0, -101); // Keep top 100
     await redis.expire(`system:${system._id}:recentProxies`, 7 * 24 * 60 * 60); // 7 day TTL
 }
 

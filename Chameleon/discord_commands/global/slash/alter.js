@@ -37,6 +37,7 @@ const System = require('../../../schemas/system');
 const Group = require('../../../schemas/group');
 const State = require('../../../schemas/state');
 const utils = require('../../functions/bot_utils');
+const proxyMessageHandler = require('../proxy-message');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -800,6 +801,7 @@ async function handleButtonInteraction(interaction) {
                 }
 
                 await alter.save();
+                await proxyMessageHandler.invalidateDisplayCache(alter._id);
                 const { embed, components } = buildEditInterface(alter, session, system);
                 return await interaction.editReply({ content: result.message, embeds: [embed], components });
             } else {
@@ -1203,6 +1205,7 @@ async function handleModalSubmit(interaction) {
         utils.updateEntityProperty(alter, session, 'description', description);
         utils.updateEntityProperty(alter, session, 'color', color);
         await alter.save();
+        await proxyMessageHandler.invalidateDisplayCache(alter._id);
     }
 
     // Personal info modal
@@ -1293,6 +1296,7 @@ async function handleModalSubmit(interaction) {
             if (proxyAvatarUrl) alter.discord.image.proxyAvatar = { url: proxyAvatarUrl };
         }
         await alter.save();
+        await proxyMessageHandler.invalidateDisplayCache(alter._id);
     }
 
     // Caution info modal
@@ -1313,6 +1317,7 @@ async function handleModalSubmit(interaction) {
         if (!alter.name) alter.name = {};
         alter.name.closedNameDisplay = closedName || null;
         await alter.save();
+        await proxyMessageHandler.invalidateDisplayCache(alter._id);
         return await interaction.update({ content: `✅ Closed name display updated to: ${closedName || '*Not set*'}`, embeds: [], components: [] });
     }
 
