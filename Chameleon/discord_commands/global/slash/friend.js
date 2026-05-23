@@ -379,6 +379,36 @@ async function handleAdd(interaction, user, system) {
     });
     await targetUser.save();
 
+    // Handle notification based on user preferences
+    const notifPrefs = targetUser.settings?.notificationPreferences || {};
+    if (notifPrefs.friendRequests !== false) {
+        const senderDisplayName = senderName + (senderSystemName !== 'No system' ? ` (${senderSystemName})` : '');
+
+        if (notifPrefs.friendNotifications === 'command') {
+            // Queue as ephemeral notification
+            utils.notificationManager.addNotification(targetUser.discordID, 'friend-request', {
+                senderName: senderDisplayName,
+                senderId: user.friendID
+            });
+        } else if (notifPrefs.friendNotifications === 'dm' || notifPrefs.friendNotifications === undefined) {
+            // Send DM notification
+            try {
+                const dmEmbed = new EmbedBuilder()
+                    .setColor(ENTITY_COLORS.info)
+                    .setTitle('👥 New Friend Request')
+                    .setDescription(`**${senderName}** (${senderSystemName}) wants to add you as a friend!\n\nUse \`/friend action:requests\` to accept or decline.`);
+                await interaction.client.users.cache.get(targetUser.discordID)?.send({ embeds: [dmEmbed] });
+            } catch {
+                // DM failed, queue as notification fallback
+                utils.notificationManager.addNotification(targetUser.discordID, 'friend-request', {
+                    senderName: senderDisplayName,
+                    senderId: user.friendID
+                });
+            }
+        }
+    }
+
+
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.success)
         .setTitle('✅ Friend Request Sent')
@@ -387,17 +417,6 @@ async function handleAdd(interaction, user, system) {
             { name: 'From', value: `${senderName} (${senderSystemName})`, inline: true },
             { name: 'To', value: `${targetUser.discord?.name?.display || targetUser.discordID} (${targetSystemName})`, inline: true }
         );
-
-    try {
-        const dmEmbed = new EmbedBuilder()
-            .setColor(ENTITY_COLORS.info)
-            .setTitle('👥 New Friend Request')
-            .setDescription(`**${senderName}** (${senderSystemName}) wants to add you as a friend!\n\nUse \`/friend action:requests\` to accept or decline.`);
-        await targetUser.createDM();
-        await interaction.client.users.cache.get(targetUser.discordID)?.send({ embeds: [dmEmbed] });
-    } catch {
-        // DM failed, not critical
-    }
 
     return interaction.editReply({ embeds: [embed] });
 }
@@ -700,7 +719,73 @@ async function handleSettings(interaction, user, system) {
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`friend_copy_id_${user._id}`).setLabel('Copy Friend ID').setStyle(ButtonStyle.Primary).setEmoji('📋'),
-        new ButtonBuilder().setCustomId(`friend_set_bucket_${user._id}`).setLabel('Set Default Bucket').setStyle(ButtonStyle.Secondary).setEmoji('🔒')
+        new ButtonBuilder().setCustomId(`friend_set_bucket_${user._id}`).setLabel('Set Default Bucket').setStyle(ButtonStyle.Secondary).setEmoji('🔒'),
+        new ButtonBuilder().setCustomId(`friend_notif_settings_${user._id}`).setLabel('Notification Settings').setStyle(ButtonStyle.Secondary).setEmoji('🔔')
+    );
+
+    return interaction.editReply({ embeds: [embed], components: [row] });
+}
+
+// ============================================
+// NOTIFICATION SETTINGS HANDLER
+// ============================================
+
+async function handleNotificationSettings(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+
+    const userId = interaction.customId.replace('friend_notif_settings_', '');
+    const user = await User.findById(userId);
+    if (!user) return interaction.editReply({ content: '❌ User not found.', ephemeral: true });
+
+    const prefs = user.settings?.notificationPreferences || {};
+
+    const embed = new EmbedBuilder()
+        .setColor(ENTITY_COLORS.info)
+        .setTitle('🔔 Notification Settings')
+        .addFields(
+            {
+                name: 'Friend Requests',
+                value: prefs.friendRequests !== false ? '✅ Enabled' : '❌ Disabled',
+                inline: true
+            },
+            {
+                name: 'Delivery Method',
+                value: prefs.friendNotifications === 'command' ? '💬 In Command' : prefs.friendNotifications === 'dm' ? '📨 Discord DM' : '📨 Discord DM (Default)',
+                inline: true
+            },
+            {
+                name: 'Friend Switches',
+                value: prefs.friendSwitches !== false ? '✅ Enabled' : '❌ Disabled',
+                inline: true
+            },
+            {
+                name: 'App Messages',
+                value: prefs.appMessages !== false ? '✅ Enabled' : '❌ Disabled',
+                inline: true
+            }
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`friend_notif_method_${userId}`)
+            .setPlaceholder('Choose notification delivery method')
+            .addOptions(
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('Discord DM')
+                    .setValue('dm')
+                    .setDescription('Receive notifications via Discord DMs')
+                    .setDefault(prefs.friendNotifications === 'dm' || prefs.friendNotifications === undefined),
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('In Command')
+                    .setValue('command')
+                    .setDescription('See notifications when you use commands')
+                    .setDefault(prefs.friendNotifications === 'command'),
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('None')
+                    .setValue('none')
+                    .setDescription('Don\'t receive notifications')
+                    .setDefault(prefs.friendNotifications === 'none')
+            )
     );
 
     return interaction.editReply({ embeds: [embed], components: [row] });
@@ -902,6 +987,10 @@ async function handleSelectMenu(interaction) {
         return await handleSetBucketSelect(interaction);
     }
 
+    if (customId.startsWith('friend_notif_method_')) {
+        return await handleNotificationMethodSelect(interaction);
+    }
+
     return false;
 }
 
@@ -1019,6 +1108,29 @@ async function handleSetBucketSelect(interaction) {
     await system.save();
 
     const msg = selectedBucket === '__none__' ? '✅ Default privacy bucket cleared.' : `✅ Default privacy bucket set to: **${selectedBucket}**`;
+    return interaction.reply({ content: msg, ephemeral: true });
+}
+
+async function handleNotificationMethodSelect(interaction) {
+    const userId = interaction.customId.replace('friend_notif_method_', '');
+    const user = await User.findById(userId);
+    if (!user) return interaction.reply({ content: '❌ User not found.', ephemeral: true });
+
+    const selectedMethod = interaction.values[0];
+
+    if (!user.settings) user.settings = {};
+    if (!user.settings.notificationPreferences) user.settings.notificationPreferences = {};
+
+    user.settings.notificationPreferences.friendNotifications = selectedMethod;
+    await user.save();
+
+    const methodDisplay = {
+        'dm': '📨 Discord DM',
+        'command': '💬 In Command',
+        'none': '❌ Disabled'
+    };
+
+    const msg = `✅ Notification delivery method set to: **${methodDisplay[selectedMethod]}**`;
     return interaction.reply({ content: msg, ephemeral: true });
 }
 

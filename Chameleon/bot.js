@@ -21,6 +21,9 @@ const client = new Client({
 // Connect to MongoDB
 client.db = dbConnection;
 
+// Initialize notification manager
+client.notificationManager = utils.notificationManager;
+
 // Check if Ready
 client.once(Events.ClientReady, async (readyClient) => {
 	console.log(`Let our wheels spin... Logged in as ${readyClient.user.tag}`);

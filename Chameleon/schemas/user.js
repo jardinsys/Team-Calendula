@@ -72,7 +72,13 @@ const userSchema = new mongoose.Schema({
         addedAt: { type: Date }
     }],
     settings:{
-        closedCharAllowed: {type: Boolean, default: true}
+        closedCharAllowed: {type: Boolean, default: true},
+        notificationPreferences: {
+            friendNotifications: { type: String, enum: ['none', 'dm', 'command'], default: 'dm' },
+            friendRequests: { type: Boolean, default: true },
+            appMessages: { type: Boolean, default: true },
+            friendSwitches: { type: Boolean, default: true }
+        }
     }
 
 });

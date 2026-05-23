@@ -18,6 +18,9 @@ const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/cl
 // Import schemas
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
+
+// Import notification manager
+const notificationManager = require('./notificationManager');
 const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
@@ -1334,7 +1337,12 @@ module.exports = {
 
     // Front management helpers
     updateRecentProxies,
-    getBatteryEmoji
+    getBatteryEmoji,
+
+    // Notification system
+    notificationManager,
+    getAndClearNotifications,
+    formatNotificationEmbed
 };
 
 // Update recent proxies for quick switch menu
@@ -1352,4 +1360,59 @@ function getBatteryEmoji(battery) {
     if (battery >= 70) return '🔋';
     if (battery >= 30) return '🪫';
     return '⚠️';
+}
+
+// Get and clear notifications for a user
+function getAndClearNotifications(userId) {
+    const notifications = notificationManager.getNotifications(userId);
+    notificationManager.clearNotifications(userId);
+    return notifications;
+}
+
+// Format notifications as an embed
+function formatNotificationEmbed(notifications) {
+    if (!notifications || notifications.length === 0) return null;
+
+    const embed = new EmbedBuilder()
+        .setColor('#00d4ff')
+        .setTitle('📬 Notifications')
+        .setFooter({ text: 'Type /settings to manage notifications' });
+
+    const groupedByType = {};
+    notifications.forEach(notif => {
+        if (!groupedByType[notif.type]) {
+            groupedByType[notif.type] = [];
+        }
+        groupedByType[notif.type].push(notif.data);
+    });
+
+    // Format each notification type
+    if (groupedByType['friend-request']) {
+        const requests = groupedByType['friend-request'];
+        embed.addFields({
+            name: '👥 Friend Requests',
+            value: requests.map(r => `• ${r.senderName} (@${r.senderId})`).join('\n') || 'None',
+            inline: false
+        });
+    }
+
+    if (groupedByType['app-message']) {
+        const messages = groupedByType['app-message'];
+        embed.addFields({
+            name: '💬 Messages from Sucre',
+            value: messages.map(m => `• ${m.message}`).join('\n') || 'None',
+            inline: false
+        });
+    }
+
+    if (groupedByType['friend-switch']) {
+        const switches = groupedByType['friend-switch'];
+        embed.addFields({
+            name: '🔄 Friend Switches',
+            value: switches.map(s => `• ${s.friendName} switched to ${s.switched}`).join('\n') || 'None',
+            inline: false
+        });
+    }
+
+    return embed;
 }
