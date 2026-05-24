@@ -278,7 +278,8 @@ async function createNewUserAndSystem(discordId) {
 
     const system = new System({
         users: [user._id],
-        metadata: { joinedAt: new Date() }
+        metadata: { joinedAt: new Date() },
+        privacyBuckets: [{ name: 'Default', friends: [] }]
     });
 
     user.systemID = system._id;
@@ -349,14 +350,29 @@ async function handleNewUserButton(interaction) {
     const customId = interaction.customId;
 
     if (customId.startsWith('new_user_has_system_')) {
-        const { user, system } = await createNewUserAndSystem(interaction.user.id);
+        const user = await User.findOne({ discordID: interaction.user.id });
+        const system = await System.findById(user?.systemID);
+
+        if (!system) {
+            return await interaction.update({
+                content: '❌ Something went wrong. Please try again.',
+                embeds: [],
+                components: []
+            });
+        }
+
+        if (!system.privacyBuckets?.some(b => b.name === 'Default')) {
+            if (!system.privacyBuckets) system.privacyBuckets = [];
+            system.privacyBuckets.push({ name: 'Default', friends: [] });
+            await system.save();
+        }
 
         const embed = new EmbedBuilder()
             .setColor(ENTITY_COLORS.success)
             .setTitle('✅ System Created!')
             .setDescription(
                 'Your system has been registered! 👍\n\n' +
-                'Use `/system edit` to customize your system\'s profile, or `/alter new` to register an first alter.\n'+
+                'Use `/system edit` to customize your system\'s profile, or `/alter new` to register your first alter.\n'+
                 'If you need any help, feel free to use `/help`'
             );
         await interaction.update({ embeds: [embed], components: [] });
@@ -501,7 +517,7 @@ function getPrivacyBucket(system, viewerDiscordId, viewerFriendId) {
         if (inBucket) return bucket;
     }
 
-    return system.privacyBuckets.find(b => b.name === 'Default') || null;
+    return null;
 }
 
 /* Check if an entity should be visible based on privacy settings

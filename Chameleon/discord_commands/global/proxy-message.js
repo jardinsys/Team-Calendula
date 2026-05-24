@@ -1168,5 +1168,6 @@ module.exports = {
     extractMediaUrls,
     flushToMongoDB,
     reconcileOnStartup,
-    invalidateDisplayCache
+    invalidateDisplayCache,
+    shouldMask
 };

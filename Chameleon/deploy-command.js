@@ -28,10 +28,21 @@ function loadCommands(foldersPath, commandArray) {
                 if ('data' in command) {
                     commandArray.push(command.data.toJSON());
                     console.log(`  ✓ Loaded: ${command.data.name}`);
-                } else if ('name' in command) {
-                    console.log(`  - Skipped (prefix only): ${command.name}`);
-                } else {
-                    console.log(`  - Skipped (not a command): ${item}`);
+                }
+                if ('contextMenuData' in command) {
+                    commandArray.push(command.contextMenuData.toJSON());
+                    console.log(`  ✓ Loaded context menu: ${command.contextMenuData.name}`);
+                }
+                if ('userContextMenuData' in command) {
+                    commandArray.push(command.userContextMenuData.toJSON());
+                    console.log(`  ✓ Loaded user context menu: ${command.userContextMenuData.name}`);
+                }
+                if (!('data' in command) && !('contextMenuData' in command) && !('userContextMenuData' in command)) {
+                    if ('name' in command) {
+                        console.log(`  - Skipped (prefix only): ${command.name}`);
+                    } else {
+                        console.log(`  - Skipped (not a command): ${item}`);
+                    }
                 }
             } catch (error) {
                 console.log(`  ✗ Error loading ${item}: ${error.message}`);
