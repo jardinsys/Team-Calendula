@@ -256,6 +256,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
+			// Settings command buttons
+			if (customId.startsWith('settings_')) {
+				const cmd = interaction.client.commands.get('settings');
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
+			}
+
 			// Add more button handlers here as needed...
 
 		} catch (error) {
@@ -333,6 +339,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 			// Friend command select menus
 			if (customId.startsWith('friend_')) {
 				const cmd = interaction.client.commands.get('friend');
+				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
+			}
+
+			// Settings command select menus
+			if (customId.startsWith('settings_')) {
+				const cmd = interaction.client.commands.get('settings');
 				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
@@ -417,6 +429,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 			// Friend command modals
 			if (customId.startsWith('friend_')) {
 				const cmd = interaction.client.commands.get('friend');
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
+			}
+
+			// Settings command modals
+			if (customId.startsWith('settings_')) {
+				const cmd = interaction.client.commands.get('settings');
 				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 

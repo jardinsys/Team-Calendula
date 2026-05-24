@@ -9,7 +9,9 @@ const {
     ButtonStyle,
     ModalBuilder,
     TextInputBuilder,
-    TextInputStyle
+    TextInputStyle,
+    StringSelectMenuBuilder,
+    StringSelectMenuOptionBuilder
 } = require('discord.js');
 const mongoose = require('mongoose');
 const https = require('https');
@@ -618,6 +620,246 @@ function buildHelpEmbed(commandName, description, subcommands) {
     embed.addFields({ name: 'Usage', value: usageText.trim() });
 
     return embed;
+}
+
+// ============================================
+// SETTINGS / PROXY UTILITIES
+// ============================================
+
+// Find entity by name across alters, states, and groups
+async function findEntityByNameForSystem(name, system) {
+    const searchName = name.toLowerCase();
+
+    const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
+    let entity = alters.find(a => a.name?.indexable?.toLowerCase() === searchName);
+    if (entity) return { entity, type: 'alter' };
+
+    const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
+    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName);
+    if (entity) return { entity, type: 'state' };
+
+    const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
+    entity = groups.find(g => g.name?.indexable?.toLowerCase() === searchName);
+    if (entity) return { entity, type: 'group' };
+
+    return { entity: null, type: null };
+}
+
+// Build proxy settings embed
+function buildProxySettingsEmbed(system) {
+    const getLayoutDisplay = (layout) => {
+        if (!layout) return '*Not set*';
+        return layout.length > 50 ? layout.substring(0, 47) + '...' : layout;
+    };
+
+    return new EmbedBuilder()
+        .setTitle('💬 Proxy Settings')
+        .setDescription('Select which proxy setting you want to edit.')
+        .addFields(
+            {
+                name: '🎭 Alter Layout',
+                value: getLayoutDisplay(system.proxy?.layout?.alter),
+                inline: false
+            },
+            {
+                name: '🔄 State Layout',
+                value: getLayoutDisplay(system.proxy?.layout?.state),
+                inline: false
+            },
+            {
+                name: '👥 Group Layout',
+                value: getLayoutDisplay(system.proxy?.layout?.group),
+                inline: false
+            },
+            {
+                name: '⚙️ Proxy Style',
+                value: system.proxy?.style || 'off',
+                inline: true
+            }
+        );
+}
+
+// Build proxy settings components (select menu + back button)
+function buildProxySettingsComponents(sessionId, prefix = 'system_edit') {
+    const proxySelect = new StringSelectMenuBuilder()
+        .setCustomId(`${prefix}_proxy_select_${sessionId}`)
+        .setPlaceholder('Choose what to edit...')
+        .addOptions(
+            new StringSelectMenuOptionBuilder()
+                .setLabel('Alter Layout')
+                .setDescription('Edit proxy layout for alters')
+                .setValue('layout_alter')
+                .setEmoji('🎭'),
+            new StringSelectMenuOptionBuilder()
+                .setLabel('State Layout')
+                .setDescription('Edit proxy layout for states')
+                .setValue('layout_state')
+                .setEmoji('🔄'),
+            new StringSelectMenuOptionBuilder()
+                .setLabel('Group Layout')
+                .setDescription('Edit proxy layout for groups')
+                .setValue('layout_group')
+                .setEmoji('👥'),
+            new StringSelectMenuOptionBuilder()
+                .setLabel('Proxy Style & Break')
+                .setDescription('Edit auto-proxy style and break patterns')
+                .setValue('style_break')
+                .setEmoji('⚙️')
+        );
+
+    const proxySelectRow = new ActionRowBuilder().addComponents(proxySelect);
+    const proxyBackRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`${prefix}_proxy_back_${sessionId}`)
+            .setLabel('Back to Edit')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return [proxySelectRow, proxyBackRow];
+}
+
+// Build proxy layout modal for a specific entity type
+function buildProxyLayoutModal(type, sessionId, system, prefix = 'system_edit') {
+    const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+    const placeholders = {
+        alter: '{a-sign1}{name}{tag1} - Use {name}, {sys-name}, {tag#}, {a-sign#}, {pronouns}, {caution}',
+        state: '{st-sign1}{name}{tag1} - Use {name}, {sys-name}, {tag#}, {st-sign#}, {pronouns}, {caution}',
+        group: '{g-sign1}{name}{tag1} - Use {name}, {sys-name}, {tag#}, {g-sign#}, {pronouns}, {caution}'
+    };
+
+    const modal = new ModalBuilder()
+        .setCustomId(`${prefix}_proxy_layout_${type}_modal_${sessionId}`)
+        .setTitle(`Edit ${typeLabel} Proxy Layout`);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('layout')
+                .setLabel(`${typeLabel} Layout`)
+                .setStyle(TextInputStyle.Paragraph)
+                .setValue(system.proxy?.layout?.[type] || '')
+                .setPlaceholder(placeholders[type])
+                .setRequired(false)
+                .setMaxLength(200)
+        )
+    );
+
+    return modal;
+}
+
+// Build proxy style & break modal
+function buildProxyStyleModal(sessionId, system, prefix = 'system_edit') {
+    const modal = new ModalBuilder()
+        .setCustomId(`${prefix}_proxy_style_modal_${sessionId}`)
+        .setTitle('Edit Proxy Style & Break');
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('proxy_style')
+                .setLabel('Proxy Style (off/last/front/[entity name])')
+                .setStyle(TextInputStyle.Short)
+                .setValue(system.proxy?.style || 'off')
+                .setPlaceholder('off, last, front, or an entity indexable name')
+                .setRequired(false)
+                .setMaxLength(50)
+        ),
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('proxy_break')
+                .setLabel('On Proxy Break? (yes/no)')
+                .setStyle(TextInputStyle.Short)
+                .setValue(system.proxy?.break ? 'yes' : 'no')
+                .setRequired(false)
+                .setMaxLength(3)
+        )
+    );
+
+    return modal;
+}
+
+// Validate proxy style string (pure logic, no DB calls)
+function validateProxyStyle(style) {
+    const normalized = style?.toLowerCase()?.trim();
+    const validStyles = ['off', 'last', 'front'];
+    if (validStyles.includes(normalized)) {
+        return { valid: true, finalStyle: normalized, isEntityName: false };
+    }
+    if (normalized) {
+        return { valid: true, finalStyle: normalized, isEntityName: true };
+    }
+    return { valid: true, finalStyle: 'off', isEntityName: false };
+}
+
+// ============================================
+// NOTIFICATION SETTINGS UTILITIES
+// ============================================
+
+function getDeliveryLabel(method) {
+    const labels = { dm: '📨 Discord DM', command: '💬 In Command', none: '❌ Disabled' };
+    return labels[method] || '📨 Discord DM (Default)';
+}
+
+// Build notification settings embed
+function buildNotificationSettingsEmbed(user) {
+    const prefs = user.settings?.notificationPreferences || {};
+    return new EmbedBuilder()
+        .setColor('#00d4ff')
+        .setTitle('🔔 Notification Settings')
+        .setDescription('Configure how you receive notifications.')
+        .addFields(
+            { name: 'Delivery Method', value: getDeliveryLabel(prefs.friendNotifications), inline: true },
+            { name: 'Friend Requests', value: prefs.friendRequests !== false ? '✅ Enabled' : '❌ Disabled', inline: true },
+            { name: 'Friend Switches', value: prefs.friendSwitches !== false ? '✅ Enabled' : '❌ Disabled', inline: true },
+            { name: 'App Messages', value: prefs.appMessages !== false ? '✅ Enabled' : '❌ Disabled', inline: true }
+        );
+}
+
+// Build notification settings components (delivery select + toggle buttons)
+function buildNotificationSettingsComponents(sessionId, prefs) {
+    const deliveryRow = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`settings_notif_method_${sessionId}`)
+            .setPlaceholder('Choose delivery method')
+            .addOptions(
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('Discord DM')
+                    .setValue('dm')
+                    .setDefault(prefs.friendNotifications === 'dm' || prefs.friendNotifications === undefined),
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('In Command')
+                    .setValue('command')
+                    .setDefault(prefs.friendNotifications === 'command'),
+                new StringSelectMenuOptionBuilder()
+                    .setLabel('None')
+                    .setValue('none')
+                    .setDefault(prefs.friendNotifications === 'none')
+            )
+    );
+
+    const toggleRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`settings_notif_toggle_friendRequests_${sessionId}`)
+            .setLabel('Friend Requests')
+            .setStyle(prefs.friendRequests !== false ? ButtonStyle.Success : ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId(`settings_notif_toggle_friendSwitches_${sessionId}`)
+            .setLabel('Friend Switches')
+            .setStyle(prefs.friendSwitches !== false ? ButtonStyle.Success : ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId(`settings_notif_toggle_appMessages_${sessionId}`)
+            .setLabel('App Messages')
+            .setStyle(prefs.appMessages !== false ? ButtonStyle.Success : ButtonStyle.Danger)
+    );
+
+    const backRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`settings_notif_back_${sessionId}`)
+            .setLabel('Back')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return [deliveryRow, toggleRow, backRow];
 }
 
 // ==== FORMATTING UTILITIES ====
@@ -1342,7 +1584,20 @@ module.exports = {
     // Notification system
     notificationManager,
     getAndClearNotifications,
-    formatNotificationEmbed
+    formatNotificationEmbed,
+
+    // Settings / proxy utilities
+    findEntityByNameForSystem,
+    buildProxySettingsEmbed,
+    buildProxySettingsComponents,
+    buildProxyLayoutModal,
+    buildProxyStyleModal,
+    validateProxyStyle,
+
+    // Notification settings utilities
+    getDeliveryLabel,
+    buildNotificationSettingsEmbed,
+    buildNotificationSettingsComponents
 };
 
 // Update recent proxies for quick switch menu

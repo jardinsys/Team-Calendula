@@ -1468,96 +1468,22 @@ async function handleSelectMenu(interaction) {
     // Handle proxy settings select menu
     if (interaction.customId.startsWith('system_edit_proxy_select_')) {
         let modal;
-        const signPrefixHelp = {
-            alter: '{a-sign1}, {a-sign2}...',
-            state: '{st-sign1}, {st-sign2}...',
-            group: '{g-sign1}, {g-sign2}...'
-        };
 
         switch (value) {
             case 'layout_alter':
-                modal = new ModalBuilder()
-                    .setCustomId(`system_edit_proxy_layout_alter_modal_${sessionId}`)
-                    .setTitle('Edit Alter Proxy Layout');
-
-                modal.addComponents(
-                    new ActionRowBuilder().addComponents(
-                        new TextInputBuilder()
-                            .setCustomId('layout')
-                            .setLabel('Alter Layout')
-                            .setStyle(TextInputStyle.Paragraph)
-                            .setValue(system.proxy?.layout?.alter || '')
-                            .setPlaceholder('{a-sign1}{name}{tag1} - Use {name}, {sys-name}, {tag#}, {a-sign#}, {pronouns}, {caution}')
-                            .setRequired(false)
-                            .setMaxLength(200)
-                    )
-                );
+                modal = utils.buildProxyLayoutModal('alter', sessionId, system, 'system_edit');
                 break;
 
             case 'layout_state':
-                modal = new ModalBuilder()
-                    .setCustomId(`system_edit_proxy_layout_state_modal_${sessionId}`)
-                    .setTitle('Edit State Proxy Layout');
-
-                modal.addComponents(
-                    new ActionRowBuilder().addComponents(
-                        new TextInputBuilder()
-                            .setCustomId('layout')
-                            .setLabel('State Layout')
-                            .setStyle(TextInputStyle.Paragraph)
-                            .setValue(system.proxy?.layout?.state || '')
-                            .setPlaceholder('{st-sign1}{name}{tag1} - Use {name}, {sys-name}, {tag#}, {st-sign#}, {pronouns}, {caution}')
-                            .setRequired(false)
-                            .setMaxLength(200)
-                    )
-                );
+                modal = utils.buildProxyLayoutModal('state', sessionId, system, 'system_edit');
                 break;
 
             case 'layout_group':
-                modal = new ModalBuilder()
-                    .setCustomId(`system_edit_proxy_layout_group_modal_${sessionId}`)
-                    .setTitle('Edit Group Proxy Layout');
-
-                modal.addComponents(
-                    new ActionRowBuilder().addComponents(
-                        new TextInputBuilder()
-                            .setCustomId('layout')
-                            .setLabel('Group Layout')
-                            .setStyle(TextInputStyle.Paragraph)
-                            .setValue(system.proxy?.layout?.group || '')
-                            .setPlaceholder('{g-sign1}{name}{tag1} - Use {name}, {sys-name}, {tag#}, {g-sign#}, {pronouns}, {caution}')
-                            .setRequired(false)
-                            .setMaxLength(200)
-                    )
-                );
+                modal = utils.buildProxyLayoutModal('group', sessionId, system, 'system_edit');
                 break;
 
             case 'style_break':
-                modal = new ModalBuilder()
-                    .setCustomId(`system_edit_proxy_style_modal_${sessionId}`)
-                    .setTitle('Edit Proxy Style & Break');
-
-                modal.addComponents(
-                    new ActionRowBuilder().addComponents(
-                        new TextInputBuilder()
-                            .setCustomId('proxy_style')
-                            .setLabel('Proxy Style (off/last/front/[entity name])')
-                            .setStyle(TextInputStyle.Short)
-                            .setValue(system.proxy?.style || 'off')
-                            .setPlaceholder('off, last, front, or an entity indexable name')
-                            .setRequired(false)
-                            .setMaxLength(50)
-                    ),
-                    new ActionRowBuilder().addComponents(
-                        new TextInputBuilder()
-                            .setCustomId('proxy_break')
-                            .setLabel('On Proxy Break? (yes/no)')
-                            .setStyle(TextInputStyle.Short)
-                            .setValue(system.proxy?.break ? 'yes' : 'no')
-                            .setRequired(false)
-                            .setMaxLength(3)
-                    )
-                );
+                modal = utils.buildProxyStyleModal(sessionId, system, 'system_edit');
                 break;
 
             default:
@@ -2237,7 +2163,7 @@ async function handleModalSubmit(interaction) {
                 system.proxy.style = style;
             } else if (style) {
                 // Check if it's an entity name (specify mode)
-                const { entity, type } = await findEntityByNameForSystem(style, system);
+                const { entity, type } = await utils.findEntityByNameForSystem(style, system);
                 if (entity) {
                     system.proxy.style = entity.name?.indexable || style;
                 } else {
@@ -2246,8 +2172,8 @@ async function handleModalSubmit(interaction) {
                     await system.save();
 
                     session.id = sessionId;
-                    const proxyEmbed = buildProxySettingsEmbed(system);
-                    const proxyComponents = buildProxySettingsComponents(sessionId);
+            const proxyEmbed = utils.buildProxySettingsEmbed(system);
+            const proxyComponents = utils.buildProxySettingsComponents(sessionId, 'system_edit');
                     return await interaction.update({
                         content: `⚠️ Could not find an alter/state/group named "${style}". Proxy style was not changed.\n\nValid options: \`off\`, \`last\`, \`front\`, or an entity's indexable name.`,
                         embeds: [proxyEmbed],
@@ -2302,104 +2228,4 @@ async function handleModalSubmit(interaction) {
         const { embed, components } = buildEditInterface(system, session);
         return await interaction.update({ embeds: [embed], components });
     }
-}
-
-// Build the proxy settings embed
-function buildProxySettingsEmbed(system) {
-    const getLayoutDisplay = (layout) => {
-        if (!layout) return '*Not set*';
-        return layout.length > 50 ? layout.substring(0, 47) + '...' : layout;
-    };
-
-    return new EmbedBuilder()
-        .setTitle('💬 Proxy Settings')
-        .setDescription('Select which proxy setting you want to edit.')
-        .addFields(
-            {
-                name: '🎭 Alter Layout',
-                value: getLayoutDisplay(system.proxy?.layout?.alter),
-                inline: false
-            },
-            {
-                name: '🔄 State Layout',
-                value: getLayoutDisplay(system.proxy?.layout?.state),
-                inline: false
-            },
-            {
-                name: '👥 Group Layout',
-                value: getLayoutDisplay(system.proxy?.layout?.group),
-                inline: false
-            },
-            {
-                name: '⚙️ Proxy Style',
-                value: system.proxy?.style || 'off',
-                inline: true
-            }, /*
-            {
-                name: '🛑 Break',
-                value: system.proxy?.break ? 'Yes' : 'No',
-                inline: true
-            }*/ //This use of break is incorrect, it needs to be labeled as a break when a proxy is stopped
-        );
-}
-
-// Build proxy settings components
-function buildProxySettingsComponents(sessionId) {
-    const proxySelect = new StringSelectMenuBuilder()
-        .setCustomId(`system_edit_proxy_select_${sessionId}`)
-        .setPlaceholder('Choose what to edit...')
-        .addOptions(
-            new StringSelectMenuOptionBuilder()
-                .setLabel('Alter Layout')
-                .setDescription('Edit proxy layout for alters')
-                .setValue('layout_alter')
-                .setEmoji('🎭'),
-            new StringSelectMenuOptionBuilder()
-                .setLabel('State Layout')
-                .setDescription('Edit proxy layout for states')
-                .setValue('layout_state')
-                .setEmoji('🔄'),
-            new StringSelectMenuOptionBuilder()
-                .setLabel('Group Layout')
-                .setDescription('Edit proxy layout for groups')
-                .setValue('layout_group')
-                .setEmoji('👥'),
-            new StringSelectMenuOptionBuilder()
-                .setLabel('Proxy Style & Break')
-                .setDescription('Edit auto-proxy style and break patterns') //again error with break
-                .setValue('style_break')
-                .setEmoji('⚙️')
-        );
-
-    const proxySelectRow = new ActionRowBuilder().addComponents(proxySelect);
-    const proxyBackRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`system_edit_proxy_back_${sessionId}`)
-            .setLabel('Back to Edit')
-            .setStyle(ButtonStyle.Secondary)
-    );
-
-    return [proxySelectRow, proxyBackRow];
-}
-
-// Helper to find entity by name for system proxy style validation
-async function findEntityByNameForSystem(name, system) {
-    const searchName = name.toLowerCase();
-
-    // Search alters
-    const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
-    let entity = alters.find(a => a.name?.indexable?.toLowerCase() === searchName);
-    if (entity) return { entity, type: 'alter' };
-
-    // Search states
-    const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
-    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName);
-    if (entity) return { entity, type: 'state' };
-
-    // Search groups
-    const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
-    entity = groups.find(g => g.name?.indexable?.toLowerCase() === searchName);
-    if (entity) return { entity, type: 'group' };
-
-    return { entity: null, type: null };
 }
