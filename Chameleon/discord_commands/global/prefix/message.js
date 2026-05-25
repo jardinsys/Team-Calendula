@@ -7,6 +7,7 @@ const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
+const redis = require('../../redis');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {
@@ -52,10 +53,29 @@ function extractMessageId(input) {
 }
 
 async function handleLookup(message, parsed, messageId) {
-    // Try to find the message in our database
-    const msgRecord = await Message.findOne({
-        discord_webhook_message_id: messageId
-    });
+    // Redis-first lookup
+    const cached = await redis.get(`msg:${messageId}`);
+    let msgRecord = null;
+
+    if (cached) {
+        msgRecord = JSON.parse(cached);
+    } else {
+        msgRecord = await Message.findOne({ discord_webhook_message_id: messageId });
+        if (msgRecord) {
+            const cacheData = {
+                discord_webhook_message_id: msgRecord.discord_webhook_message_id,
+                discord_channel_id: msgRecord.discord_channel_id,
+                discord_user_id: msgRecord.discord_user_id,
+                proxy_type: msgRecord.proxy_type,
+                proxy_id: msgRecord.proxy_id?.toString(),
+                content: msgRecord.content,
+                attachments: msgRecord.attachments || [],
+                createdAt: msgRecord.createdAt,
+                editedAt: msgRecord.editedAt
+            };
+            await redis.set(`msg:${messageId}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
+        }
+    }
 
     if (!msgRecord) {
         return utils.error(message, 'This doesn\'t appear to be a proxied message, or it\'s not in our records.');
@@ -64,15 +84,16 @@ async function handleLookup(message, parsed, messageId) {
     // Get the entity info
     let entity = null;
     let entityType = 'unknown';
+    const proxyId = msgRecord.proxy_id ? (typeof msgRecord.proxy_id === 'string' ? msgRecord.proxy_id : msgRecord.proxy_id.toString()) : null;
     
-    if (msgRecord.alterID) {
-        entity = await Alter.findById(msgRecord.alterID);
+    if (msgRecord.proxy_type === 'alter' && proxyId) {
+        entity = await Alter.findById(proxyId);
         entityType = 'alter';
-    } else if (msgRecord.stateID) {
-        entity = await State.findById(msgRecord.stateID);
+    } else if (msgRecord.proxy_type === 'state' && proxyId) {
+        entity = await State.findById(proxyId);
         entityType = 'state';
-    } else if (msgRecord.groupID) {
-        entity = await Group.findById(msgRecord.groupID);
+    } else if (msgRecord.proxy_type === 'group' && proxyId) {
+        entity = await Group.findById(proxyId);
         entityType = 'group';
     }
 
@@ -101,10 +122,15 @@ async function handleDelete(message, parsed, messageId) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!system) return utils.error(message, 'You need a system to delete messages.');
 
-    // Find the message record
-    const msgRecord = await Message.findOne({
-        discord_webhook_message_id: messageId
-    });
+    // Redis-first lookup
+    const cached = await redis.get(`msg:${messageId}`);
+    let msgRecord = null;
+
+    if (cached) {
+        msgRecord = JSON.parse(cached);
+    } else {
+        msgRecord = await Message.findOne({ discord_webhook_message_id: messageId });
+    }
 
     if (!msgRecord) {
         return utils.error(message, 'This doesn\'t appear to be a proxied message, or it\'s not in our records.');
@@ -125,8 +151,11 @@ async function handleDelete(message, parsed, messageId) {
             }
         }
 
-        // Delete the record
+        // Delete from MongoDB
         await Message.deleteOne({ _id: msgRecord._id });
+
+        // Delete from Redis
+        await redis.del(`msg:${messageId}`);
 
         return utils.success(message, 'Message deleted.');
     } catch (err) {

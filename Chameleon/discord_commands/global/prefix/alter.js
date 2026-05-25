@@ -1,5 +1,30 @@
 // sys!alter - Alter management prefix command
-// USAGE: See handleHelp() for full command list
+// CLI-style alter CRUD with privacy, mask, triggers, and R2 media support
+//
+// USAGE:
+//   sys!alter <n>                              - View an alter
+//   sys!alter new <n>                          - Create an alter
+//   sys!alter list [-full]                     - List all alters
+//   sys!alter <n> displayname|dn <name>        - Set display name
+//   sys!alter <n> closedname|cn <name>         - Set closed name display
+//   sys!alter <n> description <text>           - Set description
+//   sys!alter <n> avatar|banner <url>          - Set media
+//   sys!alter <n> color <hex>                  - Set color
+//   sys!alter <n> pronouns <p, p>             - Set pronouns
+//   sys!alter <n> birthday <date>              - Set birthday
+//   sys!alter <n> proxy add|remove <tag>       - Manage proxies
+//   sys!alter <n> aliases add|remove <alias>   - Manage aliases
+//   sys!alter <n> groups add|remove <group>    - Manage groups
+//   sys!alter <n> sync <true|false>            - Toggle Discord sync
+//   sys!alter <n> defaultstatus <s>            - Set default shift status
+//   sys!alter <n> defaultbattery <0-100>       - Set default shift battery
+//   sys!alter <n> caution <type> [detail]      - Set caution
+//   sys!alter <n> triggers add|remove <text>   - Manage triggers
+//   sys!alter <n> mask <field> <value>         - Edit mask mode
+//   sys!alter <n> dormant                      - Toggle dormant
+//   sys!alter <n> privacy <field> <pub|priv>   - Set privacy
+//   sys!alter <n> privacy bucket:<name> <f> <v> - Per-bucket privacy
+//   sys!alter <n> delete -confirm              - Delete alter
 
 const { EmbedBuilder } = require('discord.js');
 const System = require('../../../schemas/system');
@@ -28,6 +53,7 @@ module.exports = {
         const handlers = {
             'rename': handleRename, 'name': handleRename,
             'displayname': handleDisplayName, 'dn': handleDisplayName,
+            'closedname': handleClosedName, 'cn': handleClosedName,
             'description': handleDescription, 'desc': handleDescription,
             'avatar': handleAvatar, 'icon': handleAvatar, 'av': handleAvatar, 'pfp': handleAvatar,
             'banner': handleBanner,
@@ -41,12 +67,15 @@ module.exports = {
             'groups': handleGroups, 'group': handleGroups,
             'condition': handleCondition, 'cond': handleCondition,
             'caution': handleCaution,
+            'triggers': handleTriggers, 'trigger': handleTriggers,
             'privacy': handlePrivacy,
+            'sync': handleSync,
+            'defaultstatus': handleDefaultStatus, 'ds': handleDefaultStatus,
+            'defaultbattery': handleDefaultBattery, 'db': handleDefaultBattery,
+            'mask': handleMask,
             'delete': handleDelete,
             'dormant': handleDormant,
-            'id': handleId,
-            'autoproxy': handleAutoproxy, 'ap': handleAutoproxy,
-            'keepproxy': handleKeepProxy, 'kp': handleKeepProxy
+            'id': handleId
         };
 
         if (handlers[subcommand]) {
@@ -153,36 +182,45 @@ async function handleDescription(message, parsed, alterName) {
 async function handleAvatar(message, parsed, alterName) {
     const { alter } = await getAlter(message, alterName);
     if (!alter) return;
-    if (parsed.clear) { alter.avatar = undefined; await alter.save(); return utils.success(message, 'Avatar cleared.'); }
-    const url = message.attachments.first()?.url || parsed._positional[2];
-    if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
-    alter.avatar = { url };
+    if (parsed.clear) { if (alter.avatar?.r2Key) await utils.deleteFromR2(alter.avatar.r2Key); alter.avatar = undefined; await alter.save(); return utils.success(message, 'Avatar cleared.'); }
+    const attachment = message.attachments.first();
+    const urlArg = parsed._positional[2];
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'Alter', message.author.id);
+    if (!result.success) return utils.error(message, result.message);
+    if (alter.avatar?.r2Key) await utils.deleteFromR2(alter.avatar.r2Key);
+    alter.avatar = result.media;
     await alter.save();
-    return utils.success(message, 'Avatar updated.');
+    return utils.success(message, 'Avatar uploaded and updated.');
 }
 
 async function handleBanner(message, parsed, alterName) {
     const { alter } = await getAlter(message, alterName);
     if (!alter) return;
-    if (parsed.clear) { if (alter.discord?.image) alter.discord.image.banner = undefined; await alter.save(); return utils.success(message, 'Banner cleared.'); }
-    const url = message.attachments.first()?.url || parsed._positional[2];
-    if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
+    if (parsed.clear) { if (alter.discord?.image?.banner?.r2Key) await utils.deleteFromR2(alter.discord.image.banner.r2Key); if (alter.discord?.image) alter.discord.image.banner = undefined; await alter.save(); return utils.success(message, 'Banner cleared.'); }
+    const attachment = message.attachments.first();
+    const urlArg = parsed._positional[2];
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'Alter', message.author.id);
+    if (!result.success) return utils.error(message, result.message);
+    if (alter.discord?.image?.banner?.r2Key) await utils.deleteFromR2(alter.discord.image.banner.r2Key);
     alter.discord = alter.discord || {}; alter.discord.image = alter.discord.image || {};
-    alter.discord.image.banner = { url };
+    alter.discord.image.banner = result.media;
     await alter.save();
-    return utils.success(message, 'Banner updated.');
+    return utils.success(message, 'Banner uploaded and updated.');
 }
 
 async function handleProxyAvatar(message, parsed, alterName) {
     const { alter } = await getAlter(message, alterName);
     if (!alter) return;
-    if (parsed.clear) { if (alter.discord?.image) alter.discord.image.proxyAvatar = undefined; await alter.save(); return utils.success(message, 'Proxy avatar cleared.'); }
-    const url = message.attachments.first()?.url || parsed._positional[2];
-    if (!url) return utils.error(message, 'Please provide a URL.');
+    if (parsed.clear) { if (alter.discord?.image?.proxyAvatar?.r2Key) await utils.deleteFromR2(alter.discord.image.proxyAvatar.r2Key); if (alter.discord?.image) alter.discord.image.proxyAvatar = undefined; await alter.save(); return utils.success(message, 'Proxy avatar cleared.'); }
+    const attachment = message.attachments.first();
+    const urlArg = parsed._positional[2];
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'proxyAvatar', 'Alter', message.author.id);
+    if (!result.success) return utils.error(message, result.message);
+    if (alter.discord?.image?.proxyAvatar?.r2Key) await utils.deleteFromR2(alter.discord.image.proxyAvatar.r2Key);
     alter.discord = alter.discord || {}; alter.discord.image = alter.discord.image || {};
-    alter.discord.image.proxyAvatar = { url };
+    alter.discord.image.proxyAvatar = result.media;
     await alter.save();
-    return utils.success(message, 'Proxy avatar updated.');
+    return utils.success(message, 'Proxy avatar uploaded and updated.');
 }
 
 async function handleColor(message, parsed, alterName) {
@@ -343,24 +381,187 @@ async function handleCaution(message, parsed, alterName) {
     return utils.success(message, `Caution set to **${type}**`);
 }
 
-async function handlePrivacy(message, parsed, alterName) {
+async function handleClosedName(message, parsed, alterName) {
+    const { alter } = await getAlter(message, alterName);
+    if (!alter) return;
+    if (parsed.clear) { alter.name.closedNameDisplay = undefined; await alter.save(); return utils.success(message, 'Closed name display cleared.'); }
+    const newName = parsed._positional.slice(2).join(' ');
+    if (!newName) return utils.error(message, 'Please provide a closed name display.');
+    alter.name.closedNameDisplay = newName;
+    await alter.save();
+    return utils.success(message, `Closed name display set to **${newName}**`);
+}
+
+async function handleSync(message, parsed, alterName) {
+    const { alter } = await getAlter(message, alterName);
+    if (!alter) return;
+    const val = parsed._positional[2]?.toLowerCase();
+    if (!val || !['true', 'false', 'on', 'off', 'yes', 'no'].includes(val)) return utils.error(message, 'Specify `true` or `false`.');
+    alter.syncWithApps = alter.syncWithApps || {};
+    alter.syncWithApps.discord = ['true', 'on', 'yes'].includes(val);
+    await alter.save();
+    return utils.success(message, `Discord sync is now **${alter.syncWithApps.discord ? 'enabled' : 'disabled'}**`);
+}
+
+async function handleDefaultStatus(message, parsed, alterName) {
+    const { alter } = await getAlter(message, alterName);
+    if (!alter) return;
+    if (parsed.clear) { alter.setting = alter.setting || {}; alter.setting.default_status = undefined; await alter.save(); return utils.success(message, 'Default status cleared.'); }
+    const status = parsed._positional.slice(2).join(' ');
+    if (!status) return utils.error(message, 'Please provide a default status.');
+    alter.setting = alter.setting || {};
+    alter.setting.default_status = status;
+    await alter.save();
+    return utils.success(message, `Default status set to **${status}**`);
+}
+
+async function handleDefaultBattery(message, parsed, alterName) {
+    const { alter } = await getAlter(message, alterName);
+    if (!alter) return;
+    if (parsed.clear) { alter.setting = alter.setting || {}; alter.setting.default_battery = undefined; await alter.save(); return utils.success(message, 'Default battery cleared.'); }
+    const val = parseInt(parsed._positional[2]);
+    if (isNaN(val) || val < 0 || val > 100) return utils.error(message, 'Please provide a battery level (0-100).');
+    alter.setting = alter.setting || {};
+    alter.setting.default_battery = val;
+    await alter.save();
+    return utils.success(message, `Default battery set to **${val}**`);
+}
+
+async function handleTriggers(message, parsed, alterName) {
+    const { alter } = await getAlter(message, alterName);
+    if (!alter) return;
+    const action = parsed._positional[2]?.toLowerCase();
+    if (action === 'add') {
+        const trigger = parsed._positional.slice(3).join(' ');
+        if (!trigger) return utils.error(message, 'Please provide a trigger.');
+        alter.caution = alter.caution || {};
+        alter.caution.triggers = alter.caution.triggers || [];
+        alter.caution.triggers.push({ text: trigger });
+        await alter.save();
+        return utils.success(message, `Trigger \`${trigger}\` added.`);
+    }
+    if (action === 'remove') {
+        const trigger = parsed._positional.slice(3).join(' ');
+        if (!trigger) return utils.error(message, 'Please provide a trigger to remove.');
+        alter.caution = alter.caution || {};
+        alter.caution.triggers = alter.caution.triggers || [];
+        const idx = alter.caution.triggers.findIndex(t => t.text?.toLowerCase() === trigger.toLowerCase());
+        if (idx === -1) return utils.error(message, `Trigger \`${trigger}\` not found.`);
+        alter.caution.triggers.splice(idx, 1);
+        await alter.save();
+        return utils.success(message, `Trigger \`${trigger}\` removed.`);
+    }
+    if (action === 'clear') {
+        alter.caution = alter.caution || {};
+        alter.caution.triggers = [];
+        await alter.save();
+        return utils.success(message, 'All triggers cleared.');
+    }
+    const triggers = alter.caution?.triggers || [];
+    if (!triggers.length) return utils.info(message, 'No caution triggers set.');
+    return utils.info(message, `Triggers: ${triggers.map(t => t.text || t).join(', ')}`);
+}
+
+async function handleMask(message, parsed, alterName) {
     const { alter } = await getAlter(message, alterName);
     if (!alter) return;
     const field = parsed._positional[2]?.toLowerCase();
-    const value = parsed._positional[3]?.toLowerCase();
-    const validFields = ['description', 'avatar', 'banner', 'birthday', 'pronouns', 'metadata', 'proxies', 'caution', 'hidden', 'aliases'];
     if (!field) {
-        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.alter).setTitle('🔒 Alter Privacy')
-            .setDescription(`Use \`sys!alter <n> privacy <field> <public|private>\`\nFields: ${validFields.join(', ')}`);
+        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.alter).setTitle('🎭 Mask Settings')
+            .setDescription(`Use \`sys!alter <n> mask <field> <value>\`\nFields: name, displayname (dn), description, color, avatar, banner, proxyavatar (pav)`)
+            .addFields(
+                { name: 'Current Mask', value: `Name: ${alter.mask?.name?.display || alter.mask?.name?.indexable || '*not set*'}\nColor: ${alter.mask?.color || '*not set*'}\nDescription: ${alter.mask?.description || '*not set*'}`, inline: false }
+            );
         return message.reply({ embeds: [embed] });
     }
-    if (!validFields.includes(field)) return utils.error(message, `Invalid field. Valid: ${validFields.join(', ')}`);
-    if (!value || !['public', 'private'].includes(value)) return utils.error(message, 'Specify `public` or `private`.');
+    alter.mask = alter.mask || {};
+    if (field === 'name') {
+        const val = parsed._positional.slice(3).join(' ');
+        if (!val) return utils.error(message, 'Please provide a mask name.');
+        alter.mask.name = alter.mask.name || {};
+        alter.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '');
+        alter.mask.name.display = val;
+        await alter.save();
+        return utils.success(message, `Mask name set to **${val}**`);
+    }
+    if (field === 'displayname' || field === 'dn') {
+        if (parsed.clear) { alter.mask.name = alter.mask.name || {}; alter.mask.name.display = undefined; await alter.save(); return utils.success(message, 'Mask display name cleared.'); }
+        const val = parsed._positional.slice(3).join(' ');
+        if (!val) return utils.error(message, 'Please provide a mask display name.');
+        alter.mask.name = alter.mask.name || {};
+        alter.mask.name.display = val;
+        await alter.save();
+        return utils.success(message, `Mask display name set to **${val}**`);
+    }
+    if (field === 'description' || field === 'desc') {
+        if (parsed.clear) { alter.mask.description = undefined; await alter.save(); return utils.success(message, 'Mask description cleared.'); }
+        const val = parsed._positional.slice(3).join(' ');
+        if (!val) return utils.error(message, 'Please provide a mask description.');
+        alter.mask.description = val;
+        await alter.save();
+        return utils.success(message, 'Mask description updated.');
+    }
+    if (field === 'color' || field === 'colour') {
+        if (parsed.clear) { alter.mask.color = undefined; await alter.save(); return utils.success(message, 'Mask color cleared.'); }
+        const val = utils.normalizeColor(parsed._positional[3]);
+        if (!val) return utils.error(message, 'Please provide a valid hex color.');
+        alter.mask.color = val;
+        await alter.save();
+        return utils.success(message, `Mask color set to **${val}**`);
+    }
+    if (field === 'avatar' || field === 'icon' || field === 'av' || field === 'pfp') {
+        if (parsed.clear) { alter.mask.avatar = undefined; await alter.save(); return utils.success(message, 'Mask avatar cleared.'); }
+        const url = message.attachments.first()?.url || parsed._positional[3];
+        if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
+        alter.mask.avatar = { url };
+        await alter.save();
+        return utils.success(message, 'Mask avatar updated.');
+    }
+    if (field === 'banner') {
+        if (parsed.clear) { if (alter.mask.discord) alter.mask.discord.image = alter.mask.discord.image || {}; alter.mask.discord.image.banner = undefined; await alter.save(); return utils.success(message, 'Mask banner cleared.'); }
+        const url = message.attachments.first()?.url || parsed._positional[3];
+        if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
+        alter.mask.discord = alter.mask.discord || {};
+        alter.mask.discord.image = alter.mask.discord.image || {};
+        alter.mask.discord.image.banner = { url };
+        await alter.save();
+        return utils.success(message, 'Mask banner updated.');
+    }
+    if (field === 'proxyavatar' || field === 'pav') {
+        if (parsed.clear) { if (alter.mask.discord) alter.mask.discord.image = alter.mask.discord.image || {}; alter.mask.discord.image.proxyAvatar = undefined; await alter.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        const url = message.attachments.first()?.url || parsed._positional[3];
+        if (!url) return utils.error(message, 'Please provide a URL.');
+        alter.mask.discord = alter.mask.discord || {};
+        alter.mask.discord.image = alter.mask.discord.image || {};
+        alter.mask.discord.image.proxyAvatar = { url };
+        await alter.save();
+        return utils.success(message, 'Mask proxy avatar updated.');
+    }
+    return utils.error(message, `Unknown mask field: ${field}. Use: name, displayname, description, color, avatar, banner, proxyavatar`);
+}
+
+async function handlePrivacy(message, parsed, alterName) {
+    const { alter } = await getAlter(message, alterName);
+    if (!alter) return;
+    const bucketArg = parsed._positional[2]?.toLowerCase();
+    const field = parsed._positional[3]?.toLowerCase();
+    const value = parsed._positional[4]?.toLowerCase();
+    const validFields = ['description', 'avatar', 'banner', 'birthday', 'pronouns', 'metadata', 'proxies', 'caution', 'hidden', 'aliases'];
+    if (!bucketArg || !validFields.includes(bucketArg)) {
+        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.alter).setTitle('🔒 Alter Privacy')
+            .setDescription(`Use \`sys!alter <n> privacy <field> <public|private>\`\nor \`sys!alter <n> privacy bucket:<name> <field> <public|private>\`\nFields: ${validFields.join(', ')}`);
+        return message.reply({ embeds: [embed] });
+    }
+    const bucketName = bucketArg.startsWith('bucket:') ? bucketArg.slice(7) : 'default';
+    const actualField = bucketArg.startsWith('bucket:') ? field : bucketArg;
+    const actualValue = bucketArg.startsWith('bucket:') ? value : field;
+    if (!validFields.includes(actualField)) return utils.error(message, `Invalid field. Valid: ${validFields.join(', ')}`);
+    if (!actualValue || !['public', 'private'].includes(actualValue)) return utils.error(message, 'Specify `public` or `private`.');
     alter.setting = alter.setting || {}; alter.setting.privacy = alter.setting.privacy || [];
-    let priv = alter.setting.privacy.find(p => p.bucket === 'default');
-    if (!priv) { priv = { bucket: 'default', settings: {} }; alter.setting.privacy.push(priv); }
-    priv.settings[field] = value === 'private'; await alter.save();
-    return utils.success(message, `**${field}** is now **${value}**`);
+    let priv = alter.setting.privacy.find(p => p.bucket === bucketName);
+    if (!priv) { priv = { bucket: bucketName, settings: {} }; alter.setting.privacy.push(priv); }
+    priv.settings[actualField] = actualValue === 'private'; await alter.save();
+    return utils.success(message, `**${actualField}** is now **${actualValue}** in bucket **${bucketName}**`);
 }
 
 async function handleDelete(message, parsed, alterName) {
@@ -389,24 +590,6 @@ async function handleId(message, parsed, alterName) {
     return message.reply(`\`${alter._id}\``);
 }
 
-async function handleAutoproxy(message, parsed, alterName) {
-    const { alter } = await getAlter(message, alterName);
-    if (!alter) return;
-    const val = parsed._positional[2]?.toLowerCase();
-    if (!val || !['on', 'off'].includes(val)) return utils.error(message, 'Specify `on` or `off`.');
-    alter.setting = alter.setting || {}; alter.setting.autoproxyEnabled = val === 'on'; await alter.save();
-    return utils.success(message, `Autoproxy for **${alter.name?.display || alterName}** is now **${val}**`);
-}
-
-async function handleKeepProxy(message, parsed, alterName) {
-    const { alter } = await getAlter(message, alterName);
-    if (!alter) return;
-    const val = parsed._positional[2]?.toLowerCase();
-    if (!val || !['on', 'off'].includes(val)) return utils.error(message, 'Specify `on` or `off`.');
-    alter.setting = alter.setting || {}; alter.setting.keepProxy = val === 'on'; await alter.save();
-    return utils.success(message, `Keep proxy is now **${val}**`);
-}
-
 async function handleList(message, parsed) {
     const { system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
     if (!system) return utils.error(message, targetUserId === message.author.id ? 'You don\'t have a system.' : 'That user doesn\'t have a system.');
@@ -433,6 +616,7 @@ async function handleHelp(message) {
         { usage: 'sys!alter new <n>', description: 'Create new alter' },
         { usage: 'sys!alter <n> rename <new>', description: 'Change indexable name' },
         { usage: 'sys!alter <n> displayname <n>', description: 'Set display name' },
+        { usage: 'sys!alter <n> closedname <n>', description: 'Set closed name display' },
         { usage: 'sys!alter <n> description <text>', description: 'Set description' },
         { usage: 'sys!alter <n> avatar <url>', description: 'Set avatar' },
         { usage: 'sys!alter <n> pronouns <p, p>', description: 'Set pronouns' },
@@ -441,6 +625,15 @@ async function handleHelp(message) {
         { usage: 'sys!alter <n> birthday <date>', description: 'Set birthday' },
         { usage: 'sys!alter <n> aliases [add|remove] <alias>', description: 'Manage aliases' },
         { usage: 'sys!alter <n> groups [add|remove] <group>', description: 'Manage groups' },
+        { usage: 'sys!alter <n> condition <cond>', description: 'Set condition' },
+        { usage: 'sys!alter <n> caution <type> [detail]', description: 'Set caution' },
+        { usage: 'sys!alter <n> triggers add|remove <text>', description: 'Manage caution triggers' },
+        { usage: 'sys!alter <n> privacy <field> <pub|priv>', description: 'Set privacy (default bucket)' },
+        { usage: 'sys!alter <n> privacy bucket:<name> <field> <pub|priv>', description: 'Set privacy (named bucket)' },
+        { usage: 'sys!alter <n> sync <true|false>', description: 'Toggle Discord sync' },
+        { usage: 'sys!alter <n> defaultstatus <status>', description: 'Set default shift status' },
+        { usage: 'sys!alter <n> defaultbattery <0-100>', description: 'Set default shift battery' },
+        { usage: 'sys!alter <n> mask <field> <value>', description: 'Edit mask mode settings' },
         { usage: 'sys!alter <n> delete -confirm', description: 'Delete alter' },
         { usage: 'sys!alter list [-full]', description: 'List all alters' },
     ]);

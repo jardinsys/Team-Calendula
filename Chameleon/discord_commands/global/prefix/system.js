@@ -7,21 +7,36 @@
 //   sys!system new [name]                - Create a new system
 //   sys!system rename <name>             - Change system indexable name
 //   sys!system displayname <name>        - Change display name
+//   sys!system closedname <name>         - Set closed name display
 //   sys!system description <desc>        - Change description
 //   sys!system avatar <url>              - Change avatar
 //   sys!system banner <url>              - Change banner
 //   sys!system color <hex>               - Change color
-//   sys!system tag <tag>                 - Set system tag(s) (comma-separated for multiple)
+//   sys!system tag <tag>                 - Set system tag(s) (comma-separated)
 //   sys!system birthday <date>           - Set birthday (YYYY-MM-DD)
 //   sys!system timezone <tz>             - Set timezone
 //   sys!system type <type>               - Set system type name
 //   sys!system dsm <type>                - Set DSM classification
 //   sys!system icd <type>                - Set ICD classification
 //   sys!system synonym <singular> <plural> - Set alter synonyms
+//   sys!system sync <true|false>         - Toggle Discord sync
+//   sys!system autoshare <true|false>    - Toggle auto-share notes
+//   sys!system cooldown <seconds>        - Set proxy cooldown
+//   sys!system friendautobucket <name>   - Set friend auto-bucket
+//   sys!system proxylayout <type> <fmt>  - Set proxy layout
+//   sys!system proxybreak <true|false>   - Toggle proxy break
+//   sys!system proxystyle <off|last|front|name> - Set proxy style
+//   sys!system casesensitive <true|false> - Toggle case sensitivity
+//   sys!system pronounseparator <char>   - Set pronoun separator
+//   sys!system frontstatus <status>      - Set front status
+//   sys!system battery <0-100>           - Set battery
+//   sys!system caution <type> [detail]   - Set caution
+//   sys!system mask <field> <value>      - Edit mask mode
+//   sys!system conditions <type> list|new|delete - Manage conditions
 //   sys!system privacy                   - Show privacy settings
-//   sys!system privacy <field> <public|private> - Set privacy
-//   sys!system list                      - List all alters
-//   sys!system list -full                - List all alters with details
+//   sys!system privacy <field> <pub|priv> - Set privacy
+//   sys!system privacy buckets list|create|delete|show|addfriend|removefriend - Buckets
+//   sys!system list [-full]              - List all alters
 //   sys!system fronter                   - Show current fronter(s)
 //   sys!system delete                    - Delete your system
 //   sys!system <field> -clear            - Clear a field
@@ -34,6 +49,7 @@ const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
+const { PrivacyBucket } = require('../../schemas/settings');
 
 const utils = require('../../functions/bot_utils');
 
@@ -107,6 +123,64 @@ module.exports = {
             
             case 'privacy':
                 return handlePrivacy(message, parsed);
+            
+            case 'closedname':
+            case 'cn':
+                return handleClosedName(message, parsed);
+            
+            case 'sync':
+                return handleSync(message, parsed);
+            
+            case 'autoshare':
+            case 'sharenotes':
+                return handleAutoshare(message, parsed);
+            
+            case 'cooldown':
+            case 'cd':
+                return handleCooldown(message, parsed);
+            
+            case 'friendautobucket':
+            case 'fab':
+                return handleFriendAutoBucket(message, parsed);
+            
+            case 'proxylayout':
+            case 'layout':
+                return handleProxyLayout(message, parsed);
+            
+            case 'proxybreak':
+            case 'break':
+                return handleProxyBreak(message, parsed);
+            
+            case 'frontstatus':
+            case 'fs':
+                return handleFrontStatus(message, parsed);
+            
+            case 'battery':
+            case 'bat':
+                return handleBattery(message, parsed);
+            
+            case 'caution':
+                return handleCaution(message, parsed);
+            
+            case 'mask':
+                return handleMask(message, parsed);
+            
+            case 'proxystyle':
+            case 'ps':
+                return handleProxyStyle(message, parsed);
+            
+            case 'casesensitive':
+            case 'cs':
+                return handleCaseSensitive(message, parsed);
+            
+            case 'pronounseparator':
+            case 'pronounsep':
+            case 'psep':
+                return handlePronounSeparator(message, parsed);
+            
+            case 'conditions':
+            case 'condition':
+                return handleConditions(message, parsed);
             
             case 'list':
                 return handleList(message, parsed);
@@ -273,23 +347,22 @@ async function handleAvatar(message, parsed) {
     if (!await utils.requireSystem(message, system)) return;
 
     if (parsed.clear) {
+        if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key);
         system.avatar = undefined;
         await system.save();
         return utils.success(message, 'System avatar cleared.');
     }
 
-    // Check for attachment
     const attachment = message.attachments.first();
-    const url = attachment?.url || parsed._positional[1] || parsed.avatar;
+    const urlArg = parsed._positional[1] || parsed.avatar;
 
-    if (!url) {
-        return utils.error(message, 'Please provide an avatar URL or upload an image: `sys!system avatar <url>`');
-    }
-
-    system.avatar = { url };
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'System', message.author.id);
+    if (!result.success) return utils.error(message, result.message);
+    if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key);
+    system.avatar = result.media;
     await system.save();
 
-    return utils.success(message, 'System avatar updated.');
+    return utils.success(message, 'System avatar uploaded and updated.');
 }
 
 async function handleBanner(message, parsed) {
@@ -297,24 +370,24 @@ async function handleBanner(message, parsed) {
     if (!await utils.requireSystem(message, system)) return;
 
     if (parsed.clear) {
+        if (system.discord?.image?.banner?.r2Key) await utils.deleteFromR2(system.discord.image.banner.r2Key);
         if (system.discord?.image) system.discord.image.banner = undefined;
         await system.save();
         return utils.success(message, 'System banner cleared.');
     }
 
     const attachment = message.attachments.first();
-    const url = attachment?.url || parsed._positional[1] || parsed.banner;
+    const urlArg = parsed._positional[1] || parsed.banner;
 
-    if (!url) {
-        return utils.error(message, 'Please provide a banner URL or upload an image: `sys!system banner <url>`');
-    }
-
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'System', message.author.id);
+    if (!result.success) return utils.error(message, result.message);
+    if (system.discord?.image?.banner?.r2Key) await utils.deleteFromR2(system.discord.image.banner.r2Key);
     system.discord = system.discord || {};
     system.discord.image = system.discord.image || {};
-    system.discord.image.banner = { url };
+    system.discord.image.banner = result.media;
     await system.save();
 
-    return utils.success(message, 'System banner updated.');
+    return utils.success(message, 'System banner uploaded and updated.');
 }
 
 async function handleColor(message, parsed) {
@@ -525,18 +598,30 @@ async function handlePrivacy(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
 
-    const field = parsed._positional[1]?.toLowerCase();
+    const firstArg = parsed._positional[1]?.toLowerCase();
+
+    // Bucket CRUD sub-system
+    if (firstArg === 'buckets' || firstArg === 'bucket') {
+        return handlePrivacyBuckets(message, parsed, system);
+    }
+
+    // Per-bucket field setting: sys!system privacy bucket:<name> <field> <public|private>
+    if (firstArg && firstArg.startsWith('bucket:')) {
+        return handlePrivacyBucketField(message, parsed, system, firstArg.slice(7));
+    }
+
+    // Default bucket field setting: sys!system privacy <field> <public|private>
+    const field = firstArg;
     const value = parsed._positional[2]?.toLowerCase();
 
-    // Just show privacy if no field specified
     if (!field) {
         const embed = new EmbedBuilder()
             .setColor(utils.ENTITY_COLORS.system)
             .setTitle('🔒 System Privacy Settings')
-            .setDescription('Use `sys!system privacy <field> <public|private>` to change.')
+            .setDescription('Use `sys!system privacy <field> <public|private>` to change.\nOr `sys!system privacy buckets list` to manage buckets.')
             .addFields(
-                { name: 'Fields', value: 
-                    '• description\n• avatar\n• banner\n• birthday\n• pronouns\n• metadata\n• caution\n• hidden', inline: true }
+                { name: 'Fields', value: '• description\n• avatar\n• banner\n• birthday\n• pronouns\n• metadata\n• caution\n• hidden\n• mask', inline: true },
+                { name: 'Bucket Management', value: '`sys!system privacy buckets list`\n`sys!system privacy buckets create name:"Friends"`\n`sys!system privacy buckets delete name:"Friends" -confirm`', inline: true }
             );
         return message.reply({ embeds: [embed] });
     }
@@ -550,7 +635,6 @@ async function handlePrivacy(message, parsed) {
         return utils.error(message, 'Please specify `public` or `private`: `sys!system privacy description private`');
     }
 
-    // Update privacy in default bucket
     system.setting = system.setting || {};
     system.setting.privacy = system.setting.privacy || [];
     
@@ -564,6 +648,445 @@ async function handlePrivacy(message, parsed) {
     await system.save();
 
     return utils.success(message, `**${field}** is now **${value}**`);
+}
+
+async function handlePrivacyBuckets(message, parsed, system) {
+    const subcommand = parsed._positional[2]?.toLowerCase();
+    const nameArg = parsed.name || parsed._positional.slice(3).join(' ');
+
+    if (!subcommand || subcommand === 'list') {
+        const buckets = system.privacyBuckets || [];
+        if (!buckets.length) return utils.info(message, 'No privacy buckets created yet. Use `sys!system privacy buckets create name:"Friends"`');
+        
+        const bucketDocs = await PrivacyBucket.find({ _id: { $in: buckets } });
+        const desc = bucketDocs.map(b => {
+            const friendCount = b.friends?.length || 0;
+            return `**${b.name}** — ${friendCount} friend(s)`;
+        }).join('\n');
+        return utils.info(message, `Privacy buckets:\n${desc}`);
+    }
+
+    if (subcommand === 'create' || subcommand === 'new') {
+        if (!nameArg) return utils.error(message, 'Please provide a bucket name: `sys!system privacy buckets create name:"Close Friends"`');
+        
+        const existing = await PrivacyBucket.findOne({ name: nameArg });
+        if (existing) return utils.error(message, `Bucket **${nameArg}** already exists.`);
+
+        const bucket = new PrivacyBucket({
+            _id: new mongoose.Types.ObjectId(),
+            name: nameArg,
+            friends: []
+        });
+        await bucket.save();
+
+        system.privacyBuckets = system.privacyBuckets || [];
+        system.privacyBuckets.push(bucket._id);
+        await system.save();
+
+        return utils.success(message, `Privacy bucket **${nameArg}** created.`);
+    }
+
+    if (subcommand === 'delete' || subcommand === 'remove') {
+        if (!nameArg) return utils.error(message, 'Please provide a bucket name.');
+        if (!parsed.confirm) return utils.error(message, `⚠️ Delete bucket **${nameArg}**?\nConfirm: \`sys!system privacy buckets delete name:"${nameArg}" -confirm\``);
+
+        const bucket = await PrivacyBucket.findOne({ name: nameArg });
+        if (!bucket) return utils.error(message, `Bucket **${nameArg}** not found.`);
+
+        // Remove from system
+        system.privacyBuckets = (system.privacyBuckets || []).filter(id => id.toString() !== bucket._id.toString());
+        await system.save();
+
+        // Remove privacy settings referencing this bucket
+        system.setting = system.setting || {};
+        system.setting.privacy = (system.setting.privacy || []).filter(p => p.bucket !== nameArg);
+        await system.save();
+
+        // Delete bucket
+        await PrivacyBucket.deleteOne({ _id: bucket._id });
+
+        return utils.success(message, `Privacy bucket **${nameArg}** deleted.`);
+    }
+
+    if (subcommand === 'show' || subcommand === 'view') {
+        if (!nameArg) return utils.error(message, 'Please provide a bucket name.');
+        const bucket = await PrivacyBucket.findOne({ name: nameArg });
+        if (!bucket) return utils.error(message, `Bucket **${nameArg}** not found.`);
+
+        const friends = bucket.friends || [];
+        const friendList = friends.length ? friends.map(f => {
+            const parts = [];
+            if (f.friendID) parts.push(`ID: ${f.friendID}`);
+            if (f.discordUserID) parts.push(`<@${f.discordUserID}>`);
+            if (f.discordGuildID) parts.push(`Guild: ${f.discordGuildID}`);
+            return parts.join(' • ');
+        }).join('\n') : '*No friends added*';
+
+        const embed = new EmbedBuilder()
+            .setColor(utils.ENTITY_COLORS.info)
+            .setTitle(`🔒 Bucket: ${bucket.name}`)
+            .addFields(
+                { name: 'Friends', value: friendList, inline: false }
+            );
+        return message.reply({ embeds: [embed] });
+    }
+
+    if (subcommand === 'addfriend' || subcommand === 'add') {
+        const bucketName = parsed.name || parsed._positional.slice(3).join(' ');
+        if (!bucketName) return utils.error(message, 'Please provide a bucket name.');
+        
+        const bucket = await PrivacyBucket.findOne({ name: bucketName });
+        if (!bucket) return utils.error(message, `Bucket **${bucketName}** not found.`);
+
+        // Get user from mention
+        const userMention = message.mentions.users.first();
+        if (!userMention) return utils.error(message, 'Please mention a user to add: `sys!system privacy buckets addfriend name:"Friends" @User`');
+
+        bucket.friends = bucket.friends || [];
+        if (bucket.friends.find(f => f.discordUserID === userMention.id)) return utils.error(message, 'User is already in this bucket.');
+
+        bucket.friends.push({
+            friendID: '', // Will be set when they become a friend
+            discordUserID: userMention.id,
+            discordGuildID: message.guildId || ''
+        });
+        await bucket.save();
+
+        return utils.success(message, `Added **${userMention.username}** to bucket **${bucketName}**.`);
+    }
+
+    if (subcommand === 'removefriend' || subcommand === 'remove') {
+        const bucketName = parsed.name || parsed._positional.slice(3).join(' ');
+        if (!bucketName) return utils.error(message, 'Please provide a bucket name.');
+        
+        const bucket = await PrivacyBucket.findOne({ name: bucketName });
+        if (!bucket) return utils.error(message, `Bucket **${bucketName}** not found.`);
+
+        const userMention = message.mentions.users.first();
+        if (!userMention) return utils.error(message, 'Please mention a user to remove.');
+
+        bucket.friends = bucket.friends || [];
+        const idx = bucket.friends.findIndex(f => f.discordUserID === userMention.id);
+        if (idx === -1) return utils.error(message, 'User is not in this bucket.');
+
+        bucket.friends.splice(idx, 1);
+        await bucket.save();
+
+        return utils.success(message, `Removed **${userMention.username}** from bucket **${bucketName}**.`);
+    }
+
+    return utils.error(message, `Unknown bucket action: ${subcommand}. Use: list, create, delete, show, addfriend, removefriend`);
+}
+
+async function handlePrivacyBucketField(message, parsed, system, bucketName) {
+    const field = parsed._positional[2]?.toLowerCase();
+    const value = parsed._positional[3]?.toLowerCase();
+    const validFields = ['description', 'avatar', 'banner', 'birthday', 'pronouns', 'metadata', 'caution', 'hidden', 'mask'];
+
+    if (!field || !validFields.includes(field)) {
+        return utils.error(message, `Invalid field. Valid: ${validFields.join(', ')}`);
+    }
+    if (!value || !['public', 'private'].includes(value)) {
+        return utils.error(message, 'Specify `public` or `private`.');
+    }
+
+    system.setting = system.setting || {};
+    system.setting.privacy = system.setting.privacy || [];
+    
+    let bucketPrivacy = system.setting.privacy.find(p => p.bucket === bucketName);
+    if (!bucketPrivacy) {
+        bucketPrivacy = { bucket: bucketName, settings: {} };
+        system.setting.privacy.push(bucketPrivacy);
+    }
+    
+    bucketPrivacy.settings[field] = value === 'private';
+    await system.save();
+
+    return utils.success(message, `**${field}** is now **${value}** in bucket **${bucketName}**`);
+}
+
+async function handleClosedName(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    if (parsed.clear) { system.name.closedNameDisplay = undefined; await system.save(); return utils.success(message, 'Closed name display cleared.'); }
+    const newName = parsed._positional.slice(1).join(' ');
+    if (!newName) return utils.error(message, 'Please provide a closed name display.');
+    system.name = system.name || {};
+    system.name.closedNameDisplay = newName;
+    await system.save();
+    return utils.success(message, `Closed name display set to **${newName}**`);
+}
+
+async function handleSync(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    const val = parsed._positional[1]?.toLowerCase();
+    if (!val || !['true', 'false', 'on', 'off', 'yes', 'no'].includes(val)) return utils.error(message, 'Specify `true` or `false`.');
+    system.syncWithApps = system.syncWithApps || {};
+    system.syncWithApps.discord = ['true', 'on', 'yes'].includes(val);
+    await system.save();
+    return utils.success(message, `Discord sync is now **${system.syncWithApps.discord ? 'enabled' : 'disabled'}**`);
+}
+
+async function handleAutoshare(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    const val = parsed._positional[1]?.toLowerCase();
+    if (!val || !['true', 'false', 'on', 'off', 'yes', 'no'].includes(val)) return utils.error(message, 'Specify `true` or `false`.');
+    system.setting = system.setting || {};
+    system.setting.autoshareNotestoUsers = ['true', 'on', 'yes'].includes(val);
+    await system.save();
+    return utils.success(message, `Auto-share notes is now **${system.setting.autoshareNotestoUsers ? 'enabled' : 'disabled'}**`);
+}
+
+async function handleCooldown(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    const val = parseInt(parsed._positional[1]);
+    if (isNaN(val) || val < 0) return utils.error(message, 'Please provide a cooldown in seconds (0+).');
+    system.setting = system.setting || {};
+    system.setting.proxyCoolDown = val;
+    await system.save();
+    return utils.success(message, `Proxy cooldown set to **${val}s** (${Math.floor(val / 60)}m ${val % 60}s)`);
+}
+
+async function handleFriendAutoBucket(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    if (parsed.clear) { system.setting = system.setting || {}; system.setting.friendAutoBucket = undefined; await system.save(); return utils.success(message, 'Friend auto-bucket cleared.'); }
+    const bucketName = parsed._positional.slice(1).join(' ');
+    if (!bucketName) return utils.error(message, 'Please provide a bucket name.');
+    system.setting = system.setting || {};
+    system.setting.friendAutoBucket = bucketName;
+    await system.save();
+    return utils.success(message, `Friend auto-bucket set to **${bucketName}**`);
+}
+
+async function handleProxyLayout(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    const entityType = parsed._positional[1]?.toLowerCase();
+    if (!entityType || !['alter', 'state', 'group'].includes(entityType)) return utils.error(message, 'Specify entity type: `alter`, `state`, or `group`.');
+    if (parsed.clear) { system.discord = system.discord || {}; system.discord.proxylayout = system.discord.proxylayout || {}; system.discord.proxylayout[entityType] = undefined; await system.save(); return utils.success(message, `Proxy layout for ${entityType} cleared.`); }
+    const layout = parsed._positional.slice(2).join(' ');
+    if (!layout) return utils.error(message, 'Please provide a layout string. Use `{name}`, `{sys-name}`, `{pronouns}`, `{caution}`, `{tag1}`, etc.');
+    system.discord = system.discord || {};
+    system.discord.proxylayout = system.discord.proxylayout || {};
+    system.discord.proxylayout[entityType] = layout;
+    await system.save();
+    return utils.success(message, `Proxy layout for ${entityType} set to \`${layout}\``);
+}
+
+async function handleProxyBreak(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    const val = parsed._positional[1]?.toLowerCase();
+    if (!val || !['true', 'false', 'on', 'off', 'yes', 'no'].includes(val)) return utils.error(message, 'Specify `true` or `false`.');
+    system.proxy = system.proxy || {};
+    system.proxy.break = ['true', 'on', 'yes'].includes(val);
+    await system.save();
+    return utils.success(message, `Proxy break is now **${system.proxy.break ? 'active' : 'inactive'}**`);
+}
+
+async function handleFrontStatus(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    if (parsed.clear) { system.front = system.front || { layers: [] }; system.front.status = undefined; await system.save(); return utils.success(message, 'Front status cleared.'); }
+    const status = parsed._positional.slice(1).join(' ');
+    if (!status) return utils.error(message, 'Please provide a front status.');
+    system.front = system.front || { layers: [] };
+    system.front.status = status;
+    await system.save();
+    return utils.success(message, `Front status set to **${status}**`);
+}
+
+async function handleBattery(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    if (parsed.clear) { system.battery = undefined; await system.save(); return utils.success(message, 'Battery cleared.'); }
+    const val = parseInt(parsed._positional[1]);
+    if (isNaN(val) || val < 0 || val > 100) return utils.error(message, 'Please provide a battery level (0-100).');
+    system.battery = val;
+    await system.save();
+    return utils.success(message, `System battery set to **${val}** ${utils.getBatteryEmoji(val)}`);
+}
+
+async function handleCaution(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    if (parsed.clear) { system.caution = undefined; await system.save(); return utils.success(message, 'System caution cleared.'); }
+    const type = parsed._positional[1];
+    const detail = parsed._positional.slice(2).join(' ');
+    if (!type) return utils.error(message, 'Please provide a caution type.');
+    system.caution = { c_type: type, detail: detail || undefined };
+    await system.save();
+    return utils.success(message, `System caution set to **${type}**`);
+}
+
+async function handleMask(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    const field = parsed._positional[1]?.toLowerCase();
+    if (!field) {
+        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.system).setTitle('🎭 System Mask Settings')
+            .setDescription(`Use \`sys!system mask <field> <value>\`\nFields: name, displayname (dn), description, color, avatar, banner, proxyavatar (pav), pronouns`)
+            .addFields(
+                { name: 'Current Mask', value: `Name: ${system.mask?.name?.display || system.mask?.name?.indexable || '*not set*'}\nColor: ${system.mask?.color || '*not set*'}\nDescription: ${system.mask?.description || '*not set*'}\nPronouns: ${system.mask?.pronouns || '*not set*'}`, inline: false }
+            );
+        return message.reply({ embeds: [embed] });
+    }
+    system.mask = system.mask || {};
+    if (field === 'name') {
+        const val = parsed._positional.slice(2).join(' ');
+        if (!val) return utils.error(message, 'Please provide a mask name.');
+        system.mask.name = system.mask.name || {};
+        system.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '');
+        system.mask.name.display = val;
+        await system.save();
+        return utils.success(message, `Mask name set to **${val}**`);
+    }
+    if (field === 'displayname' || field === 'dn') {
+        if (parsed.clear) { system.mask.name = system.mask.name || {}; system.mask.name.display = undefined; await system.save(); return utils.success(message, 'Mask display name cleared.'); }
+        const val = parsed._positional.slice(2).join(' ');
+        if (!val) return utils.error(message, 'Please provide a mask display name.');
+        system.mask.name = system.mask.name || {};
+        system.mask.name.display = val;
+        await system.save();
+        return utils.success(message, `Mask display name set to **${val}**`);
+    }
+    if (field === 'description' || field === 'desc') {
+        if (parsed.clear) { system.mask.description = undefined; await system.save(); return utils.success(message, 'Mask description cleared.'); }
+        const val = parsed._positional.slice(2).join(' ');
+        if (!val) return utils.error(message, 'Please provide a mask description.');
+        system.mask.description = val;
+        await system.save();
+        return utils.success(message, 'Mask description updated.');
+    }
+    if (field === 'color' || field === 'colour') {
+        if (parsed.clear) { system.mask.color = undefined; await system.save(); return utils.success(message, 'Mask color cleared.'); }
+        const val = utils.normalizeColor(parsed._positional[2]);
+        if (!val) return utils.error(message, 'Please provide a valid hex color.');
+        system.mask.color = val;
+        await system.save();
+        return utils.success(message, `Mask color set to **${val}**`);
+    }
+    if (field === 'pronouns' || field === 'prns') {
+        if (parsed.clear) { system.mask.pronouns = undefined; await system.save(); return utils.success(message, 'Mask pronouns cleared.'); }
+        const val = parsed._positional.slice(2).join(' ');
+        if (!val) return utils.error(message, 'Please provide mask pronouns.');
+        system.mask.pronouns = val;
+        await system.save();
+        return utils.success(message, `Mask pronouns set to **${val}**`);
+    }
+    if (field === 'avatar' || field === 'icon' || field === 'av' || field === 'pfp') {
+        if (parsed.clear) { system.mask.avatar = undefined; await system.save(); return utils.success(message, 'Mask avatar cleared.'); }
+        const url = message.attachments.first()?.url || parsed._positional[2];
+        if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
+        system.mask.avatar = { url };
+        await system.save();
+        return utils.success(message, 'Mask avatar updated.');
+    }
+    if (field === 'banner') {
+        if (parsed.clear) { if (system.mask.discord) system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.banner = undefined; await system.save(); return utils.success(message, 'Mask banner cleared.'); }
+        const url = message.attachments.first()?.url || parsed._positional[2];
+        if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
+        system.mask.discord = system.mask.discord || {};
+        system.mask.discord.image = system.mask.discord.image || {};
+        system.mask.discord.image.banner = { url };
+        await system.save();
+        return utils.success(message, 'Mask banner updated.');
+    }
+    if (field === 'proxyavatar' || field === 'pav') {
+        if (parsed.clear) { if (system.mask.discord) system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.proxyAvatar = undefined; await system.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        const url = message.attachments.first()?.url || parsed._positional[2];
+        if (!url) return utils.error(message, 'Please provide a URL.');
+        system.mask.discord = system.mask.discord || {};
+        system.mask.discord.image = system.mask.discord.image || {};
+        system.mask.discord.image.proxyAvatar = { url };
+        await system.save();
+        return utils.success(message, 'Mask proxy avatar updated.');
+    }
+    return utils.error(message, `Unknown mask field: ${field}. Use: name, displayname, description, color, pronouns, avatar, banner, proxyavatar`);
+}
+
+async function handleProxyStyle(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    const val = parsed._positional.slice(1).join(' ');
+    if (!val) {
+        const current = system.proxy?.style || 'off';
+        return utils.info(message, `Current proxy style: **${current}**\nOptions: \`off\`, \`last\`, \`front\`, or an entity name.\nUsage: \`sys!system proxystyle <style>\``);
+    }
+    if (parsed.clear) { system.proxy = system.proxy || {}; system.proxy.style = 'off'; await system.save(); return utils.success(message, 'Proxy style reset to **off**.'); }
+    system.proxy = system.proxy || {};
+    system.proxy.style = val;
+    await system.save();
+    return utils.success(message, `Proxy style set to **${val}**`);
+}
+
+async function handleCaseSensitive(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    const val = parsed._positional[1]?.toLowerCase();
+    if (!val || !['true', 'false', 'on', 'off', 'yes', 'no'].includes(val)) {
+        const current = system.proxy?.caseSensitive ? 'on' : 'off';
+        return utils.info(message, `Case sensitivity is currently **${current}**.\nUsage: \`sys!system casesensitive <true|false>\``);
+    }
+    system.proxy = system.proxy || {};
+    system.proxy.caseSensitive = ['true', 'on', 'yes'].includes(val);
+    await system.save();
+    return utils.success(message, `Case sensitivity is now **${system.proxy.caseSensitive ? 'on' : 'off'}**`);
+}
+
+async function handlePronounSeparator(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    if (parsed.clear) { system.discord = system.discord || {}; system.discord.pronounSeparator = undefined; await system.save(); return utils.success(message, 'Pronoun separator cleared.'); }
+    const sep = parsed._positional.slice(1).join(' ');
+    if (!sep) {
+        const current = system.discord?.pronounSeparator || '/';
+        return utils.info(message, `Current pronoun separator: **${current}**\nUsage: \`sys!system pronounseparator <char>\``);
+    }
+    system.discord = system.discord || {};
+    system.discord.pronounSeparator = sep;
+    await system.save();
+    return utils.success(message, `Pronoun separator set to **${sep}**`);
+}
+
+async function handleConditions(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    const entityType = parsed._positional[1]?.toLowerCase();
+    if (!entityType || !['alter', 'state', 'group'].includes(entityType)) return utils.error(message, 'Specify entity type: `alter`, `state`, or `group`.');
+    const action = parsed._positional[2]?.toLowerCase();
+    if (!action || action === 'list') {
+        const conditions = system[entityType === 'alter' ? 'alters' : entityType === 'state' ? 'states' : 'groups']?.conditions || [];
+        if (!conditions.length) return utils.info(message, `No ${entityType} conditions set.`);
+        const desc = conditions.map(c => `**${c.name}** (hide: ${c.settings?.hide_to_self ? 'yes' : 'no'}, count: ${c.settings?.include_in_Count ? 'yes' : 'no'})`).join('\n');
+        return utils.info(message, `${entityType.charAt(0).toUpperCase() + entityType.slice(1)} conditions:\n${desc}`);
+    }
+    if (action === 'new') {
+        const name = parsed._positional.slice(3).join(' ');
+        if (!name) return utils.error(message, 'Please provide a condition name.');
+        const container = system[entityType === 'alter' ? 'alters' : entityType === 'state' ? 'states' : 'groups'];
+        container.conditions = container.conditions || [];
+        if (container.conditions.find(c => c.name?.toLowerCase() === name.toLowerCase())) return utils.error(message, `Condition **${name}** already exists.`);
+        container.conditions.push({ name, settings: { hide_to_self: false, include_in_Count: true } });
+        await system.save();
+        return utils.success(message, `Condition **${name}** added for ${entityType}.`);
+    }
+    if (action === 'delete') {
+        const name = parsed._positional.slice(3).join(' ');
+        if (!name) return utils.error(message, 'Please provide a condition name.');
+        const container = system[entityType === 'alter' ? 'alters' : entityType === 'state' ? 'states' : 'groups'];
+        container.conditions = container.conditions || [];
+        const idx = container.conditions.findIndex(c => c.name?.toLowerCase() === name.toLowerCase());
+        if (idx === -1) return utils.error(message, `Condition **${name}** not found.`);
+        container.conditions.splice(idx, 1);
+        await system.save();
+        return utils.success(message, `Condition **${name}** deleted for ${entityType}.`);
+    }
+    return utils.error(message, `Unknown action: ${action}. Use: list, new, delete`);
 }
 
 async function handleList(message, parsed) {
@@ -736,6 +1259,7 @@ async function handleHelp(message) {
             { usage: 'sys!system new [name]', description: 'Create a new system' },
             { usage: 'sys!system rename <name>', description: 'Change indexable name' },
             { usage: 'sys!system displayname <name>', description: 'Change display name' },
+            { usage: 'sys!system closedname <name>', description: 'Set closed name display' },
             { usage: 'sys!system description <text>', description: 'Set description' },
             { usage: 'sys!system avatar <url>', description: 'Set avatar (or upload image)' },
             { usage: 'sys!system banner <url>', description: 'Set banner' },
@@ -747,7 +1271,24 @@ async function handleHelp(message) {
             { usage: 'sys!system dsm <type>', description: 'Set DSM classification' },
             { usage: 'sys!system icd <type>', description: 'Set ICD classification' },
             { usage: 'sys!system synonym <sing> <plur>', description: 'Set alter synonyms' },
-            { usage: 'sys!system privacy', description: 'View/edit privacy settings' },
+            { usage: 'sys!system privacy <field> <pub|priv>', description: 'View/edit privacy settings' },
+            { usage: 'sys!system privacy buckets list', description: 'List privacy buckets' },
+            { usage: 'sys!system privacy buckets create name:"N"', description: 'Create privacy bucket' },
+            { usage: 'sys!system privacy buckets delete name:"N" -confirm', description: 'Delete privacy bucket' },
+            { usage: 'sys!system privacy buckets addfriend name:"N" @User', description: 'Add friend to bucket' },
+            { usage: 'sys!system privacy buckets removefriend name:"N" @User', description: 'Remove friend from bucket' },
+            { usage: 'sys!system privacy bucket:<name> <field> <pub|priv>', description: 'Set per-bucket privacy' },
+            { usage: 'sys!system sync <true|false>', description: 'Toggle Discord sync' },
+            { usage: 'sys!system autoshare <true|false>', description: 'Toggle auto-share notes' },
+            { usage: 'sys!system cooldown <seconds>', description: 'Set proxy cooldown' },
+            { usage: 'sys!system friendautobucket <name>', description: 'Set friend auto-bucket' },
+            { usage: 'sys!system proxylayout <type> <layout>', description: 'Set proxy layout' },
+            { usage: 'sys!system proxybreak <true|false>', description: 'Toggle proxy break' },
+            { usage: 'sys!system frontstatus <status>', description: 'Set front status' },
+            { usage: 'sys!system battery <0-100>', description: 'Set system battery' },
+            { usage: 'sys!system caution <type> [detail]', description: 'Set system caution' },
+            { usage: 'sys!system mask <field> <value>', description: 'Edit mask mode settings' },
+            { usage: 'sys!system conditions <type> list|new|delete', description: 'Manage conditions' },
             { usage: 'sys!system list [-full]', description: 'List all alters' },
             { usage: 'sys!system fronter', description: 'Show current fronter(s)' },
             { usage: 'sys!system delete -confirm', description: 'Delete your system' },

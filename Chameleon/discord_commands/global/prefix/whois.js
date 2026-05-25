@@ -13,6 +13,7 @@ const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
+const redis = require('../../redis');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {
@@ -38,10 +39,32 @@ module.exports = {
             return utils.error(message, 'Please provide a message ID, link, or reply to a proxied message.\n\nUsage: `sys!whois <message_id|link>` or reply to a message.');
         }
 
-        // Look up the message in our database
-        const msgRecord = await Message.findOne({
-            discord_webhook_message_id: targetMessageId
-        });
+        // Look up the message — Redis first, MongoDB fallback
+        let msgRecord = null;
+        const cached = await redis.get(`msg:${targetMessageId}`);
+        if (cached) {
+            msgRecord = JSON.parse(cached);
+        }
+        if (!msgRecord) {
+            msgRecord = await Message.findOne({
+                discord_webhook_message_id: targetMessageId
+            });
+            if (msgRecord) {
+                const cacheData = {
+                    discord_webhook_message_id: msgRecord.discord_webhook_message_id,
+                    discord_channel_id: msgRecord.discord_channel_id,
+                    discord_user_id: msgRecord.discord_user_id,
+                    proxy_type: msgRecord.proxy_type,
+                    proxy_id: msgRecord.proxy_id?.toString(),
+                    content: msgRecord.content,
+                    attachments: msgRecord.attachments || [],
+                    createdAt: msgRecord.createdAt,
+                    editedAt: msgRecord.editedAt,
+                    proxy_matched: msgRecord.proxy_matched
+                };
+                await redis.set(`msg:${targetMessageId}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
+            }
+        }
 
         if (!msgRecord) {
             return utils.error(message, 'This doesn\'t appear to be a proxied message, or it\'s not in our records.');

@@ -1,5 +1,26 @@
 // sys!state - State management prefix command
 // States are similar to alters but represent different modes/states of being
+//
+// USAGE:
+//   sys!state <n>                              - View a state
+//   sys!state new <n>                          - Create a state
+//   sys!state list [-full]                     - List all states
+//   sys!state <n> displayname|dn <name>        - Set display name
+//   sys!state <n> closedname|cn <name>         - Set closed name display
+//   sys!state <n> description <text>           - Set description
+//   sys!state <n> avatar|banner <url>          - Set media
+//   sys!state <n> alters add|remove <alter>    - Link alters
+//   sys!state <n> proxy add|remove <tag>       - Manage proxies
+//   sys!state <n> sync <true|false>            - Toggle Discord sync
+//   sys!state <n> defaultstatus <s>            - Set default shift status
+//   sys!state <n> defaultbattery <0-100>       - Set default shift battery
+//   sys!state <n> caution <type> [detail]      - Set caution
+//   sys!state <n> triggers add|remove <text>   - Manage triggers
+//   sys!state <n> mask <field> <value>         - Edit mask mode
+//   sys!state <n> remission                    - Toggle remission
+//   sys!state <n> privacy <field> <pub|priv>   - Set privacy
+//   sys!state <n> privacy bucket:<name> <f> <v> - Per-bucket privacy
+//   sys!state <n> delete -confirm              - Delete state
 
 const { EmbedBuilder } = require('discord.js');
 const System = require('../../../schemas/system');
@@ -27,6 +48,7 @@ module.exports = {
         const handlers = {
             'rename': handleRename, 'name': handleRename,
             'displayname': handleDisplayName, 'dn': handleDisplayName,
+            'closedname': handleClosedName, 'cn': handleClosedName,
             'description': handleDescription, 'desc': handleDescription,
             'avatar': handleAvatar, 'icon': handleAvatar, 'av': handleAvatar,
             'banner': handleBanner,
@@ -38,7 +60,12 @@ module.exports = {
             'alters': handleAlters, 'alter': handleAlters,
             'condition': handleCondition, 'cond': handleCondition,
             'caution': handleCaution,
+            'triggers': handleTriggers, 'trigger': handleTriggers,
             'privacy': handlePrivacy,
+            'sync': handleSync,
+            'defaultstatus': handleDefaultStatus, 'ds': handleDefaultStatus,
+            'defaultbattery': handleDefaultBattery, 'db': handleDefaultBattery,
+            'mask': handleMask,
             'delete': handleDelete,
             'remission': handleRemission,
             'id': handleId
@@ -131,24 +158,30 @@ async function handleDescription(message, parsed, stateName) {
 async function handleAvatar(message, parsed, stateName) {
     const { state } = await getState(message, stateName);
     if (!state) return;
-    if (parsed.clear) { state.avatar = undefined; await state.save(); return utils.success(message, 'Avatar cleared.'); }
-    const url = message.attachments.first()?.url || parsed._positional[2];
-    if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
-    state.avatar = { url };
+    if (parsed.clear) { if (state.avatar?.r2Key) await utils.deleteFromR2(state.avatar.r2Key); state.avatar = undefined; await state.save(); return utils.success(message, 'Avatar cleared.'); }
+    const attachment = message.attachments.first();
+    const urlArg = parsed._positional[2];
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'State', message.author.id);
+    if (!result.success) return utils.error(message, result.message);
+    if (state.avatar?.r2Key) await utils.deleteFromR2(state.avatar.r2Key);
+    state.avatar = result.media;
     await state.save();
-    return utils.success(message, 'Avatar updated.');
+    return utils.success(message, 'Avatar uploaded and updated.');
 }
 
 async function handleBanner(message, parsed, stateName) {
     const { state } = await getState(message, stateName);
     if (!state) return;
-    if (parsed.clear) { if (state.discord?.image) state.discord.image.banner = undefined; await state.save(); return utils.success(message, 'Banner cleared.'); }
-    const url = message.attachments.first()?.url || parsed._positional[2];
-    if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
+    if (parsed.clear) { if (state.discord?.image?.banner?.r2Key) await utils.deleteFromR2(state.discord.image.banner.r2Key); if (state.discord?.image) state.discord.image.banner = undefined; await state.save(); return utils.success(message, 'Banner cleared.'); }
+    const attachment = message.attachments.first();
+    const urlArg = parsed._positional[2];
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'State', message.author.id);
+    if (!result.success) return utils.error(message, result.message);
+    if (state.discord?.image?.banner?.r2Key) await utils.deleteFromR2(state.discord.image.banner.r2Key);
     state.discord = state.discord || {}; state.discord.image = state.discord.image || {};
-    state.discord.image.banner = { url };
+    state.discord.image.banner = result.media;
     await state.save();
-    return utils.success(message, 'Banner updated.');
+    return utils.success(message, 'Banner uploaded and updated.');
 }
 
 async function handleColor(message, parsed, stateName) {
@@ -301,24 +334,187 @@ async function handleCaution(message, parsed, stateName) {
     return utils.success(message, `Caution set to **${type}**`);
 }
 
-async function handlePrivacy(message, parsed, stateName) {
+async function handleClosedName(message, parsed, stateName) {
+    const { state } = await getState(message, stateName);
+    if (!state) return;
+    if (parsed.clear) { state.name.closedNameDisplay = undefined; await state.save(); return utils.success(message, 'Closed name display cleared.'); }
+    const newName = parsed._positional.slice(2).join(' ');
+    if (!newName) return utils.error(message, 'Please provide a closed name display.');
+    state.name.closedNameDisplay = newName;
+    await state.save();
+    return utils.success(message, `Closed name display set to **${newName}**`);
+}
+
+async function handleSync(message, parsed, stateName) {
+    const { state } = await getState(message, stateName);
+    if (!state) return;
+    const val = parsed._positional[2]?.toLowerCase();
+    if (!val || !['true', 'false', 'on', 'off', 'yes', 'no'].includes(val)) return utils.error(message, 'Specify `true` or `false`.');
+    state.syncWithApps = state.syncWithApps || {};
+    state.syncWithApps.discord = ['true', 'on', 'yes'].includes(val);
+    await state.save();
+    return utils.success(message, `Discord sync is now **${state.syncWithApps.discord ? 'enabled' : 'disabled'}**`);
+}
+
+async function handleDefaultStatus(message, parsed, stateName) {
+    const { state } = await getState(message, stateName);
+    if (!state) return;
+    if (parsed.clear) { state.setting = state.setting || {}; state.setting.default_status = undefined; await state.save(); return utils.success(message, 'Default status cleared.'); }
+    const status = parsed._positional.slice(2).join(' ');
+    if (!status) return utils.error(message, 'Please provide a default status.');
+    state.setting = state.setting || {};
+    state.setting.default_status = status;
+    await state.save();
+    return utils.success(message, `Default status set to **${status}**`);
+}
+
+async function handleDefaultBattery(message, parsed, stateName) {
+    const { state } = await getState(message, stateName);
+    if (!state) return;
+    if (parsed.clear) { state.setting = state.setting || {}; state.setting.default_battery = undefined; await state.save(); return utils.success(message, 'Default battery cleared.'); }
+    const val = parseInt(parsed._positional[2]);
+    if (isNaN(val) || val < 0 || val > 100) return utils.error(message, 'Please provide a battery level (0-100).');
+    state.setting = state.setting || {};
+    state.setting.default_battery = val;
+    await state.save();
+    return utils.success(message, `Default battery set to **${val}**`);
+}
+
+async function handleTriggers(message, parsed, stateName) {
+    const { state } = await getState(message, stateName);
+    if (!state) return;
+    const action = parsed._positional[2]?.toLowerCase();
+    if (action === 'add') {
+        const trigger = parsed._positional.slice(3).join(' ');
+        if (!trigger) return utils.error(message, 'Please provide a trigger.');
+        state.caution = state.caution || {};
+        state.caution.triggers = state.caution.triggers || [];
+        state.caution.triggers.push({ text: trigger });
+        await state.save();
+        return utils.success(message, `Trigger \`${trigger}\` added.`);
+    }
+    if (action === 'remove') {
+        const trigger = parsed._positional.slice(3).join(' ');
+        if (!trigger) return utils.error(message, 'Please provide a trigger to remove.');
+        state.caution = state.caution || {};
+        state.caution.triggers = state.caution.triggers || [];
+        const idx = state.caution.triggers.findIndex(t => t.text?.toLowerCase() === trigger.toLowerCase());
+        if (idx === -1) return utils.error(message, `Trigger \`${trigger}\` not found.`);
+        state.caution.triggers.splice(idx, 1);
+        await state.save();
+        return utils.success(message, `Trigger \`${trigger}\` removed.`);
+    }
+    if (action === 'clear') {
+        state.caution = state.caution || {};
+        state.caution.triggers = [];
+        await state.save();
+        return utils.success(message, 'All triggers cleared.');
+    }
+    const triggers = state.caution?.triggers || [];
+    if (!triggers.length) return utils.info(message, 'No caution triggers set.');
+    return utils.info(message, `Triggers: ${triggers.map(t => t.text || t).join(', ')}`);
+}
+
+async function handleMask(message, parsed, stateName) {
     const { state } = await getState(message, stateName);
     if (!state) return;
     const field = parsed._positional[2]?.toLowerCase();
-    const value = parsed._positional[3]?.toLowerCase();
-    const validFields = ['description', 'avatar', 'banner', 'metadata', 'proxies', 'caution', 'hidden', 'aliases'];
     if (!field) {
-        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.state).setTitle('🔒 State Privacy')
-            .setDescription(`Use \`sys!state <n> privacy <field> <public|private>\`\nFields: ${validFields.join(', ')}`);
+        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.state).setTitle('🎭 Mask Settings')
+            .setDescription(`Use \`sys!state <n> mask <field> <value>\`\nFields: name, displayname (dn), description, color, avatar, banner, proxyavatar (pav)`)
+            .addFields(
+                { name: 'Current Mask', value: `Name: ${state.mask?.name?.display || state.mask?.name?.indexable || '*not set*'}\nColor: ${state.mask?.color || '*not set*'}\nDescription: ${state.mask?.description || '*not set*'}`, inline: false }
+            );
         return message.reply({ embeds: [embed] });
     }
-    if (!validFields.includes(field)) return utils.error(message, `Invalid field.`);
-    if (!value || !['public', 'private'].includes(value)) return utils.error(message, 'Specify `public` or `private`.');
+    state.mask = state.mask || {};
+    if (field === 'name') {
+        const val = parsed._positional.slice(3).join(' ');
+        if (!val) return utils.error(message, 'Please provide a mask name.');
+        state.mask.name = state.mask.name || {};
+        state.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '');
+        state.mask.name.display = val;
+        await state.save();
+        return utils.success(message, `Mask name set to **${val}**`);
+    }
+    if (field === 'displayname' || field === 'dn') {
+        if (parsed.clear) { state.mask.name = state.mask.name || {}; state.mask.name.display = undefined; await state.save(); return utils.success(message, 'Mask display name cleared.'); }
+        const val = parsed._positional.slice(3).join(' ');
+        if (!val) return utils.error(message, 'Please provide a mask display name.');
+        state.mask.name = state.mask.name || {};
+        state.mask.name.display = val;
+        await state.save();
+        return utils.success(message, `Mask display name set to **${val}**`);
+    }
+    if (field === 'description' || field === 'desc') {
+        if (parsed.clear) { state.mask.description = undefined; await state.save(); return utils.success(message, 'Mask description cleared.'); }
+        const val = parsed._positional.slice(3).join(' ');
+        if (!val) return utils.error(message, 'Please provide a mask description.');
+        state.mask.description = val;
+        await state.save();
+        return utils.success(message, 'Mask description updated.');
+    }
+    if (field === 'color' || field === 'colour') {
+        if (parsed.clear) { state.mask.color = undefined; await state.save(); return utils.success(message, 'Mask color cleared.'); }
+        const val = utils.normalizeColor(parsed._positional[3]);
+        if (!val) return utils.error(message, 'Please provide a valid hex color.');
+        state.mask.color = val;
+        await state.save();
+        return utils.success(message, `Mask color set to **${val}**`);
+    }
+    if (field === 'avatar' || field === 'icon' || field === 'av') {
+        if (parsed.clear) { state.mask.avatar = undefined; await state.save(); return utils.success(message, 'Mask avatar cleared.'); }
+        const url = message.attachments.first()?.url || parsed._positional[3];
+        if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
+        state.mask.avatar = { url };
+        await state.save();
+        return utils.success(message, 'Mask avatar updated.');
+    }
+    if (field === 'banner') {
+        if (parsed.clear) { if (state.mask.discord) state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.banner = undefined; await state.save(); return utils.success(message, 'Mask banner cleared.'); }
+        const url = message.attachments.first()?.url || parsed._positional[3];
+        if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
+        state.mask.discord = state.mask.discord || {};
+        state.mask.discord.image = state.mask.discord.image || {};
+        state.mask.discord.image.banner = { url };
+        await state.save();
+        return utils.success(message, 'Mask banner updated.');
+    }
+    if (field === 'proxyavatar' || field === 'pav') {
+        if (parsed.clear) { if (state.mask.discord) state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.proxyAvatar = undefined; await state.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        const url = message.attachments.first()?.url || parsed._positional[3];
+        if (!url) return utils.error(message, 'Please provide a URL.');
+        state.mask.discord = state.mask.discord || {};
+        state.mask.discord.image = state.mask.discord.image || {};
+        state.mask.discord.image.proxyAvatar = { url };
+        await state.save();
+        return utils.success(message, 'Mask proxy avatar updated.');
+    }
+    return utils.error(message, `Unknown mask field: ${field}. Use: name, displayname, description, color, avatar, banner, proxyavatar`);
+}
+
+async function handlePrivacy(message, parsed, stateName) {
+    const { state } = await getState(message, stateName);
+    if (!state) return;
+    const bucketArg = parsed._positional[2]?.toLowerCase();
+    const field = parsed._positional[3]?.toLowerCase();
+    const value = parsed._positional[4]?.toLowerCase();
+    const validFields = ['description', 'avatar', 'banner', 'metadata', 'proxies', 'caution', 'hidden', 'aliases'];
+    if (!bucketArg || !validFields.includes(bucketArg)) {
+        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.state).setTitle('🔒 State Privacy')
+            .setDescription(`Use \`sys!state <n> privacy <field> <public|private>\`\nor \`sys!state <n> privacy bucket:<name> <field> <public|private>\`\nFields: ${validFields.join(', ')}`);
+        return message.reply({ embeds: [embed] });
+    }
+    const bucketName = bucketArg.startsWith('bucket:') ? bucketArg.slice(7) : 'default';
+    const actualField = bucketArg.startsWith('bucket:') ? field : bucketArg;
+    const actualValue = bucketArg.startsWith('bucket:') ? value : field;
+    if (!validFields.includes(actualField)) return utils.error(message, `Invalid field.`);
+    if (!actualValue || !['public', 'private'].includes(actualValue)) return utils.error(message, 'Specify `public` or `private`.');
     state.setting = state.setting || {}; state.setting.privacy = state.setting.privacy || [];
-    let priv = state.setting.privacy.find(p => p.bucket === 'default');
-    if (!priv) { priv = { bucket: 'default', settings: {} }; state.setting.privacy.push(priv); }
-    priv.settings[field] = value === 'private'; await state.save();
-    return utils.success(message, `**${field}** is now **${value}**`);
+    let priv = state.setting.privacy.find(p => p.bucket === bucketName);
+    if (!priv) { priv = { bucket: bucketName, settings: {} }; state.setting.privacy.push(priv); }
+    priv.settings[actualField] = actualValue === 'private'; await state.save();
+    return utils.success(message, `**${actualField}** is now **${actualValue}** in bucket **${bucketName}**`);
 }
 
 async function handleDelete(message, parsed, stateName) {
@@ -365,11 +561,20 @@ async function handleHelp(message) {
         { usage: 'sys!state new <n>', description: 'Create new state' },
         { usage: 'sys!state <n> rename <new>', description: 'Change name' },
         { usage: 'sys!state <n> displayname <n>', description: 'Set display name' },
+        { usage: 'sys!state <n> closedname <n>', description: 'Set closed name display' },
         { usage: 'sys!state <n> description <text>', description: 'Set description' },
         { usage: 'sys!state <n> avatar <url>', description: 'Set avatar' },
         { usage: 'sys!state <n> proxy [add|remove] <tag>', description: 'Manage proxies' },
         { usage: 'sys!state <n> alters [add|remove] <alter>', description: 'Link alters' },
         { usage: 'sys!state <n> groups [add|remove] <group>', description: 'Manage groups' },
+        { usage: 'sys!state <n> caution <type> [detail]', description: 'Set caution' },
+        { usage: 'sys!state <n> triggers add|remove <text>', description: 'Manage caution triggers' },
+        { usage: 'sys!state <n> privacy <field> <pub|priv>', description: 'Set privacy (default bucket)' },
+        { usage: 'sys!state <n> privacy bucket:<name> <field> <pub|priv>', description: 'Set privacy (named bucket)' },
+        { usage: 'sys!state <n> sync <true|false>', description: 'Toggle Discord sync' },
+        { usage: 'sys!state <n> defaultstatus <status>', description: 'Set default shift status' },
+        { usage: 'sys!state <n> defaultbattery <0-100>', description: 'Set default shift battery' },
+        { usage: 'sys!state <n> mask <field> <value>', description: 'Edit mask mode settings' },
         { usage: 'sys!state <n> remission', description: 'Mark as in remission' },
         { usage: 'sys!state <n> delete -confirm', description: 'Delete state' },
         { usage: 'sys!state list [-full]', description: 'List all states' },

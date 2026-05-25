@@ -4,6 +4,7 @@ const { EmbedBuilder } = require('discord.js');
 const Message = require('../../../schemas/message');
 const System = require('../../../schemas/system');
 const User = require('../../../schemas/user');
+const redis = require('../../redis');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {
@@ -58,10 +59,15 @@ module.exports = {
             return utils.error(message, 'Please provide new content: `sys!edit [message_id] <new content>`');
         }
 
-        // Find the message record
-        const msgRecord = await Message.findOne({
-            discord_webhook_message_id: targetMessageId
-        });
+        // Find the message record — Redis first
+        let msgRecord = null;
+        const cached = await redis.get(`msg:${targetMessageId}`);
+        if (cached) {
+            msgRecord = JSON.parse(cached);
+        }
+        if (!msgRecord) {
+            msgRecord = await Message.findOne({ discord_webhook_message_id: targetMessageId });
+        }
 
         if (!msgRecord) {
             return utils.error(message, 'This doesn\'t appear to be a proxied message.');
@@ -92,10 +98,24 @@ module.exports = {
                 content: newContent
             });
 
-            // Update our record
+            // Update our record — MongoDB
             msgRecord.content = newContent;
             msgRecord.editedAt = new Date();
             await msgRecord.save();
+
+            // Update Redis cache
+            const cacheData = {
+                discord_webhook_message_id: msgRecord.discord_webhook_message_id,
+                discord_channel_id: msgRecord.discord_channel_id,
+                discord_user_id: msgRecord.discord_user_id,
+                proxy_type: msgRecord.proxy_type,
+                proxy_id: msgRecord.proxy_id?.toString(),
+                content: newContent,
+                attachments: msgRecord.attachments || [],
+                createdAt: msgRecord.createdAt,
+                editedAt: new Date()
+            };
+            await redis.set(`msg:${targetMessageId}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
 
             // React to indicate success
             await message.react('✅').catch(() => {});

@@ -1,5 +1,5 @@
-// sys!config - Server configuration (admin only)
-// This command is PREFIX ONLY - no slash command equivalent
+// sys!config / sys!settings - Server configuration (admin only)
+// Aliases: sys!config, sys!settings, sys!cfg, sys!serverconfig
 //
 // USAGE:
 //   sys!config                           - Show current server settings
@@ -24,7 +24,7 @@ const utils = require('../../functions/bot_utils');
 
 module.exports = {
     name: 'config',
-    aliases: ['cfg', 'serverconfig', 'servercfg'],
+    aliases: ['cfg', 'serverconfig', 'servercfg', 'settings'],
 
     async executeMessage(message, args) {
         // Must be in a guild

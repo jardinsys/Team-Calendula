@@ -39,7 +39,13 @@ module.exports = {
             'import': importHelp,
             'imp': importHelp,
             'convert': convertHelp,
-            'conv': convertHelp
+            'conv': convertHelp,
+            'profile': profileHelp,
+            'prof': profileHelp,
+            'friend': friendHelp,
+            'friends': friendHelp,
+            'fr': friendHelp,
+            'settings': configHelp
         };
 
         if (topic && topics[topic]) {
@@ -87,8 +93,10 @@ module.exports = {
                         '`sys!note search` - Search notes', inline: false
                 },
                 {
-                    name: '🔍 Lookup & Search', value:
+                    name: '🔍 Lookup & Social', value:
                         '`sys!whois` - Look up who sent a proxied message\n' +
+                        '`sys!profile` - View user profile\n' +
+                        '`sys!friend` - Manage friends\n' +
                         '`sys!find` - Search for members\n' +
                         '`sys!random` - Show a random member', inline: false
                 },
@@ -125,6 +133,7 @@ function systemHelp() {
             {
                 name: 'Edit Info', value:
                     '`sys!system displayname <n>` - Set display name\n' +
+                    '`sys!system closedname <n>` - Set closed name display\n' +
                     '`sys!system description <text>` - Set description\n' +
                     '`sys!system avatar <url>` - Set avatar\n' +
                     '`sys!system color <hex>` - Set color\n' +
@@ -138,10 +147,34 @@ function systemHelp() {
                     '`sys!system synonym <sing> <plur>` - Set alter synonyms', inline: false
             },
             {
+                name: 'Proxy & Front', value:
+                    '`sys!system cooldown <seconds>` - Set proxy cooldown\n' +
+                    '`sys!system proxybreak <true|false>` - Toggle proxy break\n' +
+                    '`sys!system proxylayout <type> <layout>` - Set proxy layout\n' +
+                    '`sys!system proxystyle <off|last|front|name>` - Set proxy style\n' +
+                    '`sys!system casesensitive <true|false>` - Toggle case sensitivity\n' +
+                    '`sys!system frontstatus <status>` - Set front status\n' +
+                    '`sys!system battery <0-100>` - Set system battery', inline: false
+            },
+            {
+                name: 'Settings & Privacy', value:
+                    '`sys!system sync <true|false>` - Toggle Discord sync\n' +
+                    '`sys!system autoshare <true|false>` - Toggle auto-share notes\n' +
+                    '`sys!system friendautobucket <name>` - Set friend auto-bucket\n' +
+                    '`sys!system pronounseparator <char>` - Set pronoun separator\n' +
+                    '`sys!system privacy <field> <pub|priv>` - Set privacy\n' +
+                    '`sys!system privacy buckets list` - Manage privacy buckets', inline: false
+            },
+            {
+                name: 'Mask & Conditions', value:
+                    '`sys!system mask <field> <value>` - Edit mask mode\n' +
+                    '`sys!system conditions <type> list|new|delete` - Manage conditions', inline: false
+            },
+            {
                 name: 'Lists & Info', value:
                     '`sys!system list [-full]` - List alters\n' +
                     '`sys!system fronter` - Show current front\n' +
-                    '`sys!system privacy` - Manage privacy', inline: false
+                    '`sys!system caution <type> [detail]` - Set system caution', inline: false
             }
         );
 }
@@ -161,6 +194,7 @@ function alterHelp() {
             {
                 name: 'Edit Info', value:
                     '`sys!alter <n> displayname <n>` - Set display name\n' +
+                    '`sys!alter <n> closedname <n>` - Set closed name display\n' +
                     '`sys!alter <n> description <text>` - Set description\n' +
                     '`sys!alter <n> avatar <url>` - Set avatar\n' +
                     '`sys!alter <n> color <hex>` - Set color\n' +
@@ -174,7 +208,21 @@ function alterHelp() {
                     '`sys!alter <n> groups [add|remove] <group>` - Manage groups', inline: false
             },
             {
-                name: 'Special', value:
+                name: 'Front & Settings', value:
+                    '`sys!alter <n> sync <true|false>` - Toggle Discord sync\n' +
+                    '`sys!alter <n> defaultstatus <status>` - Set default shift status\n' +
+                    '`sys!alter <n> defaultbattery <0-100>` - Set default shift battery', inline: false
+            },
+            {
+                name: 'Mask & Privacy', value:
+                    '`sys!alter <n> mask <field> <value>` - Edit mask mode\n' +
+                    '`sys!alter <n> privacy <field> <pub|priv>` - Set privacy\n' +
+                    '`sys!alter <n> privacy bucket:<name> <field> <pub|priv>` - Per-bucket', inline: false
+            },
+            {
+                name: 'Caution & Special', value:
+                    '`sys!alter <n> caution <type> [detail]` - Set caution\n' +
+                    '`sys!alter <n> triggers add|remove <text>` - Manage triggers\n' +
                     '`sys!alter <n> dormant` - Mark as dormant\n' +
                     '`sys!alter <n> delete -confirm` - Delete alter', inline: false
             }
@@ -196,9 +244,23 @@ function stateHelp() {
             {
                 name: 'Edit & Organize', value:
                     '`sys!state <n> displayname <n>` - Set display name\n' +
+                    '`sys!state <n> closedname <n>` - Set closed name display\n' +
                     '`sys!state <n> description <text>` - Set description\n' +
                     '`sys!state <n> alters [add|remove] <alter>` - Link alters\n' +
                     '`sys!state <n> proxy [add|remove] <tag>` - Manage proxies', inline: false
+            },
+            {
+                name: 'Front & Settings', value:
+                    '`sys!state <n> sync <true|false>` - Toggle Discord sync\n' +
+                    '`sys!state <n> defaultstatus <status>` - Set default shift status\n' +
+                    '`sys!state <n> defaultbattery <0-100>` - Set default shift battery\n' +
+                    '`sys!state <n> mask <field> <value>` - Edit mask mode', inline: false
+            },
+            {
+                name: 'Caution & Privacy', value:
+                    '`sys!state <n> caution <type> [detail]` - Set caution\n' +
+                    '`sys!state <n> triggers add|remove <text>` - Manage triggers\n' +
+                    '`sys!state <n> privacy <field> <pub|priv>` - Set privacy', inline: false
             },
             {
                 name: 'Special', value:
@@ -230,8 +292,24 @@ function groupHelp() {
             {
                 name: 'Edit Info', value:
                     '`sys!group <n> displayname <n>` - Set display name\n' +
+                    '`sys!group <n> closedname <n>` - Set closed name display\n' +
                     '`sys!group <n> description <text>` - Set description\n' +
+                    '`sys!group <n> type <name>` - Set group type\n' +
+                    '`sys!group <n> canfront <yes|no>` - Toggle can front\n' +
                     '`sys!group <n> proxy [add|remove] <tag>` - Manage proxies', inline: false
+            },
+            {
+                name: 'Front & Settings', value:
+                    '`sys!group <n> sync <true|false>` - Toggle Discord sync\n' +
+                    '`sys!group <n> defaultstatus <status>` - Set default shift status\n' +
+                    '`sys!group <n> defaultbattery <0-100>` - Set default shift battery\n' +
+                    '`sys!group <n> mask <field> <value>` - Edit mask mode', inline: false
+            },
+            {
+                name: 'Caution & Privacy', value:
+                    '`sys!group <n> caution <type> [detail]` - Set caution\n' +
+                    '`sys!group <n> triggers add|remove <text>` - Manage triggers\n' +
+                    '`sys!group <n> privacy <field> <pub|priv>` - Set privacy', inline: false
             }
         );
 }
@@ -240,11 +318,14 @@ function switchHelp() {
     return new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.success)
         .setTitle('🔀 Switch Commands')
-        .setDescription('Manage front switching.')
+        .setDescription('Manage front switching with layers.')
         .addFields(
             {
                 name: 'Basic', value:
                     '`sys!switch <member>...` - Register a switch\n' +
+                    '`sys!switch <m1> | <m2> | <m3>` - Multi-layer (sequential)\n' +
+                    '`sys!switch layer:1 <m1> layer:3 <m2>` - Explicit layers\n' +
+                    '`sys!switch status:"..." battery:80` - With overrides\n' +
                     '`sys!switch out` - Switch out (no fronters)', inline: false
             },
             {
@@ -307,8 +388,8 @@ function proxyHelp() {
 function configHelp() {
     return new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.system)
-        .setTitle('⚙️ Server Config Commands')
-        .setDescription('Configure Systemiser for this server.\n**This is a prefix-only command** (no slash equivalent).\n*Requires Manage Server permission or Systemiser admin role.*')
+        .setTitle('⚙️ Server Config / Settings Commands')
+        .setDescription('Configure Systemiser for this server.\n**Prefix aliases:** `sys!config`, `sys!settings`\n*Requires Manage Server permission or Systemiser admin role.*')
         .addFields(
             {
                 name: 'General', value:
@@ -367,39 +448,16 @@ function noteHelp() {
     return new EmbedBuilder()
         .setColor('#FFD700')
         .setTitle('📝 Note Commands')
-        .setDescription('Manage your personal notes.')
+        .setDescription('Quick note management. Use the Notes app for full editing, linking, sharing, and search.')
         .addFields(
-            {
-                name: 'View Notes', value:
-                    '`sys!note` - List your notes\n' +
-                    '`sys!note <id>` - View a specific note\n' +
-                    '`sys!note tags` - List all your tags\n' +
-                    '`sys!note search <query>` - Search notes', inline: false
-            },
-            {
-                name: 'Create & Edit', value:
-                    '`sys!note new <title>` - Create a note\n' +
-                    '`sys!note <id> title <text>` - Change title\n' +
-                    '`sys!note <id> content <text>` - Set content\n' +
-                    '`sys!note <id> append <text>` - Add to content\n' +
-                    '`sys!note <id> pin` - Toggle pin status', inline: false
-            },
-            {
-                name: 'Tags', value:
-                    '`sys!note <id> tags <t1,t2>` - Set tags\n' +
-                    '`sys!note <id> tags add <tag>` - Add tag\n' +
-                    '`sys!note <id> tags remove <tag>` - Remove tag', inline: false
-            },
-            {
-                name: 'Linking & Sharing', value:
-                    '`sys!note <id> link alter <n>` - Link to entity\n' +
-                    '`sys!note <id> share @user <r|rw>` - Share note\n' +
-                    '`sys!note <id> unshare @user` - Remove access', inline: false
-            },
-            {
-                name: 'Delete', value:
-                    '`sys!note <id> delete -confirm` - Delete note', inline: false
-            }
+            { name: 'View', value:
+                '`sys!note` - List your notes\n' +
+                '`sys!note <id>` - View a note', inline: false },
+            { name: 'Create', value:
+                '`sys!note new <title>` - Create a note\n' +
+                '`sys!note new <title> content:<text>` - Create with content', inline: false },
+            { name: 'Delete', value:
+                '`sys!note <id> delete -confirm` - Delete a note', inline: false }
         );
 }
 
@@ -472,6 +530,64 @@ function convertHelp() {
                     '✅ Name, description, avatar, pronouns\n' +
                     '✅ Proxy tags, color, groups\n' +
                     '🔄 Dormancy ↔ Remission status', inline: false
+            }
+        );
+}
+
+function profileHelp() {
+    return new EmbedBuilder()
+        .setColor(utils.ENTITY_COLORS.info)
+        .setTitle('👤 Profile Commands')
+        .setDescription('View and manage user profiles.')
+        .addFields(
+            {
+                name: 'View', value:
+                    '`sys!profile` - Show your profile\n' +
+                    '`sys!profile @User` - Show another user\'s profile', inline: false
+            },
+            {
+                name: 'Edit', value:
+                    '`sys!profile edit displayname <name>` - Edit your profile display name', inline: false
+            },
+            {
+                name: 'Notifications', value:
+                    '`sys!profile edit notify` - View notification settings\n' +
+                    '`sys!profile edit notify method <dm|command|none>` - Set delivery method\n' +
+                    '`sys!profile edit notify friendreq <on|off>` - Toggle friend request alerts\n' +
+                    '`sys!profile edit notify friendswitch <on|off>` - Toggle friend switch alerts\n' +
+                    '`sys!profile edit notify appmessages <on|off>` - Toggle app message alerts', inline: false
+            }
+        );
+}
+
+function friendHelp() {
+    return new EmbedBuilder()
+        .setColor(utils.ENTITY_COLORS.info)
+        .setTitle('👥 Friend Commands')
+        .setDescription('Manage friends, view friend fronts, and handle requests.')
+        .addFields(
+            {
+                name: 'List & View', value:
+                    '`sys!friend` - List your friends\n' +
+                    '`sys!friend view @User` - View a friend\'s front\n' +
+                    '`sys!friend view` - Select a friend to view', inline: false
+            },
+            {
+                name: 'Manage', value:
+                    '`sys!friend add @User` - Send friend request\n' +
+                    '`sys!friend add friend_id:abc` - Add by Friend ID\n' +
+                    '`sys!friend remove @User -confirm` - Remove friend\n' +
+                    '`sys!friend requests` - Accept/decline requests', inline: false
+            },
+            {
+                name: 'Block', value:
+                    '`sys!friend block @User` - Block a user\n' +
+                    '`sys!friend unblock @User` - Unblock a user', inline: false
+            },
+            {
+                name: 'Settings', value:
+                    '`sys!friend settings` - View settings\n' +
+                    '`sys!friend settings defaultbucket <name>` - Set auto-bucket', inline: false
             }
         );
 }

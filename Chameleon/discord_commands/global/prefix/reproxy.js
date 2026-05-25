@@ -6,6 +6,7 @@ const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
+const redis = require('../../redis');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {
@@ -59,10 +60,17 @@ module.exports = {
             return utils.error(message, 'Please provide a member name: `sys!reproxy [message_id] <member_name>`');
         }
 
-        // Find the message record
-        const msgRecord = await Message.findOne({
-            discord_webhook_message_id: targetMessageId
-        });
+        // Find the message record — Redis first
+        let msgRecord = null;
+        const cached = await redis.get(`msg:${targetMessageId}`);
+        if (cached) {
+            msgRecord = JSON.parse(cached);
+        }
+        if (!msgRecord) {
+            msgRecord = await Message.findOne({
+                discord_webhook_message_id: targetMessageId
+            });
+        }
 
         if (!msgRecord) {
             return utils.error(message, 'This doesn\'t appear to be a proxied message.');
@@ -133,11 +141,28 @@ module.exports = {
                 avatarURL: avatarUrl
             });
 
-            // Update our record
+            // Update our record — MongoDB
             msgRecord.alterID = newType === 'alter' ? newEntity._id : undefined;
             msgRecord.stateID = newType === 'state' ? newEntity._id : undefined;
             msgRecord.groupID = newType === 'group' ? newEntity._id : undefined;
+            msgRecord.proxy_type = newType;
+            msgRecord.proxy_id = newEntity._id;
             await msgRecord.save();
+
+            // Update Redis cache
+            const cacheData = {
+                discord_webhook_message_id: msgRecord.discord_webhook_message_id,
+                discord_channel_id: msgRecord.discord_channel_id,
+                discord_user_id: msgRecord.discord_user_id,
+                proxy_type: newType,
+                proxy_id: newEntity._id.toString(),
+                content: msgRecord.content,
+                attachments: msgRecord.attachments || [],
+                createdAt: msgRecord.createdAt,
+                editedAt: new Date()
+            };
+            await redis.set(`msg:${targetMessageId}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
+            await redis.set(`user_msgs:${message.author.id}:${message.channel.id}`, targetMessageId);
 
             // Update recent proxies
             system.proxy = system.proxy || {};

@@ -1312,6 +1312,38 @@ async function handleAttachmentUpload(attachment, fieldLabel, entityType, userId
     }
 }
 
+/* Prefix command media upload: handles attachment OR URL → R2 → mediaSchema
+ * @param {Attachment|null} attachment - Discord attachment (or null)
+ * @param {string|null} urlArg - URL string from command args (or null)
+ * @param {string} fieldLabel - Label for R2 path (e.g., 'avatar', 'banner')
+ * @param {string} entityType - Entity type for R2 path (e.g., 'Alter', 'State')
+ * @param {string} userId - Discord user ID for R2 path
+ * @returns {Promise<Object>} { success, media?, message }
+ */
+async function handlePrefixMediaUpload(attachment, urlArg, fieldLabel, entityType, userId) {
+    if (attachment) {
+        if (!attachment?.contentType?.startsWith('image/')) {
+            return { success: false, message: 'Not a valid image file. Please send PNG, JPG, GIF, or WEBP.' };
+        }
+        return handleAttachmentUpload(attachment, fieldLabel, entityType, userId);
+    }
+    if (urlArg) {
+        try {
+            const buffer = await downloadFromUrl(urlArg);
+            const extMatch = urlArg.split('.').pop()?.split('?')[0];
+            const ext = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extMatch?.toLowerCase()) ? extMatch.toLowerCase() : 'png';
+            const mimeType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+            const filename = `${fieldLabel}_${Date.now()}.${ext}`;
+            const media = await uploadMediaToR2(buffer, filename, mimeType, userId, entityType, fieldLabel);
+            return { success: true, media, message: 'Image uploaded successfully!' };
+        } catch (error) {
+            console.error('Error downloading/uploading from URL:', error);
+            return { success: false, message: 'Failed to download image from URL. Check the link and try again.' };
+        }
+    }
+    return { success: false, message: 'Please provide a URL or upload an image.' };
+}
+
 /* Resolve the correct nested path for a media field based on session mode + sync
  * @param {Object} entity - The entity document
  * @param {Object} session - Session data with mode, syncWithDiscord, serverId
@@ -1581,6 +1613,7 @@ module.exports = {
     deleteFromR2,
     downloadFromUrl,
     handleAttachmentUpload,
+    handlePrefixMediaUpload,
     resolveMediaTarget,
     setMediaField,
     resolveAvatarUrl,

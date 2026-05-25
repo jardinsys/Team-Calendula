@@ -85,11 +85,16 @@ function loadCommandsFromDirectory(directory) {
 				console.log(`Loaded Slash command: ${command.data.name}`);
 				loadedSlashCommands.push(command.data.name);
 			}
-			if (hasPrefixCommand) {
-				client.prefixCommands.set(command.name, command);
-				console.log(`Loaded Prefix command: ${command.name}`);
-				loadedPrefixCommands.push(command.name);
+		if (hasPrefixCommand) {
+			client.prefixCommands.set(command.name, command);
+			if (command.aliases && Array.isArray(command.aliases)) {
+				for (const alias of command.aliases) {
+					client.prefixCommands.set(alias, command);
+				}
 			}
+			console.log(`Loaded Prefix command: ${command.name}`);
+			loadedPrefixCommands.push(command.name);
+		}
 		}
 	}
 }
