@@ -283,7 +283,7 @@ async function handleEdit(message, parsed) {
     await system.save();
     const names = targetLayer.fronters.map(f => {
         const id = f.alterID || f.stateID || f.groupID;
-        return resolvedNameCache[id] || 'Unknown';
+        return resolvedNameCache[id] || '(no name)';
     }).filter(Boolean);
 
     return utils.success(message, `Switch edited. Now fronting: **${names.join(', ') || 'nobody'}**`);
@@ -357,7 +357,7 @@ async function handleCopy(message, parsed) {
             id: new mongoose.Types.ObjectId(),
             s_type: type,
             ID: entity._id.toString(),
-            type_name: entity.name?.display || entity.name?.indexable || 'Unknown',
+            type_name: entity.name?.display || entity.name?.indexable || '(no name)',
             startTime: new Date(),
             statuses: [initialStatus]
         });
@@ -376,7 +376,7 @@ async function handleCopy(message, parsed) {
 
     const names = targetLayer.fronters.map(f => {
         const id = f.alterID || f.stateID || f.groupID;
-        return resolvedNameCache[id] || 'Unknown';
+        return resolvedNameCache[id] || '(no name)';
     }).filter(Boolean);
 
     if (!targetLayer.fronters.length) return utils.success(message, 'Switch-out registered.');

@@ -598,14 +598,14 @@ async function handleList(message, parsed) {
     const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.system).setTitle(`${system.alterSynonym?.plural || 'Alters'} (${alters.length})`);
     if (parsed.full) {
         let desc = alters.slice(0, 25).map(a => {
-            const name = a.name?.display || a.name?.indexable || 'Unknown';
+            const name = a.name?.display || a.name?.indexable || '(no name)';
             const prx = a.proxy?.length ? ` • \`${a.proxy[0]}\`` : '';
             return `**${name}** (\`${a.name?.indexable || a._id}\`)${prx}`;
         }).join('\n');
         if (alters.length > 25) desc += `\n*...and ${alters.length - 25} more*`;
         embed.setDescription(desc);
     } else {
-        embed.setDescription(alters.map(a => a.name?.display || a.name?.indexable || 'Unknown').join(', '));
+        embed.setDescription(alters.map(a => a.name?.display || a.name?.indexable || '(no name)').join(', '));
     }
     return message.reply({ embeds: [embed] });
 }
@@ -642,7 +642,7 @@ async function handleHelp(message) {
 
 async function buildAlterEmbed(alter, system, showFull = false) {
     const embed = new EmbedBuilder().setColor(alter.color || utils.ENTITY_COLORS.alter);
-    const displayName = alter.name?.display || alter.name?.indexable || 'Unknown';
+    const displayName = alter.name?.display || alter.name?.indexable || '(no name)';
     if (alter.name?.indexable) embed.setAuthor({ name: alter.name.indexable, iconURL: alter.avatar?.url });
     embed.setTitle(displayName);
     if (alter.description) embed.setDescription(alter.description);
@@ -667,6 +667,6 @@ async function buildAlterEmbed(alter, system, showFull = false) {
         if (alter.caution.detail) ct += `\n${alter.caution.detail}`;
         embed.addFields({ name: '⚠️ Caution', value: ct, inline: false });
     }
-    embed.setFooter({ text: `ID: ${alter._id}` });
+    //embed.setFooter({ text: `ID: ${alter._id}` });
     return embed;
 }

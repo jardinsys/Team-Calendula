@@ -58,7 +58,7 @@ async function handleShow(message, parsed) {
     }
 
     const embed = new EmbedBuilder();
-    const displayName = targetUser.discord?.name?.display || message.author?.displayName || targetUser.username || 'Unknown';
+    const displayName = targetUser.discord?.name?.display || message.author?.displayName || targetUser.username || '(no name)';
 
     embed.setAuthor({
         name: displayName,

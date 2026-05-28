@@ -576,7 +576,7 @@ async function handleMask(message, parsed, groupName) {
         await group.save();
         return utils.success(message, 'Mask proxy avatar updated.');
     }
-    return utils.error(message, `Unknown mask field: ${field}. Use: name, displayname, description, color, avatar, banner, proxyavatar`);
+    return utils.error(message, `(no name) mask field: ${field}. Use: name, displayname, description, color, avatar, banner, proxyavatar`);
 }
 
 async function handlePrivacy(message, parsed, groupName) {
@@ -641,9 +641,9 @@ async function handleRandom(message, parsed, groupName) {
     // Build appropriate embed based on type
     const embed = new EmbedBuilder()
         .setColor(entity.color || utils.ENTITY_COLORS[type])
-        .setTitle(`🎲 ${entity.name?.display || entity.name?.indexable || 'Unknown'}`)
-        .setDescription(entity.description || '*No description*')
-        .setFooter({ text: `Type: ${type} | ID: ${entity._id}` });
+        .setTitle(`🎲 ${entity.name?.display || entity.name?.indexable || '(no name)'}`)
+        .setDescription(entity.description || '*No description*');
+        //.setFooter({ text: `Type: ${type} | ID: ${entity._id}` });
     
     if (entity.avatar?.url) embed.setThumbnail(entity.avatar.url);
     
@@ -708,7 +708,7 @@ async function handleHelp(message) {
 
 async function buildGroupEmbed(group, system) {
     const embed = new EmbedBuilder().setColor(group.color || utils.ENTITY_COLORS.group);
-    const displayName = group.name?.display || group.name?.indexable || 'Unknown';
+    const displayName = group.name?.display || group.name?.indexable || '(no name)';
     if (group.name?.indexable) embed.setAuthor({ name: group.name.indexable, iconURL: group.avatar?.url });
     embed.setTitle(displayName);
     if (group.description) embed.setDescription(group.description);
@@ -730,6 +730,6 @@ async function buildGroupEmbed(group, system) {
     if (group.proxy?.length) embed.addFields({ name: '💬 Proxies', value: utils.formatProxies(group.proxy), inline: true });
     if (group.name?.aliases?.length) embed.addFields({ name: '📝 Aliases', value: group.name.aliases.join(', '), inline: true });
     
-    embed.setFooter({ text: `ID: ${group._id}` });
+    //embed.setFooter({ text: `ID: ${group._id}` });
     return embed;
 }

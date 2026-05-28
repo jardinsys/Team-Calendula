@@ -74,7 +74,7 @@ module.exports = {
 async function buildProfileCard(user, system, isOwner, privacyBucket, closedCharAllowed, interaction) {
     const embed = new EmbedBuilder();
 
-    const displayName = user.discord?.name?.display || interaction.user?.displayName || 'Unknown';
+    const displayName = user.discord?.name?.display || interaction.user?.displayName || '(unknown)';
 
     embed.setAuthor({
         name: `${displayName}'s Profile`,
@@ -135,7 +135,7 @@ async function buildProfileCard(user, system, isOwner, privacyBucket, closedChar
 }
 
 function buildEditInterface(user, system, session) {
-    const displayName = user.discord?.name?.display || 'Unknown';
+    const displayName = user.discord?.name?.display || '(unknown';
 
     const embed = new EmbedBuilder()
         .setTitle(`✏️ Editing: ${displayName}'s Profile`)
@@ -244,7 +244,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         ));
     }
 
-    await interaction.reply({ embeds: [embed], components, ephemeral: true });
+    await interaction.reply({ embeds: [embed], components });
 }
 
 async function handleManage(interaction, user, system) {

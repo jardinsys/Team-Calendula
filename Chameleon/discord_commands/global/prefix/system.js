@@ -1111,7 +1111,7 @@ async function handleList(message, parsed) {
         // Full list with more details
         let desc = '';
         for (const alter of alters.slice(0, 25)) { // Limit to 25 to avoid embed limits
-            const name = alter.name?.display || alter.name?.indexable || 'Unknown';
+            const name = alter.name?.display || alter.name?.indexable || '(no name)';
             const proxies = alter.proxy?.length > 0 ? ` • ${alter.proxy[0]}` : '';
             desc += `**${name}** (\`${alter.name?.indexable || alter._id}\`)${proxies}\n`;
         }
@@ -1121,7 +1121,7 @@ async function handleList(message, parsed) {
         embed.setDescription(desc);
     } else {
         // Compact list
-        const names = alters.map(a => a.name?.display || a.name?.indexable || 'Unknown');
+        const names = alters.map(a => a.name?.display || a.name?.indexable || '(no name)');
         embed.setDescription(names.join(', '));
     }
 
@@ -1160,7 +1160,7 @@ async function handleFronter(message, parsed) {
                 entity = await Group.findById(fronter.groupID);
             }
             if (entity) {
-                fronterNames.push(entity.name?.display || entity.name?.indexable || 'Unknown');
+                fronterNames.push(entity.name?.display || entity.name?.indexable || '(no name)');
             }
         }
 
@@ -1307,7 +1307,7 @@ async function buildSystemEmbed(system, showFull = false) {
         .setColor(system.color || utils.ENTITY_COLORS.system);
 
     // Title and author
-    const displayName = system.name?.display || system.name?.indexable || 'Unnamed System';
+    const displayName = system.name?.display || system.name?.indexable || '';
     const indexableName = system.name?.indexable;
 
     if (indexableName) {
@@ -1365,7 +1365,7 @@ async function buildSystemEmbed(system, showFull = false) {
     }
 
     // System ID footer
-    embed.setFooter({ text: `System ID: ${system._id}` });
+    //embed.setFooter({ text: `System ID: ${system._id}` });
 
     return embed;
 }

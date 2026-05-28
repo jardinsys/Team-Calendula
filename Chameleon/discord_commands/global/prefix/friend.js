@@ -62,7 +62,7 @@ module.exports = {
 
         if (handlers[firstArg]) return handlers[firstArg]();
 
-        return utils.error(message, `Unknown subcommand: \`${firstArg}\`\nUse \`sys!friend help\` for available commands.`);
+        return utils.error(message, `(no name) subcommand: \`${firstArg}\`\nUse \`sys!friend help\` for available commands.`);
     }
 };
 
@@ -387,7 +387,7 @@ async function handleView(message, parsed, user) {
 
 async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, privacyBucket, closedCharAllowed, message) {
     const systemName = utils.getDisplayName(targetSystem, closedCharAllowed);
-    const targetUserName = targetUser.discord?.name?.display || 'Unknown';
+    const targetUserName = targetUser.discord?.name?.display || '(no name)';
 
     const embed = new EmbedBuilder()
         .setTitle(`🎭 ${systemName}'s Front`)

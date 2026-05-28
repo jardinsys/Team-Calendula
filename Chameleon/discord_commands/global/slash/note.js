@@ -238,7 +238,7 @@ async function handleHub(interaction, user, system) {
         )
     ];
 
-    await interaction.reply({ embeds: [embed], components, ephemeral: true });
+    await interaction.reply({ embeds: [embed], components});
 }
 
 async function handleQuick(interaction, user, system) {

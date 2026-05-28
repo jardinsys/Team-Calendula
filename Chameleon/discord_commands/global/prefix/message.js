@@ -104,9 +104,9 @@ async function handleLookup(message, parsed, messageId) {
         .setColor(entity?.color || utils.ENTITY_COLORS.info)
         .setTitle('📨 Message Info')
         .addFields(
-            { name: 'Sent by', value: entity?.name?.display || entity?.name?.indexable || 'Unknown', inline: true },
+            { name: 'Sent by', value: entity?.name?.display || entity?.name?.indexable || '(no name)', inline: true },
             { name: 'Type', value: entityType, inline: true },
-            { name: 'Sender Discord', value: sender ? `<@${sender.discordID}>` : 'Unknown', inline: true },
+            { name: 'Sender Discord', value: sender ? `<@${sender.discordID}>` : '(no name)', inline: true },
             { name: 'Message ID', value: `\`${messageId}\``, inline: true },
             { name: 'Channel', value: `<#${msgRecord.discord_channel_id}>`, inline: true }
         );

@@ -584,7 +584,7 @@ async function handleHelp(message) {
 
 async function buildStateEmbed(state, system) {
     const embed = new EmbedBuilder().setColor(state.color || utils.ENTITY_COLORS.state);
-    const displayName = state.name?.display || state.name?.indexable || 'Unknown';
+    const displayName = state.name?.display || state.name?.indexable || '(no name)';
     if (state.name?.indexable) embed.setAuthor({ name: state.name.indexable, iconURL: state.avatar?.url });
     embed.setTitle(displayName);
     if (state.description) embed.setDescription(state.description);
@@ -606,6 +606,6 @@ async function buildStateEmbed(state, system) {
     }
     if (state.name?.aliases?.length) embed.addFields({ name: '📝 Aliases', value: state.name.aliases.join(', '), inline: true });
     if (state.caution?.c_type) embed.addFields({ name: '⚠️ Caution', value: state.caution.c_type + (state.caution.detail ? `\n${state.caution.detail}` : ''), inline: false });
-    embed.setFooter({ text: `ID: ${state._id}` });
+    //embed.setFooter({ text: `ID: ${state._id}` });
     return embed;
 }
