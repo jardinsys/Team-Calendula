@@ -49,7 +49,7 @@ const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
-const { PrivacyBucket } = require('../../schemas/settings');
+const { PrivacyBucket } = require('../../../schemas/settings');
 
 const utils = require('../../functions/bot_utils');
 

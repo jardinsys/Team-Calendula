@@ -4,12 +4,12 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-const System = require('../../../../schemas/system');
-const Alter = require('../../../../schemas/alter');
-const State = require('../../../../schemas/state');
-const Group = require('../../../../schemas/group');
-const Note = require('../../../../schemas/note');
-const { Shift } = require('../../../../schemas/front');
+const System = require('../../schemas/system');
+const Alter = require('../../schemas/alter');
+const State = require('../../schemas/state');
+const Group = require('../../schemas/group');
+const Note = require('../../schemas/note');
+const { Shift } = require('../../schemas/front');
 
 // Helper to get display name
 function getDisplayName(entity) {

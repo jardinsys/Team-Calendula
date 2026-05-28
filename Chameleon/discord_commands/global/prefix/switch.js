@@ -18,7 +18,7 @@ const System = require('../../../schemas/system');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
-const { Shift } = require('../../schemas/front');
+const { Shift } = require('../../../schemas/front');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {

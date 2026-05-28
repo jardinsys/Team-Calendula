@@ -58,38 +58,38 @@ app.get('/api/health', (req, res) => {
 });
 
 // Auth routes (Discord OAuth)
-const authRoutes = require('./api/routes/auth');
+const authRoutes = require('../api/routes/auth');
 app.use('/api/auth', authRoutes);
 
 // Protected routes (require authentication)
-const { authenticateToken } = require('./api/middleware/auth');
+const { authenticateToken } = require('../api/middleware/auth');
 
 // System routes
-const systemRoutes = require('./api/routes/system');
+const systemRoutes = require('../api/routes/system');
 app.use('/api/system', authenticateToken, systemRoutes);
 
 // Entity routes
-const alterRoutes = require('./api/routes/alters');
-const stateRoutes = require('./api/routes/states');
-const groupRoutes = require('./api/routes/groups');
+const alterRoutes = require('../api/routes/alters');
+const stateRoutes = require('../api/routes/states');
+const groupRoutes = require('../api/routes/groups');
 app.use('/api/alters', authenticateToken, alterRoutes);
 app.use('/api/states', authenticateToken, stateRoutes);
 app.use('/api/groups', authenticateToken, groupRoutes);
 
 // Notes routes
-const noteRoutes = require('./api/routes/notes');
+const noteRoutes = require('../api/routes/notes');
 app.use('/api/notes', authenticateToken, noteRoutes);
 
 // Front routes
-const frontRoutes = require('./api/routes/front');
+const frontRoutes = require('../api/routes/front');
 app.use('/api/front', authenticateToken, frontRoutes);
 
 // Quick action routes
-const quickRoutes = require('./api/routes/quick');
+const quickRoutes = require('../api/routes/quick');
 app.use('/api/quick', authenticateToken, quickRoutes);
 
 // Friends routes
-const friendsRoutes = require('./api/routes/friends');
+const friendsRoutes = require('../api/routes/friends');
 app.use('/api/friends', authenticateToken, friendsRoutes);
 
 // ==========================================

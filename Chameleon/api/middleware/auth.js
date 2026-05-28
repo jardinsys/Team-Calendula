@@ -2,9 +2,9 @@
 // Chameleon/webapp/api/middleware/auth.js
 
 const jwt = require('jsonwebtoken');
-const config = require('../../../../config.json');
-const User = require('../../../../schemas/user');
-const System = require('../../../../schemas/system');
+const config = require('../../../config.json');
+const User = require('../../schemas/user');
+const System = require('../../schemas/system');
 
 const JWT_SECRET = config.jwtSecret || 'change-this-secret';
 

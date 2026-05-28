@@ -4,7 +4,7 @@ const { EmbedBuilder } = require('discord.js');
 const Message = require('../../../schemas/message');
 const System = require('../../../schemas/system');
 const User = require('../../../schemas/user');
-const redis = require('../../redis');
+const redis = require('../../../redis');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {

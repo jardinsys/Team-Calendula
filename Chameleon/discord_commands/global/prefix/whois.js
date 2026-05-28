@@ -13,7 +13,7 @@ const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
-const redis = require('../../redis');
+const redis = require('../../../redis');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {

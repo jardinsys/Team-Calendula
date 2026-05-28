@@ -2,10 +2,10 @@
 // Core data processing logic extracted from prefix/import.js
 
 const mongoose = require('mongoose');
-const System = require('../../../schemas/system');
-const Alter = require('../../../schemas/alter');
-const State = require('../../../schemas/state');
-const Group = require('../../../schemas/group');
+const System = require('../../schemas/system');
+const Alter = require('../../schemas/alter');
+const State = require('../../schemas/state');
+const Group = require('../../schemas/group');
 const utils = require('./bot_utils');
 
 const PK_API_BASE = 'https://api.pluralkit.me/v2';
