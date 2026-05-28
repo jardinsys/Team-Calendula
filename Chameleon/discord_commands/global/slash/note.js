@@ -238,7 +238,7 @@ async function handleHub(interaction, user, system) {
         )
     ];
 
-    await interaction.reply({ embeds: [embed], components});
+    await interaction.reply({ embeds: [embed], components });
 }
 
 async function handleQuick(interaction, user, system) {
@@ -415,6 +415,6 @@ async function handleModalSubmit(interaction) {
             )
         ];
 
-        return await interaction.editReply({ embeds: [embed], components });
+        return await interaction.editReply({ embeds: [embed], components, ephemeral: true });
     }
 }
