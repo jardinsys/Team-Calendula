@@ -79,9 +79,8 @@ async function handleHelp(message, system) {
     // If it's a member name, try to find and display it nicely
     if (!['off', 'last', 'front'].includes(currentStyle)) {
         const result = await utils.findEntity(currentStyle, system);
-        if (result) {
+        if (result)
             currentDisplay = result.entity.name?.display || currentStyle;
-        }
     }
 
     const embed = new EmbedBuilder()

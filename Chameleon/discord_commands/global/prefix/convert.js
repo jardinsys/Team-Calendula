@@ -34,9 +34,7 @@ module.exports = {
     async executeMessage(message, args) {
         const { user, system } = await utils.getOrCreateUserAndSystem(message);
 
-        if (!system) {
-            return utils.error(message, 'You need a system to convert entities. Use `sys!system new` to create one.');
-        }
+        if (!system)  return utils.error(message, 'You need a system to convert entities. Use `sys!system new` or `/system manage` to create one.');
 
         const parsed = utils.parseArgs(args);
 
@@ -44,44 +42,33 @@ module.exports = {
         // Or: convert <type>s <name1,name2> to <targetType>s
         const sourceType = parsed._positional[0]?.toLowerCase();
 
-        if (!sourceType || sourceType === 'help') {
-            return handleHelp(message);
-        }
+        if (!sourceType || sourceType === 'help') return handleHelp(message);
 
         // Check for batch conversion (alters/states plural)
         const isBatch = sourceType === 'alters' || sourceType === 'states';
         const normalizedSourceType = sourceType.replace(/s$/, ''); // Remove trailing 's'
 
-        if (!['alter', 'state'].includes(normalizedSourceType)) {
+        if (!['alter', 'state'].includes(normalizedSourceType)) 
             return utils.error(message, `Invalid source type: \`${sourceType}\`\nUse \`alter\` or \`state\` (or \`alters\`/\`states\` for batch).`);
-        }
 
         // Find "to" keyword
         const toIndex = parsed._positional.findIndex(p => p.toLowerCase() === 'to');
-        if (toIndex === -1) {
-            return utils.error(message, 'Missing `to` keyword.\nUsage: `sys!convert alter <name> to state`');
-        }
+        if (toIndex === -1) return utils.error(message, 'Missing `to` keyword.\nUsage: `sys!convert alter <name> to state`');
 
         // Get names (everything between source type and "to")
         const namesPart = parsed._positional.slice(1, toIndex).join(' ');
-        if (!namesPart) {
-            return utils.error(message, `Please specify the ${normalizedSourceType} name(s) to convert.`);
-        }
+        if (!namesPart) return utils.error(message, `Please specify the ${normalizedSourceType} name(s) to convert.`);
 
         // Get target type
         let targetType = parsed._positional[toIndex + 1]?.toLowerCase();
-        if (!targetType) {
-            return utils.error(message, 'Please specify the target type (alter or state).');
-        }
+        if (!targetType) return utils.error(message, 'Please specify the target type (alter or state).');
         targetType = targetType.replace(/s$/, ''); // Remove trailing 's'
 
-        if (!['alter', 'state'].includes(targetType)) {
+        if (!['alter', 'state'].includes(targetType)) 
             return utils.error(message, `Invalid target type: \`${targetType}\`\nUse \`alter\` or \`state\`.`);
-        }
 
-        if (normalizedSourceType === targetType) {
+        if (normalizedSourceType === targetType) 
             return utils.error(message, `Cannot convert ${normalizedSourceType} to ${targetType} - they're the same type!`);
-        }
 
         // Parse names (comma-separated for batch, or single name)
         const names = isBatch
@@ -95,11 +82,9 @@ module.exports = {
         };
 
         // Process conversion
-        if (normalizedSourceType === 'alter' && targetType === 'state') {
+        if (normalizedSourceType === 'alter' && targetType === 'state')
             return convertAltersToStates(message, system, names, options);
-        } else {
-            return convertStatesToAlters(message, system, names, options);
-        }
+        else return convertStatesToAlters(message, system, names, options);
     }
 };
 
@@ -182,16 +167,12 @@ async function convertAltersToStates(message, system, names, options) {
             ]
         });
 
-        if (alter) {
-            altersToConvert.push(alter);
-        } else {
-            results.notFound.push(name);
-        }
+        if (alter) altersToConvert.push(alter);
+        else results.notFound.push(name);
     }
 
-    if (altersToConvert.length === 0) {
+    if (altersToConvert.length === 0)
         return utils.error(message, `No alters found matching: ${names.join(', ')}`);
-    }
 
     // Confirmation prompt (unless -confirm flag)
     if (!options.confirm) {
@@ -363,16 +344,12 @@ async function convertStatesToAlters(message, system, names, options) {
             ]
         });
 
-        if (state) {
-            statesToConvert.push(state);
-        } else {
-            results.notFound.push(name);
-        }
+        if (state) statesToConvert.push(state);
+        else results.notFound.push(name);
     }
 
-    if (statesToConvert.length === 0) {
+    if (statesToConvert.length === 0) 
         return utils.error(message, `No states found matching: ${names.join(', ')}`);
-    }
 
     // Confirmation prompt (unless -confirm flag)
     if (!options.confirm) {
@@ -532,13 +509,11 @@ function buildResultEmbed(conversionType, results, keepOriginal) {
 
     let description = '';
 
-    if (results.converted.length > 0) {
+    if (results.converted.length > 0) 
         description += `**${keepOriginal ? 'Copied' : 'Converted'}:** ${results.converted.join(', ')}\n`;
-    }
 
-    if (results.notFound.length > 0) {
+    if (results.notFound.length > 0) 
         description += `\n**Not Found:** ${results.notFound.join(', ')}\n`;
-    }
 
     embed.setDescription(description || 'No entities processed.');
 

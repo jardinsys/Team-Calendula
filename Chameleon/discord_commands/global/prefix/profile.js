@@ -41,15 +41,11 @@ async function handleShow(message, parsed) {
     const mentionedUser = message.mentions.users.first();
     if (mentionedUser) {
         targetUser = await User.findOne({ discordID: mentionedUser.id });
-        if (targetUser?.systemID) {
-            targetSystem = await System.findById(targetUser.systemID);
-        }
+        if (targetUser?.systemID) targetSystem = await System.findById(targetUser.systemID);
     } else {
         // Show own profile
         targetUser = await User.findOne({ discordID: message.author.id });
-        if (targetUser?.systemID) {
-            targetSystem = await System.findById(targetUser.systemID);
-        }
+        if (targetUser?.systemID) targetSystem = await System.findById(targetUser.systemID);
         isOwner = true;
     }
 
@@ -70,9 +66,7 @@ async function handleShow(message, parsed) {
         embed.setTitle(`${displayName}'s System`);
         embed.setColor(targetSystem.color || utils.ENTITY_COLORS.system);
 
-        if (targetSystem.avatar?.url) {
-            embed.setThumbnail(targetSystem.avatar.url);
-        }
+        if (targetSystem.avatar?.url) embed.setThumbnail(targetSystem.avatar.url);
 
         const alterCount = targetSystem.alters?.IDs?.length || 0;
         const stateCount = targetSystem.states?.IDs?.length || 0;
@@ -83,16 +77,12 @@ async function handleShow(message, parsed) {
         overview += `**Groups:** ${groupCount}`;
         embed.addFields({ name: '📊 System', value: overview, inline: true });
 
-        if (targetSystem.description) {
-            embed.addFields({ name: 'Description', value: targetSystem.description, inline: false });
-        }
+        if (targetSystem.description) embed.addFields({ name: 'Description', value: targetSystem.description, inline: false });
 
-        if (targetSystem.front?.status) {
-            embed.addFields({ name: 'Front Status', value: targetSystem.front.status, inline: true });
-        }
-        if (targetSystem.battery !== undefined && targetSystem.battery !== null) {
+        if (targetSystem.front?.status) embed.addFields({ name: 'Front Status', value: targetSystem.front.status, inline: true });
+        
+        if (targetSystem.battery !== undefined && targetSystem.battery !== null) 
             embed.addFields({ name: 'Battery', value: `${targetSystem.battery} ${utils.getBatteryEmoji(targetSystem.battery)}`, inline: true });
-        }
 
         if (targetSystem.front?.layers?.length) {
             const fronters = [];
@@ -106,19 +96,13 @@ async function handleShow(message, parsed) {
                     fronters.push(`${layer.name || 'Main'}: ${names.join(', ')}`);
                 }
             }
-            if (fronters.length) {
-                embed.addFields({ name: '🎭 Currently Fronting', value: fronters.join('\n'), inline: false });
-            }
+            if (fronters.length) embed.addFields({ name: '🎭 Currently Fronting', value: fronters.join('\n'), inline: false });
         }
 
         const tags = targetSystem.discord?.tag?.normal;
-        if (tags?.length) {
-            embed.addFields({ name: '🏷️ Tags', value: tags.join(' '), inline: true });
-        }
+        if (tags?.length) embed.addFields({ name: '🏷️ Tags', value: tags.join(' '), inline: true });
 
-        if (targetSystem.timezone) {
-            embed.addFields({ name: '🕐 Timezone', value: targetSystem.timezone, inline: true });
-        }
+        if (targetSystem.timezone) embed.addFields({ name: '🕐 Timezone', value: targetSystem.timezone, inline: true });
 
         embed.setFooter({ text: `System ID: ${targetSystem._id}` });
     } else {
@@ -155,9 +139,8 @@ async function handleEdit(message, parsed) {
         return utils.success(message, `Profile display name set to **${newName}**`);
     }
 
-    if (field === 'notify' || field === 'notification' || field === 'notif') {
+    if (field === 'notify' || field === 'notification' || field === 'notif') 
         return handleNotify(message, parsed, user);
-    }
 
     return utils.error(message, `Unknown field: ${field}. Available: displayname, notify`);
 }
@@ -179,17 +162,14 @@ async function handleNotify(message, parsed, user) {
         return utils.success(message, `Notification delivery set to **${val}**`);
     }
 
-    if (subField === 'friendreq' || subField === 'friendrequest' || subField === 'requests') {
+    if (subField === 'friendreq' || subField === 'friendrequest' || subField === 'requests')
         return handleNotifyToggle(message, parsed, user, 'friendRequests', 'Friend request notifications');
-    }
 
-    if (subField === 'friendswitch' || subField === 'switch' || subField === 'switches') {
+    if (subField === 'friendswitch' || subField === 'switch' || subField === 'switches')
         return handleNotifyToggle(message, parsed, user, 'friendSwitches', 'Friend switch notifications');
-    }
 
-    if (subField === 'appmessages' || subField === 'appmsg' || subField === 'app') {
+    if (subField === 'appmessages' || subField === 'appmsg' || subField === 'app')
         return handleNotifyToggle(message, parsed, user, 'appMessages', 'App message notifications');
-    }
 
     return utils.error(message, `Unknown notification setting: ${subField}\nAvailable: method, friendreq, friendswitch, appmessages`);
 }

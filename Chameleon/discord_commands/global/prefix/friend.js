@@ -67,9 +67,8 @@ module.exports = {
 };
 
 async function handleList(message, user, system) {
-    if (!user.friends || user.friends.length === 0) {
+    if (!user.friends || user.friends.length === 0) 
         return utils.info(message, 'You haven\'t added any friends yet.\nUse `sys!friend add @User` to send a friend request.');
-    }
 
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.info)
@@ -125,11 +124,8 @@ async function handleAdd(message, parsed, user, system) {
     }
 
     let target = null;
-    if (targetUser) {
-        target = await User.findOne({ discordID: targetUser.id });
-    } else if (friendIdInput) {
-        target = await User.findOne({ friendID: friendIdInput.trim() });
-    }
+    if (targetUser) target = await User.findOne({ discordID: targetUser.id });
+    else if (friendIdInput) target = await User.findOne({ friendID: friendIdInput.trim() });
 
     if (!target) return utils.error(message, 'User not found. Check the ID or mention and try again.');
     if (target.discordID === message.author.id) return utils.error(message, 'You can\'t add yourself as a friend.');
@@ -188,9 +184,8 @@ async function handleRemove(message, parsed, user) {
 
     if (targetUser) {
         const friendIndex = user.friends?.findIndex(f => f.discordID === targetUser.id);
-        if (friendIndex === -1 || friendIndex === undefined) {
+        if (friendIndex === -1 || friendIndex === undefined)
             return utils.error(message, 'This user is not in your friends list.');
-        }
 
         if (!parsed.confirm) {
             const friendName = user.friends[friendIndex].customName?.display || user.friends[friendIndex].customName?.indexable || targetUser.displayName;
@@ -209,9 +204,8 @@ async function handleRemove(message, parsed, user) {
     }
 
     // No mention — show select menu
-    if (!user.friends || user.friends.length === 0) {
+    if (!user.friends || user.friends.length === 0) 
         return utils.error(message, 'You have no friends to remove.');
-    }
 
     const sessionId = utils.generateSessionId(message.author.id);
     utils.setSession(sessionId, { type: 'friend_remove_select', userId: user._id });
@@ -290,9 +284,8 @@ async function handleRequests(message, user) {
 async function handleBlock(message, parsed, user) {
     const targetUser = message.mentions.users.first();
 
-    if (!targetUser) {
+    if (!targetUser)
         return utils.error(message, 'Please mention a user to block.\nUsage: `sys!friend block @User`');
-    }
 
     if (targetUser.id === message.author.id) return utils.error(message, 'You can\'t block yourself.');
 
@@ -311,9 +304,8 @@ async function handleBlock(message, parsed, user) {
     });
 
     const friendIndex = user.friends?.findIndex(f => f.discordID === targetUser.id);
-    if (friendIndex !== -1 && friendIndex !== undefined) {
+    if (friendIndex !== -1 && friendIndex !== undefined)
         user.friends.splice(friendIndex, 1);
-    }
 
     await user.save();
     return utils.success(message, `Blocked **${targetName}**. They have been removed from your friends list if they were on it.`);
@@ -322,14 +314,11 @@ async function handleBlock(message, parsed, user) {
 async function handleUnblock(message, parsed, user) {
     const targetUser = message.mentions.users.first();
 
-    if (!targetUser) {
-        return utils.error(message, 'Please mention a user to unblock.\nUsage: `sys!friend unblock @User`');
-    }
+    if (!targetUser) return utils.error(message, 'Please mention a user to unblock.\nUsage: `sys!friend unblock @User`');
 
     const blockedIndex = user.blocked?.findIndex(b => b.discordID === targetUser.id);
-    if (blockedIndex === -1 || blockedIndex === undefined) {
+    if (blockedIndex === -1 || blockedIndex === undefined) 
         return utils.error(message, 'This user is not blocked.');
-    }
 
     const blockedName = user.blocked[blockedIndex].name?.display || targetUser.displayName;
     user.blocked.splice(blockedIndex, 1);
@@ -342,9 +331,8 @@ async function handleView(message, parsed, user) {
 
     if (!targetUser) {
         // No mention — show select menu
-        if (!user.friends || user.friends.length === 0) {
+        if (!user.friends || user.friends.length === 0)
             return utils.error(message, 'You have no friends to view. Add some first!');
-        }
 
         const sessionId = utils.generateSessionId(message.author.id);
         utils.setSession(sessionId, { type: 'friend_view_select', userId: user._id });
@@ -396,9 +384,8 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
     const frontColor = utils.getSystemEmbedColor(targetSystem);
     if (frontColor) embed.setColor(frontColor);
 
-    if (targetSystem.avatar?.url || targetSystem.discord?.image?.avatar?.url) {
+    if (targetSystem.avatar?.url || targetSystem.discord?.image?.avatar?.url) 
         embed.setThumbnail(targetSystem.avatar?.url || targetSystem.discord?.image?.avatar?.url);
-    }
 
     const systemPrivacy = targetSystem.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
 
@@ -445,9 +432,8 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
                 let fronterLine = `${emoji} **${displayName}**`;
 
                 const pronounsVisible = !entityPrivacy || entityPrivacy.settings?.pronouns !== false;
-                if (pronounsVisible && entity.pronouns?.length > 0) {
+                if (pronounsVisible && entity.pronouns?.length > 0) 
                     fronterLine += ` (${entity.pronouns.join('/')})`;
-                }
 
                 const currentStatus = shift.statuses?.[shift.statuses.length - 1];
                 const statusVisible = !systemPrivacy || systemPrivacy.settings?.front?.hidden !== true;
@@ -460,9 +446,8 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
 
                 if (statusVisible && currentStatus?.caution?.c_type) {
                     const cautionVisible = !entityPrivacy || entityPrivacy.settings?.caution !== false;
-                    if (cautionVisible) {
+                    if (cautionVisible)
                         fronterLine += `\n   └ ⚠️ ${currentStatus.caution.c_type}${currentStatus.caution.detail ? `: ${currentStatus.caution.detail}` : ''}`;
-                    }
                 }
 
                 fronters.push(fronterLine);
@@ -506,9 +491,8 @@ async function getEntityForShift(shift) {
 async function handleSettings(message, parsed, user, system) {
     const subArg = parsed._positional[1]?.toLowerCase();
 
-    if (subArg === 'defaultbucket' || subArg === 'db') {
+    if (subArg === 'defaultbucket' || subArg === 'db') 
         return handleDefaultBucket(message, parsed, user, system);
-    }
 
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.info)

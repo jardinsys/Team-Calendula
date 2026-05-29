@@ -27,24 +27,15 @@ module.exports = {
         let targetMessageId = null;
 
         // Check for reply
-        if (message.reference) {
-            targetMessageId = message.reference.messageId;
-        }
-        // Check first arg for message ID or link
-        else if (parsed._positional[0]) {
-            targetMessageId = extractMessageId(parsed._positional[0]);
-        }
+        if (message.reference) targetMessageId = message.reference.messageId;
+        else if (parsed._positional[0]) targetMessageId = extractMessageId(parsed._positional[0]); // Check first arg for message ID or link
 
-        if (!targetMessageId) {
-            return utils.error(message, 'Please provide a message ID, link, or reply to a proxied message.\n\nUsage: `sys!whois <message_id|link>` or reply to a message.');
-        }
+        if (!targetMessageId) return utils.error(message, 'Please provide a message ID, link, or reply to a proxied message.\n\nUsage: `sys!whois <message_id|link>` or reply to a message.');
 
         // Look up the message — Redis first, MongoDB fallback
         let msgRecord = null;
         const cached = await redis.get(`msg:${targetMessageId}`);
-        if (cached) {
-            msgRecord = JSON.parse(cached);
-        }
+        if (cached) msgRecord = JSON.parse(cached);
         if (!msgRecord) {
             msgRecord = await Message.findOne({
                 discord_webhook_message_id: targetMessageId
@@ -66,9 +57,7 @@ module.exports = {
             }
         }
 
-        if (!msgRecord) {
-            return utils.error(message, 'This doesn\'t appear to be a proxied message, or it\'s not in our records.');
-        }
+        if (!msgRecord) return utils.error(message, 'This doesn\'t appear to be a proxied message, or it\'s not in our records.');
 
         // Get the sender's info
         const senderUser = await User.findOne({ discordID: msgRecord.discord_user_id });
@@ -125,9 +114,7 @@ module.exports = {
             });
 
             // Add avatar if available
-            if (entity.avatar?.url) {
-                embed.setThumbnail(entity.avatar.url);
-            }
+            if (entity.avatar?.url) embed.setThumbnail(entity.avatar.url);
         }
 
         // Message details
@@ -163,21 +150,15 @@ function extractMessageId(input) {
     if (!input) return null;
     
     // Direct message ID (17-19 digit snowflake)
-    if (/^\d{17,19}$/.test(input)) {
-        return input;
-    }
+    if (/^\d{17,19}$/.test(input)) return input;
     
     // Message link: https://discord.com/channels/guild/channel/message
     const linkMatch = input.match(/discord\.com\/channels\/\d+\/\d+\/(\d+)/);
-    if (linkMatch) {
-        return linkMatch[1];
-    }
+    if (linkMatch) return linkMatch[1];
     
     // Canary/PTB links
     const canaryMatch = input.match(/(?:canary\.|ptb\.)?discord\.com\/channels\/\d+\/\d+\/(\d+)/);
-    if (canaryMatch) {
-        return canaryMatch[1];
-    }
+    if (canaryMatch) return canaryMatch[1];
     
     return null;
 }

@@ -95,9 +95,8 @@ function hasAccess(note, user) {
 
 async function handleList(message, user) {
     const noteIds = user.notes?.notes || [];
-    if (noteIds.length === 0) {
+    if (noteIds.length === 0)
         return utils.info(message, 'You don\'t have any notes yet.\nUse `sys!note new <title>` to create one.');
-    }
 
     const notes = await Note.find({ _id: { $in: noteIds } }).sort({ pinned: -1, updatedAt: -1 }).limit(20);
 
@@ -144,9 +143,8 @@ async function handleShow(message, note, user) {
             ? note.content.substring(0, 4000) + '...\n*[Content truncated]*'
             : note.content;
         embed.setDescription(content);
-    } else {
+    } else 
         embed.setDescription('*No content*');
-    }
 
     if (note.tags?.length > 0) {
         embed.addFields({
@@ -193,9 +191,7 @@ async function handleNew(message, parsed, user) {
 
     if (!user.notes) user.notes = { tags: [], notes: [] };
     user.notes.notes.push(note._id);
-    for (const tag of tags) {
-        if (!user.notes.tags.includes(tag)) user.notes.tags.push(tag);
-    }
+    for (const tag of tags) if (!user.notes.tags.includes(tag)) user.notes.tags.push(tag);
     await user.save();
 
     const embed = new EmbedBuilder()

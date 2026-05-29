@@ -62,9 +62,7 @@ function parseLayerAssignments(args) {
     }
     
     // If no layers were explicitly created but we have entities, put them in layer 0
-    if (entityNames.length > 0 && Object.keys(layers).length === 0) {
-        layers[0] = entityNames;
-    }
+    if (entityNames.length > 0 && Object.keys(layers).length === 0) layers[0] = entityNames;
     
     return { layers, entityNames };
 }
@@ -236,12 +234,11 @@ async function handleEdit(message, parsed) {
     }
 
     // End existing shifts
-    if (targetLayer.shifts?.length) {
+    if (targetLayer.shifts?.length)
         await Shift.updateMany(
             { _id: { $in: targetLayer.shifts }, endTime: null },
             { $set: { endTime: new Date() } }
         );
-    }
 
     // Create new shifts
     targetLayer.shifts = [];
@@ -318,20 +315,16 @@ async function handleCopy(message, parsed) {
         if (!result) continue;
         
         const id = result.entity._id.toString();
-        if (currentIds.has(id)) {
-            currentIds.delete(id);
-        } else {
-            currentIds.add(id);
-        }
+        if (currentIds.has(id)) currentIds.delete(id);
+        else currentIds.add(id);
     }
 
     // End old shifts
-    if (targetLayer.shifts?.length) {
+    if (targetLayer.shifts?.length)
         await Shift.updateMany(
             { _id: { $in: targetLayer.shifts }, endTime: null },
             { $set: { endTime: new Date() } }
         );
-    }
 
     // Create new shifts for current set
     targetLayer.shifts = [];
@@ -412,12 +405,11 @@ async function handleDelete(message, parsed) {
     if (!targetLayer) return utils.error(message, 'No active switch to delete.');
 
     // End shifts
-    if (targetLayer.shifts?.length) {
+    if (targetLayer.shifts?.length)
         await Shift.updateMany(
             { _id: { $in: targetLayer.shifts }, endTime: null },
             { $set: { endTime: new Date() } }
         );
-    }
 
     targetLayer.fronters = [];
     targetLayer.shifts = [];

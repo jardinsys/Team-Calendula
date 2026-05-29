@@ -28,15 +28,11 @@ module.exports = {
 
     async executeMessage(message, args) {
         // Must be in a guild
-        if (!message.guild) {
-            return utils.error(message, 'This command can only be used in a server.');
-        }
+        if (!message.guild) return utils.error(message, 'This command can only be used in a server.');
 
         // Check permissions
         const hasPermission = await checkAdminPermission(message);
-        if (!hasPermission) {
-            return utils.error(message, 'You need to be a server admin or have Manage Server permission to use this command.');
-        }
+        if (!hasPermission) return utils.error(message, 'You need to be a server admin or have Manage Server permission to use this command.');
 
         const parsed = utils.parseArgs(args);
         const subcommand = parsed._positional[0]?.toLowerCase();
@@ -70,9 +66,8 @@ module.exports = {
             'help': () => handleHelp(message)
         };
 
-        if (!subcommand || !handlers[subcommand]) {
+        if (!subcommand || !handlers[subcommand])
             return handleShow(message, guild);
-        }
 
         return handlers[subcommand]();
     }
@@ -171,15 +166,9 @@ async function handleShow(message, guild) {
     const adminRoles = guild.admins?.roleIDs || [];
     const adminMembers = guild.admins?.memberIDs || [];
     let adminInfo = '';
-    if (adminRoles.length > 0) {
-        adminInfo += `**Roles:** ${adminRoles.map(id => `<@&${id}>`).join(', ')}\n`;
-    }
-    if (adminMembers.length > 0) {
-        adminInfo += `**Members:** ${adminMembers.map(id => `<@${id}>`).join(', ')}`;
-    }
-    if (!adminInfo) {
-        adminInfo = '*Only server admins with Manage Server permission*';
-    }
+    if (adminRoles.length > 0) adminInfo += `**Roles:** ${adminRoles.map(id => `<@&${id}>`).join(', ')}\n`;
+    if (adminMembers.length > 0) adminInfo += `**Members:** ${adminMembers.map(id => `<@${id}>`).join(', ')}`;
+    if (!adminInfo) adminInfo = '*Only server admins with Manage Server permission*';
 
     embed.addFields({
         name: '👑 Bot Admins',
@@ -228,11 +217,8 @@ async function handleAutoproxy(message, parsed, guild) {
     guild.settings.forceDisableAutoproxy = !allow;
     await guild.save();
 
-    if (allow) {
-        return utils.success(message, 'Autoproxy is now **allowed**. Users can use their autoproxy settings.');
-    } else {
-        return utils.success(message, 'Autoproxy is now **force disabled**. Users must use proxy tags to proxy.');
-    }
+    if (allow) return utils.success(message, 'Autoproxy is now **allowed**. Users can use their autoproxy settings.');
+    else return utils.success(message, 'Autoproxy is now **force disabled**. Users must use proxy tags to proxy.');
 }
 
 /**
@@ -251,11 +237,8 @@ async function handleClosedChar(message, parsed, guild) {
     guild.settings.closedCharAllowed = allow;
     await guild.save();
 
-    if (allow) {
-        return utils.success(message, 'Special characters are now **allowed** in proxy names.');
-    } else {
-        return utils.success(message, 'Special characters are now **restricted**. Users\' `closedNameDisplay` will be used instead.');
-    }
+    if (allow) return utils.success(message, 'Special characters are now **allowed** in proxy names.');
+    else return utils.success(message, 'Special characters are now **restricted**. Users\' `closedNameDisplay` will be used instead.');
 }
 
 /**
@@ -306,31 +289,26 @@ async function handleChannel(message, parsed, guild) {
     const channelMention = message.mentions.channels.first();
     const channelId = channelMention?.id || parsed._positional[2];
     
-    if (!channelId && ['blacklist', 'whitelist', 'remove', 'add'].includes(action)) {
+    if (!channelId && ['blacklist', 'whitelist', 'remove', 'add'].includes(action)) 
         return utils.error(message, 'Please mention a channel or provide a channel ID.');
-    }
 
     // Validate channel exists
     if (channelId) {
         const channel = message.guild.channels.cache.get(channelId);
-        if (!channel) {
-            return utils.error(message, 'Channel not found.');
-        }
-        if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) {
+        if (!channel) return utils.error(message, 'Channel not found.');
+        if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)
             return utils.error(message, 'Only text channels can be added to the list.');
-        }
     }
 
     // sys!config channel blacklist <#channel>
     if (action === 'blacklist' || action === 'black' || action === 'bl') {
         // If whitelist is active, inform user
-        if (guild.channels.whitelist.length > 0) {
+        if (guild.channels.whitelist.length > 0)
             return utils.error(message, 'Whitelist mode is active. Use `sys!config channel clear` first, or use `sys!config channel remove` to remove from whitelist.');
-        }
         
-        if (guild.channels.blacklist.includes(channelId)) {
+        if (guild.channels.blacklist.includes(channelId)) 
             return utils.error(message, 'Channel is already blacklisted.');
-        }
+
         
         guild.channels.blacklist.push(channelId);
         await guild.save();
@@ -340,14 +318,12 @@ async function handleChannel(message, parsed, guild) {
     // sys!config channel whitelist <#channel>
     if (action === 'whitelist' || action === 'white' || action === 'wl') {
         // If blacklist has items and whitelist is empty, warn about mode switch
-        if (guild.channels.blacklist.length > 0 && guild.channels.whitelist.length === 0) {
+        if (guild.channels.blacklist.length > 0 && guild.channels.whitelist.length === 0) 
             // Clear blacklist when switching to whitelist mode
             guild.channels.blacklist = [];
-        }
         
-        if (guild.channels.whitelist.includes(channelId)) {
+        if (guild.channels.whitelist.includes(channelId))
             return utils.error(message, 'Channel is already whitelisted.');
-        }
         
         guild.channels.whitelist.push(channelId);
         await guild.save();
@@ -370,9 +346,7 @@ async function handleChannel(message, parsed, guild) {
             removed = true;
         }
         
-        if (!removed) {
-            return utils.error(message, 'Channel is not in any list.');
-        }
+        if (!removed) return utils.error(message, 'Channel is not in any list.');
         
         await guild.save();
         return utils.success(message, `<#${channelId}> has been removed from channel restrictions.`);
@@ -392,9 +366,7 @@ async function handleLog(message, parsed, guild) {
     // sys!config log (show current)
     if (!action) {
         const logChannel = guild.channels.logChannel;
-        if (!logChannel) {
-            return utils.info(message, 'Logging is currently **disabled**.\nUse `sys!config log #channel` to enable.');
-        }
+        if (!logChannel) return utils.info(message, 'Logging is currently **disabled**.\nUse `sys!config log #channel` to enable.');
         
         const events = guild.channels.logEvents || {};
         const enabledEvents = [];
@@ -417,9 +389,8 @@ async function handleLog(message, parsed, guild) {
         const eventName = parsed._positional[2]?.toLowerCase();
         const eventValue = parsed._positional[3]?.toLowerCase();
         
-        if (!eventName || !['proxy', 'edit', 'delete'].includes(eventName)) {
+        if (!eventName || !['proxy', 'edit', 'delete'].includes(eventName)) 
             return utils.error(message, 'Valid events: `proxy`, `edit`, `delete`\nUsage: `sys!config log events <event> <on|off>`');
-        }
         
         if (!eventValue || !['on', 'off'].includes(eventValue)) {
             const current = guild.channels.logEvents?.[eventName] ? 'on' : 'off';
@@ -438,13 +409,11 @@ async function handleLog(message, parsed, guild) {
     const channelId = channelMention?.id || action;
     
     const channel = message.guild.channels.cache.get(channelId);
-    if (!channel) {
+    if (!channel) 
         return utils.error(message, 'Channel not found. Please mention a channel or provide a valid ID.');
-    }
     
-    if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) {
+    if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) 
         return utils.error(message, 'Log channel must be a text channel.');
-    }
 
     guild.channels.logChannel = channelId;
     // Set default log events if not set
@@ -494,23 +463,17 @@ async function handleAdmin(message, parsed, guild) {
         const role = message.mentions.roles.first();
         const user = message.mentions.users.first();
         
-        if (!role && !user) {
-            return utils.error(message, 'Please mention a role or user to add as admin.');
-        }
+        if (!role && !user) return utils.error(message, 'Please mention a role or user to add as admin.');
 
         if (role) {
-            if (guild.admins.roleIDs.includes(role.id)) {
-                return utils.error(message, 'Role is already an admin.');
-            }
+            if (guild.admins.roleIDs.includes(role.id)) return utils.error(message, 'Role is already an admin.');
             guild.admins.roleIDs.push(role.id);
             await guild.save();
             return utils.success(message, `<@&${role.id}> has been added as a Systemiser admin.`);
         }
 
         if (user) {
-            if (guild.admins.memberIDs.includes(user.id)) {
-                return utils.error(message, 'User is already an admin.');
-            }
+            if (guild.admins.memberIDs.includes(user.id)) return utils.error(message, 'User is already an admin.');
             guild.admins.memberIDs.push(user.id);
             await guild.save();
             return utils.success(message, `<@${user.id}> has been added as a Systemiser admin.`);
@@ -522,15 +485,11 @@ async function handleAdmin(message, parsed, guild) {
         const role = message.mentions.roles.first();
         const user = message.mentions.users.first();
         
-        if (!role && !user) {
-            return utils.error(message, 'Please mention a role or user to remove.');
-        }
+        if (!role && !user) return utils.error(message, 'Please mention a role or user to remove.');
 
         if (role) {
             const idx = guild.admins.roleIDs.indexOf(role.id);
-            if (idx === -1) {
-                return utils.error(message, 'Role is not an admin.');
-            }
+            if (idx === -1) return utils.error(message, 'Role is not an admin.');
             guild.admins.roleIDs.splice(idx, 1);
             await guild.save();
             return utils.success(message, `<@&${role.id}> has been removed from Systemiser admins.`);
@@ -538,9 +497,7 @@ async function handleAdmin(message, parsed, guild) {
 
         if (user) {
             const idx = guild.admins.memberIDs.indexOf(user.id);
-            if (idx === -1) {
-                return utils.error(message, 'User is not an admin.');
-            }
+            if (idx === -1) return utils.error(message, 'User is not an admin.');
             guild.admins.memberIDs.splice(idx, 1);
             await guild.save();
             return utils.success(message, `<@${user.id}> has been removed from Systemiser admins.`);

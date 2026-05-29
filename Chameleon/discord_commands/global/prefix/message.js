@@ -26,16 +26,14 @@ module.exports = {
         // Check for reply reference
         const replyRef = message.reference;
         
-        if (!messageId && !replyRef) {
+        if (!messageId && !replyRef) 
             return utils.error(message, 'Please provide a message ID, link, or reply to a proxied message.');
-        }
 
         const targetMessageId = messageId || replyRef?.messageId;
         
         // Route based on subcommand
-        if (firstArg === 'delete' || firstArg === 'del') {
+        if (firstArg === 'delete' || firstArg === 'del') 
             return handleDelete(message, parsed, targetMessageId);
-        }
         
         // Default: show message info
         return handleLookup(message, parsed, targetMessageId);
@@ -57,9 +55,8 @@ async function handleLookup(message, parsed, messageId) {
     const cached = await redis.get(`msg:${messageId}`);
     let msgRecord = null;
 
-    if (cached) {
-        msgRecord = JSON.parse(cached);
-    } else {
+    if (cached) msgRecord = JSON.parse(cached);
+    else {
         msgRecord = await Message.findOne({ discord_webhook_message_id: messageId });
         if (msgRecord) {
             const cacheData = {
@@ -77,9 +74,7 @@ async function handleLookup(message, parsed, messageId) {
         }
     }
 
-    if (!msgRecord) {
-        return utils.error(message, 'This doesn\'t appear to be a proxied message, or it\'s not in our records.');
-    }
+    if (!msgRecord) return utils.error(message, 'This doesn\'t appear to be a proxied message, or it\'s not in our records.');
 
     // Get the entity info
     let entity = null;
@@ -111,9 +106,7 @@ async function handleLookup(message, parsed, messageId) {
             { name: 'Channel', value: `<#${msgRecord.discord_channel_id}>`, inline: true }
         );
 
-    if (entity?.avatar?.url) {
-        embed.setThumbnail(entity.avatar.url);
-    }
+    if (entity?.avatar?.url) embed.setThumbnail(entity.avatar.url);
 
     return message.reply({ embeds: [embed] });
 }
@@ -126,29 +119,21 @@ async function handleDelete(message, parsed, messageId) {
     const cached = await redis.get(`msg:${messageId}`);
     let msgRecord = null;
 
-    if (cached) {
-        msgRecord = JSON.parse(cached);
-    } else {
-        msgRecord = await Message.findOne({ discord_webhook_message_id: messageId });
-    }
+    if (cached) msgRecord = JSON.parse(cached);
+    else msgRecord = await Message.findOne({ discord_webhook_message_id: messageId });
 
-    if (!msgRecord) {
-        return utils.error(message, 'This doesn\'t appear to be a proxied message, or it\'s not in our records.');
-    }
+    if (!msgRecord) return utils.error(message, 'This doesn\'t appear to be a proxied message, or it\'s not in our records.');
 
     // Verify ownership
-    if (msgRecord.discord_user_id !== message.author.id) {
+    if (msgRecord.discord_user_id !== message.author.id) 
         return utils.error(message, 'You can only delete your own proxied messages.');
-    }
 
     try {
         // Try to fetch and delete the actual message
         const channel = await message.client.channels.fetch(msgRecord.discord_channel_id);
         if (channel) {
             const webhookMessage = await channel.messages.fetch(messageId).catch(() => null);
-            if (webhookMessage) {
-                await webhookMessage.delete();
-            }
+            if (webhookMessage) await webhookMessage.delete();
         }
 
         // Delete from MongoDB

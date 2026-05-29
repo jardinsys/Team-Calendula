@@ -53,9 +53,8 @@ module.exports = {
         const source = parsed._positional[0]?.toLowerCase();
 
         // Show help if no args
-        if (!source && message.attachments.size === 0) {
+        if (!source && message.attachments.size === 0)
             return handleHelp(message);
-        }
 
         // Get or create user and system
         let { user, system } = await utils.getOrCreateUserAndSystem(message);
@@ -79,13 +78,9 @@ module.exports = {
         let targetMode = TARGET_APP; // default
         if (parsed.target) {
             const t = parsed.target.toLowerCase();
-            if (t === 'discord' || t === 'dc') {
-                targetMode = TARGET_DISCORD;
-            } else if (t === 'app' || t === 'main') {
-                targetMode = TARGET_APP;
-            } else {
-                return utils.error(message, `Invalid target: \`${parsed.target}\`\nUse \`-target:app\` or \`-target:discord\``);
-            }
+            if (t === 'discord' || t === 'dc') targetMode = TARGET_DISCORD;
+            else if (t === 'app' || t === 'main') targetMode = TARGET_APP;
+            else return utils.error(message, `Invalid target: \`${parsed.target}\`\nUse \`-target:app\` or \`-target:discord\``);
         }
 
         // Parse flags
@@ -102,38 +97,24 @@ module.exports = {
         try {
             if (source === 'pluralkit' || source === 'pk') {
                 const token = parsed._positional[1];
-                if (token) {
-                    // API import
-                    return await importPluralKitAPI(message, system, token, options);
-                } else if (message.attachments.size > 0) {
-                    // File import
-                    return await importPluralKitFile(message, system, options);
-                } else {
-                    return utils.error(message, 'Please provide a PluralKit token or attach an export file.\n\nGet your token: DM PluralKit with `pk;token`\nOr export: `pk;export` and attach the file');
-                }
+                if (token) return await importPluralKitAPI(message, system, token, options); // API import
+                else if (message.attachments.size > 0) return await importPluralKitFile(message, system, options); // File import
+                else return utils.error(message, 'Please provide a PluralKit token or attach an export file.\n\nGet your token: DM PluralKit with `pk;token`\nOr export: `pk;export` and attach the file');
             }
 
             if (source === 'tupperbox' || source === 'tb' || source === 'tupper') {
-                if (message.attachments.size > 0) {
-                    return await importTupperboxFile(message, system, options);
-                } else {
-                    return utils.error(message, 'Please attach a Tupperbox export file.\n\nExport with: `tul!export`');
-                }
+                if (message.attachments.size > 0) return await importTupperboxFile(message, system, options);
+                else return utils.error(message, 'Please attach a Tupperbox export file.\n\nExport with: `tul!export`');
             }
 
             if (source === 'simplyplural' || source === 'sp') {
                 const token = parsed._positional[1];
-                if (token) {
-                    return await importSimplyPluralAPI(message, system, token, options);
-                } else {
-                    return utils.error(message, 'Please provide a Simply Plural API token.\n\nGet your token: Settings → Developer → Add Token (Read permission)');
-                }
+                if (token) return await importSimplyPluralAPI(message, system, token, options);
+                else return utils.error(message, 'Please provide a Simply Plural API token.\n\nGet your token: Settings → Developer → Add Token (Read permission)');
             }
 
             // Auto-detect from attached file
-            if (message.attachments.size > 0) {
-                return await importAutoDetect(message, system, options);
-            }
+            if (message.attachments.size > 0) return await importAutoDetect(message, system, options);
 
             return utils.error(message, `Unknown import source: \`${source}\`\nSupported: \`pluralkit\`, \`tupperbox\`, \`simplyplural\`\n\nUse \`sys!import\` for help.`);
 
@@ -261,9 +242,8 @@ async function importPluralKitAPI(message, system, token, options) {
         });
 
         if (!sysResponse.ok) {
-            if (sysResponse.status === 401 || sysResponse.status === 403) {
+            if (sysResponse.status === 401 || sysResponse.status === 403)
                 throw new Error('Invalid or expired token. Get a new one with `pk;token`');
-            }
             throw new Error(`PluralKit API error: ${sysResponse.status}`);
         }
 
@@ -283,9 +263,8 @@ async function importPluralKitAPI(message, system, token, options) {
             }
         });
 
-        if (!membersResponse.ok) {
+        if (!membersResponse.ok)
             throw new Error(`Failed to fetch members: ${membersResponse.status}`);
-        }
 
         const pkMembers = await membersResponse.json();
 
@@ -305,9 +284,8 @@ async function importPluralKitAPI(message, system, token, options) {
                 }
             });
 
-            if (groupsResponse.ok) {
+            if (groupsResponse.ok) 
                 pkGroups = await groupsResponse.json();
-            }
         }
 
         // Fetch switches if not disabled
@@ -326,9 +304,8 @@ async function importPluralKitAPI(message, system, token, options) {
                 }
             });
 
-            if (switchesResponse.ok) {
+            if (switchesResponse.ok)
                 pkSwitches = await switchesResponse.json();
-            }
         }
 
         // Process the import
@@ -359,9 +336,8 @@ async function importPluralKitAPI(message, system, token, options) {
 async function importPluralKitFile(message, system, options) {
     const attachment = message.attachments.first();
 
-    if (!attachment.name.endsWith('.json')) {
+    if (!attachment.name.endsWith('.json'))
         return utils.error(message, 'Please attach a JSON file.');
-    }
 
     const statusMsg = await message.reply({
         embeds: [new EmbedBuilder()
@@ -374,9 +350,8 @@ async function importPluralKitFile(message, system, options) {
         const data = await response.json();
 
         // Validate PluralKit format
-        if (!data.members && !data.name) {
+        if (!data.members && !data.name)
             throw new Error('This doesn\'t look like a PluralKit export file.');
-        }
 
         await statusMsg.edit({
             embeds: [new EmbedBuilder()
@@ -572,9 +547,8 @@ async function processPluralKitData(system, data, options) {
                     const newGroup = createGroupFromPK(pkGroup, memberIdMap);
                     await newGroup.save();
 
-                    if (!system.groups.IDs.includes(newGroup._id)) {
+                    if (!system.groups.IDs.includes(newGroup._id)) 
                         system.groups.IDs.push(newGroup._id);
-                    }
 
                     result.groupsImported++;
                 }
@@ -607,10 +581,7 @@ async function processPluralKitData(system, data, options) {
                 })
                 .filter(Boolean);
 
-            if (memberIds.length > 0) {
-                // Add to shifts (we'd need the Shift schema, simplified here)
-                result.switchesImported++;
-            }
+            if (memberIds.length > 0) result.switchesImported++; // Add to shifts (we'd need the Shift schema, simplified here)
         }
     }
 
@@ -626,9 +597,8 @@ async function processPluralKitData(system, data, options) {
 async function importTupperboxFile(message, system, options) {
     const attachment = message.attachments.first();
 
-    if (!attachment.name.endsWith('.json')) {
+    if (!attachment.name.endsWith('.json'))
         return utils.error(message, 'Please attach a JSON file.');
-    }
 
     const statusMsg = await message.reply({
         embeds: [new EmbedBuilder()
@@ -641,9 +611,8 @@ async function importTupperboxFile(message, system, options) {
         const data = await response.json();
 
         // Validate Tupperbox format
-        if (!data.tuppers) {
+        if (!data.tuppers)
             throw new Error('This doesn\'t look like a Tupperbox export file.');
-        }
 
         await statusMsg.edit({
             embeds: [new EmbedBuilder()
@@ -854,9 +823,8 @@ async function importSimplyPluralAPI(message, system, token, options) {
                 }
             });
 
-            if (groupsResponse.ok) {
+            if (groupsResponse.ok) 
                 spGroups = await groupsResponse.json();
-            }
         }
 
         // Process the import
@@ -947,9 +915,8 @@ async function processSimplyPluralData(system, data, options) {
                 });
                 await newAlter.save();
 
-                if (!system.alters.IDs.includes(newAlter._id)) {
+                if (!system.alters.IDs.includes(newAlter._id))
                     system.alters.IDs.push(newAlter._id);
-                }
 
                 result.membersImported++;
             }
@@ -969,9 +936,7 @@ async function processSimplyPluralData(system, data, options) {
                     'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(spGroup.name)}$`, 'i') }
                 });
 
-                if (existingGroup && options.skipExisting) {
-                    continue;
-                }
+                if (existingGroup && options.skipExisting) continue;
 
                 if (existingGroup && !options.replace) {
                     if (spGroup.desc) existingGroup.description = spGroup.desc;
@@ -994,9 +959,7 @@ async function processSimplyPluralData(system, data, options) {
                     });
                     await newGroup.save();
 
-                    if (!system.groups.IDs.includes(newGroup._id)) {
-                        system.groups.IDs.push(newGroup._id);
-                    }
+                    if (!system.groups.IDs.includes(newGroup._id)) system.groups.IDs.push(newGroup._id);
 
                     result.groupsImported++;
                 }
@@ -1018,9 +981,8 @@ async function processSimplyPluralData(system, data, options) {
 async function importAutoDetect(message, system, options) {
     const attachment = message.attachments.first();
 
-    if (!attachment.name.endsWith('.json')) {
+    if (!attachment.name.endsWith('.json'))
         return utils.error(message, 'Please attach a JSON file.');
-    }
 
     const statusMsg = await message.reply({
         embeds: [new EmbedBuilder()
@@ -1085,15 +1047,10 @@ function buildImportResultEmbed(source, result, targetMode = TARGET_APP) {
     let description = '';
 
     // Show target mode
-    if (targetMode === TARGET_DISCORD) {
-        description += '🎯 **Target:** Discord-specific fields\n';
-    } else {
-        description += '🎯 **Target:** Main/App fields\n';
-    }
+    if (targetMode === TARGET_DISCORD) description += '🎯 **Target:** Discord-specific fields\n';
+    else description += '🎯 **Target:** Main/App fields\n';
 
-    if (result.systemUpdated) {
-        description += '📋 System info updated\n';
-    }
+    if (result.systemUpdated) description += '📋 System info updated\n';
 
     description += `\n**Alters:**\n`;
     description += `• Imported: **${result.membersImported}**\n`;
@@ -1112,9 +1069,8 @@ function buildImportResultEmbed(source, result, targetMode = TARGET_APP) {
         if (result.groupsUpdated > 0) description += `• Updated: **${result.groupsUpdated}**\n`;
     }
 
-    if (result.switchesImported > 0) {
+    if (result.switchesImported > 0)
         description += `\n**Switches:** ${result.switchesImported} imported\n`;
-    }
 
     embed.setDescription(description);
 

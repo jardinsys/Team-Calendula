@@ -218,9 +218,8 @@ async function handleShow(message, parsed) {
     const { user, system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
 
     if (!system) {
-        if (targetUserId === message.author.id) {
+        if (targetUserId === message.author.id) 
             return utils.error(message, 'You don\'t have a system yet. Use `sys!system new [name]` to create one.');
-        }
         return utils.error(message, 'That user doesn\'t have a system.');
     }
 
@@ -231,9 +230,7 @@ async function handleShow(message, parsed) {
 async function handleNew(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
 
-    if (system) {
-        return utils.error(message, 'You already have a system. Use `sys!system delete` first if you want to create a new one.');
-    }
+    if (system) return utils.error(message, 'You already have a system. Use `sys!system delete` first if you want to create a new one.');
 
     // Get name from remaining positional args
     const name = parsed._positional.slice(1).join(' ') || null;
@@ -284,13 +281,10 @@ async function handleRename(message, parsed) {
     }
 
     const newName = parsed._positional.slice(1).join(' ');
-    if (!newName) {
-        return utils.error(message, 'Please provide a new name: `sys!system rename <name>`');
-    }
+    if (!newName) return utils.error(message, 'Please provide a new name: `sys!system rename <name>`');
 
-    if (!utils.isValidIndexableName(newName)) {
+    if (!utils.isValidIndexableName(newName)) 
         return utils.error(message, 'Indexable names can only contain letters, numbers, dashes, and underscores.');
-    }
 
     system.name = system.name || {};
     system.name.indexable = newName;
@@ -310,9 +304,7 @@ async function handleDisplayName(message, parsed) {
     }
 
     const newName = parsed._positional.slice(1).join(' ');
-    if (!newName) {
-        return utils.error(message, 'Please provide a display name: `sys!system displayname <name>`');
-    }
+    if (!newName) return utils.error(message, 'Please provide a display name: `sys!system displayname <name>`');
 
     system.name = system.name || {};
     system.name.display = newName;
@@ -332,9 +324,7 @@ async function handleDescription(message, parsed) {
     }
 
     const desc = parsed._positional.slice(1).join(' ') || parsed.description;
-    if (!desc) {
-        return utils.error(message, 'Please provide a description: `sys!system description <text>`');
-    }
+    if (!desc) return utils.error(message, 'Please provide a description: `sys!system description <text>`');
 
     system.description = desc;
     await system.save();
@@ -403,9 +393,7 @@ async function handleColor(message, parsed) {
     const colorInput = parsed._positional[1] || parsed.color;
     const color = utils.normalizeColor(colorInput);
 
-    if (!color) {
-        return utils.error(message, 'Please provide a valid hex color: `sys!system color #FF0000`');
-    }
+    if (!color) return utils.error(message, 'Please provide a valid hex color: `sys!system color #FF0000`');
 
     system.color = color;
     await system.save();
@@ -426,9 +414,7 @@ async function handleTag(message, parsed) {
     }
 
     const tagInput = parsed._positional.slice(1).join(' ') || parsed.tag;
-    if (!tagInput) {
-        return utils.error(message, 'Please provide tag(s): `sys!system tag <tag1>, <tag2>, ...`');
-    }
+    if (!tagInput) return utils.error(message, 'Please provide tag(s): `sys!system tag <tag1>, <tag2>, ...`');
 
     const tags = utils.parseList(tagInput);
     
@@ -451,14 +437,10 @@ async function handleBirthday(message, parsed) {
     }
 
     const dateInput = parsed._positional[1] || parsed.birthday;
-    if (!dateInput) {
-        return utils.error(message, 'Please provide a date (YYYY-MM-DD): `sys!system birthday 2020-01-15`');
-    }
+    if (!dateInput) return utils.error(message, 'Please provide a date (YYYY-MM-DD): `sys!system birthday 2020-01-15`');
 
     const date = new Date(dateInput);
-    if (isNaN(date.getTime())) {
-        return utils.error(message, 'Invalid date format. Use YYYY-MM-DD.');
-    }
+    if (isNaN(date.getTime())) return utils.error(message, 'Invalid date format. Use YYYY-MM-DD.');
 
     system.birthday = date;
     await system.save();
@@ -477,9 +459,7 @@ async function handleTimezone(message, parsed) {
     }
 
     const tz = parsed._positional[1] || parsed.timezone;
-    if (!tz) {
-        return utils.error(message, 'Please provide a timezone: `sys!system timezone America/New_York`');
-    }
+    if (!tz) return utils.error(message, 'Please provide a timezone: `sys!system timezone America/New_York`');
 
     system.timezone = tz;
     await system.save();
@@ -499,9 +479,7 @@ async function handleType(message, parsed) {
     }
 
     const typeName = parsed._positional.slice(1).join(' ') || parsed.type;
-    if (!typeName) {
-        return utils.error(message, 'Please provide a type name: `sys!system type <name>`');
-    }
+    if (!typeName) return utils.error(message, 'Please provide a type name: `sys!system type <name>`');
 
     system.sys_type = system.sys_type || {};
     system.sys_type.name = typeName;
@@ -523,13 +501,10 @@ async function handleDSM(message, parsed) {
     }
 
     const dsmType = parsed._positional[1]?.toUpperCase() || parsed.dsm?.toUpperCase();
-    if (!dsmType) {
-        return utils.error(message, `Please provide a DSM type: \`sys!system dsm <type>\`\nValid types: ${DSM_TYPES.join(', ')}`);
-    }
+    if (!dsmType) return utils.error(message, `Please provide a DSM type: \`sys!system dsm <type>\`\nValid types: ${DSM_TYPES.join(', ')}`);
 
-    if (!DSM_TYPES.includes(dsmType)) {
+    if (!DSM_TYPES.includes(dsmType))
         return utils.error(message, `Invalid DSM type. Valid types: ${DSM_TYPES.join(', ')}`);
-    }
 
     system.sys_type = system.sys_type || {};
     system.sys_type.dd = system.sys_type.dd || {};
@@ -552,13 +527,10 @@ async function handleICD(message, parsed) {
     }
 
     const icdType = parsed._positional[1] || parsed.icd;
-    if (!icdType) {
-        return utils.error(message, `Please provide an ICD type: \`sys!system icd <type>\`\nValid types: ${ICD_TYPES.join(', ')}`);
-    }
+    if (!icdType) return utils.error(message, `Please provide an ICD type: \`sys!system icd <type>\`\nValid types: ${ICD_TYPES.join(', ')}`);
 
-    if (!ICD_TYPES.includes(icdType)) {
+    if (!ICD_TYPES.includes(icdType))
         return utils.error(message, `Invalid ICD type. Valid types: ${ICD_TYPES.join(', ')}`);
-    }
 
     system.sys_type = system.sys_type || {};
     system.sys_type.dd = system.sys_type.dd || {};
@@ -581,9 +553,7 @@ async function handleSynonym(message, parsed) {
         return utils.success(message, 'Alter synonyms reset to default (alter/alters).');
     }
 
-    if (!singular) {
-        return utils.error(message, 'Please provide synonyms: `sys!system synonym <singular> <plural>`\nExample: `sys!system synonym headmate headmates`');
-    }
+    if (!singular) return utils.error(message, 'Please provide synonyms: `sys!system synonym <singular> <plural>`\nExample: `sys!system synonym headmate headmates`');
 
     system.alterSynonym = {
         singular: singular,
@@ -601,14 +571,12 @@ async function handlePrivacy(message, parsed) {
     const firstArg = parsed._positional[1]?.toLowerCase();
 
     // Bucket CRUD sub-system
-    if (firstArg === 'buckets' || firstArg === 'bucket') {
+    if (firstArg === 'buckets' || firstArg === 'bucket') 
         return handlePrivacyBuckets(message, parsed, system);
-    }
 
     // Per-bucket field setting: sys!system privacy bucket:<name> <field> <public|private>
-    if (firstArg && firstArg.startsWith('bucket:')) {
+    if (firstArg && firstArg.startsWith('bucket:'))
         return handlePrivacyBucketField(message, parsed, system, firstArg.slice(7));
-    }
 
     // Default bucket field setting: sys!system privacy <field> <public|private>
     const field = firstArg;
@@ -627,13 +595,11 @@ async function handlePrivacy(message, parsed) {
     }
 
     const validFields = ['description', 'avatar', 'banner', 'birthday', 'pronouns', 'metadata', 'caution', 'hidden', 'mask'];
-    if (!validFields.includes(field)) {
+    if (!validFields.includes(field))
         return utils.error(message, `Invalid field. Valid fields: ${validFields.join(', ')}`);
-    }
 
-    if (!value || !['public', 'private'].includes(value)) {
+    if (!value || !['public', 'private'].includes(value)) 
         return utils.error(message, 'Please specify `public` or `private`: `sys!system privacy description private`');
-    }
 
     system.setting = system.setting || {};
     system.setting.privacy = system.setting.privacy || [];
@@ -783,12 +749,10 @@ async function handlePrivacyBucketField(message, parsed, system, bucketName) {
     const value = parsed._positional[3]?.toLowerCase();
     const validFields = ['description', 'avatar', 'banner', 'birthday', 'pronouns', 'metadata', 'caution', 'hidden', 'mask'];
 
-    if (!field || !validFields.includes(field)) {
+    if (!field || !validFields.includes(field)) 
         return utils.error(message, `Invalid field. Valid: ${validFields.join(', ')}`);
-    }
-    if (!value || !['public', 'private'].includes(value)) {
+    if (!value || !['public', 'private'].includes(value)) 
         return utils.error(message, 'Specify `public` or `private`.');
-    }
 
     system.setting = system.setting || {};
     system.setting.privacy = system.setting.privacy || [];
@@ -1099,9 +1063,8 @@ async function handleList(message, parsed) {
 
     const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
 
-    if (alters.length === 0) {
+    if (alters.length === 0) 
         return utils.info(message, `No ${system.alterSynonym?.plural || 'alters'} found.`);
-    }
 
     const embed = new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.system)
@@ -1115,9 +1078,8 @@ async function handleList(message, parsed) {
             const proxies = alter.proxy?.length > 0 ? ` • ${alter.proxy[0]}` : '';
             desc += `**${name}** (\`${alter.name?.indexable || alter._id}\`)${proxies}\n`;
         }
-        if (alters.length > 25) {
+        if (alters.length > 25) 
             desc += `\n*...and ${alters.length - 25} more*`;
-        }
         embed.setDescription(desc);
     } else {
         // Compact list
@@ -1137,9 +1099,8 @@ async function handleFronter(message, parsed) {
     }
 
     const frontLayers = system.front?.layers || [];
-    if (frontLayers.length === 0) {
+    if (frontLayers.length === 0)
         return utils.info(message, 'No fronters currently registered.');
-    }
 
     const embed = new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.system)
@@ -1152,16 +1113,11 @@ async function handleFronter(message, parsed) {
         const fronterNames = [];
         for (const fronter of fronters) {
             let entity = null;
-            if (fronter.alterID) {
-                entity = await Alter.findById(fronter.alterID);
-            } else if (fronter.stateID) {
-                entity = await State.findById(fronter.stateID);
-            } else if (fronter.groupID) {
-                entity = await Group.findById(fronter.groupID);
-            }
-            if (entity) {
-                fronterNames.push(entity.name?.display || entity.name?.indexable || '(no name)');
-            }
+            if (fronter.alterID) entity = await Alter.findById(fronter.alterID);
+            else if (fronter.stateID) entity = await State.findById(fronter.stateID);
+            else if (fronter.groupID) entity = await Group.findById(fronter.groupID);
+
+            if (entity) fronterNames.push(entity.name?.display || entity.name?.indexable || '(no name)');
         }
 
         if (fronterNames.length > 0) {
@@ -1174,12 +1130,8 @@ async function handleFronter(message, parsed) {
     }
 
     // Show front status if set
-    if (system.front?.status) {
-        embed.addFields({ name: 'Status', value: system.front.status, inline: true });
-    }
-    if (system.front?.caution) {
-        embed.addFields({ name: 'Caution', value: system.front.caution, inline: true });
-    }
+    if (system.front?.status) embed.addFields({ name: 'Status', value: system.front.status, inline: true });
+    if (system.front?.caution) embed.addFields({ name: 'Caution', value: system.front.caution, inline: true });
 
     return message.reply({ embeds: [embed] });
 }
@@ -1212,9 +1164,7 @@ async function handleDelete(message, parsed) {
     const discordId = message.author.id;
     const user = await User.findOne({ discordID: discordId });
 
-    if (!user || !user.systemID) {
-        return utils.error(message, 'You don\'t have a system yet.');
-    }
+    if (!user || !user.systemID) return utils.error(message, 'You don\'t have a system yet.');
 
     const system = await System.findById(user.systemID);
     if (!system) {
@@ -1310,24 +1260,16 @@ async function buildSystemEmbed(system, showFull = false) {
     const displayName = system.name?.display || system.name?.indexable || '';
     const indexableName = system.name?.indexable;
 
-    if (indexableName) {
-        embed.setAuthor({ name: indexableName, iconURL: system.avatar?.url });
-    }
+    if (indexableName) embed.setAuthor({ name: indexableName, iconURL: system.avatar?.url });
     embed.setTitle(displayName);
 
-    if (system.description) {
-        embed.setDescription(system.description);
-    }
+    if (system.description) embed.setDescription(system.description);
 
     // Avatar
-    if (system.avatar?.url) {
-        embed.setThumbnail(system.avatar.url);
-    }
+    if (system.avatar?.url) embed.setThumbnail(system.avatar.url);
 
     // Banner
-    if (system.discord?.image?.banner?.url) {
-        embed.setImage(system.discord.image.banner.url);
-    }
+    if (system.discord?.image?.banner?.url) embed.setImage(system.discord.image.banner.url);
 
     // Overview
     const alterCount = system.alters?.IDs?.length || 0;
@@ -1354,15 +1296,11 @@ async function buildSystemEmbed(system, showFull = false) {
     if (system.birthday) personalInfo += `**Birthday:** ${utils.formatDate(system.birthday)}\n`;
     if (system.timezone) personalInfo += `**Timezone:** ${system.timezone}\n`;
     
-    if (personalInfo) {
-        embed.addFields({ name: '👤 Personal', value: personalInfo.trim(), inline: true });
-    }
+    if (personalInfo) embed.addFields({ name: '👤 Personal', value: personalInfo.trim(), inline: true });
 
     // Tags
     const tags = system.discord?.tag?.normal;
-    if (tags && tags.length > 0) {
-        embed.addFields({ name: '🏷️ Tags', value: tags.join(' '), inline: true });
-    }
+    if (tags && tags.length > 0) embed.addFields({ name: '🏷️ Tags', value: tags.join(' '), inline: true });
 
     // System ID footer
     //embed.setFooter({ text: `System ID: ${system._id}` });

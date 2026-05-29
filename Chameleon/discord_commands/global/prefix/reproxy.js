@@ -48,38 +48,25 @@ module.exports = {
                 discord_channel_id: message.channel.id
             }).sort({ createdAt: -1 });
 
-            if (!lastMsg) {
-                return utils.error(message, 'No recent proxied message found. Provide a message ID or reply to a message.');
-            }
+            if (!lastMsg) return utils.error(message, 'No recent proxied message found. Provide a message ID or reply to a message.');
             
             targetMessageId = lastMsg.discord_webhook_message_id;
             newMemberName = parsed._positional[0];
         }
 
-        if (!newMemberName) {
-            return utils.error(message, 'Please provide a member name: `sys!reproxy [message_id] <member_name>`');
-        }
+        if (!newMemberName) return utils.error(message, 'Please provide a member name: `sys!reproxy [message_id] <member_name>`');
 
         // Find the message record — Redis first
         let msgRecord = null;
         const cached = await redis.get(`msg:${targetMessageId}`);
-        if (cached) {
-            msgRecord = JSON.parse(cached);
-        }
-        if (!msgRecord) {
-            msgRecord = await Message.findOne({
-                discord_webhook_message_id: targetMessageId
-            });
-        }
+        if (cached) msgRecord = JSON.parse(cached);
+        if (!msgRecord) msgRecord = await Message.findOne({ discord_webhook_message_id: targetMessageId });
 
-        if (!msgRecord) {
-            return utils.error(message, 'This doesn\'t appear to be a proxied message.');
-        }
+        if (!msgRecord) return utils.error(message, 'This doesn\'t appear to be a proxied message.');
 
         // Verify ownership
-        if (msgRecord.discord_user_id !== message.author.id) {
+        if (msgRecord.discord_user_id !== message.author.id)
             return utils.error(message, 'You can only reproxy your own messages.');
-        }
 
         // Check time limit (1 minute or last message)
         const isLastMessage = await Message.findOne({
@@ -90,15 +77,11 @@ module.exports = {
         const isRecent = (Date.now() - new Date(msgRecord.createdAt).getTime()) < 60000;
         const isLast = isLastMessage?.discord_webhook_message_id === targetMessageId;
 
-        if (!isRecent && !isLast) {
-            return utils.error(message, 'You can only reproxy your last message or messages within 1 minute.');
-        }
+        if (!isRecent && !isLast) return utils.error(message, 'You can only reproxy your last message or messages within 1 minute.');
 
         // Find the new member
         const result = await utils.findEntity(newMemberName, system);
-        if (!result) {
-            return utils.error(message, `Member **${newMemberName}** not found.`);
-        }
+        if (!result) return utils.error(message, `Member **${newMemberName}** not found.`);
 
         const newEntity = result.entity;
         const newType = result.type;
@@ -116,19 +99,18 @@ module.exports = {
             // Build the new display name using proxy layout
             const proxyLayout = system.proxy?.layout?.[newType] || '{name}';
             let displayName = proxyLayout
-                .replace(/{name}/gi, newEntity.name?.display || newEntity.name?.indexable || 'Unknown')
+                .replace(/{name}/gi, newEntity.name?.display || newEntity.name?.indexable || '(no name)')
                 .replace(/{sys-name}/gi, system.name?.display || system.name?.indexable || '')
                 .replace(/{pronouns}/gi, (newEntity.pronouns || []).join('/'))
                 .replace(/{caution}/gi, newEntity.caution?.c_type || '');
             
             // Handle tags
             const tags = system.discord?.tag?.normal || [];
-            for (let i = 0; i < Math.max(tags.length, 10); i++) {
+            for (let i = 0; i < Math.max(tags.length, 10); i++)
                 displayName = displayName.replace(new RegExp(`{tag${i + 1}}`, 'gi'), tags[i] || '');
-            }
             
             // Clean up extra spaces
-            displayName = displayName.replace(/\s+/g, ' ').trim() || newEntity.name?.display || 'Unknown';
+            displayName = displayName.replace(/\s+/g, ' ').trim() || newEntity.name?.display || '(no name)';
 
             // Get avatar
             const avatarUrl = newEntity.discord?.image?.proxyAvatar?.url || 
