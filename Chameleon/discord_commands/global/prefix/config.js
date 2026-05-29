@@ -1,562 +1,600 @@
-// sys!config / sys!settings - Server configuration (admin only)
-// Aliases: sys!config, sys!settings, sys!cfg, sys!serverconfig
+// sys!config / sys!settings - Personal system configuration
+// Aliases: sys!config, sys!cfg, sys!settings
 //
 // USAGE:
-//   sys!config                           - Show current server settings
-//   sys!config proxy <on|off>            - Enable/disable proxying server-wide
-//   sys!config autoproxy <on|off>        - Allow/force-disable autoproxy
-//   sys!config closedchar <on|off>       - Allow/disallow special characters
-//   sys!config channel blacklist <#channel>
-//   sys!config channel whitelist <#channel>
-//   sys!config channel remove <#channel>
-//   sys!config channel clear
-//   sys!config channel list
-//   sys!config log <#channel>            - Set log channel
-//   sys!config log off                   - Disable logging
-//   sys!config log events <proxy|edit|delete> <on|off>
-//   sys!config admin add <@role|@user>
-//   sys!config admin remove <@role|@user>
-//   sys!config admin list
+//   sys!config                                    - Show current personal settings
+//   sys!config timezone [tz]                      - Set/view timezone
+//   sys!config proxy style <off|last|front|name>  - Set proxy style
+//   sys!config proxy case <on|off>                - Toggle case sensitivity
+//   sys!config proxy cooldown <seconds|off|reset> - Set proxy cooldown
+//   sys!config proxy break <on|off>               - Toggle proxy break
+//   sys!config proxy layout <alter|state|group> <format> - Set proxy layout
+//   sys!config proxy server <guild> <style>       - Set per-server proxy style
+//   sys!config closedchar <on|off>                - Toggle special characters
+//   sys!config name format <format>               - Set name format
+//   sys!config terminology alter <singular> [plural] - Set alter terminology
+//   sys!config pronounseparator <sep|off>         - Set pronoun separator
+//   sys!config autoshare <on|off>                 - Toggle auto-share notes
+//   sys!config sync <on|off>                      - Toggle Discord sync
+//   sys!config notifications friend|request|switch|message <on|off>
+//   sys!config friendbucket <bucket|off>          - Set friend auto-bucket
+//   sys!config help                               - Show help
 
-const { EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
-const Guild = require('../../../schemas/guild');
+const { EmbedBuilder } = require('discord.js');
+const System = require('../../../schemas/system');
+const User = require('../../../schemas/user');
 const utils = require('../../functions/bot_utils');
 
 module.exports = {
     name: 'config',
-    aliases: ['cfg', 'serverconfig', 'servercfg', 'settings'],
+    aliases: ['cfg', 'settings'],
 
     async executeMessage(message, args) {
-        // Must be in a guild
-        if (!message.guild) return utils.error(message, 'This command can only be used in a server.');
-
-        // Check permissions
-        const hasPermission = await checkAdminPermission(message);
-        if (!hasPermission) return utils.error(message, 'You need to be a server admin or have Manage Server permission to use this command.');
+        const { user, system, isNew } = await utils.getOrCreateUserAndSystem(message);
+        if (isNew) return await utils.handleNewUserFlow(message, 'config');
 
         const parsed = utils.parseArgs(args);
         const subcommand = parsed._positional[0]?.toLowerCase();
 
-        // Get or create guild settings
-        let guild = await Guild.findOne({ id: message.guild.id });
-        if (!guild) {
-            guild = new Guild({
-                id: message.guild.id,
-                userIDs: [],
-                admins: { roleIDs: [], memberIDs: [] },
-                channels: { blacklist: [], whitelist: [], logEvents: {} },
-                settings: {}
-            });
-            await guild.save();
-        }
-
-        // Route to handler
         const handlers = {
-            'proxy': () => handleProxy(message, parsed, guild),
-            'autoproxy': () => handleAutoproxy(message, parsed, guild),
-            'ap': () => handleAutoproxy(message, parsed, guild),
-            'closedchar': () => handleClosedChar(message, parsed, guild),
-            'closed': () => handleClosedChar(message, parsed, guild),
-            'channel': () => handleChannel(message, parsed, guild),
-            'channels': () => handleChannel(message, parsed, guild),
-            'log': () => handleLog(message, parsed, guild),
-            'logging': () => handleLog(message, parsed, guild),
-            'admin': () => handleAdmin(message, parsed, guild),
-            'admins': () => handleAdmin(message, parsed, guild),
+            'timezone': () => handleTimezone(message, parsed, system),
+            'tz': () => handleTimezone(message, parsed, system),
+            'proxy': () => handleProxy(message, parsed, user, system),
+            'closedchar': () => handleClosedChar(message, parsed, user),
+            'closed': () => handleClosedChar(message, parsed, user),
+            'name': () => handleName(message, parsed, system),
+            'terminology': () => handleTerminology(message, parsed, system),
+            'term': () => handleTerminology(message, parsed, system),
+            'pronounseparator': () => handlePronounSeparator(message, parsed, system),
+            'pronounsep': () => handlePronounSeparator(message, parsed, system),
+            'autoshare': () => handleAutoshare(message, parsed, system),
+            'sync': () => handleSync(message, parsed, system),
+            'notifications': () => handleNotifications(message, parsed, user),
+            'notif': () => handleNotifications(message, parsed, user),
+            'friendbucket': () => handleFriendBucket(message, parsed, system),
             'help': () => handleHelp(message)
         };
 
         if (!subcommand || !handlers[subcommand])
-            return handleShow(message, guild);
+            return handleShow(message, user, system);
 
         return handlers[subcommand]();
     }
 };
 
-/**
- * Check if user has admin permission for config
- */
-async function checkAdminPermission(message) {
-    // Server owner always has permission
-    if (message.guild.ownerId === message.author.id) return true;
-    
-    // Check Discord Manage Server permission
-    if (message.member.permissions.has(PermissionFlagsBits.ManageGuild)) return true;
-    
-    // Check Systemiser admin roles/members
-    const guild = await Guild.findOne({ id: message.guild.id });
-    if (guild) {
-        // Check if user is in admin members
-        if (guild.admins?.memberIDs?.includes(message.author.id)) return true;
-        
-        // Check if user has any admin role
-        const memberRoles = message.member.roles.cache.map(r => r.id);
-        if (guild.admins?.roleIDs?.some(roleId => memberRoles.includes(roleId))) return true;
-    }
-    
-    return false;
-}
-
-/**
- * Show current server configuration
- */
-async function handleShow(message, guild) {
+async function handleShow(message, user, system) {
     const embed = new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.system)
-        .setTitle(`⚙️ ${message.guild.name} - Systemiser Config`)
-        .setThumbnail(message.guild.iconURL({ dynamic: true }));
+        .setTitle('⚙️ Personal Settings')
+        .setThumbnail(message.author.displayAvatarURL({ dynamic: true }));
 
-    // Proxy settings
-    const proxyStatus = guild.settings?.allowProxy !== false ? '✅ Enabled' : '❌ Disabled';
-    const autoproxyStatus = guild.settings?.forceDisableAutoproxy ? '❌ Force Disabled' : '✅ Allowed';
-    const closedCharStatus = guild.settings?.closedCharAllowed !== false ? '✅ Allowed' : '❌ Restricted';
+    if (system) {
+        embed.addFields({
+            name: '🎭 Proxy Settings',
+            value: [
+                `**Style:** \`${system.proxy?.style || 'off'}\``,
+                `**Case Sensitive:** ${system.proxy?.caseSensitive ? '✅ Yes' : '❌ No'}`,
+                `**Cooldown:** ${system.setting?.proxyCoolDown || 3600}s`,
+                `**Break:** ${system.proxy?.break ? '⛔ Enabled' : '▶️ Disabled'}`
+            ].join('\n'),
+            inline: false
+        });
 
-    embed.addFields({
-        name: '🔧 General Settings',
-        value: [
-            `**Proxying:** ${proxyStatus}`,
-            `**Autoproxy:** ${autoproxyStatus}`,
-            `**Special Characters:** ${closedCharStatus}`
-        ].join('\n'),
-        inline: false
-    });
+        embed.addFields({
+            name: '🌐 General',
+            value: [
+                `**Timezone:** ${system.timezone || '*Not set*'}`,
+                `**Terminology:** ${system.alterSynonym?.singular || 'alter'} / ${system.alterSynonym?.plural || 'alters'}`,
+                `**Pronoun Separator:** ${system.discord?.pronounSeparator || '*Not set*'}`,
+                `**Discord Sync:** ${system.syncWithApps?.discord ? '✅ Enabled' : '❌ Disabled'}`,
+                `**Auto-share Notes:** ${system.setting?.autoshareNotestoUsers ? '✅ Enabled' : '❌ Disabled'}`,
+                `**Friend Auto-Bucket:** ${system.setting?.friendAutoBucket || '*Not set*'}`
+            ].join('\n'),
+            inline: false
+        });
 
-    // Channel settings
-    const blacklist = guild.channels?.blacklist || [];
-    const whitelist = guild.channels?.whitelist || [];
-    
-    let channelInfo = '';
-    if (whitelist.length > 0) {
-        channelInfo = `**Whitelist Mode:** Only ${whitelist.length} channel(s) allow proxying\n`;
-        channelInfo += whitelist.slice(0, 5).map(id => `<#${id}>`).join(', ');
-        if (whitelist.length > 5) channelInfo += ` (+${whitelist.length - 5} more)`;
-    } else if (blacklist.length > 0) {
-        channelInfo = `**Blacklisted:** ${blacklist.length} channel(s)\n`;
-        channelInfo += blacklist.slice(0, 5).map(id => `<#${id}>`).join(', ');
-        if (blacklist.length > 5) channelInfo += ` (+${blacklist.length - 5} more)`;
-    } else {
-        channelInfo = '*All channels allow proxying*';
+        if (system.discord?.tag?.normal?.length > 0) {
+            embed.addFields({
+                name: '🏷️ Proxy Tags',
+                value: system.discord.tag.normal.map(t => '`' + t + '`').join(', '),
+                inline: false
+            });
+        }
     }
 
-    embed.addFields({
-        name: '📝 Channel Restrictions',
-        value: channelInfo,
-        inline: false
-    });
+    if (user) {
+        const notifPrefs = user.settings?.notificationPreferences || {};
+        embed.addFields({
+            name: '🔔 Notifications',
+            value: [
+                `**Friend Notifications:** ${notifPrefs.friendNotifications || 'dm'}`,
+                `**Friend Requests:** ${notifPrefs.friendRequests !== false ? '✅' : '❌'}`,
+                `**Friend Switches:** ${notifPrefs.friendSwitches !== false ? '✅' : '❌'}`,
+                `**App Messages:** ${notifPrefs.appMessages !== false ? '✅' : '❌'}`
+            ].join('\n'),
+            inline: false
+        });
 
-    // Logging
-    const logChannel = guild.channels?.logChannel;
-    const logEvents = guild.channels?.logEvents || {};
-    let logInfo = logChannel ? `**Channel:** <#${logChannel}>\n` : '*Logging disabled*\n';
-    if (logChannel) {
-        const events = [];
-        if (logEvents.proxy !== false) events.push('proxy');
-        if (logEvents.edit) events.push('edit');
-        if (logEvents.delete) events.push('delete');
-        logInfo += `**Events:** ${events.length ? events.join(', ') : 'none'}`;
+        embed.addFields({
+            name: '🔤 Display',
+            value: `**Special Characters:** ${user.settings?.closedCharAllowed !== false ? '✅ Allowed' : '❌ Restricted'}`,
+            inline: false
+        });
     }
-
-    embed.addFields({
-        name: '📋 Logging',
-        value: logInfo,
-        inline: false
-    });
-
-    // Admins
-    const adminRoles = guild.admins?.roleIDs || [];
-    const adminMembers = guild.admins?.memberIDs || [];
-    let adminInfo = '';
-    if (adminRoles.length > 0) adminInfo += `**Roles:** ${adminRoles.map(id => `<@&${id}>`).join(', ')}\n`;
-    if (adminMembers.length > 0) adminInfo += `**Members:** ${adminMembers.map(id => `<@${id}>`).join(', ')}`;
-    if (!adminInfo) adminInfo = '*Only server admins with Manage Server permission*';
-
-    embed.addFields({
-        name: '👑 Bot Admins',
-        value: adminInfo,
-        inline: false
-    });
 
     embed.setFooter({ text: 'Use sys!config help for command list' });
 
     return message.reply({ embeds: [embed] });
 }
 
-/**
- * Handle proxy on/off
- */
-async function handleProxy(message, parsed, guild) {
-    const value = parsed._positional[1]?.toLowerCase();
-    
-    if (!value || !['on', 'off', 'enable', 'disable'].includes(value)) {
-        const current = guild.settings?.allowProxy !== false ? 'enabled' : 'disabled';
-        return utils.info(message, `Proxying is currently **${current}**.\nUse \`sys!config proxy on\` or \`sys!config proxy off\` to change.`);
+async function handleTimezone(message, parsed, system) {
+    const value = parsed._positional.slice(1).join(' ');
+
+    if (!value) {
+        const current = system.timezone || '*Not set*';
+        return utils.info(message, `Your timezone is currently **${current}**.\nUse \`sys!config timezone <timezone>\` to change (e.g., \`sys!config timezone America/New_York\`).`);
     }
 
-    const enable = ['on', 'enable'].includes(value);
-    guild.settings = guild.settings || {};
-    guild.settings.allowProxy = enable;
-    await guild.save();
+    system.timezone = value;
+    await system.save();
 
-    return utils.success(message, `Proxying is now **${enable ? 'enabled' : 'disabled'}** server-wide.`);
+    return utils.success(message, `Timezone set to **${value}**.`);
 }
 
-/**
- * Handle autoproxy force disable
- */
-async function handleAutoproxy(message, parsed, guild) {
-    const value = parsed._positional[1]?.toLowerCase();
-    
-    if (!value || !['on', 'off', 'enable', 'disable'].includes(value)) {
-        const current = guild.settings?.forceDisableAutoproxy ? 'force disabled' : 'allowed';
-        return utils.info(message, `Autoproxy is currently **${current}**.\nUse \`sys!config autoproxy on\` to allow or \`sys!config autoproxy off\` to force disable.`);
-    }
+async function handleProxy(message, parsed, user, system) {
+    if (!system) return utils.error(message, 'You need a system to configure proxy settings.');
 
-    // on = allow autoproxy, off = force disable
-    const allow = ['on', 'enable'].includes(value);
-    guild.settings = guild.settings || {};
-    guild.settings.forceDisableAutoproxy = !allow;
-    await guild.save();
-
-    if (allow) return utils.success(message, 'Autoproxy is now **allowed**. Users can use their autoproxy settings.');
-    else return utils.success(message, 'Autoproxy is now **force disabled**. Users must use proxy tags to proxy.');
-}
-
-/**
- * Handle closed character setting
- */
-async function handleClosedChar(message, parsed, guild) {
-    const value = parsed._positional[1]?.toLowerCase();
-    
-    if (!value || !['on', 'off', 'enable', 'disable'].includes(value)) {
-        const current = guild.settings?.closedCharAllowed !== false ? 'allowed' : 'restricted';
-        return utils.info(message, `Special characters are currently **${current}**.\nUse \`sys!config closedchar on\` to allow or \`sys!config closedchar off\` to restrict.`);
-    }
-
-    const allow = ['on', 'enable'].includes(value);
-    guild.settings = guild.settings || {};
-    guild.settings.closedCharAllowed = allow;
-    await guild.save();
-
-    if (allow) return utils.success(message, 'Special characters are now **allowed** in proxy names.');
-    else return utils.success(message, 'Special characters are now **restricted**. Users\' `closedNameDisplay` will be used instead.');
-}
-
-/**
- * Handle channel blacklist/whitelist
- */
-async function handleChannel(message, parsed, guild) {
     const action = parsed._positional[1]?.toLowerCase();
-    
-    guild.channels = guild.channels || { blacklist: [], whitelist: [] };
 
-    // sys!config channel list
-    if (!action || action === 'list') {
-        const blacklist = guild.channels.blacklist || [];
-        const whitelist = guild.channels.whitelist || [];
-        
-        const embed = new EmbedBuilder()
-            .setColor(utils.ENTITY_COLORS.info)
-            .setTitle('📝 Channel Settings');
-
-        if (whitelist.length > 0) {
-            embed.setDescription('**Mode: Whitelist** (only listed channels allow proxying)');
-            embed.addFields({
-                name: `Whitelisted Channels (${whitelist.length})`,
-                value: whitelist.map(id => `<#${id}>`).join('\n') || '*None*'
-            });
-        } else if (blacklist.length > 0) {
-            embed.setDescription('**Mode: Blacklist** (listed channels block proxying)');
-            embed.addFields({
-                name: `Blacklisted Channels (${blacklist.length})`,
-                value: blacklist.map(id => `<#${id}>`).join('\n') || '*None*'
-            });
-        } else {
-            embed.setDescription('**Mode: Open** (all channels allow proxying)');
-        }
-
-        return message.reply({ embeds: [embed] });
-    }
-
-    // sys!config channel clear
-    if (action === 'clear') {
-        guild.channels.blacklist = [];
-        guild.channels.whitelist = [];
-        await guild.save();
-        return utils.success(message, 'Channel restrictions cleared. All channels now allow proxying.');
-    }
-
-    // Get channel from mention or ID
-    const channelMention = message.mentions.channels.first();
-    const channelId = channelMention?.id || parsed._positional[2];
-    
-    if (!channelId && ['blacklist', 'whitelist', 'remove', 'add'].includes(action)) 
-        return utils.error(message, 'Please mention a channel or provide a channel ID.');
-
-    // Validate channel exists
-    if (channelId) {
-        const channel = message.guild.channels.cache.get(channelId);
-        if (!channel) return utils.error(message, 'Channel not found.');
-        if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)
-            return utils.error(message, 'Only text channels can be added to the list.');
-    }
-
-    // sys!config channel blacklist <#channel>
-    if (action === 'blacklist' || action === 'black' || action === 'bl') {
-        // If whitelist is active, inform user
-        if (guild.channels.whitelist.length > 0)
-            return utils.error(message, 'Whitelist mode is active. Use `sys!config channel clear` first, or use `sys!config channel remove` to remove from whitelist.');
-        
-        if (guild.channels.blacklist.includes(channelId)) 
-            return utils.error(message, 'Channel is already blacklisted.');
-
-        
-        guild.channels.blacklist.push(channelId);
-        await guild.save();
-        return utils.success(message, `<#${channelId}> has been **blacklisted**. Proxying is disabled there.`);
-    }
-
-    // sys!config channel whitelist <#channel>
-    if (action === 'whitelist' || action === 'white' || action === 'wl') {
-        // If blacklist has items and whitelist is empty, warn about mode switch
-        if (guild.channels.blacklist.length > 0 && guild.channels.whitelist.length === 0) 
-            // Clear blacklist when switching to whitelist mode
-            guild.channels.blacklist = [];
-        
-        if (guild.channels.whitelist.includes(channelId))
-            return utils.error(message, 'Channel is already whitelisted.');
-        
-        guild.channels.whitelist.push(channelId);
-        await guild.save();
-        return utils.success(message, `<#${channelId}> has been **whitelisted**. Proxying is now ONLY allowed in whitelisted channels.`);
-    }
-
-    // sys!config channel remove <#channel>
-    if (action === 'remove' || action === 'rm') {
-        let removed = false;
-        
-        const blackIdx = guild.channels.blacklist.indexOf(channelId);
-        if (blackIdx !== -1) {
-            guild.channels.blacklist.splice(blackIdx, 1);
-            removed = true;
-        }
-        
-        const whiteIdx = guild.channels.whitelist.indexOf(channelId);
-        if (whiteIdx !== -1) {
-            guild.channels.whitelist.splice(whiteIdx, 1);
-            removed = true;
-        }
-        
-        if (!removed) return utils.error(message, 'Channel is not in any list.');
-        
-        await guild.save();
-        return utils.success(message, `<#${channelId}> has been removed from channel restrictions.`);
-    }
-
-    return utils.error(message, 'Unknown channel action. Use `blacklist`, `whitelist`, `remove`, `clear`, or `list`.');
-}
-
-/**
- * Handle logging settings
- */
-async function handleLog(message, parsed, guild) {
-    const action = parsed._positional[1]?.toLowerCase();
-    
-    guild.channels = guild.channels || { logEvents: {} };
-
-    // sys!config log (show current)
     if (!action) {
-        const logChannel = guild.channels.logChannel;
-        if (!logChannel) return utils.info(message, 'Logging is currently **disabled**.\nUse `sys!config log #channel` to enable.');
-        
-        const events = guild.channels.logEvents || {};
-        const enabledEvents = [];
-        if (events.proxy !== false) enabledEvents.push('proxy');
-        if (events.edit) enabledEvents.push('edit');
-        if (events.delete) enabledEvents.push('delete');
-        
-        return utils.info(message, `Logging to <#${logChannel}>\n**Events:** ${enabledEvents.join(', ') || 'none'}`);
+        return utils.info(message, [
+            `**Style:** \`${system.proxy?.style || 'off'}\``,
+            `**Case Sensitive:** ${system.proxy?.caseSensitive ? 'Yes' : 'No'}`,
+            `**Cooldown:** ${system.setting?.proxyCoolDown || 3600}s`,
+            `**Break:** ${system.proxy?.break ? 'Enabled' : 'Disabled'}`,
+            '',
+            'Use `sys!config help` for proxy subcommands.'
+        ].join('\n'));
     }
 
-    // sys!config log off
-    if (action === 'off' || action === 'disable' || action === 'none') {
-        guild.channels.logChannel = undefined;
-        await guild.save();
-        return utils.success(message, 'Proxy logging has been **disabled**.');
-    }
+    const handlers = {
+        'style': () => handleProxyStyle(message, parsed, system),
+        'case': () => handleProxyCase(message, parsed, system),
+        'cooldown': () => handleProxyCooldown(message, parsed, system),
+        'break': () => handleProxyBreak(message, parsed, system),
+        'layout': () => handleProxyLayout(message, parsed, system),
+        'server': () => handleProxyServer(message, parsed, system)
+    };
 
-    // sys!config log events <event> <on|off>
-    if (action === 'events' || action === 'event') {
-        const eventName = parsed._positional[2]?.toLowerCase();
-        const eventValue = parsed._positional[3]?.toLowerCase();
-        
-        if (!eventName || !['proxy', 'edit', 'delete'].includes(eventName)) 
-            return utils.error(message, 'Valid events: `proxy`, `edit`, `delete`\nUsage: `sys!config log events <event> <on|off>`');
-        
-        if (!eventValue || !['on', 'off'].includes(eventValue)) {
-            const current = guild.channels.logEvents?.[eventName] ? 'on' : 'off';
-            return utils.info(message, `Event **${eventName}** is currently **${current}**.\nUse \`sys!config log events ${eventName} on\` or \`off\` to change.`);
-        }
-        
-        guild.channels.logEvents = guild.channels.logEvents || {};
-        guild.channels.logEvents[eventName] = eventValue === 'on';
-        await guild.save();
-        
-        return utils.success(message, `Log event **${eventName}** is now **${eventValue}**.`);
-    }
+    if (!handlers[action])
+        return utils.error(message, 'Unknown proxy action. Use `style`, `case`, `cooldown`, `break`, `layout`, or `server`.');
 
-    // sys!config log #channel
-    const channelMention = message.mentions.channels.first();
-    const channelId = channelMention?.id || action;
-    
-    const channel = message.guild.channels.cache.get(channelId);
-    if (!channel) 
-        return utils.error(message, 'Channel not found. Please mention a channel or provide a valid ID.');
-    
-    if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) 
-        return utils.error(message, 'Log channel must be a text channel.');
-
-    guild.channels.logChannel = channelId;
-    // Set default log events if not set
-    guild.channels.logEvents = guild.channels.logEvents || { proxy: true, edit: false, delete: false };
-    await guild.save();
-
-    return utils.success(message, `Proxy events will now be logged to <#${channelId}>.`);
+    return handlers[action]();
 }
 
-/**
- * Handle admin management
- */
-async function handleAdmin(message, parsed, guild) {
+async function handleProxyStyle(message, parsed, system) {
+    const value = parsed._positional[2]?.toLowerCase();
+
+    if (!value) {
+        return utils.info(message, `Current proxy style: \`${system.proxy?.style || 'off'}\`\nUse \`sys!config proxy style <off|last|front|name>\` to change.`);
+    }
+
+    const validStyles = ['off', 'last', 'front'];
+    if (!validStyles.includes(value)) {
+        system.proxy = system.proxy || {};
+        system.proxy.style = value;
+        await system.save();
+        return utils.success(message, `Proxy style set to **${value}** (specific entity).`);
+    }
+
+    system.proxy = system.proxy || {};
+    system.proxy.style = value;
+    await system.save();
+
+    if (value === 'off') return utils.success(message, 'Auto-proxy is now **disabled**. Use proxy tags to proxy.');
+    if (value === 'last') return utils.success(message, 'Proxy style set to **last**. Will auto-proxy your most recent entity.');
+    if (value === 'front') return utils.success(message, 'Proxy style set to **front**. Will auto-proxy your current fronter.');
+}
+
+async function handleProxyCase(message, parsed, system) {
+    const value = parsed._positional[2]?.toLowerCase();
+
+    if (!value || !['on', 'off'].includes(value)) {
+        const current = system.proxy?.caseSensitive ? 'enabled' : 'disabled';
+        return utils.info(message, `Case sensitivity is currently **${current}**.\nUse \`sys!config proxy case on\` or \`sys!config proxy case off\` to change.`);
+    }
+
+    const enable = value === 'on';
+    system.proxy = system.proxy || {};
+    system.proxy.caseSensitive = enable;
+    await system.save();
+
+    return utils.success(message, `Proxy tags are now **${enable ? 'case sensitive' : 'case insensitive'}**.`);
+}
+
+async function handleProxyCooldown(message, parsed, system) {
+    const value = parsed._positional[2]?.toLowerCase();
+
+    if (!value) {
+        const current = system.setting?.proxyCoolDown || 3600;
+        return utils.info(message, `Proxy cooldown is currently **${current} seconds**.\nUse \`sys!config proxy cooldown <seconds>\`, \`off\`, or \`reset\` to change.`);
+    }
+
+    if (value === 'off' || value === '0') {
+        system.setting = system.setting || {};
+        system.setting.proxyCoolDown = 0;
+        await system.save();
+        return utils.success(message, 'Proxy cooldown is now **disabled**.');
+    }
+
+    if (value === 'reset' || value === 'default') {
+        system.setting = system.setting || {};
+        system.setting.proxyCoolDown = 3600;
+        await system.save();
+        return utils.success(message, 'Proxy cooldown reset to **3600 seconds** (1 hour).');
+    }
+
+    const seconds = parseInt(value);
+    if (isNaN(seconds) || seconds < 0) {
+        return utils.error(message, 'Please provide a valid number of seconds, `off`, or `reset`.');
+    }
+
+    system.setting = system.setting || {};
+    system.setting.proxyCoolDown = seconds;
+    await system.save();
+
+    return utils.success(message, `Proxy cooldown set to **${seconds} seconds**.`);
+}
+
+async function handleProxyBreak(message, parsed, system) {
+    const value = parsed._positional[2]?.toLowerCase();
+
+    if (!value || !['on', 'off'].includes(value)) {
+        const current = system.proxy?.break ? 'enabled' : 'disabled';
+        return utils.info(message, `Proxy break is currently **${current}**.\nUse \`sys!config proxy break on\` or \`sys!config proxy break off\` to change.`);
+    }
+
+    const enable = value === 'on';
+    system.proxy = system.proxy || {};
+    system.proxy.break = enable;
+    await system.save();
+
+    if (enable) return utils.success(message, 'Proxy break is now **enabled**. Use `\\` to break out of a proxy.');
+    return utils.success(message, 'Proxy break is now **disabled**.');
+}
+
+async function handleProxyLayout(message, parsed, system) {
+    const type = parsed._positional[2]?.toLowerCase();
+    const format = parsed._positional.slice(3).join(' ');
+
+    if (!type || !['alter', 'state', 'group'].includes(type)) {
+        const layouts = system.discord?.proxylayout || {};
+        return utils.info(message, [
+            '**Current Layouts:**',
+            `**Alter:** ${layouts.alter || '*Not set*'}`,
+            `**State:** ${layouts.state || '*Not set*'}`,
+            `**Group:** ${layouts.group || '*Not set*'}`,
+            '',
+            'Use `sys!config proxy layout <alter|state|group> <format>` to change.'
+        ].join('\n'));
+    }
+
+    if (!format) {
+        const current = system.discord?.proxylayout?.[type] || '*Not set*';
+        return utils.info(message, `Current ${type} layout: ${current}\nUse \`sys!config proxy layout ${type} <format>\` to change.`);
+    }
+
+    system.discord = system.discord || {};
+    system.discord.proxylayout = system.discord.proxylayout || {};
+    system.discord.proxylayout[type] = format;
+    await system.save();
+
+    return utils.success(message, `${utils.capitalize(type)} layout set to: \`${format}\``);
+}
+
+async function handleProxyServer(message, parsed, system) {
+    const guildName = parsed._positional[2];
+    const style = parsed._positional[3]?.toLowerCase();
+
+    const servers = system.discord?.server || [];
+
+    if (!guildName) {
+        if (servers.length === 0) {
+            return utils.info(message, 'No per-server proxy styles configured.\nUse `sys!config proxy server <guild> <style>` to set one.');
+        }
+
+        const list = servers
+            .filter(s => s.proxyStyle && s.proxyStyle !== 'off')
+            .map(s => `**${s.name}:** \`${s.proxyStyle}\``)
+            .join('\n') || '*No custom styles set*';
+
+        return utils.info(message, `**Per-Server Proxy Styles:**\n${list}`);
+    }
+
+    const server = servers.find(s => s.name.toLowerCase() === guildName.toLowerCase() || s.id === guildName);
+    if (!server) {
+        return utils.error(message, `Server "${guildName}" not found. Make sure you've set up this server in your system.`);
+    }
+
+    if (!style) {
+        return utils.info(message, `**${server.name}:** \`${server.proxyStyle || 'off'}\`\nUse \`sys!config proxy server ${server.name} <style>\` to change.`);
+    }
+
+    server.proxyStyle = style;
+    await system.save();
+
+    return utils.success(message, `Proxy style for **${server.name}** set to \`${style}\`.`);
+}
+
+async function handleClosedChar(message, parsed, user) {
+    const value = parsed._positional[1]?.toLowerCase();
+
+    if (!value || !['on', 'off'].includes(value)) {
+        const current = user.settings?.closedCharAllowed !== false ? 'allowed' : 'restricted';
+        return utils.info(message, `Special characters are currently **${current}**.\nUse \`sys!config closedchar on\` or \`sys!config closedchar off\` to change.`);
+    }
+
+    const allow = value === 'on';
+    user.settings = user.settings || {};
+    user.settings.closedCharAllowed = allow;
+    await user.save();
+
+    if (allow) return utils.success(message, 'Special characters are now **allowed** in your proxy names.');
+    return utils.success(message, 'Special characters are now **restricted**. Your `closedNameDisplay` will be used instead.');
+}
+
+async function handleName(message, parsed, system) {
+    if (!system) return utils.error(message, 'You need a system to configure name settings.');
+
     const action = parsed._positional[1]?.toLowerCase();
-    
-    guild.admins = guild.admins || { roleIDs: [], memberIDs: [] };
 
-    // sys!config admin list (or just sys!config admin)
-    if (!action || action === 'list') {
-        const embed = new EmbedBuilder()
-            .setColor(utils.ENTITY_COLORS.info)
-            .setTitle('👑 Systemiser Admins');
-
-        const roles = guild.admins.roleIDs || [];
-        const members = guild.admins.memberIDs || [];
-
-        embed.addFields(
-            {
-                name: `Roles (${roles.length})`,
-                value: roles.length ? roles.map(id => `<@&${id}>`).join('\n') : '*None*',
-                inline: true
-            },
-            {
-                name: `Members (${members.length})`,
-                value: members.length ? members.map(id => `<@${id}>`).join('\n') : '*None*',
-                inline: true
-            }
-        );
-
-        embed.setFooter({ text: 'Note: Users with Manage Server permission always have access' });
-
-        return message.reply({ embeds: [embed] });
+    if (action !== 'format') {
+        const current = system.discord?.name?.display || '*Not set*';
+        return utils.info(message, `Current name format: ${current}\nUse \`sys!config name format <format>\` to change.`);
     }
 
-    // sys!config admin add <@role|@user>
-    if (action === 'add') {
-        const role = message.mentions.roles.first();
-        const user = message.mentions.users.first();
-        
-        if (!role && !user) return utils.error(message, 'Please mention a role or user to add as admin.');
-
-        if (role) {
-            if (guild.admins.roleIDs.includes(role.id)) return utils.error(message, 'Role is already an admin.');
-            guild.admins.roleIDs.push(role.id);
-            await guild.save();
-            return utils.success(message, `<@&${role.id}> has been added as a Systemiser admin.`);
-        }
-
-        if (user) {
-            if (guild.admins.memberIDs.includes(user.id)) return utils.error(message, 'User is already an admin.');
-            guild.admins.memberIDs.push(user.id);
-            await guild.save();
-            return utils.success(message, `<@${user.id}> has been added as a Systemiser admin.`);
-        }
+    const format = parsed._positional.slice(2).join(' ');
+    if (!format) {
+        return utils.error(message, 'Please provide a format. Example: `sys!config name format {name} | {system}`');
     }
 
-    // sys!config admin remove <@role|@user>
-    if (action === 'remove' || action === 'rm') {
-        const role = message.mentions.roles.first();
-        const user = message.mentions.users.first();
-        
-        if (!role && !user) return utils.error(message, 'Please mention a role or user to remove.');
+    system.discord = system.discord || {};
+    system.discord.name = system.discord.name || {};
+    system.discord.name.display = format;
+    await system.save();
 
-        if (role) {
-            const idx = guild.admins.roleIDs.indexOf(role.id);
-            if (idx === -1) return utils.error(message, 'Role is not an admin.');
-            guild.admins.roleIDs.splice(idx, 1);
-            await guild.save();
-            return utils.success(message, `<@&${role.id}> has been removed from Systemiser admins.`);
-        }
-
-        if (user) {
-            const idx = guild.admins.memberIDs.indexOf(user.id);
-            if (idx === -1) return utils.error(message, 'User is not an admin.');
-            guild.admins.memberIDs.splice(idx, 1);
-            await guild.save();
-            return utils.success(message, `<@${user.id}> has been removed from Systemiser admins.`);
-        }
-    }
-
-    return utils.error(message, 'Unknown admin action. Use `add`, `remove`, or `list`.');
+    return utils.success(message, `Name format set to: \`${format}\``);
 }
 
-/**
- * Show help for config command
- */
+async function handleTerminology(message, parsed, system) {
+    if (!system) return utils.error(message, 'You need a system to configure terminology.');
+
+    const type = parsed._positional[1]?.toLowerCase();
+
+    if (type !== 'alter') {
+        const singular = system.alterSynonym?.singular || 'alter';
+        const plural = system.alterSynonym?.plural || 'alters';
+        return utils.info(message, `Current terminology: **${singular}** / **${plural}**\nUse \`sys!config terminology alter <singular> [plural]\` to change.`);
+    }
+
+    const singular = parsed._positional[2];
+    const plural = parsed._positional[3] || singular + 's';
+
+    if (!singular) {
+        return utils.error(message, 'Please provide the singular form. Example: `sys!config terminology alter member`');
+    }
+
+    system.alterSynonym = { singular, plural };
+    await system.save();
+
+    return utils.success(message, `Terminology set to **${singular}** / **${plural}**.`);
+}
+
+async function handlePronounSeparator(message, parsed, system) {
+    if (!system) return utils.error(message, 'You need a system to configure pronoun separator.');
+
+    const value = parsed._positional.slice(1).join(' ');
+
+    if (!value) {
+        const current = system.discord?.pronounSeparator || '*Not set*';
+        return utils.info(message, `Current pronoun separator: ${current}\nUse \`sys!config pronounseparator <separator>\` or \`off\` to change.`);
+    }
+
+    if (value.toLowerCase() === 'off' || value.toLowerCase() === 'none') {
+        system.discord = system.discord || {};
+        system.discord.pronounSeparator = undefined;
+        await system.save();
+        return utils.success(message, 'Pronoun separator has been **disabled**.');
+    }
+
+    system.discord = system.discord || {};
+    system.discord.pronounSeparator = value;
+    await system.save();
+
+    return utils.success(message, `Pronoun separator set to: \`${value}\``);
+}
+
+async function handleAutoshare(message, parsed, system) {
+    if (!system) return utils.error(message, 'You need a system to configure auto-share.');
+
+    const value = parsed._positional[1]?.toLowerCase();
+
+    if (!value || !['on', 'off'].includes(value)) {
+        const current = system.setting?.autoshareNotestoUsers ? 'enabled' : 'disabled';
+        return utils.info(message, `Auto-share notes is currently **${current}**.\nUse \`sys!config autoshare on\` or \`sys!config autoshare off\` to change.`);
+    }
+
+    const enable = value === 'on';
+    system.setting = system.setting || {};
+    system.setting.autoshareNotestoUsers = enable;
+    await system.save();
+
+    return utils.success(message, `Auto-share notes is now **${enable ? 'enabled' : 'disabled'}**.`);
+}
+
+async function handleSync(message, parsed, system) {
+    if (!system) return utils.error(message, 'You need a system to configure sync.');
+
+    const value = parsed._positional[1]?.toLowerCase();
+
+    if (!value || !['on', 'off'].includes(value)) {
+        const current = system.syncWithApps?.discord ? 'enabled' : 'disabled';
+        return utils.info(message, `Discord sync is currently **${current}**.\nUse \`sys!config sync on\` or \`sys!config sync off\` to change.`);
+    }
+
+    const enable = value === 'on';
+    system.syncWithApps = system.syncWithApps || {};
+    system.syncWithApps.discord = enable;
+    await system.save();
+
+    return utils.success(message, `Discord sync is now **${enable ? 'enabled' : 'disabled'}**.`);
+}
+
+async function handleNotifications(message, parsed, user) {
+    const type = parsed._positional[1]?.toLowerCase();
+    const value = parsed._positional[2]?.toLowerCase();
+
+    const prefs = user.settings?.notificationPreferences || {};
+
+    if (!type) {
+        return utils.info(message, [
+            '**Current Notification Settings:**',
+            `**Friend Notifications:** ${prefs.friendNotifications || 'dm'}`,
+            `**Friend Requests:** ${prefs.friendRequests !== false ? '✅ Enabled' : '❌ Disabled'}`,
+            `**Friend Switches:** ${prefs.friendSwitches !== false ? '✅ Enabled' : '❌ Disabled'}`,
+            `**App Messages:** ${prefs.appMessages !== false ? '✅ Enabled' : '❌ Disabled'}`,
+            '',
+            'Use `sys!config notifications <type> <on|off>` to change.'
+        ].join('\n'));
+    }
+
+    user.settings = user.settings || {};
+    user.settings.notificationPreferences = user.settings.notificationPreferences || {};
+
+    if (type === 'friend') {
+        if (!value || !['dm', 'command', 'off', 'none'].includes(value)) {
+            const current = prefs.friendNotifications || 'dm';
+            return utils.info(message, `Friend notifications are currently **${current}**.\nUse \`sys!config notifications friend <dm|command|off>\` to change.`);
+        }
+
+        const setting = value === 'off' || value === 'none' ? 'none' : value;
+        user.settings.notificationPreferences.friendNotifications = setting;
+        await user.save();
+
+        return utils.success(message, `Friend notifications set to **${setting}**.`);
+    }
+
+    if (type === 'request' || type === 'requests') {
+        if (!value || !['on', 'off'].includes(value)) {
+            const current = prefs.friendRequests !== false ? 'enabled' : 'disabled';
+            return utils.info(message, `Friend request notifications are currently **${current}**.\nUse \`sys!config notifications request on\` or \`off\` to change.`);
+        }
+
+        user.settings.notificationPreferences.friendRequests = value === 'on';
+        await user.save();
+
+        return utils.success(message, `Friend request notifications are now **${value === 'on' ? 'enabled' : 'disabled'}**.`);
+    }
+
+    if (type === 'switch' || type === 'switches') {
+        if (!value || !['on', 'off'].includes(value)) {
+            const current = prefs.friendSwitches !== false ? 'enabled' : 'disabled';
+            return utils.info(message, `Friend switch notifications are currently **${current}**.\nUse \`sys!config notifications switch on\` or \`off\` to change.`);
+        }
+
+        user.settings.notificationPreferences.friendSwitches = value === 'on';
+        await user.save();
+
+        return utils.success(message, `Friend switch notifications are now **${value === 'on' ? 'enabled' : 'disabled'}**.`);
+    }
+
+    if (type === 'message' || type === 'messages' || type === 'app') {
+        if (!value || !['on', 'off'].includes(value)) {
+            const current = prefs.appMessages !== false ? 'enabled' : 'disabled';
+            return utils.info(message, `App message notifications are currently **${current}**.\nUse \`sys!config notifications message on\` or \`off\` to change.`);
+        }
+
+        user.settings.notificationPreferences.appMessages = value === 'on';
+        await user.save();
+
+        return utils.success(message, `App message notifications are now **${value === 'on' ? 'enabled' : 'disabled'}**.`);
+    }
+
+    return utils.error(message, 'Unknown notification type. Use `friend`, `request`, `switch`, or `message`.');
+}
+
+async function handleFriendBucket(message, parsed, system) {
+    if (!system) return utils.error(message, 'You need a system to configure friend auto-bucket.');
+
+    const value = parsed._positional.slice(1).join(' ');
+
+    if (!value) {
+        const current = system.setting?.friendAutoBucket || '*Not set*';
+        return utils.info(message, `Friend auto-bucket is currently **${current}**.\nUse \`sys!config friendbucket <bucket>\` or \`off\` to change.`);
+    }
+
+    if (value.toLowerCase() === 'off' || value.toLowerCase() === 'none') {
+        system.setting = system.setting || {};
+        system.setting.friendAutoBucket = undefined;
+        await system.save();
+        return utils.success(message, 'Friend auto-bucket has been **disabled**.');
+    }
+
+    system.setting = system.setting || {};
+    system.setting.friendAutoBucket = value;
+    await system.save();
+
+    return utils.success(message, `Friend auto-bucket set to **${value}**.`);
+}
+
 async function handleHelp(message) {
     const embed = new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.info)
-        .setTitle('⚙️ Server Config Commands')
-        .setDescription('Configure Systemiser for this server.\n*Requires Manage Server permission or Systemiser admin role.*')
+        .setTitle('⚙️ Personal Config Commands')
+        .setDescription('Configure your personal Systemiser settings.')
         .addFields(
             {
-                name: '🔧 General',
+                name: '🎭 Proxy',
                 value: [
-                    '`sys!config` - Show current settings',
-                    '`sys!config proxy <on|off>` - Enable/disable proxying',
-                    '`sys!config autoproxy <on|off>` - Allow/force-disable autoproxy',
-                    '`sys!config closedchar <on|off>` - Allow/restrict special characters'
+                    '`sys!config proxy style <off|last|front|name>`',
+                    '`sys!config proxy case <on|off>`',
+                    '`sys!config proxy cooldown <seconds|off|reset>`',
+                    '`sys!config proxy break <on|off>`',
+                    '`sys!config proxy layout <alter|state|group> <format>`',
+                    '`sys!config proxy server <guild> <style>`'
                 ].join('\n'),
                 inline: false
             },
             {
-                name: '📝 Channels',
+                name: '🌐 General',
                 value: [
-                    '`sys!config channel list` - Show channel restrictions',
-                    '`sys!config channel blacklist #channel` - Block proxying in channel',
-                    '`sys!config channel whitelist #channel` - Only allow in channel',
-                    '`sys!config channel remove #channel` - Remove from list',
-                    '`sys!config channel clear` - Clear all restrictions'
+                    '`sys!config timezone <tz>` - Set timezone',
+                    '`sys!config name format <format>` - Set name format',
+                    '`sys!config terminology alter <singular> [plural]`',
+                    '`sys!config pronounseparator <sep|off>`',
+                    '`sys!config autoshare <on|off>`',
+                    '`sys!config sync <on|off>`',
+                    '`sys!config friendbucket <bucket|off>`'
                 ].join('\n'),
                 inline: false
             },
             {
-                name: '📋 Logging',
+                name: '🔔 Notifications',
                 value: [
-                    '`sys!config log #channel` - Set log channel',
-                    '`sys!config log off` - Disable logging',
-                    '`sys!config log events <proxy|edit|delete> <on|off>`'
+                    '`sys!config notifications friend <dm|command|off>`',
+                    '`sys!config notifications request <on|off>`',
+                    '`sys!config notifications switch <on|off>`',
+                    '`sys!config notifications message <on|off>`'
                 ].join('\n'),
                 inline: false
             },
             {
-                name: '👑 Admins',
-                value: [
-                    '`sys!config admin list` - List bot admins',
-                    '`sys!config admin add @role|@user` - Add admin',
-                    '`sys!config admin remove @role|@user` - Remove admin'
-                ].join('\n'),
+                name: '🔤 Display',
+                value: '`sys!config closedchar <on|off>` - Toggle special characters',
                 inline: false
             }
         )
-        .setFooter({ text: 'Whitelist mode overrides blacklist. Clear to switch modes.' });
+        .setFooter({ text: 'For server settings, use sys!serverconfig' });
 
     return message.reply({ embeds: [embed] });
 }
