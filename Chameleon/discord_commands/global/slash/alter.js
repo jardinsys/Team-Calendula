@@ -576,7 +576,8 @@ async function handleSettings(interaction, user, system) {
         .addFields(
             { name: 'Closed Name Display', value: alter.name?.closedNameDisplay || '*Not set*', inline: true },
             { name: 'Default Status', value: alter.setting?.default_status || '*Not set*', inline: true },
-            { name: 'Current Condition', value: alter.condition || '*None*', inline: true }
+            { name: 'Current Condition', value: alter.condition || '*None*', inline: true },
+            { name: 'Allow Pings', value: alter.setting?.allowPing !== false ? '✅ Enabled' : '❌ Disabled', inline: true }
         );
 
     // Color priority: alter.color > system.color > none
@@ -587,7 +588,8 @@ async function handleSettings(interaction, user, system) {
         new ButtonBuilder().setCustomId(`alter_settings_closedname_${sessionId}`).setLabel('Edit Closed Name').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`alter_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`alter_settings_privacy_${sessionId}`).setLabel('Privacy Settings').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`alter_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
+        new ButtonBuilder().setCustomId(`alter_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭'),
+        new ButtonBuilder().setCustomId(`alter_settings_allowping_${sessionId}`).setLabel(alter.setting?.allowPing !== false ? 'Pings: ON' : 'Pings: OFF').setStyle(alter.setting?.allowPing !== false ? ButtonStyle.Success : ButtonStyle.Danger)
     );
 
     const syncRow = new ActionRowBuilder().addComponents(
@@ -913,6 +915,48 @@ async function handleButtonInteraction(interaction) {
         return await interaction.update({ embeds: [embed], components: [buttons, syncRow] });
     }
 
+    // Settings → Toggle Allow Pings
+    if (customId.startsWith('alter_settings_allowping_')) {
+        const alter = await Alter.findById(session.alterId);
+        if (!alter.setting) alter.setting = {};
+        alter.setting.allowPing = alter.setting.allowPing === false ? true : (alter.setting.allowPing === undefined ? false : !alter.setting.allowPing);
+        await alter.save();
+
+        // Refresh settings embed
+        const system = await System.findById(session.systemId);
+        session.type = 'settings';
+        const embed = new EmbedBuilder()
+            .setTitle(`⚙️ Settings: ${utils.getDisplayName(alter)}`)
+            .setDescription('Configure settings for this alter.')
+            .addFields(
+                { name: 'Closed Name Display', value: alter.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Default Status', value: alter.setting?.default_status || '*Not set*', inline: true },
+                { name: 'Current Condition', value: alter.condition || '*None*', inline: true },
+                { name: 'Allow Pings', value: alter.setting?.allowPing !== false ? '✅ Enabled' : '❌ Disabled', inline: true }
+            );
+
+        const color = utils.getEntityEmbedColor(alter, system);
+        if (color) embed.setColor(color);
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`alter_settings_closedname_${sessionId}`).setLabel('Edit Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`alter_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`alter_settings_privacy_${sessionId}`).setLabel('Privacy Settings').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`alter_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭'),
+            new ButtonBuilder().setCustomId(`alter_settings_allowping_${sessionId}`).setLabel(alter.setting?.allowPing !== false ? 'Pings: ON' : 'Pings: OFF').setStyle(alter.setting?.allowPing !== false ? ButtonStyle.Success : ButtonStyle.Danger)
+        );
+
+        const syncRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`alter_settings_sync_${sessionId}`)
+                .setLabel(alter.syncWithApps?.discord ? 'Synced with Discord' : 'Not Synced')
+                .setStyle(alter.syncWithApps?.discord ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setEmoji(alter.syncWithApps?.discord ? '✅' : '🔄')
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons, syncRow] });
+    }
+
     // Settings → Privacy Settings
     if (customId.startsWith('alter_settings_privacy_')) {
         const alter = await Alter.findById(session.alterId);
@@ -935,6 +979,8 @@ async function handleButtonInteraction(interaction) {
                     if (privacy.settings.avatar === false) fields.push('avatar:hidden');
                     if (privacy.settings.description === false) fields.push('description:hidden');
                     if (privacy.settings.pronouns === false) fields.push('pronouns:hidden');
+                    if (privacy.settings.allowPing === false) fields.push('pings:disabled');
+                    else if (privacy.settings.allowPing === true) fields.push('pings:allowed');
                 }
 
                 embed.addFields({
@@ -949,6 +995,7 @@ async function handleButtonInteraction(interaction) {
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`alter_privacy_toggle_hidden_${sessionId}`).setLabel('Toggle Hidden').setStyle(ButtonStyle.Primary).setEmoji('👁️'),
+            new ButtonBuilder().setCustomId(`alter_privacy_toggle_ping_${sessionId}`).setLabel('Toggle Pings').setStyle(ButtonStyle.Secondary).setEmoji('🔔'),
             new ButtonBuilder().setCustomId(`alter_privacy_back_${sessionId}`).setLabel('Back to Settings').setStyle(ButtonStyle.Danger)
         );
 
@@ -976,13 +1023,45 @@ async function handleButtonInteraction(interaction) {
 
         const selectMenu = new StringSelectMenuBuilder()
             .setCustomId(`alter_privacy_toggle_select_${sessionId}`)
-            .setPlaceholder('Select bucket to toggle...')
+            .setPlaceholder('Select bucket to toggle hidden...')
             .addOptions(bucketOptions);
 
         const row = new ActionRowBuilder().addComponents(selectMenu);
 
         return await interaction.update({
             content: 'Select a privacy bucket to toggle hidden/visible:',
+            embeds: [],
+            components: [row]
+        });
+    }
+
+    // Privacy → Toggle Allow Pings
+    if (customId.startsWith('alter_privacy_toggle_ping_')) {
+        const alter = await Alter.findById(session.alterId);
+        const system = await System.findById(session.systemId);
+
+        if (!system.privacyBuckets?.length) {
+            return await interaction.reply({ content: '❌ No privacy buckets configured. Create some first.', ephemeral: true });
+        }
+
+        const bucketOptions = system.privacyBuckets.map(b => {
+            const privacy = alter.setting?.privacy?.find(p => p.bucket === b.name);
+            const pingAllowed = privacy?.settings?.allowPing !== false;
+            return new StringSelectMenuOptionBuilder()
+                .setLabel(`${b.name} (${pingAllowed ? 'Pings ON' : 'Pings OFF'})`)
+                .setValue(b.name)
+                .setEmoji(pingAllowed ? '🔔' : '🔕');
+        });
+
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`alter_privacy_toggle_ping_select_${sessionId}`)
+            .setPlaceholder('Select bucket to toggle pings...')
+            .addOptions(bucketOptions);
+
+        const row = new ActionRowBuilder().addComponents(selectMenu);
+
+        return await interaction.update({
+            content: 'Select a privacy bucket to toggle allow pings:',
             embeds: [],
             components: [row]
         });
@@ -1112,6 +1191,49 @@ async function handleSelectMenu(interaction) {
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`alter_privacy_toggle_hidden_${sessionId}`).setLabel('Toggle Hidden').setStyle(ButtonStyle.Primary).setEmoji('👁️'),
+            new ButtonBuilder().setCustomId(`alter_privacy_back_${sessionId}`).setLabel('Back to Settings').setStyle(ButtonStyle.Danger)
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons] });
+    }
+
+    // Privacy toggle ping select
+    if (interaction.customId.startsWith('alter_privacy_toggle_ping_select_')) {
+        const alter = await Alter.findById(session.alterId);
+        const system = await System.findById(session.systemId);
+        const bucketName = interaction.values[0];
+
+        if (!alter.setting) alter.setting = {};
+        if (!alter.setting.privacy) alter.setting.privacy = [];
+
+        let privacy = alter.setting.privacy.find(p => p.bucket === bucketName);
+        if (!privacy) {
+            privacy = { bucket: bucketName, settings: {} };
+            alter.setting.privacy.push(privacy);
+        }
+
+        // Toggle allowPing
+        privacy.settings.allowPing = privacy.settings.allowPing === false ? true : false;
+        await alter.save();
+
+        // Return to privacy settings
+        const embed = new EmbedBuilder()
+            .setTitle(`🔒 Privacy Settings: ${utils.getDisplayName(alter)}`)
+            .setDescription('Configure who can see what information about this alter.');
+
+        if (system.privacyBuckets?.length > 0) {
+            for (const bucket of system.privacyBuckets) {
+                const p = alter.setting?.privacy?.find(pr => pr.bucket === bucket.name);
+                let status = 'Default (pings allowed)';
+                if (p?.settings?.allowPing === false) status = '🔕 Pings disabled';
+                else if (p?.settings?.allowPing === true) status = '🔔 Pings allowed';
+                embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
+            }
+        }
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`alter_privacy_toggle_hidden_${sessionId}`).setLabel('Toggle Hidden').setStyle(ButtonStyle.Primary).setEmoji('👁️'),
+            new ButtonBuilder().setCustomId(`alter_privacy_toggle_ping_${sessionId}`).setLabel('Toggle Pings').setStyle(ButtonStyle.Secondary).setEmoji('🔔'),
             new ButtonBuilder().setCustomId(`alter_privacy_back_${sessionId}`).setLabel('Back to Settings').setStyle(ButtonStyle.Danger)
         );
 

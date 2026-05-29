@@ -73,6 +73,7 @@ const userSchema = new mongoose.Schema({
     }],
     settings:{
         closedCharAllowed: {type: Boolean, default: true},
+        allowPing: {type: Boolean, default: true},
         notificationPreferences: {
             friendNotifications: { type: String, enum: ['none', 'dm', 'command'], default: 'dm' },
             friendRequests: { type: Boolean, default: true },

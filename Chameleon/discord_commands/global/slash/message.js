@@ -19,6 +19,7 @@ const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
+const Guild = require('../../../schemas/guild');
 const redis = require('../../../redis');
 
 const utils = require('../../functions/bot_utils');
@@ -34,7 +35,8 @@ module.exports = {
             .addChoices(
                 { name: 'Delete - Delete a proxied message', value: 'delete' },
                 { name: 'Edit - Edit a proxied message', value: 'edit' },
-                { name: 'Reproxy - Change which entity sent a message', value: 'reproxy' }
+                { name: 'Reproxy - Change which entity sent a message', value: 'reproxy' },
+                { name: 'Ping - Ping the entity who sent a message', value: 'ping' }
             ))
         .addStringOption(opt => opt
             .setName('message_id')
@@ -52,6 +54,7 @@ module.exports = {
             case 'delete': return await handleDelete(interaction);
             case 'edit': return await handleEdit(interaction);
             case 'reproxy': return await handleReproxy(interaction);
+            case 'ping': return await handlePing(interaction);
         }
     },
 
@@ -172,7 +175,38 @@ async function autoDetectLastMessage(interaction) {
     return { fromCache: false, data: null };
 }
 
-// Verify the user owns the message and get the record
+// Auto-detect the most recent proxied message in the current channel (any user)
+async function autoDetectLastMessageAnyUser(interaction) {
+    const channelId = interaction.channelId;
+
+    // Try Redis: scan user_msgs keys for this channel — not feasible, so go straight to MongoDB
+    // MongoDB fallback: most recent message in channel regardless of user
+    const record = await Message.findOne({
+        discord_channel_id: channelId
+    }).sort({ timestamp: -1 });
+
+    if (record) {
+        const cacheData = {
+            _id: record._id.toString(),
+            discord_webhook_message_id: record.discord_webhook_message_id,
+            discord_channel_id: record.discord_channel_id,
+            discord_guild_id: record.discord_guild_id,
+            discord_user_id: record.discord_user_id,
+            system_id: record.system_id,
+            proxy_type: record.proxy_type,
+            proxy_id: record.proxy_id,
+            content: record.content,
+            attachments: record.attachments || [],
+            timestamp: Date.now()
+        };
+        await redis.set(`msg:${record.discord_webhook_message_id}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
+        return { fromCache: false, data: record };
+    }
+
+    return { fromCache: false, data: null };
+}
+
+// Verify message ownership and get the record
 async function verifyMessageOwnership(interaction, messageId) {
     let result;
 
@@ -265,6 +299,15 @@ async function handleDelete(interaction) {
         if (messageRecord._id) {
             await Message.findByIdAndDelete(messageRecord._id);
         }
+
+        // Send guild log (if configured)
+        utils.sendGuildLog(interaction.guildId, 'delete', {
+            entityType: messageRecord.proxy_type,
+            entityName: messageRecord.proxy_type,
+            content: messageRecord.content,
+            channelId: messageRecord.discord_channel_id,
+            messageLink: `https://discord.com/channels/${interaction.guildId}/${messageRecord.discord_channel_id}/${messageRecord.discord_webhook_message_id}`
+        }, interaction.client);
 
         const autoText = messageId ? '' : ' (auto-detected last message)';
         return await interaction.editReply({ content: `✅ Message deleted${autoText}.` });
@@ -400,12 +443,73 @@ async function handleReproxy(interaction) {
             });
         }
 
+        // Send guild log (if configured)
+        utils.sendGuildLog(interaction.guildId, 'reproxy', {
+            oldEntityType: messageRecord.proxy_type,
+            oldEntityName: messageRecord.proxy_type,
+            newEntityType: type,
+            newEntityName: utils.getDisplayName(entity),
+            channelId: messageRecord.discord_channel_id,
+            avatarUrl,
+            messageLink: `https://discord.com/channels/${interaction.guildId}/${messageRecord.discord_channel_id}/${messageRecord.discord_webhook_message_id}`
+        }, interaction.client);
+
         const autoText = messageId ? '' : ' (auto-detected last message)';
         return await interaction.editReply({ content: `✅ Message reproxied to **${utils.getDisplayName(entity)}** (${type})${autoText}.` });
     } catch (err) {
         console.error('Error reproxying message:', err);
         return await interaction.editReply({ content: '❌ Failed to reproxy message. ' + (err.message || 'Unknown error.') });
     }
+}
+
+// Handle ping action
+async function handlePing(interaction) {
+    const messageId = interaction.options.getString('message_id');
+
+    await interaction.deferReply({ ephemeral: true });
+
+    let result;
+    if (messageId) {
+        result = await getMessageRecord(messageId, interaction.channelId);
+    } else {
+        result = await autoDetectLastMessageAnyUser(interaction);
+    }
+
+    const { data: messageRecord } = result;
+
+    if (!messageRecord) {
+        return await interaction.editReply({ content: messageId
+            ? '❌ Message not found. Make sure you\'re using this command in the same channel as the message.'
+            : '❌ No recent proxied messages found in this channel.'
+        });
+    }
+
+    if (!messageRecord.discord_user_id) {
+        return await interaction.editReply({ content: '❌ Could not determine who sent that message.' });
+    }
+
+    // Fetch entity for display name and ping check
+    let entityDisplayName = messageRecord.proxy_type || 'Unknown';
+    let entity = null;
+    if (messageRecord.proxy_id) {
+        if (messageRecord.proxy_type === 'alter') entity = await Alter.findById(messageRecord.proxy_id);
+        else if (messageRecord.proxy_type === 'state') entity = await State.findById(messageRecord.proxy_id);
+        else if (messageRecord.proxy_type === 'group') entity = await Group.findById(messageRecord.proxy_id);
+
+        if (entity) entityDisplayName = utils.getDisplayName(entity);
+    }
+
+    // Check if ping is allowed
+    if (entity && !await utils.isPingAllowed(entity, messageRecord.discord_user_id, interaction.user.id)) {
+        return await interaction.editReply({ content: '❌ That user or entity has disabled pings.' });
+    }
+
+    const pingedUserId = messageRecord.discord_user_id;
+    const senderId = interaction.user.id;
+
+    return await interaction.editReply({
+        content: `-# Hey ${entityDisplayName} (<@${pingedUserId}>), <@${senderId}> is mentioning you!`
+    });
 }
 
 // Get display info for proxying (avatar and name)
@@ -571,8 +675,10 @@ async function handleModalSubmit(interaction) {
 
             // Update Redis cache
             const cached = await redis.get(`msg:${session.messageId}`);
+            let oldContent = null;
             if (cached) {
                 const data = JSON.parse(cached);
+                oldContent = data.content;
                 data.content = newContent;
                 if (session.entityTarget) {
                     data.proxy_type = session.entityTarget.type;
@@ -590,6 +696,21 @@ async function handleModalSubmit(interaction) {
                 }
                 await Message.findByIdAndUpdate(session.messageRecordId, updateFields);
             }
+
+            // Send guild log (if configured)
+            const logEntityName = session.entityTarget
+                ? utils.getDisplayName(session.entityTarget.entity)
+                : 'Unknown';
+            const logEntityType = session.entityTarget?.type || 'alter';
+            utils.sendGuildLog(interaction.guildId, 'edit', {
+                entityType: logEntityType,
+                entityName: logEntityName,
+                oldContent,
+                newContent,
+                channelId: session.channelId,
+                avatarUrl: editPayload.avatarURL || null,
+                messageLink: `https://discord.com/channels/${interaction.guildId}/${session.channelId}/${session.messageId}`
+            }, interaction.client);
 
             const entityName = session.entityTarget ? utils.getDisplayName(session.entityTarget.entity) : null;
             const response = entityName

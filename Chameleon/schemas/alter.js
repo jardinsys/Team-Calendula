@@ -110,6 +110,7 @@ const alterSchema = new mongoose.Schema({
         addedAt: { type: Date, default: Date.now },
     },
     setting: {
+        allowPing: { type: Boolean, default: true },
         default_status: String,
         default_battery: Number,
         mask: {

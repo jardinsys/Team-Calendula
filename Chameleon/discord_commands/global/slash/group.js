@@ -452,6 +452,7 @@ async function handleSettings(interaction, user, system) {
             { name: 'Default Status', value: group.setting?.default_status || '*Not set*', inline: true },
             { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
             { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true },
+            { name: 'Allow Pings', value: group.setting?.allowPing !== false ? '✅ Enabled' : '❌ Disabled', inline: true },
             { name: 'Sync with Discord', value: group.syncWithApps?.discord ? '✅ Yes' : '🔄 No', inline: true }
         );
 
@@ -462,7 +463,8 @@ async function handleSettings(interaction, user, system) {
         new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`group_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
+        new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭'),
+        new ButtonBuilder().setCustomId(`group_settings_allowping_${sessionId}`).setLabel(group.setting?.allowPing !== false ? 'Pings: ON' : 'Pings: OFF').setStyle(group.setting?.allowPing !== false ? ButtonStyle.Success : ButtonStyle.Danger)
     );
 
     const syncRow = new ActionRowBuilder().addComponents(
@@ -749,6 +751,7 @@ async function handleButtonInteraction(interaction) {
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`group_privacy_toggle_hidden_${sessionId}`).setLabel('Toggle Hidden').setStyle(ButtonStyle.Primary).setEmoji('👁️'),
+            new ButtonBuilder().setCustomId(`group_privacy_toggle_ping_${sessionId}`).setLabel('Toggle Pings').setStyle(ButtonStyle.Secondary).setEmoji('🔔'),
             new ButtonBuilder().setCustomId(`group_privacy_back_${sessionId}`).setLabel('Back to Settings').setStyle(ButtonStyle.Danger)
         );
 
@@ -775,10 +778,36 @@ async function handleButtonInteraction(interaction) {
 
         const selectMenu = new StringSelectMenuBuilder()
             .setCustomId(`group_privacy_toggle_select_${sessionId}`)
-            .setPlaceholder('Select bucket to toggle...')
+            .setPlaceholder('Select bucket to toggle hidden...')
             .addOptions(bucketOptions);
 
-        return await interaction.update({ content: 'Select a bucket to toggle:', embeds: [], components: [new ActionRowBuilder().addComponents(selectMenu)] });
+        return await interaction.update({ content: 'Select a bucket to toggle hidden/visible:', embeds: [], components: [new ActionRowBuilder().addComponents(selectMenu)] });
+    }
+
+    // Privacy → Toggle Allow Pings
+    if (customId.startsWith('group_privacy_toggle_ping_')) {
+        const group = await Group.findById(session.groupId);
+        const sys = await System.findById(session.systemId);
+
+        if (!sys.privacyBuckets?.length) {
+            return await interaction.reply({ content: '❌ No privacy buckets configured.', ephemeral: true });
+        }
+
+        const bucketOptions = sys.privacyBuckets.map(b => {
+            const privacy = group.setting?.privacy?.find(p => p.bucket === b.name);
+            const pingAllowed = privacy?.settings?.allowPing !== false;
+            return new StringSelectMenuOptionBuilder()
+                .setLabel(`${b.name} (${pingAllowed ? 'Pings ON' : 'Pings OFF'})`)
+                .setValue(b.name)
+                .setEmoji(pingAllowed ? '🔔' : '🔕');
+        });
+
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`group_privacy_toggle_ping_select_${sessionId}`)
+            .setPlaceholder('Select bucket to toggle pings...')
+            .addOptions(bucketOptions);
+
+        return await interaction.update({ content: 'Select a bucket to toggle allow pings:', embeds: [], components: [new ActionRowBuilder().addComponents(selectMenu)] });
     }
 
     // Privacy → Back to Settings
@@ -865,6 +894,7 @@ async function handleButtonInteraction(interaction) {
                 { name: 'Default Status', value: group.setting?.default_status || '*Not set*', inline: true },
                 { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
                 { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true },
+                { name: 'Allow Pings', value: group.setting?.allowPing !== false ? '✅ Enabled' : '❌ Disabled', inline: true },
                 { name: 'Sync with Discord', value: group.syncWithApps?.discord ? '✅ Yes' : '🔄 No', inline: true }
             );
 
@@ -875,7 +905,50 @@ async function handleButtonInteraction(interaction) {
             new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`group_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭')
+            new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭'),
+            new ButtonBuilder().setCustomId(`group_settings_allowping_${sessionId}`).setLabel(group.setting?.allowPing !== false ? 'Pings: ON' : 'Pings: OFF').setStyle(group.setting?.allowPing !== false ? ButtonStyle.Success : ButtonStyle.Danger)
+        );
+
+        const syncRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`group_settings_sync_${sessionId}`)
+                .setLabel(group.syncWithApps?.discord ? 'Synced with Discord' : 'Not Synced')
+                .setStyle(group.syncWithApps?.discord ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setEmoji(group.syncWithApps?.discord ? '✅' : '🔄')
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons, syncRow] });
+    }
+
+    // Settings → Toggle Allow Pings
+    if (customId.startsWith('group_settings_allowping_')) {
+        const group = await Group.findById(session.groupId);
+        if (!group.setting) group.setting = {};
+        group.setting.allowPing = group.setting.allowPing === false ? true : (group.setting.allowPing === undefined ? false : !group.setting.allowPing);
+        await group.save();
+
+        session.type = 'settings';
+        const embed = new EmbedBuilder()
+            .setTitle(`⚙️ Settings: ${utils.getDisplayName(group)}`)
+            .setDescription('Configure settings for this group.')
+            .addFields(
+                { name: 'Closed Name', value: group.name?.closedNameDisplay || '*Not set*', inline: true },
+                { name: 'Default Status', value: group.setting?.default_status || '*Not set*', inline: true },
+                { name: 'Type', value: group.type?.name || '*Not set*', inline: true },
+                { name: 'Can Front', value: group.type?.canFront || '*Not set*', inline: true },
+                { name: 'Allow Pings', value: group.setting?.allowPing !== false ? '✅ Enabled' : '❌ Disabled', inline: true },
+                { name: 'Sync with Discord', value: group.syncWithApps?.discord ? '✅ Yes' : '🔄 No', inline: true }
+            );
+
+        const color = utils.getEntityEmbedColor(group, system);
+        if (color) embed.setColor(color);
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`group_settings_closedname_${sessionId}`).setLabel('Closed Name').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`group_settings_status_${sessionId}`).setLabel('Edit Default Status').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`group_settings_privacy_${sessionId}`).setLabel('Privacy').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`group_settings_mask_${sessionId}`).setLabel('Mask Settings').setStyle(ButtonStyle.Secondary).setEmoji('🎭'),
+            new ButtonBuilder().setCustomId(`group_settings_allowping_${sessionId}`).setLabel(group.setting?.allowPing !== false ? 'Pings: ON' : 'Pings: OFF').setStyle(group.setting?.allowPing !== false ? ButtonStyle.Success : ButtonStyle.Danger)
         );
 
         const syncRow = new ActionRowBuilder().addComponents(
@@ -941,6 +1014,47 @@ async function handleSelectMenu(interaction) {
 
         const buttons = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`group_privacy_toggle_hidden_${sessionId}`).setLabel('Toggle Hidden').setStyle(ButtonStyle.Primary).setEmoji('👁️'),
+            new ButtonBuilder().setCustomId(`group_privacy_back_${sessionId}`).setLabel('Back to Settings').setStyle(ButtonStyle.Danger)
+        );
+
+        return await interaction.update({ embeds: [embed], components: [buttons] });
+    }
+
+    // Privacy toggle ping select
+    if (interaction.customId.startsWith('group_privacy_toggle_ping_select_')) {
+        const group = await Group.findById(session.groupId);
+        const sys = await System.findById(session.systemId);
+        const bucketName = interaction.values[0];
+
+        if (!group.setting) group.setting = {};
+        if (!group.setting.privacy) group.setting.privacy = [];
+
+        let privacy = group.setting.privacy.find(p => p.bucket === bucketName);
+        if (!privacy) {
+            privacy = { bucket: bucketName, settings: {} };
+            group.setting.privacy.push(privacy);
+        }
+
+        privacy.settings.allowPing = privacy.settings.allowPing === false ? true : false;
+        await group.save();
+
+        const embed = new EmbedBuilder()
+            .setTitle(`🔒 Privacy Settings: ${utils.getDisplayName(group)}`)
+            .setDescription('Configure who can see what information about this group.');
+
+        if (sys.privacyBuckets?.length > 0) {
+            for (const bucket of sys.privacyBuckets) {
+                const p = group.setting?.privacy?.find(pr => pr.bucket === bucket.name);
+                let status = 'Default (pings allowed)';
+                if (p?.settings?.allowPing === false) status = '🔕 Pings disabled';
+                else if (p?.settings?.allowPing === true) status = '🔔 Pings allowed';
+                embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
+            }
+        }
+
+        const buttons = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`group_privacy_toggle_hidden_${sessionId}`).setLabel('Toggle Hidden').setStyle(ButtonStyle.Primary).setEmoji('👁️'),
+            new ButtonBuilder().setCustomId(`group_privacy_toggle_ping_${sessionId}`).setLabel('Toggle Pings').setStyle(ButtonStyle.Secondary).setEmoji('🔔'),
             new ButtonBuilder().setCustomId(`group_privacy_back_${sessionId}`).setLabel('Back to Settings').setStyle(ButtonStyle.Danger)
         );
 

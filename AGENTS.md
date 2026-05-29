@@ -23,6 +23,26 @@ Team-Calendula/
 │   ├── discord_commands/
 │   │   ├── global/
 │   │   │   ├── proxy-message.js      # Core proxy message handler (read → resend as entity)
+│   │   │   ├── prefix/
+│   │   │   │   ├── config.js         # sys!config — personal system settings (timezone, proxy, notifications, etc.)
+│   │   │   │   ├── serverconfig.js   # sys!serverconfig — server/guild config (admin only)
+│   │   │   │   ├── alter.js          # sys!alter commands
+│   │   │   │   ├── state.js          # sys!state commands
+│   │   │   │   ├── group.js          # sys!group commands
+│   │   │   │   ├── system.js         # sys!system commands
+│   │   │   │   ├── friend.js         # sys!friend commands
+│   │   │   │   ├── message.js        # sys!message commands
+│   │   │   │   ├── switch.js         # sys!switch (DEPRECATED)
+│   │   │   │   ├── autoproxy.js      # sys!autoproxy
+│   │   │   │   ├── edit.js           # sys!edit
+│   │   │   │   ├── import.js         # sys!import
+│   │   │   │   ├── convert.js        # sys!convert
+│   │   │   │   ├── profile.js        # sys!profile
+│   │   │   │   ├── whois.js          # sys!whois
+│   │   │   │   ├── reproxy.js        # sys!reproxy
+│   │   │   │   ├── note.js           # sys!note
+│   │   │   │   ├── hi.js             # sys!hi
+│   │   │   │   └── help.js           # sys!help
 │   │   │   ├── slash/
 │   │   │   │   ├── alter.js          # /alter commands + edit interface
 │   │   │   │   ├── state.js          # /state commands + edit interface
@@ -32,12 +52,13 @@ Team-Calendula/
 │   │   │   │   ├── front.js          # /front command (view, switch, layers, per-entity editing)
 │   │   │   │   ├── friend.js         # /friend command (list, view, add, remove, requests, block, unblock, settings)
 │   │   │   │   ├── whois.js          # /whois command + "Who sent this?" context menu
-│   │   │   │   ├── switch.js         # DEPRECATED - to be deleted by user
-│   │   │   │   ├── quickswitch.js    # DEPRECATED - to be deleted by user
-│   │   │   │   └── message.js        # /message command (action pattern: edit/delete/reproxy, auto-detect last message)
-│   │   │   ├── slash/
-│   │   │   │   ├── ... (alter, state, group, system, profile, front, friend, message)
-│   │   │   │   └── settings.js       # /settings command (server, proxy, notifications, general sections)
+│   │   │   │   ├── settings.js       # /settings command (server, proxy, notifications, general sections)
+│   │   │   │   ├── message.js        # /message command (action pattern: edit/delete/reproxy, auto-detect last message)
+│   │   │   │   ├── crisis.js         # /crisis command
+│   │   │   │   ├── support.js        # /support command
+│   │   │   │   ├── whoami.js         # /whoami command
+│   │   │   │   ├── switch.js         # DEPRECATED — to be deleted by user
+│   │   │   │   └── quickswitch.js    # DEPRECATED — to be deleted by user
 │   │   │   └── functions/
 │   │   │       ├── bot_utils.js      # Shared utilities (session management, R2 upload, display helpers, front helpers, proxy/notification builders)
 │   │   │       ├── import_functions.js # Stub — shared import functions (for prefix + slash reuse)
@@ -421,6 +442,113 @@ const isAdmin = interaction.member.permissions.has('Administrator')
 ### Migration Section
 - Placeholder embed in General section pointing to `sys!import` / `sys!convert`
 - Full import/export deferred — `import_functions.js` and `convert_functions.js` are stubs
+
+## Prefix Config Commands (`sys!config` / `sys!serverconfig`)
+
+### Split Architecture
+The prefix config was split into two commands to separate concerns:
+
+| Command | Aliases | Scope | Access |
+|---------|---------|-------|--------|
+| `sys!config` | `sys!cfg`, `sys!settings` | Personal system settings | System owner |
+| `sys!serverconfig` | `sys!servercfg`, `sys!serversettings` | Server/guild settings | Admin only |
+
+### `sys!config` — Personal Settings
+Operates on the caller's own system/user document. No permission check beyond having a system.
+
+| Subcommand | Schema Target |
+|------------|---------------|
+| `sys!config timezone <tz>` | `system.timezone` |
+| `sys!config proxy style <off\|last\|front\|name>` | `system.proxy.style` |
+| `sys!config proxy case <on\|off>` | `system.proxy.caseSensitive` |
+| `sys!config proxy cooldown <seconds\|off\|reset>` | `system.setting.proxyCoolDown` |
+| `sys!config proxy break <on\|off>` | `system.proxy.break` |
+| `sys!config proxy layout <alter\|state\|group> <format>` | `system.discord.proxylayout.*` |
+| `sys!config proxy server <guild> <style>` | `system.discord.server[].proxyStyle` |
+| `sys!config closedchar <on\|off>` | `user.settings.closedCharAllowed` |
+| `sys!config name format <format>` | `system.discord.name.display` |
+| `sys!config terminology alter <singular> [plural]` | `system.alterSynonym` |
+| `sys!config pronounseparator <sep\|off>` | `system.discord.pronounSeparator` |
+| `sys!config autoshare <on\|off>` | `system.setting.autoshareNotestoUsers` |
+| `sys!config sync <on\|off>` | `system.syncWithApps.discord` |
+| `sys!config notifications friend\|request\|switch\|message <on\|off>` | `user.settings.notificationPreferences` |
+| `sys!config friendbucket <bucket\|off>` | `system.setting.friendAutoBucket` |
+
+### `sys!serverconfig` — Server Settings
+Requires Manage Server permission, server ownership, or Systemiser admin role. Same permission check as `/settings > Server`.
+
+| Subcommand | Schema Target |
+|------------|---------------|
+| `sys!serverconfig proxy <on\|off>` | `guild.settings.allowProxy` |
+| `sys!serverconfig autoproxy <on\|off>` | `guild.settings.forceDisableAutoproxy` |
+| `sys!serverconfig closedchar <on\|off>` | `guild.settings.closedCharAllowed` |
+| `sys!serverconfig channel blacklist\|whitelist\|remove\|clear\|list` | `guild.channels.blacklist[]` / `whitelist[]` |
+| `sys!serverconfig log <#channel\|off>` | `guild.channels.logChannel` |
+| `sys!serverconfig log events <proxy\|edit\|delete\|reproxy> <on\|off>` | `guild.channels.logEvents.*` |
+| `sys!serverconfig admin add\|remove\|list` | `guild.admins.roleIDs[]` / `memberIDs[]` |
+
+## Guild Logging System
+
+### Overview
+Guild proxy logging is a configurable system that sends embed logs to a designated text channel when proxy events occur. The configuration UI exists in both prefix (`sys!serverconfig log`) and slash (`/settings > Server > Log Channel`) forms.
+
+### Status
+✅ **Implemented** — was previously a stub (config UI only), now fully wired with `sendGuildLog()`.
+
+### Configuration
+- **Log channel**: Set via `sys!serverconfig log #channel` or `/settings > Server > Log Channel`. Stored as `guild.channels.logChannel`.
+- **Event toggles**: Four events, each on/off, stored in `guild.channels.logEvents`:
+  - `proxy` (default: `true`) — When a message is proxied
+  - `edit` (default: `false`) — When a proxied message is edited
+  - `delete` (default: `false`) — When a proxied message is deleted
+  - `reproxy` (default: `false`) — When a message is reproxied to a different entity
+- Cleared via `sys!serverconfig log off` → sets `logChannel` to `undefined`.
+
+### Implementation
+
+#### Core function: `sendGuildLog` (bot_utils.js)
+```javascript
+sendGuildLog(guildId, eventType, logData, client)
+```
+- Silent failure — never throws, never breaks the main flow
+- Queries Guild doc by both `{ id }` and `{ discordId }` (handles prefix/slash storage inconsistency)
+- Returns early if no Guild doc, no `logChannel`, or event type is disabled
+- Fetches channel via `client.channels.fetch()` and sends the embed
+
+#### Hook locations
+
+| File | Event | Line |
+|------|-------|------|
+| `proxy-message.js` | proxy | After `webhook.send()` (~line 499) |
+| `slash/message.js` | delete | After `webhook.deleteMessage()` (~line 264) |
+| `slash/message.js` | edit | After `webhook.editMessage()` in `handleModalSubmit` (~line 615) |
+| `slash/message.js` | reproxy | After `webhook.editMessage()` in `handleReproxy` (~line 412) |
+
+#### Embed designs
+
+| Event | Color | Fields |
+|-------|-------|--------|
+| **proxy** | Entity color → `#1fb819` | Entity (type + name), System, Channel, Content |
+| **edit** | `#ffdb28` | Entity, Channel, Original content, New content |
+| **delete** | `#e9162d` | Entity, Channel, Content |
+| **reproxy** | `#8f2be7` | From entity, To entity, Channel |
+
+All embeds include timestamp, entity thumbnail, and jump-to-message link.
+
+#### Edge cases
+- **No logging library** — uses raw `console.error` for error reporting
+- **Silent failure** — all errors caught and logged to console only
+- **Missing Guild doc** — if server was never configured, silently returns
+- **Deleted log channel** — `channel.fetch()` fails silently
+- **Bot permissions** — missing `Send Messages` in log channel silently ignored
+- **Content truncation** — content fields truncated to 1024 characters (Discord embed field limit)
+
+#### Schema update needed
+The `reproxy` event type is new to `guild.channels.logEvents`. Existing Guild documents will need a migration to add `reproxy: false`:
+
+```javascript
+guildDoc.channels.logEvents.reproxy = false;
+```
 
 ## Mascot / System Info
 - **System Name:** The Colorwheel 🎡

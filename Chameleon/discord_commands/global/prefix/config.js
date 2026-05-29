@@ -52,6 +52,7 @@ module.exports = {
             'notifications': () => handleNotifications(message, parsed, user),
             'notif': () => handleNotifications(message, parsed, user),
             'friendbucket': () => handleFriendBucket(message, parsed, system),
+            'ping': () => handlePing(message, parsed, user),
             'help': () => handleHelp(message)
         };
 
@@ -118,6 +119,12 @@ async function handleShow(message, user, system) {
         embed.addFields({
             name: '🔤 Display',
             value: `**Special Characters:** ${user.settings?.closedCharAllowed !== false ? '✅ Allowed' : '❌ Restricted'}`,
+            inline: false
+        });
+
+        embed.addFields({
+            name: '📢 Pings',
+            value: `**Message Pings:** ${user.settings?.allowPing !== false ? '✅ Enabled' : '❌ Disabled'}`,
             inline: false
         });
     }
@@ -547,6 +554,22 @@ async function handleFriendBucket(message, parsed, system) {
     return utils.success(message, `Friend auto-bucket set to **${value}**.`);
 }
 
+async function handlePing(message, parsed, user) {
+    const value = parsed._positional[1]?.toLowerCase();
+
+    if (!value || !['on', 'off'].includes(value)) {
+        const current = user.settings?.allowPing !== false ? 'enabled' : 'disabled';
+        return utils.info(message, `Message pings are currently **${current}**.\nUse \`sys!config ping on\` or \`sys!config ping off\` to change.`);
+    }
+
+    const enable = value === 'on';
+    user.settings = user.settings || {};
+    user.settings.allowPing = enable;
+    await user.save();
+
+    return utils.success(message, `Message pings are now **${enable ? 'enabled' : 'disabled'}**.`);
+}
+
 async function handleHelp(message) {
     const embed = new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.info)
@@ -591,6 +614,11 @@ async function handleHelp(message) {
             {
                 name: '🔤 Display',
                 value: '`sys!config closedchar <on|off>` - Toggle special characters',
+                inline: false
+            },
+            {
+                name: '📢 Pings',
+                value: '`sys!config ping <on|off>` - Toggle message pings',
                 inline: false
             }
         )

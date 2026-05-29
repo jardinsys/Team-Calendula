@@ -58,7 +58,7 @@ async function handleProxyMessage(message, client) {
         
         if (proxyMatch) {
             // Explicit proxy found - always proxy and clear break
-            await sendProxyMessage(message, proxyMatch.entity, proxyMatch.type, system, proxyMatch.content);
+            await sendProxyMessage(message, proxyMatch.entity, proxyMatch.type, system, proxyMatch.content, client);
             
             // Clear break since we just proxied
             await redis.del(`system:${system._id}:break`);
@@ -86,7 +86,7 @@ async function handleProxyMessage(message, client) {
             if (!autoProxy) return;
             
             // Use auto-proxy
-            await sendProxyMessage(message, autoProxy.entity, autoProxy.type, system, message.content);
+            await sendProxyMessage(message, autoProxy.entity, autoProxy.type, system, message.content, client);
             
             // Update last proxy time (Redis)
             await redis.set(`system:${system._id}:lastProxyTime`, Date.now().toString());
@@ -408,7 +408,7 @@ async function getEntityById(type, entityId) {
 /**
  * Send a proxy message via webhook
  */
-async function sendProxyMessage(originalMessage, entity, type, system, content) {
+async function sendProxyMessage(originalMessage, entity, type, system, content, client) {
     const guild = originalMessage.guild;
     const channel = originalMessage.channel;
 
@@ -494,6 +494,20 @@ async function sendProxyMessage(originalMessage, entity, type, system, content) 
         await originalMessage.delete();
     } catch (e) {
         console.error('Could not delete original message:', e);
+    }
+
+    // Send guild log (if configured)
+    if (client) {
+        utils.sendGuildLog(guild.id, 'proxy', {
+            entity,
+            type,
+            system,
+            content,
+            channelId: channel.id,
+            avatarUrl,
+            displayName,
+            messageLink: `https://discord.com/channels/${guild.id}/${channel.id}/${webhookMessage.id}`
+        }, client);
     }
 
     // Cache message in Redis (7 day TTL)

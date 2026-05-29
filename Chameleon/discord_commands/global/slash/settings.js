@@ -277,7 +277,8 @@ async function buildGeneralOverview(interaction, user, system, sessionId) {
             { name: 'Terminology', value: (system.alterSynonym?.singular || 'alter') + ' / ' + (system.alterSynonym?.plural || 'alters'), inline: true },
             { name: 'Pronoun Separator', value: system.discord?.pronounSeparator || '*Not set*', inline: true },
             { name: 'Friend Auto-Bucket', value: system.setting?.friendAutoBucket || '*Not set*', inline: true },
-            { name: 'Auto-share Notes', value: system.setting?.autoshareNotestoUsers ? '✅ Enabled' : '❌ Disabled', inline: true }
+            { name: 'Auto-share Notes', value: system.setting?.autoshareNotestoUsers ? '✅ Enabled' : '❌ Disabled', inline: true },
+            { name: 'Message Pings', value: user.settings?.allowPing !== false ? '✅ Enabled' : '❌ Disabled', inline: true }
         );
 
     if (system.discord?.tag?.normal?.length > 0) {
@@ -298,6 +299,7 @@ async function buildGeneralOverview(interaction, user, system, sessionId) {
 
     const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('settings_general_friendbucket_' + sessionId).setLabel('Friend Bucket').setStyle(ButtonStyle.Secondary).setEmoji('🔒'),
+        new ButtonBuilder().setCustomId('settings_general_allowping_' + sessionId).setLabel('Pings').setStyle(user.settings?.allowPing !== false ? ButtonStyle.Success : ButtonStyle.Danger).setEmoji(user.settings?.allowPing !== false ? '✅' : '🔕'),
         new ButtonBuilder().setCustomId('settings_general_migration_' + sessionId).setLabel('Migration').setStyle(ButtonStyle.Secondary).setEmoji('📦'),
         new ButtonBuilder().setCustomId('settings_main_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Danger)
     );
@@ -408,6 +410,9 @@ async function handleButtonInteraction(interaction) {
     }
     if (customId.startsWith('settings_general_autoshare_')) {
         return await handleGeneralAutoshareToggle(interaction, sessionId);
+    }
+    if (customId.startsWith('settings_general_allowping_')) {
+        return await handleGeneralAllowPingToggle(interaction, sessionId);
     }
     if (customId.startsWith('settings_general_friendbucket_') && !customId.includes('select') && !customId.includes('back')) {
         return await handleGeneralFriendBucket(interaction, sessionId);
@@ -1224,6 +1229,19 @@ async function handleGeneralAutoshareToggle(interaction, sessionId) {
     await system.save();
 
     const user = await User.findById(session.userId);
+    return await buildGeneralOverview(interaction, user, system, sessionId);
+}
+
+async function handleGeneralAllowPingToggle(interaction, sessionId) {
+    const session = utils.getSession(sessionId);
+    const user = await User.findById(session.userId);
+    if (!user) return await interaction.reply({ content: 'User not found.', ephemeral: true });
+
+    if (!user.settings) user.settings = {};
+    user.settings.allowPing = user.settings.allowPing === false ? true : (user.settings.allowPing === undefined ? false : !user.settings.allowPing);
+    await user.save();
+
+    const system = await System.findById(session.systemId);
     return await buildGeneralOverview(interaction, user, system, sessionId);
 }
 

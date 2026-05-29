@@ -24,6 +24,7 @@ const groupPrivacySchema = new mongoose.Schema({
     metadata: Boolean,
     hidden: Boolean,
     caution: Boolean,
+    allowPing: Boolean,
     aliases: {
         all: Boolean,
         allowed: [String]
@@ -42,6 +43,7 @@ const alterPrivacySchema = new mongoose.Schema({
     hidden: Boolean,
     proxies: Boolean,
     caution: Boolean,
+    allowPing: Boolean,
     aliases: {
         all: Boolean,
         allowed: [String]

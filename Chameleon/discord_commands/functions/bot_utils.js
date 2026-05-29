@@ -537,6 +537,39 @@ function shouldShowEntity(entity, privacyBucket, isOwner, showFullList = false) 
     return true;
 }
 
+/* Check if pinging an entity is allowed
+ * Priority: user master switch > entity master switch > privacy bucket restriction
+ * @param {Object} entity - The entity being pinged (alter/state/group)
+ * @param {string} pingedUserId - Discord ID of the user who sent the proxied message
+ * @param {string} viewerDiscordId - Discord ID of the person sending the ping command
+ * @returns {Promise<boolean>}
+ */
+async function isPingAllowed(entity, pingedUserId, viewerDiscordId) {
+    // 1. Check entity-level master toggle
+    if (entity.setting?.allowPing === false) return false;
+
+    // 2. Get the entity's owner system and user
+    const System = require('../../../schemas/system');
+    const User = require('../../../schemas/user');
+    const system = await System.findById(entity.systemID);
+    if (!system) return false;
+
+    const ownerUser = await User.findOne({ systemID: system._id.toString() });
+    if (!ownerUser) return false;
+
+    // 3. Check user-level master toggle
+    if (ownerUser.settings?.allowPing === false) return false;
+
+    // 4. Check privacy bucket restriction (only applies to friends, not strangers)
+    const privacyBucket = getPrivacyBucket(system, viewerDiscordId);
+    if (privacyBucket) {
+        const entityPrivacy = entity.setting?.privacy?.find(p => p.bucket === privacyBucket.name);
+        if (entityPrivacy?.settings?.allowPing === false) return false;
+    }
+
+    return true;
+}
+
 /* Check if user is blocked by another user
  * @param {User} targetUser - The user being viewed
  * @param {string} viewerDiscordId - The viewer's Discord ID
@@ -1520,6 +1553,135 @@ function getEntityEmbedColor(entity, system) {
     return entity?.color || system?.color || ENTITY_COLORS.system || null;
 }
 
+// ==== GUILD LOGGING ====
+
+async function sendGuildLog(guildId, eventType, logData, client) {
+    try {
+        let guildDoc = await Guild.findOne({ id: guildId });
+        if (!guildDoc) guildDoc = await Guild.findOne({ discordId: guildId });
+        if (!guildDoc) return;
+
+        const logChannelId = guildDoc.channels?.logChannel;
+        if (!logChannelId) return;
+
+        const logEvents = guildDoc.channels?.logEvents || {};
+        if (eventType === 'proxy' && logEvents.proxy === false) return;
+        if (eventType === 'edit' && !logEvents.edit) return;
+        if (eventType === 'delete' && !logEvents.delete) return;
+        if (eventType === 'reproxy' && !logEvents.reproxy) return;
+
+        const channel = await client.channels.fetch(logChannelId).catch(() => null);
+        if (!channel) return;
+
+        const embed = buildLogEmbed(eventType, logData);
+        await channel.send({ embeds: [embed] });
+    } catch (err) {
+        console.error('[GuildLog] Error sending log:', err.message);
+    }
+}
+
+function buildLogEmbed(eventType, data) {
+    const embed = new EmbedBuilder().setTimestamp();
+
+    switch (eventType) {
+        case 'proxy': {
+            const avatarUrl = data.avatarUrl || null;
+            const displayName = data.displayName || 'Unknown';
+            const entityName = data.entity?.name?.display || data.entity?.name?.indexable || 'Unknown';
+            const systemName = data.system?.name || 'Unknown';
+            const content = (data.content || '').substring(0, 1024);
+            const color = data.entity?.color || data.system?.color || ENTITY_COLORS.success;
+
+            embed
+                .setColor(color)
+                .setTitle('📤 Message Proxied')
+                .setThumbnail(avatarUrl)
+                .addFields(
+                    { name: 'Entity', value: `${capitalize(data.type)}: **${entityName}**`, inline: true },
+                    { name: 'System', value: systemName, inline: true },
+                    { name: 'Channel', value: `<#${data.channelId}>`, inline: true },
+                    { name: 'Content', value: content || '*empty*', inline: false }
+                )
+                .setFooter({ text: `Displayed as: ${displayName}` });
+
+            if (data.messageLink) {
+                embed.setURL(data.messageLink);
+            }
+            break;
+        }
+
+        case 'edit': {
+            const avatarUrl = data.avatarUrl || null;
+            const entityName = data.entityName || 'Unknown';
+            const oldContent = (data.oldContent || '').substring(0, 1024);
+            const newContent = (data.newContent || '').substring(0, 1024);
+            const color = ENTITY_COLORS.group;
+
+            embed
+                .setColor(color)
+                .setTitle('✏️ Message Edited')
+                .setThumbnail(avatarUrl)
+                .addFields(
+                    { name: 'Entity', value: `${capitalize(data.entityType)}: **${entityName}**`, inline: true },
+                    { name: 'Channel', value: `<#${data.channelId}>`, inline: true },
+                    { name: 'Original', value: oldContent || '*empty*', inline: false },
+                    { name: 'New', value: newContent || '*empty*', inline: false }
+                );
+
+            if (data.messageLink) {
+                embed.setURL(data.messageLink);
+            }
+            break;
+        }
+
+        case 'delete': {
+            const avatarUrl = data.avatarUrl || null;
+            const entityName = data.entityName || 'Unknown';
+            const content = (data.content || '').substring(0, 1024);
+            const color = ENTITY_COLORS.error;
+
+            embed
+                .setColor(color)
+                .setTitle('🗑️ Message Deleted')
+                .setThumbnail(avatarUrl)
+                .addFields(
+                    { name: 'Entity', value: `${capitalize(data.entityType)}: **${entityName}**`, inline: true },
+                    { name: 'Channel', value: `<#${data.channelId}>`, inline: true },
+                    { name: 'Content', value: content || '*empty*', inline: false }
+                );
+
+            if (data.messageLink) {
+                embed.setURL(data.messageLink);
+            }
+            break;
+        }
+
+        case 'reproxy': {
+            const avatarUrl = data.avatarUrl || null;
+            const oldEntityName = data.oldEntityName || 'Unknown';
+            const newEntityName = data.newEntityName || 'Unknown';
+            const color = ENTITY_COLORS.info;
+
+            embed
+                .setColor(color)
+                .setTitle('🔄 Message Reproxied')
+                .setThumbnail(avatarUrl)
+                .addFields(
+                    { name: 'From', value: `${capitalize(data.oldEntityType)}: **${oldEntityName}**`, inline: true },
+                    { name: 'To', value: `${capitalize(data.newEntityType)}: **${newEntityName}**`, inline: true },
+                    { name: 'Channel', value: `<#${data.channelId}>`, inline: true }
+                );
+
+            if (data.messageLink) {
+                embed.setURL(data.messageLink);
+            }
+            break;
+        }
+    }
+
+    return embed;
+}
+
 // ==== EXPORTS ====
 module.exports = {
     // Constants
@@ -1559,6 +1721,7 @@ module.exports = {
     // Privacy and visibility
     getPrivacyBucket,
     shouldShowEntity,
+    isPingAllowed,
     isBlocked,
 
     // Display helpers
@@ -1646,7 +1809,10 @@ module.exports = {
     // Notification settings utilities
     getDeliveryLabel,
     buildNotificationSettingsEmbed,
-    buildNotificationSettingsComponents
+    buildNotificationSettingsComponents,
+
+    // Guild logging
+    sendGuildLog
 };
 
 // Update recent proxies for quick switch menu
