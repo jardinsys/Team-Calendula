@@ -27,7 +27,7 @@ router.get('/', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const frontData = await buildFrontData(system);
@@ -79,7 +79,7 @@ router.patch('/status', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const { status, battery, caution } = req.body;
@@ -126,7 +126,7 @@ router.get('/history', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const { limit = 20, before } = req.query;
@@ -204,7 +204,7 @@ router.get('/layers', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const layers = system.front?.layers || [];
@@ -232,7 +232,7 @@ router.post('/layers', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const { name, color } = req.body;
@@ -271,7 +271,7 @@ router.delete('/layers/:layerId', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const layerIndex = system.front?.layers?.findIndex(

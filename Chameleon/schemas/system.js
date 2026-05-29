@@ -55,6 +55,7 @@ const systemSchema = new mongoose.Schema({
         singular: { type: String, default: "alter" },
         plural: { type: String, default: "alters" }
     },
+    systemSynonym: { type: String, default: "system" },
     alters: {
         conditions: [{
             name: String,

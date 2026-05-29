@@ -53,6 +53,8 @@ const { PrivacyBucket } = require('../../../schemas/settings');
 
 const utils = require('../../functions/bot_utils');
 
+const { getSystemTerm, getAlterTerm } = utils;
+
 const DSM_TYPES = ['DID', 'Amnesia', 'Dereal/Depers', 'OSDD-1A', 'OSDD-1B', 'OSDD-2', 'OSDD-3', 'OSDD-4', 'UDD'];
 const ICD_TYPES = ['P-DID', 'Trance', 'DNSD', 'Possession Trance', 'SDS'];
 
@@ -230,7 +232,7 @@ async function handleShow(message, parsed) {
 async function handleNew(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
 
-    if (system) return utils.error(message, 'You already have a system. Use `sys!system delete` first if you want to create a new one.');
+    if (system) return utils.error(message, 'You already have a profile. Use `sys!system delete` first if you want to create a new one.');
 
     // Get name from remaining positional args
     const name = parsed._positional.slice(1).join(' ') || null;
@@ -255,12 +257,12 @@ async function handleNew(message, parsed) {
 
     const embed = new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.success)
-        .setTitle('✅ System Created!')
+        .setTitle('✅ Profile Created!')
         .setDescription(name 
-            ? `Your system **${name}** has been created.`
-            : 'Your system has been created.')
+            ? `Your profile **${name}** has been created.`
+            : 'Your profile has been created.')
         .addFields(
-            { name: 'System ID', value: `\`${newSystem._id}\``, inline: true },
+            { name: 'Profile ID', value: `\`${newSystem._id}\``, inline: true },
             { name: 'Next Steps', value: 
                 '• `sys!system displayname <name>` - Set display name\n' +
                 '• `sys!system description <desc>` - Add description\n' +
@@ -300,7 +302,7 @@ async function handleDisplayName(message, parsed) {
     if (parsed.clear) {
         if (system.name) system.name.display = undefined;
         await system.save();
-        return utils.success(message, 'System display name cleared.');
+        return utils.success(message, 'Profile display name cleared.');
     }
 
     const newName = parsed._positional.slice(1).join(' ');
@@ -310,7 +312,7 @@ async function handleDisplayName(message, parsed) {
     system.name.display = newName;
     await system.save();
 
-    return utils.success(message, `System display name set to **${newName}**`);
+    return utils.success(message, `Profile display name set to **${newName}**`);
 }
 
 async function handleDescription(message, parsed) {
@@ -320,7 +322,7 @@ async function handleDescription(message, parsed) {
     if (parsed.clear) {
         system.description = undefined;
         await system.save();
-        return utils.success(message, 'System description cleared.');
+        return utils.success(message, 'Profile description cleared.');
     }
 
     const desc = parsed._positional.slice(1).join(' ') || parsed.description;
@@ -329,7 +331,7 @@ async function handleDescription(message, parsed) {
     system.description = desc;
     await system.save();
 
-    return utils.success(message, 'System description updated.');
+    return utils.success(message, 'Profile description updated.');
 }
 
 async function handleAvatar(message, parsed) {
@@ -340,7 +342,7 @@ async function handleAvatar(message, parsed) {
         if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key);
         system.avatar = undefined;
         await system.save();
-        return utils.success(message, 'System avatar cleared.');
+        return utils.success(message, 'Profile avatar cleared.');
     }
 
     const attachment = message.attachments.first();
@@ -352,7 +354,7 @@ async function handleAvatar(message, parsed) {
     system.avatar = result.media;
     await system.save();
 
-    return utils.success(message, 'System avatar uploaded and updated.');
+    return utils.success(message, 'Profile avatar uploaded and updated.');
 }
 
 async function handleBanner(message, parsed) {
@@ -363,7 +365,7 @@ async function handleBanner(message, parsed) {
         if (system.discord?.image?.banner?.r2Key) await utils.deleteFromR2(system.discord.image.banner.r2Key);
         if (system.discord?.image) system.discord.image.banner = undefined;
         await system.save();
-        return utils.success(message, 'System banner cleared.');
+        return utils.success(message, 'Profile banner cleared.');
     }
 
     const attachment = message.attachments.first();
@@ -377,7 +379,7 @@ async function handleBanner(message, parsed) {
     system.discord.image.banner = result.media;
     await system.save();
 
-    return utils.success(message, 'System banner uploaded and updated.');
+    return utils.success(message, 'Profile banner uploaded and updated.');
 }
 
 async function handleColor(message, parsed) {
@@ -387,7 +389,7 @@ async function handleColor(message, parsed) {
     if (parsed.clear) {
         system.color = undefined;
         await system.save();
-        return utils.success(message, 'System color cleared.');
+        return utils.success(message, 'Profile color cleared.');
     }
 
     const colorInput = parsed._positional[1] || parsed.color;
@@ -398,7 +400,7 @@ async function handleColor(message, parsed) {
     system.color = color;
     await system.save();
 
-    return utils.success(message, `System color set to **${color}**`);
+    return utils.success(message, `Profile color set to **${color}**`);
 }
 
 async function handleTag(message, parsed) {
@@ -410,7 +412,7 @@ async function handleTag(message, parsed) {
         system.discord.tag = system.discord.tag || {};
         system.discord.tag.normal = [];
         await system.save();
-        return utils.success(message, 'System tags cleared.');
+        return utils.success(message, 'Profile tags cleared.');
     }
 
     const tagInput = parsed._positional.slice(1).join(' ') || parsed.tag;
@@ -423,7 +425,7 @@ async function handleTag(message, parsed) {
     system.discord.tag.normal = tags;
     await system.save();
 
-    return utils.success(message, `System tags set to: ${tags.map(t => `**${t}**`).join(', ')}`);
+    return utils.success(message, `Profile tags set to: ${tags.map(t => `**${t}**`).join(', ')}`);
 }
 
 async function handleBirthday(message, parsed) {
@@ -433,7 +435,7 @@ async function handleBirthday(message, parsed) {
     if (parsed.clear) {
         system.birthday = undefined;
         await system.save();
-        return utils.success(message, 'System birthday cleared.');
+        return utils.success(message, 'Profile birthday cleared.');
     }
 
     const dateInput = parsed._positional[1] || parsed.birthday;
@@ -445,7 +447,7 @@ async function handleBirthday(message, parsed) {
     system.birthday = date;
     await system.save();
 
-    return utils.success(message, `System birthday set to **${utils.formatDate(date)}**`);
+    return utils.success(message, `Profile birthday set to **${utils.formatDate(date)}**`);
 }
 
 async function handleTimezone(message, parsed) {
@@ -455,7 +457,7 @@ async function handleTimezone(message, parsed) {
     if (parsed.clear) {
         system.timezone = undefined;
         await system.save();
-        return utils.success(message, 'System timezone cleared.');
+        return utils.success(message, 'Profile timezone cleared.');
     }
 
     const tz = parsed._positional[1] || parsed.timezone;
@@ -464,7 +466,7 @@ async function handleTimezone(message, parsed) {
     system.timezone = tz;
     await system.save();
 
-    return utils.success(message, `System timezone set to **${tz}**`);
+    return utils.success(message, `Profile timezone set to **${tz}**`);
 }
 
 async function handleType(message, parsed) {
@@ -475,7 +477,7 @@ async function handleType(message, parsed) {
         system.sys_type = system.sys_type || {};
         system.sys_type.name = 'None';
         await system.save();
-        return utils.success(message, 'System type cleared.');
+        return utils.success(message, 'Profile type cleared.');
     }
 
     const typeName = parsed._positional.slice(1).join(' ') || parsed.type;
@@ -485,7 +487,7 @@ async function handleType(message, parsed) {
     system.sys_type.name = typeName;
     await system.save();
 
-    return utils.success(message, `System type set to **${typeName}**`);
+    return utils.success(message, `Profile type set to **${typeName}**`);
 }
 
 async function handleDSM(message, parsed) {
@@ -585,7 +587,7 @@ async function handlePrivacy(message, parsed) {
     if (!field) {
         const embed = new EmbedBuilder()
             .setColor(utils.ENTITY_COLORS.system)
-            .setTitle('🔒 System Privacy Settings')
+            .setTitle('🔒 Privacy Settings')
             .setDescription('Use `sys!system privacy <field> <public|private>` to change.\nOr `sys!system privacy buckets list` to manage buckets.')
             .addFields(
                 { name: 'Fields', value: '• description\n• avatar\n• banner\n• birthday\n• pronouns\n• metadata\n• caution\n• hidden\n• mask', inline: true },
@@ -872,19 +874,19 @@ async function handleBattery(message, parsed) {
     if (isNaN(val) || val < 0 || val > 100) return utils.error(message, 'Please provide a battery level (0-100).');
     system.battery = val;
     await system.save();
-    return utils.success(message, `System battery set to **${val}** ${utils.getBatteryEmoji(val)}`);
+    return utils.success(message, `Profile battery set to **${val}** ${utils.getBatteryEmoji(val)}`);
 }
 
 async function handleCaution(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
-    if (parsed.clear) { system.caution = undefined; await system.save(); return utils.success(message, 'System caution cleared.'); }
+    if (parsed.clear) { system.caution = undefined; await system.save(); return utils.success(message, 'Profile caution cleared.'); }
     const type = parsed._positional[1];
     const detail = parsed._positional.slice(2).join(' ');
     if (!type) return utils.error(message, 'Please provide a caution type.');
     system.caution = { c_type: type, detail: detail || undefined };
     await system.save();
-    return utils.success(message, `System caution set to **${type}**`);
+    return utils.success(message, `Profile caution set to **${type}**`);
 }
 
 async function handleMask(message, parsed) {
@@ -892,7 +894,7 @@ async function handleMask(message, parsed) {
     if (!await utils.requireSystem(message, system)) return;
     const field = parsed._positional[1]?.toLowerCase();
     if (!field) {
-        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.system).setTitle('🎭 System Mask Settings')
+        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.system).setTitle('🎭 Mask Settings')
             .setDescription(`Use \`sys!system mask <field> <value>\`\nFields: name, displayname (dn), description, color, avatar, banner, proxyavatar (pav), pronouns`)
             .addFields(
                 { name: 'Current Mask', value: `Name: ${system.mask?.name?.display || system.mask?.name?.indexable || '*not set*'}\nColor: ${system.mask?.color || '*not set*'}\nDescription: ${system.mask?.description || '*not set*'}\nPronouns: ${system.mask?.pronouns || '*not set*'}`, inline: false }
@@ -1057,7 +1059,7 @@ async function handleList(message, parsed) {
     const { user, system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
     if (!system) {
         return utils.error(message, targetUserId === message.author.id 
-            ? 'You don\'t have a system yet.' 
+            ? 'Not registered yet.' 
             : 'That user doesn\'t have a system.');
     }
 
@@ -1094,7 +1096,7 @@ async function handleFronter(message, parsed) {
     const { user, system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
     if (!system) {
         return utils.error(message, targetUserId === message.author.id 
-            ? 'You don\'t have a system yet.' 
+            ? 'Not registered yet.' 
             : 'That user doesn\'t have a system.');
     }
 
@@ -1140,7 +1142,7 @@ async function handleFrontHistory(message, parsed) {
     const { user, system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
     if (!system) {
         return utils.error(message, targetUserId === message.author.id 
-            ? 'You don\'t have a system yet.' 
+            ? 'Not registered yet.' 
             : 'That user doesn\'t have a system.');
     }
 
@@ -1164,14 +1166,14 @@ async function handleDelete(message, parsed) {
     const discordId = message.author.id;
     const user = await User.findOne({ discordID: discordId });
 
-    if (!user || !user.systemID) return utils.error(message, 'You don\'t have a system yet.');
+    if (!user || !user.systemID) return utils.error(message, 'Not registered yet.');
 
     const system = await System.findById(user.systemID);
     if (!system) {
         // System missing but user has a dangling reference — clean it up
         user.systemID = null;
         await user.save();
-        return utils.error(message, 'No system found. Your account has been cleaned up.');
+        return utils.error(message, 'Not registered. Your account has been cleaned up.');
     }
 
     // Delete all associated entities
@@ -1186,14 +1188,14 @@ async function handleDelete(message, parsed) {
     user.systemID = null;
     await user.save();
 
-    return utils.success(message, 'Your system has been deleted. Thank you for using Systemiser and good luck on your mental health journey 💙');
+    return utils.success(message, 'Your profile has been deleted. Thank you for using Systemiser and good luck on your mental health journey 💙');
 }
 
 async function handleId(message, parsed) {
     const { user, system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
     if (!system) {
         return utils.error(message, targetUserId === message.author.id 
-            ? 'You don\'t have a system yet.' 
+            ? 'Not registered yet.' 
             : 'That user doesn\'t have a system.');
     }
 

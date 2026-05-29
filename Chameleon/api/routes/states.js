@@ -25,7 +25,7 @@ router.get('/', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const states = await State.find({ _id: { $in: system.states?.IDs || [] } })
@@ -48,7 +48,7 @@ router.get('/summary', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const states = await State.find({ _id: { $in: system.states?.IDs || [] } })
@@ -80,7 +80,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         // Verify state belongs to this system
@@ -115,7 +115,7 @@ router.post('/', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const { name, description, color, avatar, alters, signoff } = req.body;
@@ -182,7 +182,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         // Verify state belongs to this system
@@ -249,7 +249,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         // Verify state belongs to this system

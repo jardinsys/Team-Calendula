@@ -24,12 +24,12 @@ router.get('/', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.userId);
         if (!user?.systemID) {
-            return res.status(404).json({ error: 'No system found', hasSystem: false });
+            return res.status(404).json({ error: 'Not registered', hasSystem: false });
         }
         
         const system = await System.findById(user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'System not found', hasSystem: false });
+            return res.status(404).json({ error: 'Not registered', hasSystem: false });
         }
         
         res.json(system);
@@ -47,12 +47,12 @@ router.get('/full', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.userId);
         if (!user?.systemID) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const system = await System.findById(user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'System not found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         // Get entity counts
@@ -140,12 +140,12 @@ router.patch('/', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.userId);
         if (!user?.systemID) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const system = await System.findById(user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'System not found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const updates = req.body;
@@ -201,12 +201,12 @@ router.patch('/type', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.userId);
         if (!user?.systemID) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const system = await System.findById(user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'System not found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const { isSystem, isFragmented, name, dd } = req.body;
@@ -259,12 +259,12 @@ router.delete('/', authMiddleware, async (req, res) => {
         
         const user = await User.findById(req.userId);
         if (!user?.systemID) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const system = await System.findById(user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'System not found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         // Delete all related entities

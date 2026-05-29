@@ -32,6 +32,7 @@ const utils = require('../../functions/bot_utils');
 
 const WEBAPP_URL = 'https://systemise.teamcalendula.net';
 const ENTITY_COLORS = utils.ENTITY_COLORS;
+const { getSystemTerm } = utils;
 
 module.exports = {
     name: 'friend',
@@ -81,7 +82,7 @@ async function handleList(message, user, system) {
         const targetSystem = targetUser?.systemID ? await System.findById(targetUser.systemID) : null;
 
         const displayName = friend.customName?.display || friend.customName?.indexable || `<@${friend.discordID}>`;
-        const systemName = targetSystem ? utils.getDisplayName(targetSystem) : 'No system';
+        const systemName = targetSystem ? utils.getDisplayName(targetSystem) : 'No profile';
 
         let statusPreview = '';
         if (targetSystem?.front?.status) statusPreview = ` | *${targetSystem.front.status}*`;
@@ -138,9 +139,9 @@ async function handleAdd(message, parsed, user, system) {
     if (alreadyRequested) return utils.error(message, 'You already have a pending request to this user.');
 
     const targetSystem = target.systemID ? await System.findById(target.systemID) : null;
-    const targetSystemName = targetSystem ? utils.getDisplayName(targetSystem) : 'No system';
+    const targetSystemName = targetSystem ? utils.getDisplayName(targetSystem) : 'No profile';
     const senderName = user.discord?.name?.display || message.author.displayName;
-    const senderSystemName = system ? utils.getDisplayName(system) : 'No system';
+    const senderSystemName = system ? utils.getDisplayName(system) : 'No profile';
 
     if (!target.friendRequests) target.friendRequests = [];
     target.friendRequests.push({
@@ -155,7 +156,7 @@ async function handleAdd(message, parsed, user, system) {
     // DM notification
     const notifPrefs = target.settings?.notificationPreferences || {};
     if (notifPrefs.friendRequests !== false) {
-        const senderDisplayName = senderName + (senderSystemName !== 'No system' ? ` (${senderSystemName})` : '');
+        const senderDisplayName = senderName + (senderSystemName !== 'No profile' ? ` (${senderSystemName})` : '');
         if (notifPrefs.friendNotifications === 'dm' || notifPrefs.friendNotifications === undefined) {
             try {
                 const dmEmbed = new EmbedBuilder()
@@ -358,13 +359,13 @@ async function handleView(message, parsed, user) {
 
     const targetDb = await User.findOne({ discordID: targetUser.id });
     if (!targetDb) return utils.error(message, 'This user hasn\'t set up a profile yet.');
-    if (!targetDb.systemID) return utils.error(message, 'This user doesn\'t have a system set up.');
+    if (!targetDb.systemID) return utils.error(message, 'Not registered.');
     if (utils.isBlocked(targetDb, message.author.id, user.friendID)) {
         return utils.error(message, 'This user\'s information is not available to you.');
     }
 
     const targetSystem = await System.findById(targetDb.systemID);
-    if (!targetSystem) return utils.error(message, 'System not found.');
+    if (!targetSystem) return utils.error(message, 'Not registered.');
 
     const privacyBucket = utils.getPrivacyBucket(targetSystem, message.author.id, user.friendID);
     const closedCharAllowed = await utils.checkClosedCharAllowed(message.guild);
@@ -471,7 +472,7 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
         }
     }
 
-    embed.setFooter({ text: `${targetUserName}'s system` });
+    embed.setFooter({ text: `${targetUserName}'s ${getSystemTerm(targetSystem, {context:'ownership'})}` });
     return embed;
 }
 

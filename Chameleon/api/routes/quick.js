@@ -25,7 +25,7 @@ router.get('/switch', async (req, res) => {
     try {
         const system = await System.findById(req.user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'System not found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         // Get recent proxies first (most used entities)
@@ -114,7 +114,7 @@ router.post('/switch', async (req, res) => {
         
         const system = await System.findById(req.user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'System not found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const now = new Date();
@@ -224,7 +224,7 @@ router.post('/switch/out', async (req, res) => {
     try {
         const system = await System.findById(req.user.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'System not found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const now = new Date();

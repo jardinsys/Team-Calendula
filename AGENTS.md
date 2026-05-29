@@ -806,4 +806,45 @@ All are deployed in a single `PUT` to `Routes.applicationCommands(clientId)` —
 Currently used by:
 - **`whois.js`** — `contextMenuData`: "Who sent this?" (message context menu)
 
-The `userContextMenuData` pattern is defined in `bot.js` (lines 500-509) but no command currently uses it. Ready for future user context menu commands.`
+The `userContextMenuData` pattern is defined in `bot.js` (lines 500-509) but no command currently uses it. Ready for future user context menu commands.
+
+## Ping System (`/message ping`)
+
+### Overview
+`/message action:ping message_id:?` — pings the Discord user who sent a proxied message. No ownership check (anyone can ping any proxied message).
+
+### Auto-Detect
+Without `message_id`, uses `autoDetectLastMessageAnyUser()` which finds the most recent proxied message in the channel from **any user** (not just the command sender). Goes straight to MongoDB (Redis scan for channel-scoped lookups isn't feasible).
+
+### Ping Priority Chain (`utils.isPingAllowed`)
+```
+1. entity.setting.allowPing === false       → block
+2. ownerUser.settings.allowPing === false   → block (hard kill switch)
+3. privacy bucket found AND
+   bucket.settings.allowPing === false      → block (per-bucket restriction)
+4. Otherwise                                → ping
+```
+
+### Schema Locations
+| Level | Field | Schema |
+|-------|-------|--------|
+| **User** | `settings.allowPing` (`Boolean, default: true`) | `schemas/user.js` |
+| **Entity** (alter/state/group) | `setting.allowPing` (`Boolean, default: true`) | `schemas/alter.js`, `schemas/state.js`, `schemas/group.js` |
+| **Privacy bucket** (alter+group only) | `settings.allowPing` (`Boolean`) | `schemas/settings.js` (`alterPrivacySchema`, `groupPrivacySchema`) |
+
+### Setting Toggles
+| Toggle | Location | File |
+|--------|----------|------|
+| User master | `/settings > General` — "Pings" toggle button | `settings.js` → `handleGeneralAllowPingToggle` |
+| User master | `sys!config ping <on\|off>` | `prefix/config.js` → `handlePing` |
+| Entity master | `/alter edit > Alter Settings` / `/state edit > State Settings` / `/group edit > Group Settings` — "Pings: ON/OFF" button | `alter.js`, `state.js`, `group.js` |
+| Per-bucket | Privacy Settings → "Toggle Pings" button → select bucket | `alter.js`, `state.js`, `group.js` |
+
+### Helper in bot_utils.js
+```javascript
+isPingAllowed(entity, pingedUserId, viewerDiscordId)
+```
+- `pingedUserId` = Discord ID of the message sender (the user who would receive the ping)
+- `viewerDiscordId` = Discord ID of the person running `/message ping`
+- Returns `true`/`false` following the priority chain above
+- Must be `await`ed (fetches System + User docs for owner lookup)`

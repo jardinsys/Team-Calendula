@@ -154,6 +154,7 @@ function buildEditInterface(user, system, session) {
     if (system) {
         if (system.front?.status) currentValues += `**Status:** ${system.front.status}\n`;
         if (system.battery !== undefined) currentValues += `**Battery:** ${system.battery}%\n`;
+        if (system?.front?.caution) currentValues += `**⚠️ Caution:** ${system.front.caution}\n`;
     }
     if (currentValues) embed.addFields({ name: '📋 Current Values', value: currentValues.trim(), inline: false });
 
@@ -162,7 +163,7 @@ function buildEditInterface(user, system, session) {
         .setPlaceholder('Choose what to edit...')
         .addOptions(
             new StringSelectMenuOptionBuilder().setLabel('Basic Info').setDescription('Edit display name, pronouns, bio').setValue('basic_info').setEmoji('📋'),
-            new StringSelectMenuOptionBuilder().setLabel('Current Status').setDescription('Edit status and social battery').setValue('status_info').setEmoji('💭'),
+            new StringSelectMenuOptionBuilder().setLabel('Current Status').setDescription('Edit status, social battery, and caution').setValue('status_info').setEmoji('💭'),
             new StringSelectMenuOptionBuilder().setLabel('Proxy Settings').setDescription('Edit auto-proxy style and break status').setValue('proxy_info').setEmoji('💬')
         );
 
@@ -240,7 +241,8 @@ async function handleShow(interaction, currentUser, currentSystem) {
         components.push(new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`profile_edit_${sessionId}`).setLabel('Edit Profile').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
             new ButtonBuilder().setCustomId(`profile_quick_status_${sessionId}`).setLabel('Update Status').setStyle(ButtonStyle.Secondary).setEmoji('💬'),
-            new ButtonBuilder().setCustomId(`profile_quick_battery_${sessionId}`).setLabel('Update Battery').setStyle(ButtonStyle.Secondary).setEmoji('🔋')
+            new ButtonBuilder().setCustomId(`profile_quick_battery_${sessionId}`).setLabel('Update Battery').setStyle(ButtonStyle.Secondary).setEmoji('🔋'),
+            new ButtonBuilder().setCustomId(`profile_quick_caution_${sessionId}`).setLabel('Update Caution').setStyle(ButtonStyle.Secondary).setEmoji('⚠️')
         ));
     }
 
@@ -412,6 +414,26 @@ async function handleButtonInteraction(interaction) {
                 .setPlaceholder('75')
                 .setRequired(false)
                 .setMaxLength(3)
+        ));
+
+        return await interaction.showModal(modal);
+    }
+
+    // Quick Caution button
+    if (customId.startsWith('profile_quick_caution_')) {
+        const modal = new ModalBuilder()
+            .setCustomId(`profile_quick_caution_modal_${sessionId}`)
+            .setTitle('Update Caution');
+
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('caution')
+                .setLabel('Status Caution')
+                .setStyle(TextInputStyle.Short)
+                .setValue(system?.front?.caution || '')
+                .setPlaceholder('e.g., Low energy today')
+                .setRequired(false)
+                .setMaxLength(100)
         ));
 
         return await interaction.showModal(modal);
@@ -634,6 +656,23 @@ async function handleModalSubmit(interaction) {
 
         return await interaction.update({
             content: '❌ Invalid battery value. Please enter a number between 0-100.',
+            embeds: [],
+            components: []
+        });
+    }
+
+    // Quick caution modal
+    if (interaction.customId.startsWith('profile_quick_caution_modal_')) {
+        const caution = interaction.fields.getTextInputValue('caution');
+
+        if (system) {
+            if (!system.front) system.front = {};
+            system.front.caution = caution || undefined;
+            await system.save();
+        }
+
+        return await interaction.update({
+            content: caution ? `✅ Caution updated: ${caution}` : '✅ Caution cleared.',
             embeds: [],
             components: []
         });

@@ -23,10 +23,12 @@ const utils = require('../../functions/bot_utils');
 
 const SETTINGS_COLOR = '#808080';
 
+const { getSystemTerm, getAlterTerm } = utils;
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('settings')
-        .setDescription('System and server settings')
+        .setDescription('Profile and server settings')
         .addStringOption(option =>
             option.setName('section')
                 .setDescription('Settings section to open')
@@ -270,11 +272,11 @@ async function buildGeneralOverview(interaction, user, system, sessionId) {
     const embed = new EmbedBuilder()
         .setColor(SETTINGS_COLOR)
         .setTitle('General Settings')
-        .setDescription('System-wide configuration options.')
+        .setDescription(`${getSystemTerm(system)}-wide configuration options.`)
         .addFields(
             { name: 'Discord Sync', value: system.syncWithApps?.discord ? '✅ Enabled' : '❌ Disabled', inline: true },
             { name: 'Timezone', value: system.timezone || '*Not set*', inline: true },
-            { name: 'Terminology', value: (system.alterSynonym?.singular || 'alter') + ' / ' + (system.alterSynonym?.plural || 'alters'), inline: true },
+            { name: 'Terminology', value: getSystemTerm(system) + ' / ' + getAlterTerm(system, {plural:true}).charAt(0).toUpperCase() + getAlterTerm(system, {plural:true}).slice(1) + ' / ' + getAlterTerm(system, {plural:true}), inline: true },
             { name: 'Pronoun Separator', value: system.discord?.pronounSeparator || '*Not set*', inline: true },
             { name: 'Friend Auto-Bucket', value: system.setting?.friendAutoBucket || '*Not set*', inline: true },
             { name: 'Auto-share Notes', value: system.setting?.autoshareNotestoUsers ? '✅ Enabled' : '❌ Disabled', inline: true },
@@ -884,7 +886,7 @@ async function handleServerDisplay(interaction, sessionId) {
 
 async function handleProxyStyleSelector(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const embed = new EmbedBuilder()
         .setColor(SETTINGS_COLOR)
@@ -916,7 +918,7 @@ async function handleProxyStyleSelector(interaction, sessionId) {
 
 async function handleProxyServerStyle(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const servers = system.discord?.server || [];
     const customServers = servers.filter(s => s.proxyStyle && s.proxyStyle !== 'off');
@@ -959,7 +961,7 @@ async function handleProxyServerStyle(interaction, sessionId) {
 
 async function handleProxyCooldownModal(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const modal = new ModalBuilder()
         .setCustomId('settings_proxy_cooldown_modal_' + sessionId)
@@ -982,7 +984,7 @@ async function handleProxyCooldownModal(interaction, sessionId) {
 
 async function handleProxyLayoutSelector(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const getLayoutDisplay = (layout) => {
         if (!layout) return '*Not set*';
@@ -1011,7 +1013,7 @@ async function handleProxyLayoutSelector(interaction, sessionId) {
 
 async function handleProxyLayoutModalBtn(interaction, sessionId, type) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const modal = utils.buildProxyLayoutModal(type, sessionId, system, 'settings');
     return await interaction.showModal(modal);
@@ -1019,7 +1021,7 @@ async function handleProxyLayoutModalBtn(interaction, sessionId, type) {
 
 async function handleProxyCaseToggle(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     if (!system.proxy) system.proxy = {};
     system.proxy.caseSensitive = !system.proxy.caseSensitive;
@@ -1030,7 +1032,7 @@ async function handleProxyCaseToggle(interaction, sessionId) {
 
 async function handleProxyBreakToggle(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     if (!system.proxy) system.proxy = {};
     system.proxy.break = !system.proxy.break;
@@ -1092,7 +1094,7 @@ async function handleNotificationToggle(interaction, sessionId) {
 async function handleGeneralSyncToggle(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     system.syncWithApps = system.syncWithApps || {};
     system.syncWithApps.discord = !system.syncWithApps.discord;
@@ -1104,7 +1106,7 @@ async function handleGeneralSyncToggle(interaction, sessionId) {
 
 async function handleGeneralTagsModal(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const tags = system.discord?.tag?.normal || [];
 
@@ -1141,7 +1143,7 @@ async function handleGeneralTagsModal(interaction, sessionId) {
 
 async function handleGeneralPronounSepModal(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const modal = new ModalBuilder()
         .setCustomId('settings_general_pronounsep_modal_' + sessionId)
@@ -1165,7 +1167,7 @@ async function handleGeneralPronounSepModal(interaction, sessionId) {
 
 async function handleGeneralTerminologyModal(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const modal = new ModalBuilder()
         .setCustomId('settings_general_terminology_modal_' + sessionId)
@@ -1189,6 +1191,15 @@ async function handleGeneralTerminologyModal(interaction, sessionId) {
                 .setValue(system.alterSynonym?.plural || 'alters')
                 .setRequired(false)
                 .setMaxLength(30)
+        ),
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('systemSynonym')
+                .setLabel(getSystemTerm(system) + ' synonym (e.g., system, collective)')
+                .setStyle(TextInputStyle.Short)
+                .setValue(system.systemSynonym || 'system')
+                .setRequired(false)
+                .setMaxLength(30)
         )
     );
 
@@ -1197,7 +1208,7 @@ async function handleGeneralTerminologyModal(interaction, sessionId) {
 
 async function handleGeneralTimezoneModal(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const modal = new ModalBuilder()
         .setCustomId('settings_general_timezone_modal_' + sessionId)
@@ -1222,7 +1233,7 @@ async function handleGeneralTimezoneModal(interaction, sessionId) {
 async function handleGeneralAutoshareToggle(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     if (!system.setting) system.setting = {};
     system.setting.autoshareNotestoUsers = !system.setting.autoshareNotestoUsers;
@@ -1247,7 +1258,7 @@ async function handleGeneralAllowPingToggle(interaction, sessionId) {
 
 async function handleGeneralFriendBucket(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const buckets = system.privacyBuckets || [];
 
@@ -1304,7 +1315,7 @@ async function handleGeneralMigration(interaction, sessionId) {
 async function handleProxyCooldownSave(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const cooldown = parseInt(interaction.fields.getTextInputValue('cooldown'));
     if (isNaN(cooldown) || cooldown < 0) {
@@ -1321,7 +1332,7 @@ async function handleProxyCooldownSave(interaction, sessionId) {
 async function handleProxyStyleSave(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const style = interaction.fields.getTextInputValue('proxy_style')?.toLowerCase()?.trim();
     const onBreak = interaction.fields.getTextInputValue('proxy_break');
@@ -1354,7 +1365,7 @@ async function handleProxyStyleSave(interaction, sessionId) {
 async function handleProxyLayoutSave(interaction, sessionId, type) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     if (!system.proxy) system.proxy = {};
     if (!system.proxy.layout || typeof system.proxy.layout === 'string') {
@@ -1372,7 +1383,7 @@ async function handleProxyLayoutSave(interaction, sessionId, type) {
 async function handleProxyStyleSelect(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const selected = interaction.values[0];
 
@@ -1388,7 +1399,7 @@ async function handleProxyStyleSelect(interaction, sessionId) {
 
 async function handleProxyStyleModal(interaction, sessionId) {
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const modal = utils.buildProxyStyleModal(sessionId, system, 'settings');
     return await interaction.showModal(modal);
@@ -1397,7 +1408,7 @@ async function handleProxyStyleModal(interaction, sessionId) {
 async function handleProxyServerStyleSelect(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const guildId = interaction.values[0];
     if (guildId === 'none') return await handleProxyServerStyle(interaction, sessionId);
@@ -1431,7 +1442,7 @@ async function handleProxyServerStyleSelect(interaction, sessionId) {
 async function handleProxyServerStyleSave(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const style = interaction.fields.getTextInputValue('server_style')?.toLowerCase()?.trim() || 'off';
 
@@ -1677,7 +1688,7 @@ async function handleServerDisplayToggle(interaction, sessionId) {
 async function handleGeneralFriendBucketSelect(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const bucket = interaction.values[0];
     if (!system.setting) system.setting = {};
@@ -1691,7 +1702,7 @@ async function handleGeneralFriendBucketSelect(interaction, sessionId) {
 async function handleGeneralPronounSepSave(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const separator = interaction.fields.getTextInputValue('separator');
     if (!system.discord) system.discord = {};
@@ -1705,14 +1716,16 @@ async function handleGeneralPronounSepSave(interaction, sessionId) {
 async function handleGeneralTerminologySave(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const singular = interaction.fields.getTextInputValue('singular');
     const plural = interaction.fields.getTextInputValue('plural');
+    const systemSynonym = interaction.fields.getTextInputValue('systemSynonym');
 
     if (!system.alterSynonym) system.alterSynonym = {};
     system.alterSynonym.singular = singular || 'alter';
     system.alterSynonym.plural = plural || 'alters';
+    system.systemSynonym = systemSynonym || 'system';
     await system.save();
 
     const user = await User.findById(session.userId);
@@ -1722,7 +1735,7 @@ async function handleGeneralTerminologySave(interaction, sessionId) {
 async function handleGeneralTimezoneSave(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const timezone = interaction.fields.getTextInputValue('timezone');
     system.timezone = timezone || undefined;
@@ -1735,7 +1748,7 @@ async function handleGeneralTimezoneSave(interaction, sessionId) {
 async function handleGeneralTagsSave(interaction, sessionId) {
     const session = utils.getSession(sessionId);
     const system = await System.findById(session.systemId);
-    if (!system) return await interaction.reply({ content: 'System not found.', ephemeral: true });
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
 
     const tagsInput = interaction.fields.getTextInputValue('tags');
     const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);

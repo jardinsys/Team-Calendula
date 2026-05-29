@@ -34,6 +34,8 @@ const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 
+const { getSystemTerm, getAlterTerm } = utils;
+
 module.exports = {
     name: 'alter',
     aliases: ['a', 'member', 'm'],
@@ -88,7 +90,7 @@ module.exports = {
 async function getAlter(message, alterName) {
     const { system } = await utils.getOrCreateUserAndSystem(message);
     if (!system) {
-        await utils.error(message, 'You don\'t have a system yet. Use `sys!system new` to create one.');
+        await utils.error(message, 'Not registered yet. Use `sys!system new` to create one.');
         return { alter: null, system: null };
     }
     const result = await utils.findEntity(alterName, system, 'alter');
@@ -103,7 +105,7 @@ async function handleShow(message, parsed, alterName) {
     const { user, system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
     if (!system) {
         return utils.error(message, targetUserId === message.author.id 
-            ? 'You don\'t have a system yet.' : 'That user doesn\'t have a system.');
+            ? 'Not registered yet.' : 'Not registered.');
     }
     const result = await utils.findEntity(alterName, system, 'alter');
     if (!result) return utils.error(message, `Alter **${alterName}** not found.`);
@@ -592,7 +594,7 @@ async function handleId(message, parsed, alterName) {
 
 async function handleList(message, parsed) {
     const { system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
-    if (!system) return utils.error(message, targetUserId === message.author.id ? 'You don\'t have a system.' : 'That user doesn\'t have a system.');
+    if (!system) return utils.error(message, targetUserId === message.author.id ? 'Not registered yet.' : 'Not registered.');
     const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
     if (!alters.length) return utils.info(message, `No ${system.alterSynonym?.plural || 'alters'} found.`);
     const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.system).setTitle(`${system.alterSynonym?.plural || 'Alters'} (${alters.length})`);
@@ -611,7 +613,7 @@ async function handleList(message, parsed) {
 }
 
 async function handleHelp(message) {
-    const embed = utils.buildHelpEmbed('alter', 'Manage alters/members in your system.', [
+    const embed = utils.buildHelpEmbed('alter', 'Manage alters/members in your profile.', [
         { usage: 'sys!alter <n>', description: 'Show alter info' },
         { usage: 'sys!alter new <n>', description: 'Create new alter' },
         { usage: 'sys!alter <n> rename <new>', description: 'Change indexable name' },

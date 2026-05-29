@@ -21,6 +21,8 @@ const redis = require('../../../redis');
 const proxyMessageHandler = require('../proxy-message');
 const utils = require('../../functions/bot_utils');
 
+const { getSystemTerm } = utils;
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('whois')
@@ -158,7 +160,7 @@ async function handleWhoisLookup(interaction, messageId, channelId, targetMessag
 
     const entityDisplayName = entity ? utils.getDisplayName(entity) : 'Unknown';
     const entityIndexable = entity?.name?.indexable || '';
-    const systemName = system ? utils.getDisplayName(system) : 'Unknown System';
+    const systemName = system ? utils.getDisplayName(system) : 'Unknown';
 
     let discordUser;
     try {
@@ -199,7 +201,7 @@ async function handleWhoisLookup(interaction, messageId, channelId, targetMessag
                 inline: false
             },
             {
-                name: 'System',
+                name: getSystemTerm(system),
                 value: systemName,
                 inline: true
             },
@@ -273,7 +275,7 @@ async function handleCardButton(interaction) {
 
     const system = await System.findById(messageRecord?.system_id);
     if (!system) {
-        return await interaction.reply({ content: '❌ System not found.', ephemeral: true });
+        return await interaction.reply({ content: '❌ Not registered.', ephemeral: true });
     }
 
     const targetUser = await User.findOne({ systemID: system._id });
@@ -340,7 +342,7 @@ function buildDMEmbed({ entity, type, system, isMasked, isOwner, privacyBucket, 
 
     embed.addFields(
         { name: 'Entity', value: entityField, inline: false },
-        { name: 'System', value: utils.getDisplayName(system), inline: true },
+        { name: getSystemTerm(system), value: utils.getDisplayName(system), inline: true },
         { name: 'Discord User', value: `**Username:** ${discordUser.username}\n**Display:** ${serverNickname}\n**ID:** \`${discordUser.id}\``, inline: false },
         { name: 'Jump to Message', value: `[Click here](${jumpUrl})`, inline: false }
     );

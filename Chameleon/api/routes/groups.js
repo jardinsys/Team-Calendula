@@ -22,7 +22,7 @@ router.get('/', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } })
@@ -41,7 +41,7 @@ router.get('/summary', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } })
@@ -70,7 +70,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         if (!system.groups?.IDs?.includes(req.params.id)) {
@@ -124,7 +124,7 @@ router.post('/', authMiddleware, async (req, res) => {
         const system = await System.findById(user?.systemID);
         
         if (!system) {
-            return res.status(404).json({ error: 'No system found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const { name, description, color, avatar, type, alterIDs, stateIDs, signoff } = req.body;

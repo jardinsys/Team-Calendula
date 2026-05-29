@@ -39,6 +39,8 @@ const State = require('../../../schemas/state');
 const utils = require('../../functions/bot_utils');
 const proxyMessageHandler = require('../proxy-message');
 
+const { getSystemTerm } = utils;
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('group')
@@ -315,7 +317,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 
-    if (!targetSystem) return await interaction.reply({ content: '❌ No system found.', ephemeral: true });
+    if (!targetSystem) return await interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     const groups = await Group.find({ _id: { $in: targetSystem.groups?.IDs || [] } });
     if (groups.length === 0) return await interaction.reply({ content: '📭 No groups found.', ephemeral: true });
@@ -362,7 +364,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 
-    if (!targetSystem) return await interaction.reply({ content: '❌ No system found.', ephemeral: true });
+    if (!targetSystem) return await interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     const group = await utils.findGroupByName(groupName, targetSystem);
     if (!group || (!isOwner && !utils.shouldShowEntity(group, privacyBucket, isOwner))) 

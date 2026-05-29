@@ -16,6 +16,8 @@ const System = require('../../../schemas/system');
 const User = require('../../../schemas/user');
 const utils = require('../../functions/bot_utils');
 
+const { getSystemTerm } = utils;
+
 module.exports = {
     name: 'profile',
     aliases: ['prof'],
@@ -62,8 +64,8 @@ async function handleShow(message, parsed) {
     });
 
     if (targetSystem) {
-        const sysName = targetSystem.name?.display || targetSystem.name?.indexable || 'Unnamed System';
-        embed.setTitle(`${displayName}'s System`);
+        const sysName = targetSystem.name?.display || targetSystem.name?.indexable || 'Unnamed';
+        embed.setTitle(`${displayName}'s ${getSystemTerm(targetSystem)}`);
         embed.setColor(targetSystem.color || utils.ENTITY_COLORS.system);
 
         if (targetSystem.avatar?.url) embed.setThumbnail(targetSystem.avatar.url);
@@ -75,7 +77,7 @@ async function handleShow(message, parsed) {
         let overview = `**${targetSystem.alterSynonym?.plural || 'Alters'}:** ${alterCount}\n`;
         overview += `**States:** ${stateCount}\n`;
         overview += `**Groups:** ${groupCount}`;
-        embed.addFields({ name: '📊 System', value: overview, inline: true });
+        embed.addFields({ name: `📊 ${getSystemTerm(targetSystem)}`, value: overview, inline: true });
 
         if (targetSystem.description) embed.addFields({ name: 'Description', value: targetSystem.description, inline: false });
 
@@ -104,11 +106,11 @@ async function handleShow(message, parsed) {
 
         if (targetSystem.timezone) embed.addFields({ name: '🕐 Timezone', value: targetSystem.timezone, inline: true });
 
-        embed.setFooter({ text: `System ID: ${targetSystem._id}` });
+        embed.setFooter({ text: `Profile ID: ${targetSystem._id}` });
     } else {
         embed.setTitle(displayName);
         embed.setColor(utils.ENTITY_COLORS.info);
-        embed.setDescription('*No system registered yet.*');
+        embed.setDescription('*Not registered yet.*');
         embed.setFooter({ text: `User ID: ${targetUser.discordID}` });
     }
 

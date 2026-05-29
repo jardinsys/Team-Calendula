@@ -26,6 +26,7 @@ const utils = require('../../functions/bot_utils');
 
 const WEBAPP_URL = 'https://systemise.teamcalendula.net';
 const ENTITY_COLORS = utils.ENTITY_COLORS;
+const { getSystemTerm } = utils;
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -55,7 +56,7 @@ module.exports = {
         const { user, system, isNew } = await utils.getOrCreateUserAndSystem(interaction);
 
         if (isNew) return utils.handleNewUserFlow(interaction, 'front');
-        if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+        if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
         if (!action) return await handleView(interaction, system, user, quick);
 
@@ -465,49 +466,49 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('front_switch_session_')) {
         const systemId = customId.replace('front_switch_session_', '');
         const system = await System.findById(systemId);
-        if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+        if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
         return await handleSwitch(interaction, system, false);
     }
 
     if (customId.startsWith('front_add_btn_')) {
         const systemId = customId.replace('front_add_btn_', '');
         const system = await System.findById(systemId);
-        if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+        if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
         return await handleAdd(interaction, system, false);
     }
 
     if (customId.startsWith('front_remove_btn_')) {
         const systemId = customId.replace('front_remove_btn_', '');
         const system = await System.findById(systemId);
-        if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+        if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
         return await handleRemove(interaction, system, false);
     }
 
     if (customId.startsWith('front_status_btn_')) {
         const systemId = customId.replace('front_status_btn_', '');
         const system = await System.findById(systemId);
-        if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+        if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
         return await handleStatus(interaction, system, false);
     }
 
     if (customId.startsWith('front_battery_btn_')) {
         const systemId = customId.replace('front_battery_btn_', '');
         const system = await System.findById(systemId);
-        if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+        if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
         return await handleBattery(interaction, system, false);
     }
 
     if (customId.startsWith('front_history_btn_')) {
         const systemId = customId.replace('front_history_btn_', '');
         const system = await System.findById(systemId);
-        if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+        if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
         return await handleHistory(interaction, system, false);
     }
 
     if (customId.startsWith('front_layers_btn_')) {
         const systemId = customId.replace('front_layers_btn_', '');
         const system = await System.findById(systemId);
-        if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+        if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
         return await handleLayers(interaction, system, false);
     }
 
@@ -549,7 +550,7 @@ async function handleSwitchSessionButton(interaction) {
     }
 
     const system = await System.findById(session.systemId);
-    if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+    if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     if (action === 'cancel') {
         utils.deleteSession(sessionId);
@@ -746,7 +747,7 @@ async function handleLayerButton(interaction) {
     const systemId = parts.slice(3).join('_');
 
     const system = await System.findById(systemId);
-    if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+    if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     if (action === 'add') {
         const sessionId = utils.generateSessionId(interaction.user.id);
@@ -858,7 +859,7 @@ async function handleLayerSelect(interaction) {
     if (!session) return interaction.reply({ content: '❌ Session expired.', ephemeral: true });
 
     const system = await System.findById(session.systemId);
-    if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+    if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     const layerId = interaction.values[0];
     const layer = system.front?.layers?.find(l => l._id.toString() === layerId);
@@ -963,7 +964,7 @@ async function handleDeleteTargetSelect(interaction) {
     if (!session) return interaction.reply({ content: '❌ Session expired.', ephemeral: true });
 
     const system = await System.findById(session.systemId);
-    if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+    if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     const targetLayerId = interaction.values[0];
     const sourceLayerId = session.layerId;
@@ -1002,7 +1003,7 @@ async function handleMoveEntitySelect(interaction) {
     if (!session) return interaction.reply({ content: '❌ Session expired.', ephemeral: true });
 
     const system = await System.findById(session.systemId);
-    if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+    if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     const selectedShiftIds = interaction.values;
     session.selectedShiftIds = selectedShiftIds;
@@ -1035,7 +1036,7 @@ async function handleMoveTargetSelect(interaction) {
     if (!session) return interaction.reply({ content: '❌ Session expired.', ephemeral: true });
 
     const system = await System.findById(session.systemId);
-    if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+    if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     const targetLayerId = interaction.values[0];
     const targetLayer = system.front?.layers?.find(l => l._id.toString() === targetLayerId);
@@ -1087,7 +1088,7 @@ async function handleModalSubmit(interaction) {
     }
 
     const system = await System.findById(session.systemId);
-    if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+    if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     // Quick switch modal
     if (interaction.customId.startsWith('front_quick_switch_modal_')) {
@@ -1449,7 +1450,7 @@ async function handleLayerRenameModal(interaction, session, system) {
 async function handleRefreshButton(interaction) {
     const systemId = interaction.customId.replace('front_refresh_', '');
     const system = await System.findById(systemId);
-    if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+    if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     const user = await User.findOne({ systemID: systemId, discordID: interaction.user.id });
     if (!user) return interaction.reply({ content: '❌ You can only refresh your own front view.', ephemeral: true });
@@ -1527,7 +1528,7 @@ async function closeAllActiveShifts(system) {
 async function buildFrontEmbed(system, user, interaction, isOwner, closedCharAllowed = true) {
     let systemName;
     if (!closedCharAllowed && system.name?.closedNameDisplay) systemName = system.name.closedNameDisplay;
-    else systemName = system.name?.display || system.name?.indexable || 'Unknown System';
+    else systemName = system.name?.display || system.name?.indexable || 'Unknown';
 
     const userName = user.discord?.name?.display || interaction.user?.displayName || 'Unknown User';
 
@@ -1616,7 +1617,7 @@ async function buildFrontEmbed(system, user, interaction, isOwner, closedCharAll
     }
 
     embed.setFooter({
-        text: isOwner ? 'Your system' : `${userName}'s system`,
+        text: isOwner ? `Your ${getSystemTerm(system, {context:'ownership'})}` : `${userName}'s ${getSystemTerm(system, {context:'ownership'})}`,
         iconURL: interaction.user.displayAvatarURL()
     });
 

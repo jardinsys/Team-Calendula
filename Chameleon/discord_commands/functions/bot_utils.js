@@ -63,6 +63,36 @@ const ENTITY_COLORS = {
 const DSM_TYPES = ['DID', 'Amnesia', 'Dereal/Depers', 'OSDD-1A', 'OSDD-1B', 'OSDD-2', 'OSDD-3', 'OSDD-4', 'UDD'];
 const ICD_TYPES = ['P-DID', 'Trance', 'DNSD', 'Possession Trance', 'SDS'];
 
+// ==== TERMINOLOGY HELPERS ====
+
+const NEUTRAL_TERMS = {
+    label: 'Profile',
+    title: '',
+    error: 'Registration',
+    ownership: 'profile',
+    ownershipCap: 'Profile'
+};
+
+function getSystemTerm(system, { context = 'label' } = {}) {
+    if (!system?.sys_type?.isSystem) {
+        return NEUTRAL_TERMS[context] || NEUTRAL_TERMS.label;
+    }
+    const synonym = system.systemSynonym || 'system';
+    switch (context) {
+        case 'title': return synonym.charAt(0).toUpperCase() + synonym.slice(1);
+        case 'error': return synonym.charAt(0).toUpperCase() + synonym.slice(1);
+        case 'ownership': return synonym.toLowerCase();
+        case 'ownershipCap': return synonym.charAt(0).toUpperCase() + synonym.slice(1);
+        default: return synonym.charAt(0).toUpperCase() + synonym.slice(1);
+    }
+}
+
+function getAlterTerm(system, { plural = false } = {}) {
+    return plural
+        ? (system?.alterSynonym?.plural || 'alters')
+        : (system?.alterSynonym?.singular || 'alter');
+}
+
 // Session storage (for multi-step interactions)
 const activeSessions = new Map();
 
@@ -322,19 +352,19 @@ async function createUser(discordId) {
  * @param {Interaction} interaction 
  * @param {string} entityType - 'system', 'alter', 'state', or 'group'
  */
-async function handleNewUserFlow(interaction, entityType) { //Change this later to have "System"
+async function handleNewUserFlow(interaction, entityType) {
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.system)
         .setTitle('Hihi! Welcome to Systemiser! 👋')
         .setDescription(
-            'It looks like you don\'t have a system set up. 😅\n\n' +
+            'It looks like you don\'t have a profile set up. 😅\n\n' +
             'If you need to, would you like to register yours now?'
         );
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`new_user_has_system_${entityType}`)
-            .setLabel('Yes, register my system!')
+            .setLabel('Yes, register my profile!')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
             .setCustomId(`new_user_no_system_${entityType}`)
@@ -369,10 +399,10 @@ async function handleNewUserButton(interaction) {
 
         const embed = new EmbedBuilder()
             .setColor(ENTITY_COLORS.success)
-            .setTitle('✅ System Created!')
+            .setTitle('✅ Profile Created!')
             .setDescription(
-                'Your system has been registered! 👍\n\n' +
-                'Use `/system edit` to customize your system\'s profile, or `/alter new` to register your first alter.\n'+
+                'Your profile has been registered! 👍\n\n' +
+                'Use `/system edit` to customize your profile, or `/alter new` to register your first alter.\n'+
                 'If you need any help, feel free to use `/help`'
             );
         await interaction.update({ embeds: [embed], components: [] });
@@ -394,7 +424,7 @@ async function handleNewUserButton(interaction) {
  */
 async function requireSystem(context, system) {
     if (!system) {
-        const errorMsg = 'You don\'t have a system set up yet. Use `sys!system new` or `/system` to create one.';
+        const errorMsg = 'Not registered yet. Use `sys!system new` or `/system` to create one.';
 
         // Check if it's an interaction or message
         if (context.reply && context.author) { // It's a message
@@ -1690,6 +1720,10 @@ module.exports = {
     ENTITY_COLORS,
     DSM_TYPES,
     ICD_TYPES,
+
+    // Terminology helpers
+    getSystemTerm,
+    getAlterTerm,
 
     // Session management
     generateSessionId,

@@ -16,6 +16,8 @@ const Group = require('../../../schemas/group');
 const redis = require('../../../redis');
 const utils = require('../../functions/bot_utils');
 
+const { getSystemTerm } = utils;
+
 module.exports = {
     name: 'whois',
     aliases: ['who', 'lookup'],
@@ -92,9 +94,9 @@ module.exports = {
 
         // System info (if available and public)
         if (system) {
-            const systemName = system.name?.display || system.name?.indexable || 'Unknown System';
+            const systemName = system.name?.display || system.name?.indexable || 'Unknown';
             embed.addFields({
-                name: '🎡 System',
+                name: `🎡 ${getSystemTerm(system)}`,
                 value: systemName,
                 inline: true
             });
@@ -103,8 +105,8 @@ module.exports = {
         // Entity info
         if (entity) {
             const entityName = entity.name?.display || entity.name?.indexable || 'Unknown';
-            const synonym = entityType === 'alter' && system?.alterSynonym?.singular 
-                ? system.alterSynonym.singular 
+            const synonym = entityType === 'alter' && system
+                ? getAlterTerm(system).charAt(0).toUpperCase() + getAlterTerm(system).slice(1)
                 : entityType.charAt(0).toUpperCase() + entityType.slice(1);
             
             embed.addFields({

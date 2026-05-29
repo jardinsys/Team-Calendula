@@ -34,6 +34,8 @@ const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 
+const { getSystemTerm } = utils;
+
 module.exports = {
     name: 'group',
     aliases: ['g'],
@@ -92,7 +94,7 @@ async function getGroup(message, groupName) {
 
 async function handleShow(message, parsed, groupName) {
     const { system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
-    if (!system) return utils.error(message, targetUserId === message.author.id ? 'You don\'t have a system.' : 'That user doesn\'t have a system.');
+    if (!system) return utils.error(message, targetUserId === message.author.id ? 'Not registered yet.' : 'Not registered.');
     const result = await utils.findEntity(groupName, system, 'group');
     if (!result) return utils.error(message, `Group **${groupName}** not found.`);
     const embed = await buildGroupEmbed(result.entity, system);
@@ -658,7 +660,7 @@ async function handleId(message, parsed, groupName) {
 
 async function handleList(message, parsed) {
     const { system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
-    if (!system) return utils.error(message, targetUserId === message.author.id ? 'You don\'t have a system.' : 'That user doesn\'t have a system.');
+    if (!system) return utils.error(message, targetUserId === message.author.id ? 'Not registered yet.' : 'Not registered.');
     const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
     if (!groups.length) return utils.info(message, 'No groups found.');
     const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.group).setTitle(`Groups (${groups.length})`);
@@ -676,7 +678,7 @@ async function handleList(message, parsed) {
 }
 
 async function handleHelp(message) {
-    const embed = utils.buildHelpEmbed('group', 'Manage groups in your system.', [
+    const embed = utils.buildHelpEmbed('group', 'Manage groups in your profile.', [
         { usage: 'sys!group <n>', description: 'Show group info' },
         { usage: 'sys!group new <n>', description: 'Create new group' },
         { usage: 'sys!group <n> add <member> [member2...]', description: 'Add members' },

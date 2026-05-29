@@ -232,12 +232,12 @@ router.get('/:friendId/front', authMiddleware, async (req, res) => {
         }
         
         if (!friendUser || !friendUser.systemID) {
-            return res.status(404).json({ error: 'No system' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const system = await System.findById(friendUser.systemID);
         if (!system) {
-            return res.status(404).json({ error: 'System not found' });
+            return res.status(404).json({ error: 'Not registered' });
         }
         
         const frontData = {

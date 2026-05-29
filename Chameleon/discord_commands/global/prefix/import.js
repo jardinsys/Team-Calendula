@@ -252,7 +252,7 @@ async function importPluralKitAPI(message, system, token, options) {
         await statusMsg.edit({
             embeds: [new EmbedBuilder()
                 .setColor(IMPORT_COLOR)
-                .setDescription(`🔄 Found system: **${pkSystem.name || 'Unnamed'}**\nFetching members...`)]
+                .setDescription(`🔄 Found profile: **${pkSystem.name || 'Unnamed'}**\nFetching members...`)]
         });
 
         // Fetch members
@@ -1050,7 +1050,7 @@ function buildImportResultEmbed(source, result, targetMode = TARGET_APP) {
     if (targetMode === TARGET_DISCORD) description += '🎯 **Target:** Discord-specific fields\n';
     else description += '🎯 **Target:** Main/App fields\n';
 
-    if (result.systemUpdated) description += '📋 System info updated\n';
+    if (result.systemUpdated) description += '📋 Profile info updated\n';
 
     description += `\n**Alters:**\n`;
     description += `• Imported: **${result.membersImported}**\n`;

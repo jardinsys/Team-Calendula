@@ -40,6 +40,8 @@ const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 const proxyMessageHandler = require('../proxy-message');
 
+const { getSystemTerm } = utils;
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('state')
@@ -393,7 +395,7 @@ async function handleMenu(interaction, user, system) {
 async function handleShowList(interaction, currentUser, currentSystem) {
     const targetUser = interaction.options.getUser('user');
     const targetUserId = interaction.options.getString('userid');
-    const refuse_list_message = '❌ This user does not have a state list to show. They may not have a system set up in this application, have not allowed you to view their list, or you might be blocked...';
+    const refuse_list_message = '❌ This user does not have a state list to show. They may not be registered, have not allowed you to view their list, or you might be blocked...';
 
     let targetSystem = currentSystem;
     let isOwner = true;
@@ -420,7 +422,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 
-    if (!targetSystem) return await interaction.reply({ content: '❌ No system/person found. Use `/system` to set up your system first.', ephemeral: true });
+    if (!targetSystem) return await interaction.reply({ content: '❌ Not registered. Use `/system` to set up first.', ephemeral: true });
 
     // Get all states for this system
     const states = await State.find({ _id: { $in: targetSystem.states?.IDs || [] } });
@@ -432,7 +434,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         utils.shouldShowEntity(state, privacyBucket, isOwner, false)
     ); 
 
-    if (states.length === 0 || visibleStates.length === 0) return await interaction.reply({ content: '📭 No states registered for this system.', ephemeral: true });
+    if (states.length === 0 || visibleStates.length === 0) return await interaction.reply({ content: '📭 No states registered.', ephemeral: true });
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -477,7 +479,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 
-    if (!targetSystem) return await interaction.reply({ content: '❌ No registered system/person found.', ephemeral: true });
+    if (!targetSystem) return await interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     // Find the state
     const state = await utils.findStateByName(stateName, targetSystem);

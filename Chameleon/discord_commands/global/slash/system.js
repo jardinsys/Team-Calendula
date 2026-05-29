@@ -32,7 +32,7 @@ const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 
-const { DSM_TYPES, ICD_TYPES, ENTITY_COLORS, getSystemEmbedColor } = utils;
+const { DSM_TYPES, ICD_TYPES, ENTITY_COLORS, getSystemEmbedColor, getSystemTerm, getAlterTerm } = utils;
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -124,7 +124,7 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
 
     // Basic Info field
     let basicInfo = '';
-    basicInfo += `**${system.alterSynonym?.plural || 'Alters'}:** ${alterCount}\n`;
+    basicInfo += `**${getAlterTerm(system, {plural:true}).charAt(0).toUpperCase() + getAlterTerm(system, {plural:true}).slice(1)}:** ${alterCount}\n`;
     basicInfo += `**States:** ${stateCount}\n`;
     basicInfo += `**Groups:** ${groupCount}\n`;
 
@@ -152,10 +152,11 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     }
 
     // Terminology field
-    if (system.alterSynonym?.singular || system.alterSynonym?.plural) {
+    if (system.alterSynonym?.singular || system.alterSynonym?.plural || system.systemSynonym) {
         let termInfo = '';
-        if (system.alterSynonym.singular) termInfo += `**Singular:** ${system.alterSynonym.singular}\n`;
-        if (system.alterSynonym.plural) termInfo += `**Plural:** ${system.alterSynonym.plural}\n`;
+        if (system.systemSynonym && system.systemSynonym !== 'system') termInfo += `**${getSystemTerm(system)}:** ${system.systemSynonym}\n`;
+        if (system.alterSynonym?.singular) termInfo += `**Singular:** ${system.alterSynonym.singular}\n`;
+        if (system.alterSynonym?.plural) termInfo += `**Plural:** ${system.alterSynonym.plural}\n`;
         embed.addFields({
             name: '📝 Terminology',
             value: termInfo.trim(),
@@ -254,7 +255,7 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
 //Build the edit interface for a system
 function buildEditInterface(system, session) {
     const embed = new EmbedBuilder()
-        .setTitle(`Editing System Info of ${utils.getDisplayName(system)}`)
+        .setTitle(`Editing ${getSystemTerm(system, {context:'ownershipCap'})} Info of ${utils.getDisplayName(system)}`)
         .setDescription(session.mode
             ? `Currently in **${session.mode.toUpperCase()} MODE**\n\nSelect what you would like to edit.`
             : 'Select what you would like to edit from the dropdown menu below.')
@@ -272,12 +273,12 @@ function buildEditInterface(system, session) {
                 .setEmoji('🎴'),
             new StringSelectMenuOptionBuilder()
                 .setLabel('System Type')
-                .setDescription('Edit system type (DSM/ICD classification)')
+                .setDescription(`Edit ${getSystemTerm(system, {context:'ownership'})} type (DSM/ICD classification)`)
                 .setValue('type_info')
                 .setEmoji('🏷️'),
             new StringSelectMenuOptionBuilder()
                 .setLabel('Terminology')
-                .setDescription('Edit alter synonyms')
+                .setDescription(`Edit ${getAlterTerm(system)} synonyms & ${getSystemTerm(system, {context:'ownership'})} name`)
                 .setValue('terminology_info')
                 .setEmoji('📝'),
             new StringSelectMenuOptionBuilder()
@@ -365,8 +366,8 @@ function buildEditInterface(system, session) {
 //Build the settings interface
 function buildSettingsInterface(system, session) {
     const embed = new EmbedBuilder()
-        .setTitle(`⚙️ System Settings`)
-        .setDescription('Configure your system settings below.');
+        .setTitle(`⚙️ ${getSystemTerm(system)} Settings`)
+        .setDescription(`Configure your ${getSystemTerm(system, {context:'ownership'})} settings below.`);
 
     // Current settings
     embed.addFields(
@@ -517,7 +518,7 @@ function buildConditionsInterface(system, session) {
         }).join('\n');
     }
     embed.addFields({
-        name: `${system.alterSynonym?.singular || 'Alter'} Conditions`,
+        name: `${getAlterTerm(system, {plural:true}).charAt(0).toUpperCase() + getAlterTerm(system, {plural:true}).slice(1)} Conditions`,
         value: alterConditions,
         inline: false
     });
@@ -550,7 +551,7 @@ function buildConditionsInterface(system, session) {
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`system_conditions_alter_add_${session.id}`)
-            .setLabel(`Add ${system.alterSynonym?.singular || 'Alter'} Condition`)
+            .setLabel(`Add ${getAlterTerm(system)} Condition`)
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
             .setCustomId(`system_conditions_state_add_${session.id}`)
@@ -575,12 +576,12 @@ function buildManagementMenu(system, session, sessionId) {
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`system_manage_edit_${sessionId}`)
-            .setLabel('Edit System Info')
+            .setLabel(`Edit ${getSystemTerm(system, {context:'ownershipCap'})} Info`)
             .setStyle(ButtonStyle.Primary)
             .setEmoji('✏️'),
         new ButtonBuilder()
             .setCustomId(`system_manage_settings_${sessionId}`)
-            .setLabel('System Settings')
+            .setLabel(`${getSystemTerm(system)} Settings`)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji('⚙️')
     );
@@ -633,7 +634,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     if (targetUser || targetUserId) {
         isOwner = false;
         const discordId = targetUser?.id || targetUserId;
-        const dont_show_system_message = '❌ This user does not have a system to show. They may not have set up a system in this application, or you may not be allowed to view them...'
+        const dont_show_system_message = '❌ This user is not registered. They may not have set up a profile in this application, or you may not be allowed to view them...'
 
         const otherUser = await User.findOne({ discordID: discordId });
         if (!otherUser || !otherUser.systemID) return await interaction.reply({ content: dont_show_system_message, ephemeral: true });
@@ -649,7 +650,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
 
     if (!targetSystem) {
         return await interaction.reply({
-            content: '❌ No system found. Use `/system` if you want to register a system.',
+            content: '❌ Not registered. Use `/system` if you want to register.',
             ephemeral: true
         });
     }
@@ -852,8 +853,8 @@ async function handleButtonInteraction(interaction) {
                     {
                         name: '📋 Available Placeholders',
                         value: '`{name}` - Display name of the alter/state/group\n' +
-                            '`{sys-name}` - System display name\n' +
-                            '`{tag1}`, `{tag2}`, `{tag3}`... - **System** tag array items\n' +
+                            '`{sys-name}` - ' + getSystemTerm(system, {context:'ownershipCap'}) + ' display name\n' +
+                            '`{tag1}`, `{tag2}`, `{tag3}`... - **' + getSystemTerm(system) + '** tag array items\n' +
                             '`{pronouns}` - Entity pronouns joined by separator\n' +
                             '`{caution}` - Entity caution type',
                         inline: false
@@ -869,9 +870,9 @@ async function handleButtonInteraction(interaction) {
                     },
                     {
                         name: '💡 Example Layouts',
-                        value: 'System tag(s): (🎡)\n Alter "Bird" signoff(s): 🪶\n\n' +
+                        value: getSystemTerm(system) + ' tag(s): (🎡)\n Alter "Bird" signoff(s): 🪶\n\n' +
                             '`{tag1} {name}{a-sign1}` → (🎡) Bird🪶\n' +
-                            '`[{sys-name}] {name}` → [Colorwheel System] Bird',
+                            '`[{sys-name}] {name}` → [' + utils.getDisplayName(system) + ' ' + getSystemTerm(system, {context:'ownershipCap'}) + '] Bird',
                         inline: false
                     },
                     {
@@ -884,7 +885,7 @@ async function handleButtonInteraction(interaction) {
                     },
                     {
                         name: '📝 Setting Up Tags & Signoffs',
-                        value: '**System Tags:** Edit in System → Card Info or Proxy Settings\n' +
+                        value: '**' + getSystemTerm(system) + ' Tags:** Edit in ' + getSystemTerm(system, {context:'ownershipCap'}) + ' → Card Info or Proxy Settings\n' +
                             '**Entity Signoffs:** Edit in alter/state/group Proxy Info\n' +
                             '• Enter one per line (emojis recommended!)\n' +
                             '• They become `{tag1}`, `{a-sign1}`, etc.',
@@ -1315,7 +1316,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('system_conditions_alter_add_')) {
         const modal = new ModalBuilder()
             .setCustomId(`system_conditions_alter_modal_${sessionId}`)
-            .setTitle(`Add ${system.alterSynonym?.singular || 'Alter'} Condition`);
+            .setTitle(`Add ${getAlterTerm(system)} Condition`);
 
         modal.addComponents(
             new ActionRowBuilder().addComponents(
@@ -1601,9 +1602,18 @@ async function handleSelectMenu(interaction) {
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
                         .setCustomId('plural')
-                        .setLabel('Plural Term (e.g., alters, headmates, parts, collective)')
+                        .setLabel('Plural Term (e.g., alters, headmates, parts)')
                         .setStyle(TextInputStyle.Short)
                         .setValue(system.alterSynonym?.plural || 'alters')
+                        .setRequired(false)
+                        .setMaxLength(30)
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('systemSynonym')
+                        .setLabel(getSystemTerm(system) + ' Synonym (e.g., system, collective, team)')
+                        .setStyle(TextInputStyle.Short)
+                        .setValue(system.systemSynonym || 'system')
                         .setRequired(false)
                         .setMaxLength(30)
                 )
@@ -2041,10 +2051,12 @@ async function handleModalSubmit(interaction) {
         if (interaction.customId.startsWith('system_edit_terminology_modal_')) {
             const singular = interaction.fields.getTextInputValue('singular');
             const plural = interaction.fields.getTextInputValue('plural');
+            const systemSynonym = interaction.fields.getTextInputValue('systemSynonym');
 
             if (!system.alterSynonym) system.alterSynonym = {};
             system.alterSynonym.singular = singular || 'alter';
             system.alterSynonym.plural = plural || 'alters';
+            system.systemSynonym = systemSynonym || 'system';
 
             await system.save();
         }

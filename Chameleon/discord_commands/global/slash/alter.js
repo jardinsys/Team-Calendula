@@ -39,6 +39,8 @@ const State = require('../../../schemas/state');
 const utils = require('../../functions/bot_utils');
 const proxyMessageHandler = require('../proxy-message');
 
+const { getSystemTerm, getAlterTerm } = utils;
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('alter')
@@ -107,7 +109,7 @@ module.exports = {
 
         if (!system && subcommand !== 'view') 
             return await interaction.reply({
-                content: '❌ You need to set up a system first. Use `/system` to get started.',
+                content: '❌ Not registered. Use `/system` to get started.',
                 ephemeral: true
             });
 
@@ -349,7 +351,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
 
         if (!otherUser || !otherUser.systemID) {
             return await interaction.reply({
-                content: '❌ This user does not have an alter list to show. They may not have a system set up in this application...',
+                content: '❌ This user does not have an alter list to show. They may not be registered...',
                 ephemeral: true
             });
         }
@@ -357,7 +359,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         targetSystem = await System.findById(otherUser.systemID);
         if (!targetSystem) {
             return await interaction.reply({
-                content: '❌ This user does not have an alter list to show. They may not have a system set up in this application...',
+                content: '❌ This user does not have an alter list to show. They may not be registered...',
                 ephemeral: true
             });
         }
@@ -365,7 +367,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         // Check if blocked
         if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) {
             return await interaction.reply({
-                content: '❌ This user does not have an alter list to show. They may not have a system set up in this application...',
+                content: '❌ This user does not have an alter list to show. They may not be registered...',
                 ephemeral: true
             });
         }
@@ -376,7 +378,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         const systemPrivacy = targetSystem.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
         if (systemPrivacy?.settings?.hidden === false) {
             return await interaction.reply({
-                content: '❌ This user does not have an alter list to show. They may not have a system set up in this application...',
+                content: '❌ This user does not have an alter list to show. They may not be registered...',
                 ephemeral: true
             });
         }
@@ -384,7 +386,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
 
     if (!targetSystem) {
         return await interaction.reply({
-            content: '❌ No system found. Use `/system` to set up your system first.',
+            content: '❌ Not registered. Use `/system` to set up first.',
             ephemeral: true
         });
     }
@@ -393,7 +395,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
     const alters = await Alter.find({ _id: { $in: targetSystem.alters?.IDs || [] } });
 
     if (alters.length === 0) 
-        return await interaction.reply({ content: '📭 No alters found in this system.', ephemeral: true });
+        return await interaction.reply({ content: '📭 No alters found.', ephemeral: true });
 
     // Filter alters based on visibility
     const visibleAlters = alters.filter(alter => utils.shouldShowEntity(alter, privacyBucket, isOwner, false));
@@ -438,7 +440,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
     }
 
-    if (!targetSystem) return await interaction.reply({ content: '❌ No system found.', ephemeral: true });
+    if (!targetSystem) return await interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     const alter = await utils.findAlterByName(alterName, targetSystem);
     if (!alter) return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
@@ -475,7 +477,7 @@ async function handleNew(interaction, user, system) {
     const existingAlter = await utils.findAlterByName(alterName, system);
     if (existingAlter) {
         return await interaction.reply({
-            content: '❌ An alter with this indexable name already exists in your system.',
+            content: '❌ An alter with this indexable name already exists.',
             ephemeral: true
         });
     }
@@ -517,7 +519,7 @@ async function handleDormant(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
 
-    if (!alter) return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
+    if (!alter) return await interaction.reply({ content: '❌ Alter not found.', ephemeral: true });
 
     alter.condition = 'dormant';
     await alter.save();
@@ -532,7 +534,7 @@ async function handleDelete(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
 
-    if (!alter) return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
+    if (!alter) return await interaction.reply({ content: '❌ Alter not found.', ephemeral: true });
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
@@ -561,7 +563,7 @@ async function handleSettings(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
 
-    if (!alter) return await interaction.reply({ content: '❌ Alter not found in your system.', ephemeral: true });
+    if (!alter) return await interaction.reply({ content: '❌ Alter not found.', ephemeral: true });
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {

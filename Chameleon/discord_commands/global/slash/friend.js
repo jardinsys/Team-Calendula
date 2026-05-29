@@ -28,6 +28,7 @@ const utils = require('../../functions/bot_utils');
 
 const WEBAPP_URL = 'https://systemise.teamcalendula.net';
 const ENTITY_COLORS = utils.ENTITY_COLORS;
+const { getSystemTerm } = utils;
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -107,7 +108,7 @@ async function handleList(interaction, user, system) {
         const targetSystem = targetUser?.systemID ? await System.findById(targetUser.systemID) : null;
 
         const displayName = friend.customName?.display || friend.customName?.indexable || friend.discordID;
-        const systemName = targetSystem ? utils.getDisplayName(targetSystem) : 'No system';
+        const systemName = targetSystem ? utils.getDisplayName(targetSystem) : 'No profile';
 
         // Get front status preview
         let statusPreview = '';
@@ -149,7 +150,7 @@ async function handleView(interaction, user, system) {
     }
 
     if (!targetUser.systemID) {
-        return interaction.editReply({ content: '❌ This user doesn\'t have a system set up.', ephemeral: true });
+        return interaction.editReply({ content: '❌ Not registered.', ephemeral: true });
     }
 
     if (utils.isBlocked(targetUser, interaction.user.id, user.friendID)) {
@@ -158,7 +159,7 @@ async function handleView(interaction, user, system) {
 
     const targetSystem = await System.findById(targetUser.systemID);
     if (!targetSystem) {
-        return interaction.editReply({ content: '❌ System not found.', ephemeral: true });
+        return interaction.editReply({ content: '❌ Not registered.', ephemeral: true });
     }
 
     const privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, user.friendID);
@@ -300,7 +301,7 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
     }
 
     embed.setFooter({
-        text: `${targetUserName}'s system`,
+        text: `${targetUserName}'s ${getSystemTerm(targetSystem, {context:'ownership'})}`,
         iconURL: interaction.user.displayAvatarURL()
     });
 
@@ -365,9 +366,9 @@ async function handleAdd(interaction, user, system) {
     }
 
     const targetSystem = targetUser.systemID ? await System.findById(targetUser.systemID) : null;
-    const targetSystemName = targetSystem ? utils.getDisplayName(targetSystem) : 'No system';
+    const targetSystemName = targetSystem ? utils.getDisplayName(targetSystem) : 'No profile';
     const senderName = user.discord?.name?.display || interaction.user.displayName;
-    const senderSystemName = system ? utils.getDisplayName(system) : 'No system';
+    const senderSystemName = system ? utils.getDisplayName(system) : 'No profile';
 
     if (!targetUser.friendRequests) targetUser.friendRequests = [];
     targetUser.friendRequests.push({
@@ -382,7 +383,7 @@ async function handleAdd(interaction, user, system) {
     // Handle notification based on user preferences
     const notifPrefs = targetUser.settings?.notificationPreferences || {};
     if (notifPrefs.friendRequests !== false) {
-        const senderDisplayName = senderName + (senderSystemName !== 'No system' ? ` (${senderSystemName})` : '');
+        const senderDisplayName = senderName + (senderSystemName !== 'No profile' ? ` (${senderSystemName})` : '');
 
         if (notifPrefs.friendNotifications === 'command') {
             // Queue as ephemeral notification
@@ -813,7 +814,7 @@ async function handleButtonInteraction(interaction) {
 
         const system = user.systemID ? await System.findById(user.systemID) : null;
         if (!system?.privacyBuckets?.length) {
-            return interaction.reply({ content: '❌ No privacy buckets configured for your system.', ephemeral: true });
+            return interaction.reply({ content: '❌ No privacy buckets configured.', ephemeral: true });
         }
 
         const sessionId = utils.generateSessionId(interaction.user.id);
@@ -1005,7 +1006,7 @@ async function handleViewSelect(interaction) {
     const targetDiscordId = interaction.values[0];
     const targetUser = await User.findOne({ discordID: targetDiscordId });
     if (!targetUser) return interaction.reply({ content: '❌ User not found.', ephemeral: true });
-    if (!targetUser.systemID) return interaction.reply({ content: '❌ This user doesn\'t have a system.', ephemeral: true });
+    if (!targetUser.systemID) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     const targetSystem = await System.findById(targetUser.systemID);
     const privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, user.friendID);
@@ -1099,7 +1100,7 @@ async function handleSetBucketSelect(interaction) {
 
     const user = await User.findById(session.userId);
     const system = session.systemId ? await System.findById(session.systemId) : null;
-    if (!system) return interaction.reply({ content: '❌ System not found.', ephemeral: true });
+    if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
     const selectedBucket = interaction.values[0];
 

@@ -25,6 +25,8 @@ const System = require('../../../schemas/system');
 const User = require('../../../schemas/user');
 const utils = require('../../functions/bot_utils');
 
+const { getSystemTerm, getAlterTerm } = utils;
+
 module.exports = {
     name: 'config',
     aliases: ['cfg', 'settings'],
@@ -85,7 +87,7 @@ async function handleShow(message, user, system) {
             name: '🌐 General',
             value: [
                 `**Timezone:** ${system.timezone || '*Not set*'}`,
-                `**Terminology:** ${system.alterSynonym?.singular || 'alter'} / ${system.alterSynonym?.plural || 'alters'}`,
+                `**Terminology:** ${getSystemTerm(system)} / ${getAlterTerm(system, {plural:true}).charAt(0).toUpperCase() + getAlterTerm(system, {plural:true}).slice(1)} / ${getAlterTerm(system, {plural:true})}`,
                 `**Pronoun Separator:** ${system.discord?.pronounSeparator || '*Not set*'}`,
                 `**Discord Sync:** ${system.syncWithApps?.discord ? '✅ Enabled' : '❌ Disabled'}`,
                 `**Auto-share Notes:** ${system.setting?.autoshareNotestoUsers ? '✅ Enabled' : '❌ Disabled'}`,
@@ -379,9 +381,10 @@ async function handleTerminology(message, parsed, system) {
     const type = parsed._positional[1]?.toLowerCase();
 
     if (type !== 'alter') {
-        const singular = system.alterSynonym?.singular || 'alter';
-        const plural = system.alterSynonym?.plural || 'alters';
-        return utils.info(message, `Current terminology: **${singular}** / **${plural}**\nUse \`sys!config terminology alter <singular> [plural]\` to change.`);
+        const sysTerm = getSystemTerm(system);
+        const alterSing = getAlterTerm(system);
+        const alterPlural = getAlterTerm(system, {plural:true});
+        return utils.info(message, `Current terminology: **${sysTerm}** / **${alterSing}** / **${alterPlural}**\nUse \`sys!config terminology alter <singular> [plural]\` to change alter terms.`);
     }
 
     const singular = parsed._positional[2];

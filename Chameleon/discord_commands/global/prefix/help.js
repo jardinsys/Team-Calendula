@@ -121,8 +121,8 @@ module.exports = {
 function systemHelp() {
     return new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.system)
-        .setTitle('📋 System Commands')
-        .setDescription('Manage your system settings.')
+        .setTitle('📋 Profile Commands')
+        .setDescription('Manage your profile settings.')
         .addFields(
             {
                 name: 'View & Create', value:

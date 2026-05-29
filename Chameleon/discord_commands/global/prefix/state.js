@@ -30,6 +30,8 @@ const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 
+const { getSystemTerm } = utils;
+
 module.exports = {
     name: 'state',
     aliases: ['st'],
@@ -78,7 +80,7 @@ module.exports = {
 
 async function getState(message, stateName) {
     const { system } = await utils.getOrCreateUserAndSystem(message);
-    if (!system) { await utils.error(message, 'You don\'t have a system yet.'); return { state: null, system: null }; }
+    if (!system) { await utils.error(message, 'Not registered yet.'); return { state: null, system: null }; }
     const result = await utils.findEntity(stateName, system, 'state');
     if (!result) { await utils.error(message, `State **${stateName}** not found.`); return { state: null, system }; }
     return { state: result.entity, system };
@@ -86,7 +88,7 @@ async function getState(message, stateName) {
 
 async function handleShow(message, parsed, stateName) {
     const { system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
-    if (!system) return utils.error(message, targetUserId === message.author.id ? 'You don\'t have a system.' : 'That user doesn\'t have a system.');
+    if (!system) return utils.error(message, targetUserId === message.author.id ? 'Not registered yet.' : 'Not registered.');
     const result = await utils.findEntity(stateName, system, 'state');
     if (!result) return utils.error(message, `State **${stateName}** not found.`);
     const embed = await buildStateEmbed(result.entity, system);
@@ -541,7 +543,7 @@ async function handleId(message, parsed, stateName) {
 
 async function handleList(message, parsed) {
     const { system, targetUserId } = await utils.resolveTargetSystem(message, parsed);
-    if (!system) return utils.error(message, targetUserId === message.author.id ? 'You don\'t have a system.' : 'That user doesn\'t have a system.');
+    if (!system) return utils.error(message, targetUserId === message.author.id ? 'Not registered yet.' : 'Not registered.');
     const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
     if (!states.length) return utils.info(message, 'No states found.');
     const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.state).setTitle(`States (${states.length})`);
@@ -556,7 +558,7 @@ async function handleList(message, parsed) {
 }
 
 async function handleHelp(message) {
-    const embed = utils.buildHelpEmbed('state', 'Manage states in your system.', [
+    const embed = utils.buildHelpEmbed('state', 'Manage states in your profile.', [
         { usage: 'sys!state <n>', description: 'Show state info' },
         { usage: 'sys!state new <n>', description: 'Create new state' },
         { usage: 'sys!state <n> rename <new>', description: 'Change name' },
