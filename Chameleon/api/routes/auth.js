@@ -191,4 +191,75 @@ router.post('/refresh', authenticateToken, async (req, res) => {
     }
 });
 
+// ==========================================
+// POST /api/auth/activity/token
+// Activity auth — exchange Discord access token for JWT
+// ==========================================
+
+router.post('/activity/token', async (req, res) => {
+    try {
+        const { discordId, discordAccessToken } = req.body;
+
+        if (!discordId || !discordAccessToken) {
+            return res.status(400).json({ error: 'discordId and discordAccessToken required' });
+        }
+
+        // Verify the Discord access token by fetching user info
+        const userResponse = await axios.get(`${DISCORD_API}/users/@me`, {
+            headers: {
+                'Authorization': `Bearer ${discordAccessToken}`
+            }
+        });
+
+        const discordUser = userResponse.data;
+
+        // Verify the discordId matches the token's user
+        if (discordUser.id !== discordId) {
+            return res.status(401).json({ error: 'Discord ID does not match token' });
+        }
+
+        // Find or create user in database
+        let user = await User.findOne({ discordID: discordId });
+
+        if (!user) {
+            user = new User({
+                discordID: discordId,
+                username: discordUser.username,
+                globalName: discordUser.global_name,
+                avatar: discordUser.avatar,
+                type: 'basic',
+                createdAt: new Date()
+            });
+            await user.save();
+            console.log(`[Activity Auth] New user registered: ${discordUser.username} (${discordId})`);
+        } else {
+            user.username = discordUser.username;
+            user.globalName = discordUser.global_name;
+            user.avatar = discordUser.avatar;
+            user.lastLogin = new Date();
+            await user.save();
+        }
+
+        // Generate JWT token (same format as webapp)
+        const token = generateToken(user);
+
+        res.json({
+            token,
+            user: {
+                _id: user._id,
+                discordID: user.discordID,
+                username: user.username,
+                globalName: user.globalName,
+                type: user.type || 'basic',
+                hasSystem: !!user.systemID,
+                systemID: user.systemID
+            }
+        });
+
+    } catch (error) {
+        console.error('[Activity Auth] Token exchange error:', error.response?.data || error.message);
+        res.status(500).json({ error: 'Failed to authenticate' });
+    }
+});
+
 module.exports = router;

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@chameleon/shared": "*",
     "@discord/embedded-app-sdk": "^2.4.0",
     "@tanstack/react-query": "^5.90.16",
     "axios": "^1.13.2",

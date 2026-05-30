@@ -175,9 +175,48 @@ When editing image info via modal, routing depends on `session.syncWithDiscord`:
 | `states[].avatar` | Embedded state avatar within alter (mediaSchema) |
 
 ## R2 Configuration
-- Config accessed via `config.r2.system` (endpoint, bucketName, accessKeyId, secretAccessKey, publicURL)
-- R2 key format: `media/{entityType}/{userId}/{field}_{timestamp}.{ext}`
-- Entity types: 'Alter', 'State', 'Group', 'System'
+
+### Dual-Bucket Architecture
+Two R2 buckets for media storage, both accessible by the Discord bot and the embedded app:
+
+| Bucket | Config Path | Purpose |
+|--------|-------------|---------|
+| **app** | `config.r2.system.app` | Primary media for the main app/webapp (avatars, banners, note content, etc.) |
+| **discord** | `config.r2.system.discord` | Discord-synced media — used when a user chooses **not** to sync the main app with Discord. Their Discord-only media (server-specific avatars/banners, Discord-synced proxies) lives here, keeping it separate from the app bucket. |
+
+### Routing Logic (future)
+- Uploads flow to `app` bucket by default.
+- When `syncWithApps.discord` is `false` and the upload originates from a Discord context (proxy avatar, server-specific media), it routes to the `discord` bucket.
+- The embedded app can access both buckets directly via R2 public URLs.
+
+### Config Structure
+```json
+"r2": {
+    "system": {
+        "accountID": "...",
+        "app": {
+            "endpoint": "https://{accountID}.r2.cloudflarestorage.com",
+            "accessKeyId": "...",
+            "secretAccessKey": "...",
+            "bucketName": "app",
+            "publicURL": ""
+        },
+        "discord": {
+            "endpoint": "https://{accountID}.r2.cloudflarestorage.com",
+            "accessKeyId": "...",
+            "secretAccessKey": "...",
+            "bucketName": "discord",
+            "publicURL": ""
+        }
+    }
+}
+```
+
+### R2 Key Format
+`media/{entityType}/{userId}/{field}_{timestamp}.{ext}`
+
+### Entity Types
+'Alter', 'State', 'Group', 'System'
 
 ## Redis Configuration
 
@@ -848,3 +887,79 @@ isPingAllowed(entity, pingedUserId, viewerDiscordId)
 - `viewerDiscordId` = Discord ID of the person running `/message ping`
 - Returns `true`/`false` following the priority chain above
 - Must be `await`ed (fetches System + User docs for owner lookup)`
+
+## Profile Command (`/profile`)
+
+### Command Definition
+```
+/profile
+├── show [user: @user]
+└── manage action: [edit | settings]
+```
+
+### Routing
+| Subcommand | Behavior |
+|------------|----------|
+| `show` | Displays a profile card (yours or another user's). Owner sees quick-action buttons below the embed |
+| `manage action:edit` | Opens an ephemeral edit interface with a select menu (Basic Info, Current Status, Proxy Settings) |
+| `manage action:settings` | Opens settings interface (Closed Characters toggle, Privacy Settings) |
+
+### Profile Card (Owner View)
+- Shows **Info** (pronouns, friend ID), **Current Status** (status, battery, caution), **Proxy** (auto-proxy style, break status), and **Account** info
+- Three quick-action buttons below the embed:
+  - **Update Status** (`profile_quick_status_`) — modal with single `status` text field → saves to `system.front.status`
+  - **Update Battery** (`profile_quick_battery_`) — modal with single `battery` number field → saves to `system.battery`
+  - **Update Caution** (`profile_quick_caution_`) — modal with single `caution` text field → saves to `system.front.caution`
+
+### Edit Interface (Current Status)
+The `status_info` select menu option opens a modal with three fields — **status**, **battery**, and **caution** — all in one form. This is the same data accessed by the three individual quick buttons.
+
+### Data Fields
+| Field | Schema Path | Type |
+|-------|-------------|------|
+| Status | `system.front.status` | String |
+| Battery | `system.battery` | Number (0-100) |
+| Caution | `system.front.caution` | String (flat string, unlike entity-caution which is `{c_type, detail}`) |
+
+### Privacy
+- When viewing another user's profile, front info (status, battery, caution) is gated by `system.setting.privacy[].settings.front.hidden`
+- Blocked users cannot view profiles at all
+
+## Terminology System (Custom Labels)
+
+### Overview
+All user-facing "System"/"system" labels are dynamically replaced based on `sys_type.isSystem` and `systemSynonym`. This lets non-system users get neutral terms and system users set a custom synonym.
+
+### Schema
+- `system.sys_type.isSystem` (Boolean) — if false, neutral terms used
+- `system.systemSynonym` (String, default: `"system"`) — custom label when `isSystem` is true
+
+### Helper Functions (`bot_utils.js`)
+
+**`getSystemTerm(system, {context})`**
+- `context`: `'label'` → "Profile" (field names), `'title'` → `""` (strip from titles), `'error'` → "Registration", `'ownership'` → "profile" (lowercase)
+- When `isSystem=true`: uses `system.systemSynonym` (default `"system"`)
+
+**`getAlterTerm(system, {plural})`**
+- Returns `alterSynonym.singular` or `alterSynonym.plural`
+
+### Neutral Term Mapping (when `isSystem=false`)
+| Context | Neutral Term |
+|---------|-------------|
+| Embed field label | "Profile" |
+| Embed title | Stripped (remove "System" prefix) |
+| Error messages | "Not registered" or "Registration" |
+| Ownership ("your/their") | "profile" |
+
+### Files Updated (29 files)
+- **Schema**: `schemas/system.js` — `systemSynonym` field
+- **Helpers**: `bot_utils.js` — `getSystemTerm()`, `getAlterTerm()`
+- **Slash commands**: `system.js`, `settings.js`, `whois.js`, `front.js`, `friend.js`, `alter.js`, `state.js`, `group.js`
+- **Prefix commands**: `system.js`, `alter.js`, `state.js`, `group.js`, `config.js`, `friend.js`, `profile.js`, `whois.js`, `help.js`, `import.js`
+- **API routes**: `alters.js`, `friends.js`, `front.js`, `groups.js`, `quick.js`, `states.js`, `system.js` — errors return `'Not registered'`
+
+### Terminology UI
+- **`/system edit`** → Terminology modal: 3 fields (singular, plural, system synonym)
+- **`/settings`** → General → Terminology modal: same 3 fields
+- **`sys!config terminology`** → displays current terms in `"System / Alter / alters"` format
+- Edit paths hint when `isSystem=false` pointing to System Type settings`

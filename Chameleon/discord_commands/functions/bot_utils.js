@@ -35,10 +35,10 @@ const config = require('../../../config.json');
 // Initialize R2 Client for Systemiser media
 const sysR2 = new S3Client({
     region: 'auto',
-    endpoint: config.r2.system.endpoint,
+    endpoint: config.r2.system.app.endpoint,
     credentials: {
-        accessKeyId: config.r2.system.accessKeyId,
-        secretAccessKey: config.r2.system.secretAccessKey,
+        accessKeyId: config.r2.system.app.accessKeyId,
+        secretAccessKey: config.r2.system.app.secretAccessKey,
     },
 });
 
@@ -1282,7 +1282,7 @@ async function uploadMediaToR2(buffer, filename, mimeType, userId, entityType, f
         const r2Key = `media/${entityType}/${userId}/${field}_${timestamp}.${ext}`;
 
         const command = new PutObjectCommand({
-            Bucket: config.r2.system.bucketName,
+            Bucket: config.r2.system.app.bucketName,
             Key: r2Key,
             Body: buffer,
             ContentType: mimeType,
@@ -1290,7 +1290,7 @@ async function uploadMediaToR2(buffer, filename, mimeType, userId, entityType, f
 
         await sysR2.send(command);
 
-        const publicUrl = `${config.r2.system.publicURL}/${r2Key}`;
+        const publicUrl = `${config.r2.system.app.publicURL}/${r2Key}`;
 
         return {
             r2Key: r2Key,
@@ -1313,7 +1313,7 @@ async function deleteFromR2(r2Key) {
     try {
         if (!r2Key) return;
         const command = new DeleteObjectCommand({
-            Bucket: config.r2.system.bucketName,
+            Bucket: config.r2.system.app.bucketName,
             Key: r2Key,
         });
         await sysR2.send(command);

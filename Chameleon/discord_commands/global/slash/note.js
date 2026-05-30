@@ -31,10 +31,10 @@ const utils = require('../../functions/bot_utils');
 // Initialize R2 Client
 const sysR2 = new S3Client({
     region: 'auto',
-    endpoint: config.r2.system.endpoint,
+    endpoint: config.r2.system.app.endpoint,
     credentials: {
-        accessKeyId: config.r2.system.accessKeyId,
-        secretAccessKey: config.r2.system.secretAccessKey,
+        accessKeyId: config.r2.system.app.accessKeyId,
+        secretAccessKey: config.r2.system.app.secretAccessKey,
     },
 });
 
@@ -88,7 +88,7 @@ async function uploadNoteContent(userId, noteId, content) {
         const r2Key = `notes/${userId}/${noteId}.txt`;
 
         const command = new PutObjectCommand({
-            Bucket: config.r2.system.bucketName,
+            Bucket: config.r2.system.app.bucketName,
             Key: r2Key,
             Body: content,
             ContentType: 'text/plain; charset=utf-8',
@@ -96,7 +96,7 @@ async function uploadNoteContent(userId, noteId, content) {
 
         await sysR2.send(command);
 
-        const publicUrl = `${config.r2.system.publicURL}/${r2Key}`;
+        const publicUrl = `${config.r2.system.app.publicURL}/${r2Key}`;
 
         return {
             r2Key: r2Key,
@@ -115,7 +115,7 @@ async function uploadNoteContent(userId, noteId, content) {
 async function fetchNoteContent(r2Key) {
     try {
         const command = new GetObjectCommand({
-            Bucket: config.r2.system.bucketName,
+            Bucket: config.r2.system.app.bucketName,
             Key: r2Key,
         });
 
@@ -134,7 +134,7 @@ async function deleteNoteContent(r2Key) {
         if (!r2Key) return;
 
         const command = new DeleteObjectCommand({
-            Bucket: config.r2.system.bucketName,
+            Bucket: config.r2.system.app.bucketName,
             Key: r2Key,
         });
 

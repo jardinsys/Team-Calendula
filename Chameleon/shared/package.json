@@ -1,0 +1,10 @@
+{
+    "name": "@chameleon/shared",
+    "private": true,
+    "type": "module",
+    "exports": "./index.js",
+    "dependencies": {
+        "react": "^19.2.0",
+        "react-markdown": "^9.0.1"
+    }
+}
