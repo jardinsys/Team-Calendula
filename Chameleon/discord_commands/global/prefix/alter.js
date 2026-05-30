@@ -184,12 +184,12 @@ async function handleDescription(message, parsed, alterName) {
 async function handleAvatar(message, parsed, alterName) {
     const { alter } = await getAlter(message, alterName);
     if (!alter) return;
-    if (parsed.clear) { if (alter.avatar?.r2Key) await utils.deleteFromR2(alter.avatar.r2Key); alter.avatar = undefined; await alter.save(); return utils.success(message, 'Avatar cleared.'); }
+    if (parsed.clear) { if (alter.avatar?.r2Key) await utils.deleteFromR2(alter.avatar.r2Key, alter.avatar.bucket || 'app'); alter.avatar = undefined; await alter.save(); return utils.success(message, 'Avatar cleared.'); }
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[2];
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'Alter', message.author.id);
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'Alter', message.author.id, 'app');
     if (!result.success) return utils.error(message, result.message);
-    if (alter.avatar?.r2Key) await utils.deleteFromR2(alter.avatar.r2Key);
+    if (alter.avatar?.r2Key) await utils.deleteFromR2(alter.avatar.r2Key, alter.avatar.bucket || 'app');
     alter.avatar = result.media;
     await alter.save();
     return utils.success(message, 'Avatar uploaded and updated.');
@@ -198,12 +198,14 @@ async function handleAvatar(message, parsed, alterName) {
 async function handleBanner(message, parsed, alterName) {
     const { alter } = await getAlter(message, alterName);
     if (!alter) return;
-    if (parsed.clear) { if (alter.discord?.image?.banner?.r2Key) await utils.deleteFromR2(alter.discord.image.banner.r2Key); if (alter.discord?.image) alter.discord.image.banner = undefined; await alter.save(); return utils.success(message, 'Banner cleared.'); }
+    const syncWithDiscord = alter.syncWithApps?.discord;
+    const bucket = utils.resolveUploadBucket(syncWithDiscord, 'discord');
+    if (parsed.clear) { if (alter.discord?.image?.banner?.r2Key) await utils.deleteFromR2(alter.discord.image.banner.r2Key, alter.discord.image.banner.bucket || 'app'); if (alter.discord?.image) alter.discord.image.banner = undefined; await alter.save(); return utils.success(message, 'Banner cleared.'); }
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[2];
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'Alter', message.author.id);
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'Alter', message.author.id, bucket);
     if (!result.success) return utils.error(message, result.message);
-    if (alter.discord?.image?.banner?.r2Key) await utils.deleteFromR2(alter.discord.image.banner.r2Key);
+    if (alter.discord?.image?.banner?.r2Key) await utils.deleteFromR2(alter.discord.image.banner.r2Key, alter.discord.image.banner.bucket || 'app');
     alter.discord = alter.discord || {}; alter.discord.image = alter.discord.image || {};
     alter.discord.image.banner = result.media;
     await alter.save();
@@ -213,12 +215,14 @@ async function handleBanner(message, parsed, alterName) {
 async function handleProxyAvatar(message, parsed, alterName) {
     const { alter } = await getAlter(message, alterName);
     if (!alter) return;
-    if (parsed.clear) { if (alter.discord?.image?.proxyAvatar?.r2Key) await utils.deleteFromR2(alter.discord.image.proxyAvatar.r2Key); if (alter.discord?.image) alter.discord.image.proxyAvatar = undefined; await alter.save(); return utils.success(message, 'Proxy avatar cleared.'); }
+    const syncWithDiscord = alter.syncWithApps?.discord;
+    const bucket = utils.resolveUploadBucket(syncWithDiscord, 'discord');
+    if (parsed.clear) { if (alter.discord?.image?.proxyAvatar?.r2Key) await utils.deleteFromR2(alter.discord.image.proxyAvatar.r2Key, alter.discord.image.proxyAvatar.bucket || 'app'); if (alter.discord?.image) alter.discord.image.proxyAvatar = undefined; await alter.save(); return utils.success(message, 'Proxy avatar cleared.'); }
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[2];
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'proxyAvatar', 'Alter', message.author.id);
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'proxyAvatar', 'Alter', message.author.id, bucket);
     if (!result.success) return utils.error(message, result.message);
-    if (alter.discord?.image?.proxyAvatar?.r2Key) await utils.deleteFromR2(alter.discord.image.proxyAvatar.r2Key);
+    if (alter.discord?.image?.proxyAvatar?.r2Key) await utils.deleteFromR2(alter.discord.image.proxyAvatar.r2Key, alter.discord.image.proxyAvatar.bucket || 'app');
     alter.discord = alter.discord || {}; alter.discord.image = alter.discord.image || {};
     alter.discord.image.proxyAvatar = result.media;
     await alter.save();

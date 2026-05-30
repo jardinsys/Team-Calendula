@@ -6,6 +6,12 @@ const mediaSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Which R2 bucket this media is stored in ('app' or 'discord')
+  bucket: {
+    type: String,
+    enum: ['app', 'discord'],
+    default: 'app'
+  },
   // Public URL
   url: {
     type: String,

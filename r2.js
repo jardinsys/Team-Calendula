@@ -10,21 +10,21 @@ const trigR2 = new S3Client({
     }
 });
 
-const sysDiscR2 = new S3Client({ // MAIN INFO
+const sysDiscR2 = new S3Client({
     region: "auto",
     endpoint: `https://${config.r2.system.accountID}.r2.cloudflarestorage.com`,
     credentials: {
-        accessKeyId: config.r2.system.keyID.discord,
-        secretAccessKey: config.r2.system.key.discord
+        accessKeyId: config.r2.system.discord.accessKeyId,
+        secretAccessKey: config.r2.system.discord.secretAccessKey
     }
 });
 
-const sysAppR2 = new S3Client({ // APP SPECIFIC INFO (Ex: Themes)
+const sysAppR2 = new S3Client({ 
     region: "auto",
     endpoint: `https://${config.r2.system.accountID}.r2.cloudflarestorage.com`,
     credentials: {
-        accessKeyId: config.r2.system.keyID.app,
-        secretAccessKey: config.r2.system.key.app
+        accessKeyId: config.r2.system.app.accessKeyId,
+        secretAccessKey: config.r2.system.app.secretAccessKey
     }
 });
 

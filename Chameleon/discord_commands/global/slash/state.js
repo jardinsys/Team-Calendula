@@ -899,12 +899,13 @@ async function handleButtonInteraction(interaction) {
 
             const attachment = collected.first().attachments.first();
             const state = await State.findById(session.stateId);
-            const result = await utils.handleAttachmentUpload(attachment, config.fieldLabel, 'State', interaction.user.id);
+            const bucket = utils.resolveUploadBucket(session.syncWithDiscord, config.path);
+            const result = await utils.handleAttachmentUpload(attachment, config.fieldLabel, 'State', interaction.user.id, bucket);
 
             if (result.success) {
                 if (config.path === 'mask') {
                     const oldMedia = state.mask?.avatar;
-                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
                     if (!state.mask) state.mask = {};
                     state.mask.avatar = result.media;
                 } else if (config.path === 'mask_discord') {
@@ -912,22 +913,22 @@ async function handleButtonInteraction(interaction) {
                     if (!state.mask.discord) state.mask.discord = { image: {} };
                     if (!state.mask.discord.image) state.mask.discord.image = {};
                     const oldMedia = state.mask.discord.image[config.mediaType];
-                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
                     state.mask.discord.image[config.mediaType] = result.media;
                 } else if (config.path === 'server') {
                     const serverEntry = utils.ensureServerEntry(state, session.serverId, interaction.guild?.name);
                     const oldMedia = serverEntry[config.mediaType];
-                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
                     serverEntry[config.mediaType] = result.media;
                 } else if (config.path === 'primary') {
                     const oldMedia = state.avatar;
-                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
                     state.avatar = result.media;
                 } else {
                     if (!state.discord) state.discord = {};
                     if (!state.discord.image) state.discord.image = {};
                     const oldMedia = state.discord.image[config.mediaType];
-                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                    if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
                     state.discord.image[config.mediaType] = result.media;
                 }
 

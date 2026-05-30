@@ -339,7 +339,7 @@ async function handleAvatar(message, parsed) {
     if (!await utils.requireSystem(message, system)) return;
 
     if (parsed.clear) {
-        if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key);
+        if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key, system.avatar.bucket || 'app');
         system.avatar = undefined;
         await system.save();
         return utils.success(message, 'Profile avatar cleared.');
@@ -348,9 +348,9 @@ async function handleAvatar(message, parsed) {
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[1] || parsed.avatar;
 
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'System', message.author.id);
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'System', message.author.id, 'app');
     if (!result.success) return utils.error(message, result.message);
-    if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key);
+    if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key, system.avatar.bucket || 'app');
     system.avatar = result.media;
     await system.save();
 
@@ -360,9 +360,11 @@ async function handleAvatar(message, parsed) {
 async function handleBanner(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
+    const syncWithDiscord = system.syncWithApps?.discord;
+    const bucket = utils.resolveUploadBucket(syncWithDiscord, 'discord');
 
     if (parsed.clear) {
-        if (system.discord?.image?.banner?.r2Key) await utils.deleteFromR2(system.discord.image.banner.r2Key);
+        if (system.discord?.image?.banner?.r2Key) await utils.deleteFromR2(system.discord.image.banner.r2Key, system.discord.image.banner.bucket || 'app');
         if (system.discord?.image) system.discord.image.banner = undefined;
         await system.save();
         return utils.success(message, 'Profile banner cleared.');
@@ -371,9 +373,9 @@ async function handleBanner(message, parsed) {
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[1] || parsed.banner;
 
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'System', message.author.id);
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'System', message.author.id, bucket);
     if (!result.success) return utils.error(message, result.message);
-    if (system.discord?.image?.banner?.r2Key) await utils.deleteFromR2(system.discord.image.banner.r2Key);
+    if (system.discord?.image?.banner?.r2Key) await utils.deleteFromR2(system.discord.image.banner.r2Key, system.discord.image.banner.bucket || 'app');
     system.discord = system.discord || {};
     system.discord.image = system.discord.image || {};
     system.discord.image.banner = result.media;

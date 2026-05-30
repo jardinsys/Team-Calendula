@@ -32,13 +32,23 @@ const { PrivacyBucket } = require('../../schemas/settings');
 // Import config for R2
 const config = require('../../../config.json');
 
-// Initialize R2 Client for Systemiser media
+// Initialize R2 Client for Systemiser media (app bucket)
 const sysR2 = new S3Client({
     region: 'auto',
     endpoint: config.r2.system.app.endpoint,
     credentials: {
         accessKeyId: config.r2.system.app.accessKeyId,
         secretAccessKey: config.r2.system.app.secretAccessKey,
+    },
+});
+
+// Initialize R2 Client for Discord-only media (discord bucket)
+const discordR2 = new S3Client({
+    region: 'auto',
+    endpoint: config.r2.system.discord.endpoint,
+    credentials: {
+        accessKeyId: config.r2.system.discord.accessKeyId,
+        secretAccessKey: config.r2.system.discord.secretAccessKey,
     },
 });
 
@@ -1275,25 +1285,39 @@ function getProxyStyleOptions() {
  * @param {string} field - 'avatar', 'banner', or 'proxyAvatar'
  * @returns {Object} mediaSchema-compatible object { r2Key, url, filename, mimeType, size, uploadedAt }
  */
-async function uploadMediaToR2(buffer, filename, mimeType, userId, entityType, field) {
+/* Upload media to the correct R2 bucket
+ * @param {Buffer} buffer - File content buffer
+ * @param {string} filename - Original filename
+ * @param {string} mimeType - MIME type
+ * @param {string} userId - Discord user ID for R2 path
+ * @param {string} entityType - Entity type for R2 path (e.g., 'Alter', 'State')
+ * @param {string} field - Field label for R2 path
+ * @param {string} bucket - Which bucket to use ('app' or 'discord', default 'app')
+ * @returns {Object} mediaSchema object
+ */
+async function uploadMediaToR2(buffer, filename, mimeType, userId, entityType, field, bucket = 'app') {
     try {
         const ext = filename.split('.').pop() || 'bin';
         const timestamp = Date.now();
         const r2Key = `media/${entityType}/${userId}/${field}_${timestamp}.${ext}`;
 
+        const bucketConfig = bucket === 'discord' ? config.r2.system.discord : config.r2.system.app;
+        const r2Client = bucket === 'discord' ? discordR2 : sysR2;
+
         const command = new PutObjectCommand({
-            Bucket: config.r2.system.app.bucketName,
+            Bucket: bucketConfig.bucketName,
             Key: r2Key,
             Body: buffer,
             ContentType: mimeType,
         });
 
-        await sysR2.send(command);
+        await r2Client.send(command);
 
-        const publicUrl = `${config.r2.system.app.publicURL}/${r2Key}`;
+        const publicUrl = `${bucketConfig.publicURL}/${r2Key}`;
 
         return {
             r2Key: r2Key,
+            bucket: bucket,
             url: publicUrl,
             filename: filename,
             mimeType: mimeType,
@@ -1308,15 +1332,18 @@ async function uploadMediaToR2(buffer, filename, mimeType, userId, entityType, f
 
 /* Delete a file from Cloudflare R2
  * @param {string} r2Key - The R2 object key to delete
+ * @param {string} bucket - Which bucket to delete from ('app' or 'discord', default 'app')
  */
-async function deleteFromR2(r2Key) {
+async function deleteFromR2(r2Key, bucket = 'app') {
     try {
         if (!r2Key) return;
+        const bucketConfig = bucket === 'discord' ? config.r2.system.discord : config.r2.system.app;
+        const r2Client = bucket === 'discord' ? discordR2 : sysR2;
         const command = new DeleteObjectCommand({
-            Bucket: config.r2.system.app.bucketName,
+            Bucket: bucketConfig.bucketName,
             Key: r2Key,
         });
-        await sysR2.send(command);
+        await r2Client.send(command);
     } catch (error) {
         console.error('Error deleting from R2:', error);
     }
@@ -1351,9 +1378,10 @@ function downloadFromUrl(url) {
  * @param {string} fieldLabel - Label for R2 path (e.g., 'avatar', 'banner')
  * @param {string} entityType - Entity type for R2 path (e.g., 'Alter', 'State')
  * @param {string} userId - Discord user ID for R2 path
+ * @param {string} bucket - Which R2 bucket to use ('app' or 'discord', default 'app')
  * @returns {Promise<Object>} { success, media?, message }
  */
-async function handleAttachmentUpload(attachment, fieldLabel, entityType, userId) {
+async function handleAttachmentUpload(attachment, fieldLabel, entityType, userId, bucket = 'app') {
     if (!attachment?.contentType?.startsWith('image/')) {
         return { success: false, message: '❌ Not a valid image file. Please send PNG, JPG, GIF, or WEBP.' };
     }
@@ -1366,7 +1394,8 @@ async function handleAttachmentUpload(attachment, fieldLabel, entityType, userId
             attachment.contentType,
             userId,
             entityType,
-            fieldLabel
+            fieldLabel,
+            bucket
         );
         return { success: true, media, message: '✅ Image uploaded successfully!' };
     } catch (error) {
@@ -1381,14 +1410,15 @@ async function handleAttachmentUpload(attachment, fieldLabel, entityType, userId
  * @param {string} fieldLabel - Label for R2 path (e.g., 'avatar', 'banner')
  * @param {string} entityType - Entity type for R2 path (e.g., 'Alter', 'State')
  * @param {string} userId - Discord user ID for R2 path
+ * @param {string} bucket - Which R2 bucket to use ('app' or 'discord', default 'app')
  * @returns {Promise<Object>} { success, media?, message }
  */
-async function handlePrefixMediaUpload(attachment, urlArg, fieldLabel, entityType, userId) {
+async function handlePrefixMediaUpload(attachment, urlArg, fieldLabel, entityType, userId, bucket = 'app') {
     if (attachment) {
         if (!attachment?.contentType?.startsWith('image/')) {
             return { success: false, message: 'Not a valid image file. Please send PNG, JPG, GIF, or WEBP.' };
         }
-        return handleAttachmentUpload(attachment, fieldLabel, entityType, userId);
+        return handleAttachmentUpload(attachment, fieldLabel, entityType, userId, bucket);
     }
     if (urlArg) {
         try {
@@ -1397,7 +1427,7 @@ async function handlePrefixMediaUpload(attachment, urlArg, fieldLabel, entityTyp
             const ext = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extMatch?.toLowerCase()) ? extMatch.toLowerCase() : 'png';
             const mimeType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
             const filename = `${fieldLabel}_${Date.now()}.${ext}`;
-            const media = await uploadMediaToR2(buffer, filename, mimeType, userId, entityType, fieldLabel);
+            const media = await uploadMediaToR2(buffer, filename, mimeType, userId, entityType, fieldLabel, bucket);
             return { success: true, media, message: 'Image uploaded successfully!' };
         } catch (error) {
             console.error('Error downloading/uploading from URL:', error);
@@ -1405,6 +1435,17 @@ async function handlePrefixMediaUpload(attachment, urlArg, fieldLabel, entityTyp
         }
     }
     return { success: false, message: 'Please provide a URL or upload an image.' };
+}
+
+/* Determine which R2 bucket to use based on sync state and media context
+ * @param {boolean} syncWithDiscord - Whether Discord is synced with the app
+ * @param {string} mediaCategory - 'primary' | 'discord' | 'server' | 'mask' | 'mask_discord'
+ * @returns {string} 'app' or 'discord'
+ */
+function resolveUploadBucket(syncWithDiscord, mediaCategory) {
+    const isDiscordContext = ['discord', 'server', 'mask', 'mask_discord'].includes(mediaCategory);
+    if (syncWithDiscord === false && isDiscordContext) return 'discord';
+    return 'app';
 }
 
 /* Resolve the correct nested path for a media field based on session mode + sync
@@ -1453,7 +1494,7 @@ async function setMediaField(entity, session, mediaType, mediaObj) {
 
     const oldMedia = target[mediaType];
     if (oldMedia?.r2Key) {
-        await deleteFromR2(oldMedia.r2Key);
+        await deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
     }
 
     target[mediaType] = mediaObj;
@@ -1811,6 +1852,7 @@ module.exports = {
     downloadFromUrl,
     handleAttachmentUpload,
     handlePrefixMediaUpload,
+    resolveUploadBucket,
     resolveMediaTarget,
     setMediaField,
     resolveAvatarUrl,

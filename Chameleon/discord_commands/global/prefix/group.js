@@ -167,12 +167,12 @@ async function handleDescription(message, parsed, groupName) {
 async function handleAvatar(message, parsed, groupName) {
     const { group } = await getGroup(message, groupName);
     if (!group) return;
-    if (parsed.clear) { if (group.avatar?.r2Key) await utils.deleteFromR2(group.avatar.r2Key); group.avatar = undefined; await group.save(); return utils.success(message, 'Avatar cleared.'); }
+    if (parsed.clear) { if (group.avatar?.r2Key) await utils.deleteFromR2(group.avatar.r2Key, group.avatar.bucket || 'app'); group.avatar = undefined; await group.save(); return utils.success(message, 'Avatar cleared.'); }
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[2];
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'Group', message.author.id);
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'Group', message.author.id, 'app');
     if (!result.success) return utils.error(message, result.message);
-    if (group.avatar?.r2Key) await utils.deleteFromR2(group.avatar.r2Key);
+    if (group.avatar?.r2Key) await utils.deleteFromR2(group.avatar.r2Key, group.avatar.bucket || 'app');
     group.avatar = result.media;
     await group.save();
     return utils.success(message, 'Avatar uploaded and updated.');
@@ -181,12 +181,14 @@ async function handleAvatar(message, parsed, groupName) {
 async function handleBanner(message, parsed, groupName) {
     const { group } = await getGroup(message, groupName);
     if (!group) return;
-    if (parsed.clear) { if (group.discord?.image?.banner?.r2Key) await utils.deleteFromR2(group.discord.image.banner.r2Key); if (group.discord?.image) group.discord.image.banner = undefined; await group.save(); return utils.success(message, 'Banner cleared.'); }
+    const syncWithDiscord = group.syncWithApps?.discord;
+    const bucket = utils.resolveUploadBucket(syncWithDiscord, 'discord');
+    if (parsed.clear) { if (group.discord?.image?.banner?.r2Key) await utils.deleteFromR2(group.discord.image.banner.r2Key, group.discord.image.banner.bucket || 'app'); if (group.discord?.image) group.discord.image.banner = undefined; await group.save(); return utils.success(message, 'Banner cleared.'); }
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[2];
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'Group', message.author.id);
+    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'Group', message.author.id, bucket);
     if (!result.success) return utils.error(message, result.message);
-    if (group.discord?.image?.banner?.r2Key) await utils.deleteFromR2(group.discord.image.banner.r2Key);
+    if (group.discord?.image?.banner?.r2Key) await utils.deleteFromR2(group.discord.image.banner.r2Key, group.discord.image.banner.bucket || 'app');
     group.discord = group.discord || {}; group.discord.image = group.discord.image || {};
     group.discord.image.banner = result.media;
     await group.save();

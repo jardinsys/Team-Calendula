@@ -978,12 +978,13 @@ async function handleButtonInteraction(interaction) {
                 });
 
                 const attachment = collected.first().attachments.first();
-                const result = await utils.handleAttachmentUpload(attachment, config.fieldLabel, 'System', interaction.user.id);
+                const bucket = utils.resolveUploadBucket(session.syncWithDiscord, config.path);
+                const result = await utils.handleAttachmentUpload(attachment, config.fieldLabel, 'System', interaction.user.id, bucket);
 
                 if (result.success) {
                     if (config.path === 'mask') {
                         const oldMedia = system.mask?.avatar;
-                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
                         if (!system.mask) system.mask = {};
                         system.mask.avatar = result.media;
                     } else if (config.path === 'mask_discord') {
@@ -991,22 +992,22 @@ async function handleButtonInteraction(interaction) {
                         if (!system.mask.discord) system.mask.discord = { image: {} };
                         if (!system.mask.discord.image) system.mask.discord.image = {};
                         const oldMedia = system.mask.discord.image[config.mediaType];
-                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
                         system.mask.discord.image[config.mediaType] = result.media;
                     } else if (config.path === 'server') {
                         const serverEntry = utils.ensureServerEntry(system, session.serverId, interaction.guild?.name);
                         const oldMedia = serverEntry[config.mediaType];
-                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
                         serverEntry[config.mediaType] = result.media;
                     } else if (config.path === 'primary') {
                         const oldMedia = system.avatar;
-                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
                         system.avatar = result.media;
                     } else {
                         if (!system.discord) system.discord = {};
                         if (!system.discord.image) system.discord.image = {};
                         const oldMedia = system.discord.image[config.mediaType];
-                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key);
+                        if (oldMedia?.r2Key) await utils.deleteFromR2(oldMedia.r2Key, oldMedia.bucket || 'app');
                         system.discord.image[config.mediaType] = result.media;
                     }
 

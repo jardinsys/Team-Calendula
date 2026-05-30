@@ -6,7 +6,7 @@ A Discord bot system for managing plural systems (alters, states, groups) with R
 ## Directory Structure
 ```
 Team-Calendula/
-├── media.js                          # Mongoose mediaSchema (r2Key, url, filename, mimeType, size, uploadedAt)
+├── media.js                          # Mongoose mediaSchema (r2Key, bucket, url, filename, mimeType, size, uploadedAt)
 ├── extra-config.js                   # Example config templates (DO NOT commit with real credentials)
 ├── Chameleon/
 │   ├── schemas/
@@ -174,6 +174,8 @@ When editing image info via modal, routing depends on `session.syncWithDiscord`:
 |------|-------------|
 | `states[].avatar` | Embedded state avatar within alter (mediaSchema) |
 
+All mediaSchema objects also include a `bucket` field (`'app'` or `'discord'`, default `'app'`) alongside `r2Key`, `url`, `filename`, `mimeType`, `size`, and `uploadedAt`. This lets `deleteFromR2()` route deletes to the correct bucket.
+
 ## R2 Configuration
 
 ### Dual-Bucket Architecture
@@ -184,10 +186,12 @@ Two R2 buckets for media storage, both accessible by the Discord bot and the emb
 | **app** | `config.r2.system.app` | Primary media for the main app/webapp (avatars, banners, note content, etc.) |
 | **discord** | `config.r2.system.discord` | Discord-synced media — used when a user chooses **not** to sync the main app with Discord. Their Discord-only media (server-specific avatars/banners, Discord-synced proxies) lives here, keeping it separate from the app bucket. |
 
-### Routing Logic (future)
+### Routing Logic
 - Uploads flow to `app` bucket by default.
 - When `syncWithApps.discord` is `false` and the upload originates from a Discord context (proxy avatar, server-specific media), it routes to the `discord` bucket.
 - The embedded app can access both buckets directly via R2 public URLs.
+- Helper function: `resolveUploadBucket(syncWithDiscord, mediaCategory)` returns `'discord'` when `syncWithDiscord === false` and `mediaCategory` is `'discord'`, `'server'`, `'mask'`, or `'mask_discord'`; otherwise returns `'app'`.
+- Each mediaSchema object stores a `bucket` field (`'app'` or `'discord'`) so delete operations know which bucket to target.
 
 ### Config Structure
 ```json
@@ -373,10 +377,13 @@ Server-specific `proxyStyle` in `system.discord.server[]` overrides global style
 - `resolveProxyAvatarUrl(entity, session)` — full priority chain for author icon
 
 ### R2 Media
-- `uploadMediaToR2(buffer, filename, mimeType, userId, entityType, field)` — uploads to R2, returns mediaSchema object
-- `deleteFromR2(r2Key)` — deletes R2 object
+Two S3 clients in `bot_utils.js`: `sysR2` (app bucket) and `discordR2` (discord bucket). All functions accept a `bucket` parameter (`'app'` or `'discord'`, default `'app'`):
+- `uploadMediaToR2(buffer, filename, mimeType, userId, entityType, field, bucket)` — uploads to R2, returns mediaSchema object with `bucket` field
+- `deleteFromR2(r2Key, bucket)` — deletes R2 object from the correct bucket
 - `downloadFromUrl(url)` — downloads file from URL to Buffer
-- `handleAttachmentUpload(attachment, fieldLabel, entityType, userId)` — validates, downloads, uploads, returns `{ success, media, message }`
+- `handleAttachmentUpload(attachment, fieldLabel, entityType, userId, bucket)` — validates, downloads, uploads, returns `{ success, media, message }`
+- `handlePrefixMediaUpload(attachment, urlArg, fieldLabel, entityType, userId, bucket)` — prefix variant supporting both attachment and URL
+- `resolveUploadBucket(syncWithDiscord, mediaCategory)` — determines bucket based on sync state and media context
 - `ensureServerEntry(entity, guildId, guildName)` — ensures discord.server[] entry exists
 - `buildUploadOptions(session)` — generates select menu options based on mode+sync
 
