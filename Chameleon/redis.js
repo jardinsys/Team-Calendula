@@ -1,7 +1,7 @@
 const Redis = require('ioredis');
-const config = require('../config.json');
+const config = require('./config.json');
 
-const redisUrl = `redis://${config.redis.host}:${config.redis.port}/0`;
+const redisUrl = process.env.REDIS_URL || `redis://${config.redis.host}:${config.redis.port}/0`;
 
 let redis;
 

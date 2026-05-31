@@ -1,8 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Client, Events, GatewayIntentBits, Collection, MessageFlags, EmbedBuilder } = require('discord.js');
-const config = require('./../config.json');
-const { MongoClient } = require('mongodb');
+const config = require('./config.json');
 const dbConnection = require('./database');
 const token = config.discordTokens.system;
 const prefixes = ['sys!', 'sys;'];

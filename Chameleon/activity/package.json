@@ -8,7 +8,7 @@
     "start": "robo start"
   },
   "dependencies": {
-    "@chameleon/shared": "*",
+    "@chameleon/shared": "file:../shared",
     "@discord/embedded-app-sdk": "^2.4.0",
     "@robojs/patch": "^0.1.1",
     "@robojs/server": "^0.5.7",

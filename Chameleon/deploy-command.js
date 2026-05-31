@@ -1,5 +1,5 @@
 const { REST, Routes } = require('discord.js');
-const config = require('../config.json');
+const config = require('./config.json');
 const fs = require('fs');
 const path = require('path');
 const clientId = config.discordClientIDs.system;
@@ -75,11 +75,16 @@ const rest = new REST().setToken(token);
         console.log(`
 Started refreshing ${globalCommands.length} global and ${guildCommands.length} guild application (/) commands.`);
 
-        // Clear existing commands
-        await rest.put(Routes.applicationCommands(clientId), { body: [] });
-        await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: [] });
+        // Fetch existing commands to preserve Entry Point (auto-created by Activities)
+        const existingCommands = await rest.get(Routes.applicationCommands(clientId));
+        const existingEntryPoint = existingCommands.find(c => c.type === 4); // type 4 = Entry Point
 
-        // Deploy global commands
+        if (existingEntryPoint) {
+            console.log(`  Preserving Entry Point command: ${existingEntryPoint.name} (${existingEntryPoint.id})`);
+            globalCommands.push(existingEntryPoint);
+        }
+
+        // Deploy global commands (PUT replaces all; we include Entry Point to avoid 50240)
         if (globalCommands.length > 0) {
             const globalData = await rest.put(Routes.applicationCommands(clientId), { body: globalCommands });
             console.log(`✓ Successfully reloaded ${globalData.length} global application (/) commands.`);

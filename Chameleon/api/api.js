@@ -20,7 +20,7 @@ const Alter = require('../schemas/alter');
 const State = require('../schemas/state');
 const Group = require('../schemas/group');
 const { Shift } = require('../schemas/front');
-const config = require('../../config.json');
+const config = require('../config.json');
 
 // Import routes
 const authRoutes = require('./routes/auth');

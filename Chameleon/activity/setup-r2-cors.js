@@ -1,6 +1,6 @@
 const { S3Client, PutBucketCorsCommand } = require('@aws-sdk/client-s3')
 
-const config = require('../../config.json')
+const config = require('../config.json')
 
 const corsRules = [
     {

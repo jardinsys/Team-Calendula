@@ -30,7 +30,7 @@ const Guild = require('../../schemas/guild');
 const { PrivacyBucket } = require('../../schemas/settings');
 
 // Import config for R2
-const config = require('../../../config.json');
+const config = require('../../config.json');
 
 // Initialize R2 Client for Systemiser media (app bucket)
 const sysR2 = new S3Client({

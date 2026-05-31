@@ -1,6 +1,6 @@
-import { createRequire } from 'module'
-const require = createRequire(import.meta.url)
-const config = require('../../../../config.json')
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
+const config = JSON.parse(readFileSync(resolve(process.cwd(), '../config.json'), 'utf-8'))
 
 export default async (req) => {
   const { code } = await req.json()

@@ -1,0 +1,53 @@
+# Team-Calendula — Docker services
+# docker compose up              — start everything
+# docker compose up redis chameleon-api  — API + Redis only (for activity dev)
+# docker compose down            — stop everything
+#
+# NOTE: Plum, Sugar, TigerLily use root config.json (as-is).
+#       Chameleon uses Chameleon/config.json (separated).
+#
+# NOTE: api/api.js is an alternative entry point with the same routes
+#       but no static file serving — swap the command if you don't need
+#       the webapp served:
+#         command: node Chameleon/api/api.js
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  chameleon-api:
+    build: .
+    command: node Chameleon/webapp/server.js
+    ports:
+      - "3001:3001"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  chameleon-bot:
+    build: .
+    command: node Chameleon/bot.js
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  plum-bot:
+    build: .
+    command: node Plum/bot.js
+    restart: unless-stopped
+
+  sugar-bot:
+    build: .
+    command: node Sugar/bot.js
+    restart: unless-stopped
+
+  tigerlily-bot:
+    build: .
+    command: node TigerLily/bot.js
+    restart: unless-stopped

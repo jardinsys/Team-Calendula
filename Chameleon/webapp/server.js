@@ -7,7 +7,7 @@ const session = require('express-session');
 const mongoose = require('mongoose');
 const path = require('path');
 
-const config = require('../../config.json');
+const config = require('../config.json');
 
 const app = express();
 const PORT = config.apiPort || 3001;
@@ -93,16 +93,28 @@ const friendsRoutes = require('../api/routes/friends');
 app.use('/api/friends', authenticateToken, friendsRoutes);
 
 // ==========================================
-// STATIC FILES (Production)
+// STATIC FILES
 // ==========================================
 
-// Serve built React app in production
+// Activity static files — built from Chameleon/activity/
+// Assets are referenced as /assets/* from index.html, served at root level
+app.use('/assets', express.static(path.join(__dirname, '../activity/dist/assets')));
+
+// Activity SPA — serve index.html for /activity and all subpaths
+app.get('/activity', (req, res) => {
+    res.sendFile(path.join(__dirname, '../activity/dist', 'index.html'));
+});
+app.get('/activity/*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../activity/dist', 'index.html'));
+});
+
+// Serve built webapp in production
 if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.join(__dirname, 'dist')));
     
-    // Handle React routing - serve index.html for all non-API routes
+    // Handle webapp React routing - serve index.html for all non-API, non-activity routes
     app.get('*', (req, res) => {
-        if (!req.path.startsWith('/api')) {
+        if (!req.path.startsWith('/api') && !req.path.startsWith('/activity')) {
             res.sendFile(path.join(__dirname, 'dist', 'index.html'));
         }
     });
@@ -112,8 +124,8 @@ if (process.env.NODE_ENV === 'production') {
 // ERROR HANDLING
 // ==========================================
 
-// 404 handler for API routes
-app.use('/api/*', (req, res) => {
+// 404 handler for API routes (Express 5 — catches any unmatched /api/*)
+app.use('/api', (req, res) => {
     res.status(404).json({ error: 'Endpoint not found' });
 });
 

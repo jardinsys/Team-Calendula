@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const config = require('../../../config.json');
+const config = require('../../config.json');
 const User = require('../../schemas/user');
 const { generateToken, authenticateToken } = require('../middleware/auth');
 

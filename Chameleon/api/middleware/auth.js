@@ -2,7 +2,7 @@
 // Chameleon/webapp/api/middleware/auth.js
 
 const jwt = require('jsonwebtoken');
-const config = require('../../../config.json');
+const config = require('../../config.json');
 const User = require('../../schemas/user');
 const System = require('../../schemas/system');
 
@@ -103,7 +103,9 @@ async function optionalAuth(req, res, next) {
 
 module.exports = {
     authenticateToken,
+    authMiddleware: authenticateToken,
     generateToken,
     optionalAuth,
+    optionalAuthMiddleware: optionalAuth,
     JWT_SECRET
 };

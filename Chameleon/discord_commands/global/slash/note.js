@@ -25,7 +25,7 @@ const Note = require('../../../schemas/note');
 const System = require('../../../schemas/system');
 const User = require('../../../schemas/user');
 const { Shift } = require('../../../schemas/front');
-const config = require('../../../../config.json');
+const config = require('../../../config.json');
 const utils = require('../../functions/bot_utils');
 
 // Initialize R2 Client

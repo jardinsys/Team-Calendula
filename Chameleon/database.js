@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const config = require('./../config.json');
+const config = require('./config.json');
 const mongoURI = config.mongoURIs.system;
 const sysDB = mongoose.createConnection(mongoURI);
 

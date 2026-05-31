@@ -969,4 +969,110 @@ All user-facing "System"/"system" labels are dynamically replaced based on `sys_
 - **`/system edit`** → Terminology modal: 3 fields (singular, plural, system synonym)
 - **`/settings`** → General → Terminology modal: same 3 fields
 - **`sys!config terminology`** → displays current terms in `"System / Alter / alters"` format
-- Edit paths hint when `isSystem=false` pointing to System Type settings`
+- Edit paths hint when `isSystem=false` pointing to System Type settings
+
+## Docker Compose & Hosting
+
+### Architecture
+Chameleon runs in Docker (compose.yaml), other bots (Plum, Sugar, TigerLily) run locally via `node index.js`.
+
+```
+Docker (compose.yaml):
+├── redis:7-alpine (port 6379)
+├── chameleon-api   → node Chameleon/webapp/server.js (port 3001)
+└── chameleon-bot   → node Chameleon/bot.js
+
+Local (node index.js):
+├── Plum   (utility)
+├── Sugar  (utility)
+└── TigerLily (future production)
+```
+
+### Files
+
+**`Dockerfile`** (repo root) — Two-step npm install for caching:
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+# 1. Root deps (express, discord.js, mongoose, etc.)
+COPY package*.json ./
+RUN npm ci --ignore-scripts
+# 2. Workspace deps (React, Robo.js, etc.)
+COPY Chameleon/package*.json Chameleon/
+COPY Chameleon/webapp/package*.json Chameleon/webapp/
+COPY Chameleon/activity/package*.json Chameleon/activity/
+COPY Chameleon/shared/package*.json Chameleon/shared/
+RUN cd Chameleon && npm ci --ignore-scripts
+# 3. Source code
+COPY . .
+```
+
+**`compose.yaml`** (repo root):
+```yaml
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    restart: unless-stopped
+  chameleon-api:
+    build: .
+    command: node Chameleon/webapp/server.js
+    ports: ["3001:3001"]
+    environment: [REDIS_URL=redis://redis:6379]
+    depends_on: [redis]
+    restart: unless-stopped
+  chameleon-bot:
+    build: .
+    command: node Chameleon/bot.js
+    environment: [REDIS_URL=redis://redis:6379]
+    depends_on: [redis]
+    restart: unless-stopped
+```
+
+### node_modules Strategy
+Two independent `node_modules/` directories — they don't overlap and neither depends on the other:
+
+| Location | Source | Used by | Managed by |
+|----------|--------|---------|------------|
+| repo root `node_modules/` | `npm install` at root | Plum, Sugar, TigerLily, `index.js` CLI | Root `package.json` |
+| `Chameleon/node_modules/` | `npm ci` in `Chameleon/` | Chameleon bot + API (inside Docker) | Workspace `Chameleon/package.json` |
+
+TigerLily gets its own Docker setup + `node_modules/` when it's ready for production.
+
+### Usage
+
+```bash
+# Start Chameleon backend (Docker)
+docker compose up                         # all 3 services
+docker compose up redis chameleon-api     # API + Redis only (for activity dev)
+docker compose up redis chameleon-bot     # bot + Redis only
+docker compose down                       # stop everything
+
+# Run local bots (separate terminal)
+node index.js prune sucre trigin          # start Plum + Sugar + TigerLily
+node index.js -d system                   # deploy Discord commands for Chameleon
+node index.js -d prune                    # deploy commands for Plum
+
+# Activity dev (separate terminal)
+cd Chameleon/activity
+robox dev --tunnel
+```
+
+### Fly.io (future)
+Each Docker Compose service becomes a separate Fly app using the same Dockerfile:
+```bash
+fly launch --name chameleon-redis --image redis:7-alpine --internal-port 6379 --no-deploy
+fly launch --name chameleon-api --dockerfile Dockerfile --internal-port 3001 --no-deploy
+fly launch --name chameleon-bot --dockerfile Dockerfile --no-deploy
+```
+Redis on Fly connects via private network: `REDIS_URL=redis://chameleon-redis.internal:6379`
+
+### Bug Fixes Applied
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `Cannot find module 'express'` in Docker | Workspace npm ci didn't install root deps | Dockerfile now runs `npm ci` at root level first, then workspace |
+| `authMiddleware` is not a function | Route files imported `authMiddleware` but middleware exports `authenticateToken` | Added alias in `api/middleware/auth.js` |
+| `Missing parameter name at index 6: /api/*` | Express 5 doesn't allow bare `*` wildcards | Changed `app.use('/api/*', ...)` → `app.use('/api', ...)` |
+| `Cannot find module 'mongodb'` | `bot.js` imported `MongoClient` but `mongodb` isn't a direct dep (only `mongoose` is) | Removed unused `MongoClient` import |
+| Workspace `npm ci` failed with "Missing from lock file" | Added `api` to workspace but didn't regenerate lockfile | Removed `api` from workspace (root `package.json` already has all deps), regenerated lockfile |

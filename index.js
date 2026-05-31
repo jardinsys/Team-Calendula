@@ -45,41 +45,16 @@ if (args.includes("-d")) {
 }
 
 // ==========================================
-// START WEBAPP SERVER
-// ==========================================
-
-// Start webapp unless "-noweb" flag is passed
-if (!args.includes("-noweb")) {
-    try {
-        const webapp = require("./Chameleon/webapp/server");
-        webapp.start()
-            .then(() => {
-                console.log(`✔ Webapp API started on port ${webapp.PORT}`);
-            })
-            .catch(err => {
-                console.error("❌ Failed to start Webapp API");
-                console.error(err);
-            });
-    } catch (err) {
-        console.error("❌ Failed to load Webapp API");
-        console.error(err);
-    }
-}
-
-// ==========================================
 // START DISCORD BOTS
 // ==========================================
 
 if (selectedBots.length === 0) {
-    if ((args.length === 1 && !["-d", "-only", "-noweb"].includes(args[0]))
-        || (args.length === 2 && !args.every(a => ["-d", "-only", "-noweb"].includes(a)))
-        || args.length > 3) {
+    if ((args.length === 1 && !["-d", "-only"].includes(args[0])) || args.length > 2) {
         console.log(`Invalid argument(s) detected. Available arguments for specific bots:`);
         for (const bot of bots) console.log(`  ${bot.argument} - ${bot.name}`);
         console.log(`\nAdditional flags:
     -d      : Deploy commands for all or specific bot(s)
-    -only   : With -d, only deploy commands without starting bots
-    -noweb  : Don't start the webapp API server`);
+    -only   : With -d, only deploy commands without starting bots`);
         return;
     } else {
         let AllBotsOnline = true;
