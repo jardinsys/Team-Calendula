@@ -24,7 +24,7 @@ const Group = require('../../schemas/group');
  */
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { filter = 'all', tag, pinned, limit = 50, skip = 0 } = req.query;
         
         let noteIds = user?.notes?.notes || [];
@@ -102,7 +102,7 @@ router.get('/', authMiddleware, async (req, res) => {
  */
 router.get('/tags', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         res.json(user?.notes?.tags || []);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -119,7 +119,7 @@ router.get('/tags', authMiddleware, async (req, res) => {
  */
 router.get('/:id', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { id } = req.params;
         
         // Try by snowflake ID first, then MongoDB ObjectId
@@ -206,7 +206,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
  */
 router.post('/', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { title, content, tags, linkedEntity, pinned, color } = req.body;
         
         const note = new Note({
@@ -264,7 +264,7 @@ router.post('/', authMiddleware, async (req, res) => {
  */
 router.patch('/:id', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { id } = req.params;
         
         let note = await Note.findOne({ id: id });
@@ -339,7 +339,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
  */
 router.delete('/:id', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { id } = req.params;
         
         let note = await Note.findOne({ id: id });
@@ -384,7 +384,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
  */
 router.post('/:id/share', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { id } = req.params;
         const { discordId, friendId, access } = req.body;
         
@@ -450,7 +450,7 @@ router.post('/:id/share', authMiddleware, async (req, res) => {
  */
 router.delete('/:id/share', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { id } = req.params;
         const { discordId, friendId } = req.body;
         

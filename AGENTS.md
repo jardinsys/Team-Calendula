@@ -205,6 +205,70 @@ Two R2 buckets for media storage, both accessible by the Discord bot and the emb
 - Helper function: `resolveUploadBucket(syncWithDiscord, mediaCategory)` returns `'discord'` when `syncWithDiscord === false` and `mediaCategory` is `'discord'`, `'server'`, `'mask'`, or `'mask_discord'`; otherwise returns `'app'`.
 - Each mediaSchema object stores a `bucket` field (`'app'` or `'discord'`) so delete operations know which bucket to target.
 
+## Indexable Name System
+
+### Purpose
+
+The `name.indexable` field is a **machine-friendly ASCII identifier** used for stable command-line lookups (`sys!alter rename bird`), proxy style storage, and embed author display. It is decoupled from the `name.display` field (the full human-friendly name with any Unicode).
+
+### Rules
+
+| Field | Character Set | Duplicates Allowed | Auto-generated From | Required |
+|-------|--------------|-------------------|-------------------|----------|
+| `name.indexable` | `[a-zA-Z0-9\-_]` only | No (duplicate check) | Stripped from display name | No — left `undefined` if stripped result is empty |
+| `name.display` | Any Unicode (including emoji, Arabic, CJK, etc.) | Yes | User's original input | Yes — always set at creation |
+| `name.closedNameDisplay` | Closed-char-safe subset | Yes | User-set | No |
+
+### Search Priority
+
+All lookup functions (`findEntity`, `findEntityByNameForSystem`, `findEntityByName`) search in this order:
+1. `name.indexable` (exact match, case-insensitive)
+2. `name.display` (exact match, case-insensitive) — added so non-Latin named entities are findable
+3. `name.aliases` (if present)
+
+### Duplicate Detection
+
+Checked only against `name.indexable` — if the display name generates an empty indexable (purely non-Latin), the entity is created without one and no duplicate check runs. This means multiple entities can share the same display name.
+
+### Creation Flow
+
+```javascript
+// 1. Generate indexable by stripping non-ASCII
+const indexable = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
+
+// 2. Check duplicates only if we got an indexable
+if (indexable) {
+    const existing = await utils.findEntity(indexable, system, 'alter');
+    if (existing) return error('Already exists');
+}
+
+// 3. Conditionally set indexable in the document
+name: {
+    ...(indexable && { indexable }),
+    display: name
+},
+```
+
+### Files Modified (decoupling)
+
+| File | Change |
+|------|--------|
+| `bot_utils.js` | `findEntity()` — added `name.display` to MongoDB `$or` query; `findEntityByNameForSystem()` — added `.name?.display` fallback |
+| `slash/message.js` | `findEntityByName()` — added `name.display` fallback |
+| `prefix/alter.js`, `prefix/state.js`, `prefix/group.js` | Removed `if (!indexable) return error(...)` guard; conditional indexable; duplicate check skipped when indexable is empty |
+| `prefix/system.js` | Same for registration; mask name indexable uses `\|\| undefined` |
+| `prefix/alter.js`, `prefix/state.js`, `prefix/group.js` (mask) | Mask name indexable uses `\|\| undefined` |
+| `slash/alter.js`, `slash/state.js`, `slash/group.js` | Removed `isValidIndexableName()` validation; session stores separate `displayName` + `indexable`; conditional indexable at entity creation |
+| `api/routes/alters.js`, `states.js`, `groups.js`, `system.js`, `friends.js` | Conditional indexable; duplicate checks only on indexable (removed display name from duplicate detection) |
+| `slash/whois.js` | Guards `(entityIndexable)` parentheses to avoid empty `()` |
+
+### What Stays ASCII-Only
+
+- **Rename handlers** (`handleRename`) — still validate with `isValidIndexableName()` since they explicitly set the machine identifier
+- **`prefix/import.js`** — already has `\|\| \`alter${Date.now()}\`` fallback for empty results
+- **`prefix/convert.js`** — copies whatever exists, fine as-is
+- **`slash/front.js`** — already searched both `indexable` and `display` before the change
+
 ### Config Structure
 ```json
 "r2": {
@@ -438,8 +502,9 @@ Two S3 clients in `bot_utils.js`: `sysR2` (app bucket) and `discordR2` (discord 
 
 ### Distinction
 - **Webapp** (`https://systemise.teamcalendula.net`) — Full browser-based UI, accessed via web browser
-- **Embedded App** (Discord Activity) — Similar functionality but different UI, launched from within Discord via `ButtonStyle.Link` buttons
+- **Embedded App** (Discord Activity) — Launched from within Discord via `/systemise` command (LAUNCH_ACTIVITY)
 - Both use the same API backend (`api/routes/`) and MongoDB data
+- Embedded App runs inside Discord's CDN proxy iframe (`{clientId}.discordsays.com`)
 
 ### Current Embedded App Links
 | Feature | Button Label | URL | Status |
@@ -447,15 +512,6 @@ Two S3 clients in `bot_utils.js`: `sysR2` (app bucket) and `discordR2` (discord 
 | Front | "Open Full Front" | `${WEBAPP_URL}/app/front` | ✅ Live — label TBD (user still deciding) |
 | Notes | "Open in App" | `${WEBAPP_URL}/app/notes/${note._id}` | ✅ Live |
 | Settings | — | `${WEBAPP_URL}/app/settings` | ⏳ Planned — link button not added yet, API route not built |
-
-### Front Button Label
-The "Open Full Front" label on front link buttons is temporary. The user is still deciding on the final name. When settled, it's a single edit across ~11 occurrences in `front.js`.
-
-### Settings: Preparing for Embedded App
-When ready, the settings embedded app will need:
-1. **Link button** in `settings.js` main menu — `ButtonStyle.Link` → `${WEBAPP_URL}/app/settings`
-2. **API route** `api/routes/settings.js` — read/write proxy config, server settings, notification prefs
-3. Registered in `api.js` like other route files
 
 ### Express Server (`webapp/server.js`)
 - Express 5 with path-to-regexp v8 — bare `*` wildcards crash; use `{*any}` catch-all syntax
@@ -472,31 +528,48 @@ When ready, the settings embedded app will need:
 - Responds with `LAUNCH_ACTIVITY` (type 12) callback — opens embedded app in Discord
 - Import fixed to use `discord.js` instead of `@discordjs/rest`
 - Requires EMBEDDED flag (set via URL Mapping in Discord Developer Portal)
-- URL Mapping: path `/` → `https://systemise.teamcalendula.net/discord_activity`
-- URL Mapping can also point to root URL (`https://systemise.teamcalendula.net`) — root-level activity detection via `frame_id` query param is wired in `server.js`
+- **URL Mapping: path `/` → `https://systemise.teamcalendula.net`** (root mapping catches all paths including `/api`)
+- Root-level activity detection via `frame_id` query param is wired in `server.js`
 
-### Discord Activity SDK Status
-**Current state:** JS bundle loads successfully in Discord iframe, but `sdk.ready()` never completes — 10s timeout fires. Same on both desktop and web browser.
+### Discord Activity SDK — Fully Working
 
-**Symptoms:**
-1. HTML loads (dark background "Connecting to Discord..." spinner)
-2. JS bundle loads successfully (no more 404 white screen)
-3. `sdk.ready()` hangs for 10s → fires timeout → user sees "Connection failed — SDK ready() timed out after 10s"
-4. `SecurityError` appears after ~10s: `"Failed to read a named property 'origin' from 'Window': Blocked a frame with origin 'https://{clientId}.discordsays.com' from accessing a cross-origin frame."` — caused by our error diagnostic code trying to read `window.parent.origin` directly (not via postMessage)
+**Status:** All SDK issues resolved. Activity loads inside Discord with full auth flow.
 
-**Diagnostic improvements applied:**
-- Added `window.onerror` and `unhandledrejection` handlers
-- Added resource error listener for JS/CSS loading failures
-- Added 20-second fallback timeout for module script not executing
-- Added environment diagnostics to error output (url, referrer, parentOrigin, frameId)
-- Added visible initial loading state with dark background before JS loads
-- Added 10s timeout on `sdk.ready()` and 15s timeout on `sdk.authenticate()`
-- Added non-module inline test script
+**Auth Flow (inside Discord):**
+1. `sdk.ready()` → resolves (SDK HANDSHAKE + READY event from Discord)
+2. Check `localStorage` for cached access token → if valid, skip to step 6
+3. `sdk.commands.authorize({ client_id, scope })` → Discord shows OAuth modal (first time only)
+4. POST code to `/api/auth/activity/exchange` → backend exchanges for Discord access token
+5. Cache access token in `localStorage`
+6. `sdk.commands.authenticate({ access_token })` → Discord returns `{ access_token, user }`
+7. POST to `/api/auth/activity/token` → backend returns JWT for API access
+8. Notes/Crisis UI loads
 
-**Potential causes:**
-- Discord CDN proxy (`{clientId}.discordsays.com`) hosts the Activity in a cross-origin iframe. The SDK's postMessage handshake with the parent Discord client doesn't complete — `ready()` never resolves.
-- May require specific Activity SDK version compatibility or Discord client update
-- URL Mapping configuration may need adjustment (try root URL target)
+**Auth Flow (outside Discord — mock mode):**
+- No `frame_id` in URL → mock SDK used → skips real API calls → UI loads without notes data
+
+**Key files:**
+| File | Purpose |
+|------|---------|
+| `activity/src/hooks/useDiscordSdk.jsx` | SDK init, auth flow, token caching, context provider |
+| `activity/src/hooks/useApiAuth.js` | Exchange Discord token for JWT (skips in mock mode) |
+| `activity/src/app/App.jsx` | Root component, wraps DiscordContextProvider |
+| `activity/src/app/Activity.jsx` | Status rendering (INITIALIZING → READY → AUTHENTICATED) |
+| `activity/src/app/pages/NotesPage.jsx` | Notes CRUD via shared API client |
+| `activity/src/app/pages/CrisisPage.jsx` | Crisis placeholder |
+| `activity/config/vite.mjs` | Vite config — injects `VITE_DISCORD_CLIENT_ID` and `VITE_API_BASE` |
+
+**Build command:** `docker compose exec chameleon-api sh -c "cd Chameleon/activity && npm run build"`
+
+**Package.json build script:** `vite build --config config/vite.mjs` (NOT `robo build` — Robo.js hangs)
+
+**Known issues:**
+- `@chameleon/shared` React dedup — `CreateNoteModal` crashes with `Cannot read properties of null (reading 'useState')` due to multiple React instances when shared components are bundled. Fix: add `react` to Vite `resolve.alias` or remove shared from `optimizeDeps.include`
+- `req.userId` → `req.user._id` was broken across all API route files (now fixed)
+- Activity CSP restricts fetch to `*.discordsays.com` — API calls must go through Discord proxy, not direct to `systemise.teamcalendula.net`
+
+### CSP Constraint (Important)
+Discord's Content Security Policy only allows `connect-src` to `*.discordsays.com`, `discord.com`, `cdn.discordapp.com`, `media.discordapp.net`. **All API calls from inside the activity iframe MUST go through the discordsays.com proxy.** This is why `VITE_API_BASE` is set to `/api` (relative) and the URL Mapping uses root `/` → `https://systemise.teamcalendula.net`.
 
 ### API Backend
 - Express router at `Chameleon/api/api.js`
@@ -1202,4 +1275,13 @@ Redis on Fly connects via private network: `REDIS_URL=redis://chameleon-redis.in
 | `Cannot find module 'localforage'` in `@discord/embedded-app-sdk` | `@robojs/patch` removed from production build, `crossorigin` not set — Vite injected `crossorigin` on module scripts | Added `/discord_activity/assets` static route to bypass catch-all; SDK constructor now works but `ready()` hangs |
 | White screen (404 JS/CSS) inside Discord Activity | Discord CDN proxy prepends URL Mapping target path to asset URLs, hitting Express `{*any}` catch-all which returns `index.html` instead of JS | Added `app.use('/discord_activity/assets', express.static(...))` middleware in `server.js` to serve assets before catch-all |
 | `sdk.ready()` hangs indefinitely | Discord client never responds to SDK's postMessage handshake from inside cross-origin iframe | Added 10s timeout via `Promise.race`; added env diagnostics to error output |
-| `SecurityError: Failed to read a named property 'origin'` | Error diagnostic code reads `window.parent.origin` directly (cross-origin blocked) | Wrap in try/catch or use `postMessage` instead (deferred) |
+| `SecurityError: Failed to read a named property 'origin'` | Error diagnostic code reads `window.parent.origin` directly (cross-origin blocked) | Wrapped in try/catch — returns `'cross-origin'` |
+| `sdk.ready()` times out with `"client_id" is required` | `npx vite build` without `--config` ignored `config/vite.mjs` — `VITE_DISCORD_CLIENT_ID` was `undefined` | Build script changed to `vite build --config config/vite.mjs` |
+| Error 4009: `"No access token provided"` | `sdk.commands.authenticate()` called with wrong args (`client_id`, `scope`); SDK v2 only accepts `{ access_token }` | Changed to `sdk.commands.authorize()` → exchange code → `sdk.commands.authenticate({ access_token })` |
+| CSP blocks fetch to `systemise.teamcalendula.net` | Discord's CSP only allows `connect-src` to `*.discordsays.com`, `discord.com`, etc. | `VITE_API_BASE` set to `/api` (relative); URL Mapping changed to `/` → `https://systemise.teamcalendula.net` |
+| `POST /api/auth/activity/exchange 404` | API calls used absolute URL (`systemise.teamcalendula.net`) which Discord CSP blocked | Changed to relative `/api` so requests go through discordsays.com proxy |
+| `Cannot read properties of null (reading '_id')` in notes | All API route files used `req.userId` but auth middleware sets `req.user._id` | Fixed `req.userId` → `req.user._id` across all 6 route files (40+ occurrences) |
+| `Cannot read properties of null (reading 'useState')` in CreateNoteModal | `@chameleon/shared` components resolve React to a separate instance when bundled | **Known issue** — React dedup needed in Vite config (deferred — see plan) |
+| Discord Activity asks for auth every time | No token caching between activity sessions | Added `localStorage` caching of Discord access token — skips `authorize()` on subsequent loads |
+| `robo build` hangs in Docker | Robo.js build process never completes | Changed package.json build script to `vite build --config config/vite.mjs` |
+| Stale `.robo/public` copy in Dockerfile | Dockerfile had `cp -r .robo/public dist` from old `robo build` | Removed — no longer needed with `vite build` |

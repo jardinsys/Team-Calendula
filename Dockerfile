@@ -19,4 +19,4 @@ RUN cd Chameleon/activity && npm ci --ignore-scripts
 COPY . .
 
 # 5. Build activity
-RUN cd Chameleon/activity && npm run build && cp -r .robo/public dist
+RUN cd Chameleon/activity && npm run build

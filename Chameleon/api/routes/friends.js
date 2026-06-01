@@ -19,7 +19,7 @@ const { Shift } = require('../../schemas/front');
 
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const friends = user?.friends || [];
         
         const enrichedFriends = [];
@@ -101,7 +101,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
 router.post('/', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { friendId, discordId, customName } = req.body;
         
         if (!friendId && !discordId) {
@@ -157,7 +157,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
 router.delete('/:friendId', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { friendId } = req.params;
         
         user.friends = (user.friends || []).filter(
@@ -178,7 +178,7 @@ router.delete('/:friendId', authMiddleware, async (req, res) => {
 
 router.patch('/:friendId', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { friendId } = req.params;
         const { customName, privacyBucket } = req.body;
         
@@ -215,7 +215,7 @@ router.patch('/:friendId', authMiddleware, async (req, res) => {
 
 router.get('/:friendId/front', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { friendId } = req.params;
         
         const isFriend = user.friends?.some(
@@ -298,7 +298,7 @@ router.get('/:friendId/front', authMiddleware, async (req, res) => {
 
 router.post('/block', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const { friendId, discordId } = req.body;
         
         let targetUser;
@@ -341,7 +341,7 @@ router.post('/block', authMiddleware, async (req, res) => {
 
 router.delete('/block/:id', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         user.blocked = (user.blocked || []).filter(
             b => b.friendID !== req.params.id && b.discordID !== req.params.id
         );
@@ -354,7 +354,7 @@ router.delete('/block/:id', authMiddleware, async (req, res) => {
 
 router.get('/blocked', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         res.json(user?.blocked || []);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -367,7 +367,7 @@ router.get('/blocked', authMiddleware, async (req, res) => {
 
 router.get('/my-id', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         res.json({ 
             friendID: user.friendID,
             discordID: user.discordID

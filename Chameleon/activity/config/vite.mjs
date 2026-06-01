@@ -35,6 +35,6 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    include: ['@chameleon/shared']
+    include: ['@chameleon/shared', 'react']
   }
 })

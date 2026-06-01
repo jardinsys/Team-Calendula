@@ -3,15 +3,26 @@ import { useDiscordSdk } from '../hooks/useDiscordSdk'
 import { api } from '@chameleon/shared'
 
 export function useApiAuth() {
-  const { accessToken, session, status } = useDiscordSdk()
+  const { accessToken, session, status, isMock } = useDiscordSdk()
   const [jwt, setJwt] = useState(null)
   const [authStatus, setAuthStatus] = useState('PENDING')
   const [authError, setAuthError] = useState(null)
 
   useEffect(() => {
     if (status !== 'AUTHENTICATED') return
+
+    if (isMock) {
+      const baseUrl = process.env.VITE_API_BASE || '/api'
+      api.setBaseUrl(baseUrl)
+      setAuthStatus('READY')
+      return
+    }
+
     if (!accessToken || !session?.id) {
-      setAuthError('No Discord session')
+      const missing = []
+      if (!accessToken) missing.push('accessToken')
+      if (!session?.id) missing.push('session.id')
+      setAuthError('No Discord session (missing: ' + missing.join(', ') + ')')
       setAuthStatus('ERROR')
       return
     }
@@ -54,7 +65,7 @@ export function useApiAuth() {
 
     exchange()
     return () => { cancelled = true }
-  }, [accessToken, session?.id, status])
+  }, [accessToken, session?.id, status, isMock])
 
   return { jwt, authStatus, authError }
 }

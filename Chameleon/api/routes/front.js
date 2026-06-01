@@ -23,7 +23,7 @@ const { Shift } = require('../../schemas/front');
  */
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system) {
@@ -51,7 +51,7 @@ router.get('/:systemId', optionalAuthMiddleware, async (req, res) => {
         }
         
         // Check if requester has access (is owner or friend)
-        const isOwner = req.userId && system.users?.some(u => u.toString() === req.userId);
+        const isOwner = req.user?._id && system.users?.some(u => u.toString() === req.user?._id);
         
         // TODO: Add privacy bucket checking here
         // For now, return basic front info
@@ -75,7 +75,7 @@ router.get('/:systemId', optionalAuthMiddleware, async (req, res) => {
  */
 router.patch('/status', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system) {
@@ -122,7 +122,7 @@ router.patch('/status', authMiddleware, async (req, res) => {
  */
 router.get('/history', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system) {
@@ -200,7 +200,7 @@ router.get('/history', authMiddleware, async (req, res) => {
  */
 router.get('/layers', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system) {
@@ -228,7 +228,7 @@ router.get('/layers', authMiddleware, async (req, res) => {
  */
 router.post('/layers', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system) {
@@ -267,7 +267,7 @@ router.post('/layers', authMiddleware, async (req, res) => {
  */
 router.delete('/layers/:layerId', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system) {

@@ -262,4 +262,42 @@ router.post('/activity/token', async (req, res) => {
     }
 });
 
+// ==========================================
+// POST /api/auth/activity/exchange
+// Exchange SDK authorize code for access token
+// ==========================================
+
+router.post('/activity/exchange', async (req, res) => {
+    try {
+        const { code } = req.body;
+
+        if (!code) {
+            return res.status(400).json({ error: 'code is required' });
+        }
+
+        const tokenResponse = await axios.post(
+            `${DISCORD_API}/oauth2/token`,
+            new URLSearchParams({
+                client_id: CLIENT_ID,
+                client_secret: CLIENT_SECRET,
+                grant_type: 'authorization_code',
+                code: code,
+            }),
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            }
+        );
+
+        const { access_token } = tokenResponse.data;
+
+        res.json({ access_token });
+
+    } catch (error) {
+        console.error('[Activity Auth] Code exchange error:', error.response?.data || error.message);
+        res.status(500).json({ error: 'Failed to exchange code' });
+    }
+});
+
 module.exports = router;

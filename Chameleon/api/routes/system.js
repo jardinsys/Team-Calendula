@@ -22,7 +22,7 @@ const Group = require('../../schemas/group');
  */
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         if (!user?.systemID) {
             return res.status(404).json({ error: 'Not registered', hasSystem: false });
         }
@@ -45,7 +45,7 @@ router.get('/', authMiddleware, async (req, res) => {
  */
 router.get('/full', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         if (!user?.systemID) {
             return res.status(404).json({ error: 'Not registered' });
         }
@@ -87,7 +87,7 @@ router.get('/full', authMiddleware, async (req, res) => {
  */
 router.post('/', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         
         if (user.systemID) {
             return res.status(400).json({ error: 'You already have a system' });
@@ -139,7 +139,7 @@ router.post('/', authMiddleware, async (req, res) => {
  */
 router.patch('/', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         if (!user?.systemID) {
             return res.status(404).json({ error: 'Not registered' });
         }
@@ -202,7 +202,7 @@ router.patch('/', authMiddleware, async (req, res) => {
  */
 router.patch('/type', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         if (!user?.systemID) {
             return res.status(404).json({ error: 'Not registered' });
         }
@@ -260,7 +260,7 @@ router.delete('/', authMiddleware, async (req, res) => {
             });
         }
         
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         if (!user?.systemID) {
             return res.status(404).json({ error: 'Not registered' });
         }

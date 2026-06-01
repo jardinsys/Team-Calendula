@@ -17,7 +17,7 @@ const Group = require('../../schemas/group');
 
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system) {
@@ -36,7 +36,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
 router.get('/summary', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system) {
@@ -64,7 +64,7 @@ router.get('/summary', authMiddleware, async (req, res) => {
 
 router.get('/:id', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system) {
@@ -109,7 +109,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
 router.post('/', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system) {
@@ -177,7 +177,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
 router.patch('/:id', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system || !system.alters?.IDs?.includes(req.params.id)) {
@@ -231,7 +231,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
 
 router.delete('/:id', authMiddleware, async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         
         if (!system || !system.alters?.IDs?.includes(req.params.id)) {

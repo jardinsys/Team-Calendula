@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "robox dev --tunnel",
-    "build": "robo build",
+    "build": "vite build --config config/vite.mjs",
     "start": "robo start"
   },
   "dependencies": {
