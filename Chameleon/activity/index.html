@@ -4,9 +4,43 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Systemiser Activity</title>
+  <script>
+window.__debug = [];
+window.__debug.push('script start');
+window.onerror = function(msg, url, line, col, err) {
+  window.__debug.push('ERROR: ' + (err && err.stack ? err.stack : msg));
+  console.error('GLOBAL ERROR:', msg, err);
+  document.body.innerHTML = '<pre style="color:red;padding:20px;white-space:pre-wrap">ERROR: ' + (err && err.stack ? err.stack : msg) + '</pre>';
+};
+window.addEventListener('unhandledrejection', function(e) {
+  window.__debug.push('PROMISE: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason));
+  console.error('UNHANDLED REJECTION:', e.reason);
+  document.body.innerHTML += '<pre style="color:red;padding:20px;white-space:pre-wrap">PROMISE ERROR: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason) + '</pre>';
+});
+// Catch resource loading errors (JS module, CSS, images)
+window.addEventListener('error', function(e) {
+  if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK' || e.target.tagName === 'IMG')) {
+    var src = e.target.src || e.target.href;
+    window.__debug.push('RESOURCE LOAD ERROR: ' + src);
+    console.error('RESOURCE LOAD ERROR:', src);
+    document.body.innerHTML = '<pre style="color:red;padding:20px;white-space:pre-wrap">RESOURCE LOAD FAILED: ' + src + '<br>Tag: ' + e.target.tagName + '</pre>';
+  }
+}, true);
+// Fallback: if module script never loads, show timeout after 20s
+setTimeout(function() {
+  if (document.getElementById('root') && !document.querySelector('#root > div.status-screen, #root > div.app-container, #root > div[class]')) {
+    document.body.innerHTML = '<pre style="color:red;padding:30px;white-space:pre-wrap">TIMEOUT: JavaScript module never executed after 20 seconds. The module script at /assets/index-*.js may have failed to load.</pre>';
+  }
+}, 20000);
+</script>
+<script>
+console.log('[Activity] Inline non-module script executed');
+window.__debug.push('inline non-module script executed');
+</script>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root"><div id="initial-loading" style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f0f13"><div style="width:32px;height:32px;border:3px solid #2d2d3a;border-top-color:#8b5cf6;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:16px"></div><div><p style="color:#6b6b78;font-family:sans-serif;font-size:14px">Connecting to Discord...</p></div></div></div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
   <script type="module" src="/src/app/index.jsx"></script>
 </body>
 </html>

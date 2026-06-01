@@ -100,12 +100,28 @@ app.use('/api/friends', authenticateToken, friendsRoutes);
 // Assets are referenced as /assets/* from index.html, served at root level
 app.use('/assets', express.static(path.join(__dirname, '../activity/dist/assets')));
 
-// Activity SPA — serve index.html for /activity and all subpaths
-app.get('/activity', (req, res) => {
+// Activity assets — also serve from /discord_activity/assets/ for Discord CDN proxy
+app.use('/discord_activity/assets', express.static(path.join(__dirname, '../activity/dist/assets')));
+
+// Activity SPA — serve index.html for /discord_activity and all subpaths
+// IMPORTANT: Must come AFTER the /discord_activity/assets static middleware
+// so that asset requests don't hit this catch-all
+app.get('/discord_activity', (req, res) => {
     res.sendFile(path.join(__dirname, '../activity/dist', 'index.html'));
 });
-app.get('/activity/*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../activity/dist', 'index.html'));
+app.get('/discord_activity/{*any}', (req, res) => {
+    if (!req.path.startsWith('/discord_activity/assets')) {
+        res.sendFile(path.join(__dirname, '../activity/dist', 'index.html'));
+    }
+});
+
+// Discord Activity at root — detect via frame_id query param
+// Enables URL Mapping with Target set to root URL: https://systemise.teamcalendula.net
+app.use('/', (req, res, next) => {
+    if (req.query.frame_id && (req.path === '/' || req.path === '')) {
+        return res.sendFile(path.join(__dirname, '../activity/dist', 'index.html'));
+    }
+    next();
 });
 
 // Serve built webapp in production
@@ -114,9 +130,12 @@ if (process.env.NODE_ENV === 'production') {
     
     // Handle webapp React routing - serve index.html for all non-API, non-activity routes
     app.get('*', (req, res) => {
-        if (!req.path.startsWith('/api') && !req.path.startsWith('/activity')) {
-            res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+        if (req.path.startsWith('/api') || req.path.startsWith('/discord_activity')) return;
+        // If this request has frame_id, it's a Discord Activity — serve activity SPA
+        if (req.query.frame_id) {
+            return res.sendFile(path.join(__dirname, '../activity/dist', 'index.html'));
         }
+        res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
 }
 

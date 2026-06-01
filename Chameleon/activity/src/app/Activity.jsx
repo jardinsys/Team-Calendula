@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useDiscordSdk } from '../hooks/useDiscordSdk'
 import { useApiAuth } from '../hooks/useApiAuth'
 import { NotesPage } from './pages/NotesPage'

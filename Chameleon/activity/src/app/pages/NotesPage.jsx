@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
 import { api, NoteCardGrid, NoteModal, CreateNoteModal } from '@chameleon/shared'
 

@@ -3,6 +3,9 @@
 # docker compose up redis chameleon-api  — API + Redis only (for activity dev)
 # docker compose down            — stop everything
 #
+# Bind mounts for development: edit source on host, reflects in container.
+# node_modules is preserved from the image via anonymous volumes.
+#
 # NOTE: Plum, Sugar, TigerLily use root config.json (as-is).
 #       Chameleon uses Chameleon/config.json (separated).
 #
@@ -24,6 +27,10 @@ services:
       - "3001:3001"
     environment:
       - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./Chameleon:/app/Chameleon
+      - /app/Chameleon/node_modules
+      - /app/Chameleon/activity/node_modules
     depends_on:
       - redis
     restart: unless-stopped
@@ -33,6 +40,10 @@ services:
     command: node Chameleon/bot.js
     environment:
       - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./Chameleon:/app/Chameleon
+      - /app/Chameleon/node_modules
+      - /app/Chameleon/activity/node_modules
     depends_on:
       - redis
     restart: unless-stopped
@@ -40,14 +51,23 @@ services:
   plum-bot:
     build: .
     command: node Plum/bot.js
+    volumes:
+      - ./Plum:/app/Plum
+      - ./config.json:/app/config.json
     restart: unless-stopped
 
   sugar-bot:
     build: .
     command: node Sugar/bot.js
+    volumes:
+      - ./Sugar:/app/Sugar
+      - ./config.json:/app/config.json
     restart: unless-stopped
 
   tigerlily-bot:
     build: .
     command: node TigerLily/bot.js
+    volumes:
+      - ./TigerLily:/app/TigerLily
+      - ./config.json:/app/config.json
     restart: unless-stopped

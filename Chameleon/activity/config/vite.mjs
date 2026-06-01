@@ -11,12 +11,22 @@ const config = JSON.parse(readFileSync(resolve(__dirname, '../../config.json'), 
 const clientId = config.discordClientIDs?.system
 const apiUrl = config.activity?.apiUrl || '/api'
 
+const isDev = process.env.NODE_ENV !== 'production'
+
 export default defineConfig({
   define: {
     'process.env.VITE_DISCORD_CLIENT_ID': JSON.stringify(clientId),
     'process.env.VITE_API_BASE': JSON.stringify(apiUrl)
   },
-  plugins: [react(), DiscordProxy.Vite()],
+  plugins: [react(), isDev && DiscordProxy.Vite()].filter(Boolean),
+  resolve: {
+    alias: {
+      '@chameleon/shared': resolve(__dirname, '../../shared')
+    }
+  },
+  build: {
+    crossorigin: ''
+  },
   server: {
     allowedHosts: true,
     proxy: {

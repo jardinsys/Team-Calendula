@@ -52,16 +52,22 @@ export function DiscordContextProvider({ children, authenticate = false, scope =
           sdk._updateCommandMocks({ authenticate: async () => mockConfig })
         }
 
-        await sdk.ready()
+        await Promise.race([
+          sdk.ready(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('SDK ready() timed out after 10s')), 10000))
+        ])
         if (!isMounted) return
         setDiscordSdk(sdk)
         setStatus('READY')
 
         if (authenticate) {
-          const authResponse = await sdk.commands.authenticate({
-            client_id: process.env.VITE_DISCORD_CLIENT_ID,
-            scope,
-          })
+          const authResponse = await Promise.race([
+            sdk.commands.authenticate({
+              client_id: process.env.VITE_DISCORD_CLIENT_ID,
+              scope,
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('SDK authenticate() timed out after 15s')), 15000))
+          ])
           if (!isMounted) return
           setAccessToken(authResponse.access_token)
           setAuthenticated(true)
@@ -71,7 +77,14 @@ export function DiscordContextProvider({ children, authenticate = false, scope =
       } catch (err) {
         if (!isMounted) return
         console.error('[DiscordSDK] Init error:', err)
-        setError(err.message)
+        const envInfo = {
+          url: window.location.href,
+          referrer: document.referrer,
+          hasParent: !!window.parent,
+          parentOrigin: (window.parent && window.parent.origin) || 'unknown',
+          frameId: new URLSearchParams(window.location.search).get('frame_id'),
+        }
+        setError(err.message + ' | Env: ' + JSON.stringify(envInfo))
         setStatus('ERROR')
       }
     }

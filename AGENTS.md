@@ -6,68 +6,80 @@ A Discord bot system for managing plural systems (alters, states, groups) with R
 ## Directory Structure
 ```
 Team-Calendula/
-├── media.js                          # Mongoose mediaSchema (r2Key, bucket, url, filename, mimeType, size, uploadedAt)
-├── extra-config.js                   # Example config templates (DO NOT commit with real credentials)
+├── media.js                        # Mongoose mediaSchema (r2Key, bucket, url, filename, mimeType, size, uploadedAt)
+├── extra-config.js                 # Example config templates (DO NOT commit with real credentials)
+├── config.json                     # ROOT config — Plum/Sugar/TigerLily creds (Chameleon uses own)
+├── Dockerfile                      # 5-step build: root deps → workspace deps → activity deps → copy → build activity
+├── compose.yaml                    # 6 services (redis, chameleon-api, chameleon-bot, plum-bot, sugar-bot, tigerlily-bot)
+├── AGENTS.md                       # This file
+├── rebuild.sh                      # Docker rebuild with per-bot targeting
 ├── Chameleon/
+│   ├── config.json                 # Chameleon's own config (tokens, MongoDB, R2, JWT, secrets)
+│   ├── bot.js                      # Discord bot entry point
+│   ├── deploy-command.js           # Deploys slash + context menu commands; preserves Entry Point (type 4)
+│   ├── redis.js                    # Redis client (ioredis) — reads REDIS_URL env var or config.json fallback, no-op fallback
+│   ├── database.js                 # Mongoose connection
+│   ├── package.json                # Workspace: ["webapp", "shared"] — activity NOT a workspace member
+│   ├── api/
+│   │   ├── api.js                  # Express API router (auth, system, alters, states, groups, notes, front, friends, quick)
+│   │   ├── middleware/auth.js      # JWT auth middleware — exports authenticateToken + authMiddleware alias
+│   │   └── routes/                 # Per-resource API route files
+│   ├── webapp/
+│   │   ├── server.js               # Express 5 — serves API (/api), webapp SPA fallback, activity SPA (/discord_activity), assets (/assets); root-level activity detection via frame_id
+│   │   └── package.json
+│   ├── activity/
+│   │   ├── package.json            # Independent project (not workspace) with "@chameleon/shared": "file:../shared"
+│   │   ├── node_modules/           # Own deps (193 packages) — @robojs/patch breaks with hoisting
+│   │   ├── dist/                   # Built output (index.html, assets/index-*.js 492KB bundle — includes SDK timeouts + env diagnostics, assets/index-*.css 7KB)
+│   │   ├── config/vite.mjs         # Reads ../../config.json (relative to activity/config/ = Chameleon/config.json)
+│   │   └── src/
+│   │       ├── app/                # Activity React app (pages: NotesPage, CrisisPage placeholder)
+│   │       └── api/token.js        # Uses process.cwd() to find config.json (not createRequire/import.meta.url)
+│   ├── shared/
+│   │   ├── package.json            # ESM workspace package (@chameleon/shared) — "type": "module"
+│   │   └── src/
+│   │       ├── index.js            # Barrel exports: api, ApiClient, NoteCard, NoteCardGrid, NoteModal, CreateNoteModal
+│   │       ├── api/                # API client (notes CRUD + sharing + entity linking)
+│   │       └── components/         # NoteCard, NoteCardGrid, NoteModal, CreateNoteModal (Google Keep-style)
 │   ├── schemas/
-│   │   ├── alter.js                  # Alter entity schema
-│   │   ├── state.js                  # State entity schema
-│   │   ├── group.js                  # Group entity schema
-│   │   ├── system.js                 # System entity schema
-│   │   ├── settings.js               # PrivacyBucket, alterPrivacySchema, groupPrivacySchema, systemPrivacySchema, PrivacyBucket
-│   │   ├── user.js                   # User schema
-│   │   ├── front.js                  # Front/layer schema (Shift, layerSchema)
-│   │   ├── message.js                # Message schema (discord_webhook_message_id, discord_channel_id, proxy_type, proxy_id, content, attachments)
-│   │   ├── guild.js                  # Guild schema
-│   │   └── note.js                   # Note schema
-│   ├── discord_commands/
-│   │   ├── global/
-│   │   │   ├── proxy-message.js      # Core proxy message handler (read → resend as entity)
-│   │   │   ├── prefix/
-│   │   │   │   ├── config.js         # sys!config — personal system settings (timezone, proxy, notifications, etc.)
-│   │   │   │   ├── serverconfig.js   # sys!serverconfig — server/guild config (admin only)
-│   │   │   │   ├── alter.js          # sys!alter commands
-│   │   │   │   ├── state.js          # sys!state commands
-│   │   │   │   ├── group.js          # sys!group commands
-│   │   │   │   ├── system.js         # sys!system commands
-│   │   │   │   ├── friend.js         # sys!friend commands
-│   │   │   │   ├── message.js        # sys!message commands
-│   │   │   │   ├── switch.js         # sys!switch (DEPRECATED)
-│   │   │   │   ├── autoproxy.js      # sys!autoproxy
-│   │   │   │   ├── edit.js           # sys!edit
-│   │   │   │   ├── import.js         # sys!import
-│   │   │   │   ├── convert.js        # sys!convert
-│   │   │   │   ├── profile.js        # sys!profile
-│   │   │   │   ├── whois.js          # sys!whois
-│   │   │   │   ├── reproxy.js        # sys!reproxy
-│   │   │   │   ├── note.js           # sys!note
-│   │   │   │   ├── hi.js             # sys!hi
-│   │   │   │   └── help.js           # sys!help
-│   │   │   ├── slash/
-│   │   │   │   ├── alter.js          # /alter commands + edit interface
-│   │   │   │   ├── state.js          # /state commands + edit interface
-│   │   │   │   ├── group.js          # /group commands + edit interface
-│   │   │   │   ├── system.js         # /system commands + edit interface
-│   │   │   │   ├── profile.js        # /profile command
-│   │   │   │   ├── front.js          # /front command (view, switch, layers, per-entity editing)
-│   │   │   │   ├── friend.js         # /friend command (list, view, add, remove, requests, block, unblock, settings)
-│   │   │   │   ├── whois.js          # /whois command + "Who sent this?" context menu
-│   │   │   │   ├── settings.js       # /settings command (server, proxy, notifications, general sections)
-│   │   │   │   ├── message.js        # /message command (action pattern: edit/delete/reproxy, auto-detect last message)
-│   │   │   │   ├── crisis.js         # /crisis command
-│   │   │   │   ├── support.js        # /support command
-│   │   │   │   ├── whoami.js         # /whoami command
-│   │   │   │   ├── switch.js         # DEPRECATED — to be deleted by user
-│   │   │   │   └── quickswitch.js    # DEPRECATED — to be deleted by user
-│   │   │   └── functions/
-│   │   │       ├── bot_utils.js      # Shared utilities (session management, R2 upload, display helpers, front helpers, proxy/notification builders)
-│   │   │       ├── import_functions.js # Stub — shared import functions (for prefix + slash reuse)
-│   │   │       └── convert_functions.js # Stub — shared convert functions (for prefix + slash reuse)
-│   │   └── database.js               # Mongoose connection
-│   └── redis.js                      # Redis client (ioredis) — falls back to no-op if unavailable
+│   │   ├── alter.js                # Alter entity schema
+│   │   ├── state.js                # State entity schema
+│   │   ├── group.js                # Group entity schema
+│   │   ├── system.js               # System entity schema
+│   │   ├── settings.js             # PrivacyBucket, alterPrivacySchema, groupPrivacySchema, systemPrivacySchema, PrivacyBucket
+│   │   ├── user.js                 # User schema
+│   │   ├── front.js                # Front/layer schema (Shift, layerSchema)
+│   │   ├── message.js              # Message schema (discord_webhook_message_id, discord_channel_id, proxy_type, proxy_id, content, attachments)
+│   │   ├── guild.js                # Guild schema
+│   │   └── note.js                 # Note schema
+│   └── discord_commands/
+│       └── global/
+│           ├── proxy-message.js    # Core proxy message handler (read → resend as entity)
+│           ├── prefix/             # sys! commands (config, serverconfig, alter, state, group, system, friend, etc.)
+│           └── slash/
+│               ├── alter.js        # /alter commands + edit interface
+│               ├── state.js        # /state commands + edit interface
+│               ├── group.js        # /group commands + edit interface
+│               ├── system.js       # /system commands + edit interface
+│               ├── systemise.js    # /systemise — LAUNCH_ACTIVITY (type 12) callback for Discord Activity
+│               ├── profile.js      # /profile command
+│               ├── front.js        # /front command (view, switch, layers, per-entity editing)
+│               ├── friend.js       # /friend command (list, view, add, remove, requests, block, unblock, settings)
+│               ├── whois.js        # /whois command + "Who sent this?" context menu
+│               ├── settings.js     # /settings command (server, proxy, notifications, general sections)
+│               ├── message.js      # /message command (action pattern: edit/delete/reproxy, auto-detect last message)
+│               ├── crisis.js       # /crisis command
+│               ├── support.js      # /support command
+│               ├── whoami.js       # /whoami command
+│               ├── switch.js       # DEPRECATED — to be deleted by user
+│               └── quickswitch.js  # DEPRECATED — to be deleted by user
+├── Plum/
+│   └── index.js                    # Utility bot
+├── Sugar/
+│   └── index.js                    # Utility bot
 └── TigerLily/
     └── schemas/
-        └── trigger.js                # Trigger schema
+        └── trigger.js              # Trigger schema (future production)
 ```
 
 ## Key Architectural Decisions
@@ -229,7 +241,7 @@ Redis serves as a fast cache layer for messages, proxy state, display resolution
 
 ### Redis Client (`Chameleon/redis.js`)
 - Uses `ioredis` library
-- Reads URL from `process.env.REDIS_URL` (Fly.io secret) or falls back to `redis://localhost:6379/0`
+- Reads URL from `process.env.REDIS_URL` (Fly.io secret or Docker Compose env) or falls back to `config.json` fallback, then `redis://localhost:6379/0`
 - Supports Upstash `rediss://` URLs with auto-TLS
 - **Graceful fallback**: If Redis is unavailable, returns a no-op client. All Redis calls return `null`/empty and code falls through to MongoDB. No crashes.
 
@@ -445,8 +457,49 @@ When ready, the settings embedded app will need:
 2. **API route** `api/routes/settings.js` — read/write proxy config, server settings, notification prefs
 3. Registered in `api.js` like other route files
 
+### Express Server (`webapp/server.js`)
+- Express 5 with path-to-regexp v8 — bare `*` wildcards crash; use `{*any}` catch-all syntax
+- Routes:
+  - `/api/*` → API routes (`Chameleon/api/api.js`)
+  - `/discord_activity/assets` → static assets from `activity/dist/assets/` (BEFORE catch-all, fixes Discord CDN proxy path injection)
+  - `/discord_activity` + `/discord_activity/{*any}` → Activity SPA from `activity/dist/index.html`
+  - `/assets` → static assets from `activity/dist/assets/` (for direct CDN cache access)
+  - Everything else → Webapp SPA (React app); **but checks `req.query.frame_id`** → if present, serves activity SPA at root `/` instead (for URL Mapping pointing to root URL)
+- Bind-mounted in Docker: changes to `server.js` reflect instantly via `docker compose restart chameleon-api`
+
+### Discord Activity Launcher (`/systemise`)
+- File: `Chameleon/discord_commands/global/slash/systemise.js`
+- Responds with `LAUNCH_ACTIVITY` (type 12) callback — opens embedded app in Discord
+- Import fixed to use `discord.js` instead of `@discordjs/rest`
+- Requires EMBEDDED flag (set via URL Mapping in Discord Developer Portal)
+- URL Mapping: path `/` → `https://systemise.teamcalendula.net/discord_activity`
+- URL Mapping can also point to root URL (`https://systemise.teamcalendula.net`) — root-level activity detection via `frame_id` query param is wired in `server.js`
+
+### Discord Activity SDK Status
+**Current state:** JS bundle loads successfully in Discord iframe, but `sdk.ready()` never completes — 10s timeout fires. Same on both desktop and web browser.
+
+**Symptoms:**
+1. HTML loads (dark background "Connecting to Discord..." spinner)
+2. JS bundle loads successfully (no more 404 white screen)
+3. `sdk.ready()` hangs for 10s → fires timeout → user sees "Connection failed — SDK ready() timed out after 10s"
+4. `SecurityError` appears after ~10s: `"Failed to read a named property 'origin' from 'Window': Blocked a frame with origin 'https://{clientId}.discordsays.com' from accessing a cross-origin frame."` — caused by our error diagnostic code trying to read `window.parent.origin` directly (not via postMessage)
+
+**Diagnostic improvements applied:**
+- Added `window.onerror` and `unhandledrejection` handlers
+- Added resource error listener for JS/CSS loading failures
+- Added 20-second fallback timeout for module script not executing
+- Added environment diagnostics to error output (url, referrer, parentOrigin, frameId)
+- Added visible initial loading state with dark background before JS loads
+- Added 10s timeout on `sdk.ready()` and 15s timeout on `sdk.authenticate()`
+- Added non-module inline test script
+
+**Potential causes:**
+- Discord CDN proxy (`{clientId}.discordsays.com`) hosts the Activity in a cross-origin iframe. The SDK's postMessage handshake with the parent Discord client doesn't complete — `ready()` never resolves.
+- May require specific Activity SDK version compatibility or Discord client update
+- URL Mapping configuration may need adjustment (try root URL target)
+
 ### API Backend
-- Express server at `Chameleon/api/api.js`
+- Express router at `Chameleon/api/api.js`
 - Routes: `auth`, `system`, `alters`, `states`, `groups`, `notes`, `front`, `friends`, `quick`
 - Auth via Discord OAuth (passport-discord + JWT)
 - Settings data is already stored in MongoDB (same collections) — just needs API endpoints
@@ -974,23 +1027,21 @@ All user-facing "System"/"system" labels are dynamically replaced based on `sys_
 ## Docker Compose & Hosting
 
 ### Architecture
-Chameleon runs in Docker (compose.yaml), other bots (Plum, Sugar, TigerLily) run locally via `node index.js`.
+Chameleon runs in Docker (compose.yaml), other bots (Plum, Sugar, TigerLily) also have Docker Compose services.
 
 ```
 Docker (compose.yaml):
 ├── redis:7-alpine (port 6379)
 ├── chameleon-api   → node Chameleon/webapp/server.js (port 3001)
-└── chameleon-bot   → node Chameleon/bot.js
-
-Local (node index.js):
-├── Plum   (utility)
-├── Sugar  (utility)
-└── TigerLily (future production)
+├── chameleon-bot   → node Chameleon/bot.js
+├── plum-bot        → node Plum/index.js
+├── sugar-bot       → node Sugar/index.js
+└── tigerlily-bot   → node TigerLily/index.js
 ```
 
 ### Files
 
-**`Dockerfile`** (repo root) — Two-step npm install for caching:
+**`Dockerfile`** (repo root) — 5-step build:
 ```dockerfile
 FROM node:20-alpine
 WORKDIR /app
@@ -1003,11 +1054,16 @@ COPY Chameleon/webapp/package*.json Chameleon/webapp/
 COPY Chameleon/activity/package*.json Chameleon/activity/
 COPY Chameleon/shared/package*.json Chameleon/shared/
 RUN cd Chameleon && npm ci --ignore-scripts
-# 3. Source code
+# 3. Activity deps (own node_modules, not workspace)
+COPY Chameleon/activity/package*.json Chameleon/activity/
+RUN cd Chameleon/activity && npm ci --ignore-scripts
+# 4. Source code
 COPY . .
+# 5. Build activity
+RUN cd Chameleon/activity && npm run build
 ```
 
-**`compose.yaml`** (repo root):
+**`compose.yaml`** (repo root) — 6 services with bind mounts for dev:
 ```yaml
 services:
   redis:
@@ -1021,42 +1077,103 @@ services:
     environment: [REDIS_URL=redis://redis:6379]
     depends_on: [redis]
     restart: unless-stopped
+    volumes: &chameleon-volumes
+      - ./Chameleon:/app/Chameleon
+      - /app/Chameleon/node_modules  # preserve image node_modules
+      - /app/Chameleon/activity/node_modules
   chameleon-bot:
     build: .
     command: node Chameleon/bot.js
     environment: [REDIS_URL=redis://redis:6379]
     depends_on: [redis]
     restart: unless-stopped
+    volumes: *chameleon-volumes
+  plum-bot:
+    build: .
+    command: node Plum/index.js
+    restart: unless-stopped
+    volumes:
+      - ./Plum:/app/Plum
+      - ./config.json:/app/config.json
+  sugar-bot:
+    build: .
+    command: node Sugar/index.js
+    restart: unless-stopped
+    volumes:
+      - ./Sugar:/app/Sugar
+      - ./config.json:/app/config.json
+  tigerlily-bot:
+    build: .
+    command: node TigerLily/index.js
+    restart: unless-stopped
+    volumes:
+      - ./TigerLily:/app/TigerLily
+      - ./config.json:/app/config.json
 ```
 
 ### node_modules Strategy
-Two independent `node_modules/` directories — they don't overlap and neither depends on the other:
+Three independent `node_modules/` directories:
 
 | Location | Source | Used by | Managed by |
 |----------|--------|---------|------------|
 | repo root `node_modules/` | `npm install` at root | Plum, Sugar, TigerLily, `index.js` CLI | Root `package.json` |
-| `Chameleon/node_modules/` | `npm ci` in `Chameleon/` | Chameleon bot + API (inside Docker) | Workspace `Chameleon/package.json` |
+| `Chameleon/node_modules/` | `npm ci` in `Chameleon/` | Chameleon bot + API + webapp + shared (inside Docker) | Workspace `Chameleon/package.json` |
+| `Chameleon/activity/node_modules/` | `npm ci` in `activity/` | Activity (independent, NOT workspace) | `Chameleon/activity/package.json` |
 
-TigerLily gets its own Docker setup + `node_modules/` when it's ready for production.
+### Config Per Bot Directory
+- **`Chameleon/config.json`** — Chameleon's own config (tokens, MongoDB, R2, JWT). 14 require paths in Chameleon files updated to use `../config.json`.
+- **Root `config.json`** — Untouched. Still has Chameleon+Plum+Sugar+TigerLily entries for the local CLI tools.
+
+### Bot Name Aliases
+| Alias | Bot Name | Directory | Docker Service |
+|-------|----------|-----------|----------------|
+| `prune` | Plum | `Plum/` | `plum-bot` |
+| `sucre` | Sugar | `Sugar/` | `sugar-bot` |
+| `trigin` | TigerLily | `TigerLily/` | `tigerlily-bot` |
+| `system` | Chameleon | `Chameleon/` | `chameleon-[api,bot]` |
 
 ### Usage
 
 ```bash
-# Start Chameleon backend (Docker)
-docker compose up                         # all 3 services
-docker compose up redis chameleon-api     # API + Redis only (for activity dev)
-docker compose up redis chameleon-bot     # bot + Redis only
-docker compose down                       # stop everything
+# Start everything
+docker compose up                          # all 6 services
+docker compose up redis chameleon-api      # API + Redis only (for activity dev)
+docker compose up redis chameleon-bot      # bot + Redis only
+docker compose down                        # stop everything
+docker compose down chameleon-api          # stop one service
+
+# Rebuild (with bind mounts, only needed when Dockerfile or package.json changes):
+./rebuild.sh                               # all services
+./rebuild.sh system                        # Chameleon only (api + bot + redis)
+./rebuild.sh prune                         # Plum only
+./rebuild.sh --no-cache                    # full clean rebuild
 
 # Run local bots (separate terminal)
-node index.js prune sucre trigin          # start Plum + Sugar + TigerLily
-node index.js -d system                   # deploy Discord commands for Chameleon
-node index.js -d prune                    # deploy commands for Plum
+node index.js prune sucre trigin           # start Plum + Sugar + TigerLily
+node index.js -d system                    # deploy Discord commands for Chameleon
+node index.js -d prune                     # deploy commands for Plum
 
 # Activity dev (separate terminal)
 cd Chameleon/activity
 robox dev --tunnel
 ```
+
+### Cloudflare Tunnel
+Both domains point to the same Express server (port 3001):
+```yaml
+# ~/.cloudflared/config.yml
+ingress:
+  - hostname: api.teamcalendula.net
+    service: http://localhost:3001
+  - hostname: systemise.teamcalendula.net
+    service: http://localhost:3001
+  - service: http_status:404
+```
+
+The Express server routes internally:
+- `/api/*` → API routes
+- `/discord_activity/*` → Activity SPA from `activity/dist/`
+- Everything else → Webapp SPA (React app)
 
 ### Fly.io (future)
 Each Docker Compose service becomes a separate Fly app using the same Dockerfile:
@@ -1076,3 +1193,13 @@ Redis on Fly connects via private network: `REDIS_URL=redis://chameleon-redis.in
 | `Missing parameter name at index 6: /api/*` | Express 5 doesn't allow bare `*` wildcards | Changed `app.use('/api/*', ...)` → `app.use('/api', ...)` |
 | `Cannot find module 'mongodb'` | `bot.js` imported `MongoClient` but `mongodb` isn't a direct dep (only `mongoose` is) | Removed unused `MongoClient` import |
 | Workspace `npm ci` failed with "Missing from lock file" | Added `api` to workspace but didn't regenerate lockfile | Removed `api` from workspace (root `package.json` already has all deps), regenerated lockfile |
+| `@robojs/patch` not found in workspace | Activity was a workspace member; `@robojs/patch` couldn't resolve `.robo/public/` when hoisted | Removed activity from workspace; it has its own `node_modules/` with `"@chameleon/shared": "file:../shared"` |
+| `DiscordAPIError[50240]` on deploy | Bulk PUT removed auto-created Entry Point command (type 4) | `deploy-command.js` now fetches existing commands, preserves Entry Point, includes in bulk PUT |
+| `DiscordAPIError[50234]` on /systemise | App doesn't have EMBEDDED flag | Add URL Mapping in Discord Developer Portal → sets EMBEDDED flag |
+| Express crash on `/activity/*` | Express 5's `path-to-regexp` v8 doesn't allow bare `*` | Changed to `app.get('/activity/{*any}', ...)` using brace syntax, later moved to `/discord_activity/{*any}` |
+| `Cannot find module config.json` in activity build | `createRequire(import.meta.url)` relative path broke after Robo.js rebuild | Changed to `readFileSync(resolve(process.cwd(), ...))` in `activity/src/api/token.js` |
+| Activity path in vite.mjs wrong | Relative path used `../../../config.json` but activity is at same level | Fixed to `../../config.json` (activity/config/ → Chameleon/config.json) |
+| `Cannot find module 'localforage'` in `@discord/embedded-app-sdk` | `@robojs/patch` removed from production build, `crossorigin` not set — Vite injected `crossorigin` on module scripts | Added `/discord_activity/assets` static route to bypass catch-all; SDK constructor now works but `ready()` hangs |
+| White screen (404 JS/CSS) inside Discord Activity | Discord CDN proxy prepends URL Mapping target path to asset URLs, hitting Express `{*any}` catch-all which returns `index.html` instead of JS | Added `app.use('/discord_activity/assets', express.static(...))` middleware in `server.js` to serve assets before catch-all |
+| `sdk.ready()` hangs indefinitely | Discord client never responds to SDK's postMessage handshake from inside cross-origin iframe | Added 10s timeout via `Promise.race`; added env diagnostics to error output |
+| `SecurityError: Failed to read a named property 'origin'` | Error diagnostic code reads `window.parent.origin` directly (cross-origin blocked) | Wrap in try/catch or use `postMessage` instead (deferred) |
