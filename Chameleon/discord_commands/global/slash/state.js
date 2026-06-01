@@ -520,20 +520,19 @@ async function handleShow(interaction, currentUser, currentSystem) {
 // Handle /state new
 async function handleNew(interaction, user, system) {
     const stateName = interaction.options.getString('state_name');
+    const indexable = stateName.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
 
-    // Validate name format
-    if (!utils.isValidIndexableName(stateName)) 
-        return await interaction.reply({ content: '❌ Indexable names can only include standard letters, numbers, hyphens, and underscores.', ephemeral: true });
-
-    // Check if state already exists
-    const existingState = await utils.findStateByName(stateName, system);
-    if (existingState) return await interaction.reply({ content: '❌ A state with this name already exists in your system.', ephemeral: true });
+    if (indexable) {
+        const existingState = await utils.findStateByName(indexable, system);
+        if (existingState) return await interaction.reply({ content: '❌ A state with this name already exists in your system.', ephemeral: true });
+    }
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
         type: 'new',
-        stateName: stateName.toLowerCase(),
+        stateDisplayName: stateName,
+        stateIndexable: indexable,
         systemId: system._id,
         userId: user._id
     });
@@ -783,8 +782,8 @@ async function handleButtonInteraction(interaction) {
                 addedAt: new Date(),
                 syncWithApps: { discord: session.syncWithDiscord },
                 name: {
-                    indexable: session.stateName,
-                    display: session.stateName
+                    ...(session.stateIndexable && { indexable: session.stateIndexable }),
+                    display: session.stateDisplayName
                 },
                 alters: [],
                 groupIDs: [],

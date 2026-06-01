@@ -195,7 +195,7 @@ async function handleWhoisLookup(interaction, messageId, channelId, targetMessag
         .addFields(
             {
                 name: 'Entity',
-                value: isMasked
+                value: isMasked || !entityIndexable
                     ? `${capitalize(messageRecord.proxy_type)}: **${entityDisplayName}**`
                     : `${capitalize(messageRecord.proxy_type)}: **${entityDisplayName}**\n(${entityIndexable})`,
                 inline: false
@@ -336,7 +336,7 @@ function buildDMEmbed({ entity, type, system, isMasked, isOwner, privacyBucket, 
     const entityDisplayName = utils.getDisplayName(entity);
     const entityIndexable = entity?.name?.indexable || '';
 
-    const entityField = isMasked
+    const entityField = isMasked || !entityIndexable
         ? `${capitalize(type)}: **${entityDisplayName}**`
         : `${capitalize(type)}: **${entityDisplayName}**\n(${entityIndexable})`;
 

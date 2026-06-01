@@ -106,14 +106,16 @@ async function handleNew(message, parsed) {
     if (!await utils.requireSystem(message, system)) return;
     const name = parsed._positional.slice(1).join(' ');
     if (!name) return utils.error(message, 'Please provide a name: `sys!group new <n>`');
-    const indexable = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '');
-    if (!indexable) return utils.error(message, 'Name must contain at least one alphanumeric character.');
-    const existing = await utils.findEntity(indexable, system, 'group');
-    if (existing) return utils.error(message, `A group with the name **${indexable}** already exists.`);
+    const indexable = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
+
+    if (indexable) {
+        const existing = await utils.findEntity(indexable, system, 'group');
+        if (existing) return utils.error(message, `A group with the name **${indexable}** already exists.`);
+    }
 
     const group = new Group({
         systemID: system._id,
-        name: { indexable, display: name },
+        name: { ...(indexable && { indexable }), display: name },
         addedAt: new Date(),
         memberIDs: []
     });
@@ -522,7 +524,7 @@ async function handleMask(message, parsed, groupName) {
         const val = parsed._positional.slice(3).join(' ');
         if (!val) return utils.error(message, 'Please provide a mask name.');
         group.mask.name = group.mask.name || {};
-        group.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '');
+        group.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
         group.mask.name.display = val;
         await group.save();
         return utils.success(message, `Mask name set to **${val}**`);

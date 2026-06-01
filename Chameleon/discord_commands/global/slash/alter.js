@@ -466,26 +466,23 @@ async function handleShow(interaction, currentUser, currentSystem) {
 
 async function handleNew(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
+    const indexable = alterName.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
 
-    if (!utils.isValidIndexableName(alterName)) {
-        return await interaction.reply({
-            content: '❌ Indexable names can only include standard letters, numbers, hyphens, and underscores.',
-            ephemeral: true
-        });
-    }
-
-    const existingAlter = await utils.findAlterByName(alterName, system);
-    if (existingAlter) {
-        return await interaction.reply({
-            content: '❌ An alter with this indexable name already exists.',
-            ephemeral: true
-        });
+    if (indexable) {
+        const existingAlter = await utils.findAlterByName(indexable, system);
+        if (existingAlter) {
+            return await interaction.reply({
+                content: '❌ An alter with this indexable name already exists.',
+                ephemeral: true
+            });
+        }
     }
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
         type: 'new',
-        alterName: alterName.toLowerCase(),
+        alterDisplayName: alterName,
+        alterIndexable: indexable,
         systemId: system._id,
         userId: user._id
     });
@@ -671,7 +668,7 @@ async function handleButtonInteraction(interaction) {
                 systemID: session.systemId,
                 genesisDate: new Date(),
                 syncWithApps: { discord: session.syncWithDiscord },
-                name: { indexable: session.alterName, display: session.alterName },
+                name: { ...(session.alterIndexable && { indexable: session.alterIndexable }), display: session.alterDisplayName },
                 metadata: { addedAt: new Date() }
             });
             await newAlter.save();

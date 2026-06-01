@@ -469,6 +469,7 @@ async function findEntity(identifier, system, entityType = 'any') {
             $or: [
                 { _id: identifier },
                 { 'name.indexable': { $regex: new RegExp(`^${escapeRegex(searchName)}$`, 'i') } },
+                { 'name.display': { $regex: new RegExp(`^${escapeRegex(searchName)}$`, 'i') } },
                 { 'name.aliases': { $elemMatch: { $regex: new RegExp(`^${escapeRegex(searchName)}$`, 'i') } } }
             ]
         });
@@ -720,15 +721,15 @@ async function findEntityByNameForSystem(name, system) {
     const searchName = name.toLowerCase();
 
     const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
-    let entity = alters.find(a => a.name?.indexable?.toLowerCase() === searchName);
+    let entity = alters.find(a => a.name?.indexable?.toLowerCase() === searchName || a.name?.display?.toLowerCase() === searchName);
     if (entity) return { entity, type: 'alter' };
 
     const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
-    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName);
+    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName || s.name?.display?.toLowerCase() === searchName);
     if (entity) return { entity, type: 'state' };
 
     const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
-    entity = groups.find(g => g.name?.indexable?.toLowerCase() === searchName);
+    entity = groups.find(g => g.name?.indexable?.toLowerCase() === searchName || g.name?.display?.toLowerCase() === searchName);
     if (entity) return { entity, type: 'group' };
 
     return { entity: null, type: null };

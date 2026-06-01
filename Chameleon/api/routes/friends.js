@@ -135,10 +135,10 @@ router.post('/', authMiddleware, async (req, res) => {
         user.friends.push({
             friendID: targetUser.friendID,
             discordID: targetUser.discordID,
-            customName: customName ? {
-                display: customName,
-                indexable: customName.toLowerCase().replace(/[^a-z0-9]/g, '')
-            } : undefined,
+            customName: customName ? (() => {
+                const frIdx = customName.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
+                return { display: customName, ...(frIdx && { indexable: frIdx }) };
+            })() : undefined,
             addedAt: new Date()
         });
         
@@ -191,10 +191,10 @@ router.patch('/:friendId', authMiddleware, async (req, res) => {
         }
         
         if (customName !== undefined) {
-            friend.customName = customName ? {
-                display: customName,
-                indexable: customName.toLowerCase().replace(/[^a-z0-9]/g, '')
-            } : undefined;
+            friend.customName = customName ? (() => {
+                const frUpIdx = customName.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
+                return { display: customName, ...(frUpIdx && { indexable: frUpIdx }) };
+            })() : undefined;
         }
         
         if (privacyBucket !== undefined) {

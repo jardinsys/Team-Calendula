@@ -120,15 +120,16 @@ async function handleNew(message, parsed) {
     const name = parsed._positional.slice(1).join(' ') || parsed.name;
     if (!name) return utils.error(message, 'Please provide a name: `sys!alter new <n>`');
 
-    const indexable = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '');
-    if (!indexable) return utils.error(message, 'Name must contain at least one alphanumeric character.');
+    const indexable = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
 
-    const existing = await utils.findEntity(indexable, system, 'alter');
-    if (existing) return utils.error(message, `An alter with the name **${indexable}** already exists.`);
+    if (indexable) {
+        const existing = await utils.findEntity(indexable, system, 'alter');
+        if (existing) return utils.error(message, `An alter with the name **${indexable}** already exists.`);
+    }
 
     const alter = new Alter({
         systemID: system._id,
-        name: { indexable, display: name },
+        name: { ...(indexable && { indexable }), display: name },
         metadata: { addedAt: new Date() }
     });
     await alter.save();
@@ -143,7 +144,7 @@ async function handleNew(message, parsed) {
         .setDescription(`**${name}** has been created.`)
         .addFields(
             { name: 'ID', value: `\`${alter._id}\``, inline: true },
-            { name: 'Indexable Name', value: `\`${indexable}\``, inline: true }
+            ...(indexable ? [{ name: 'Indexable Name', value: `\`${indexable}\``, inline: true }] : [])
         );
     return message.reply({ embeds: [embed] });
 }
@@ -485,7 +486,7 @@ async function handleMask(message, parsed, alterName) {
         const val = parsed._positional.slice(3).join(' ');
         if (!val) return utils.error(message, 'Please provide a mask name.');
         alter.mask.name = alter.mask.name || {};
-        alter.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '');
+        alter.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
         alter.mask.name.display = val;
         await alter.save();
         return utils.success(message, `Mask name set to **${val}**`);

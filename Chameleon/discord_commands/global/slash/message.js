@@ -238,21 +238,18 @@ async function verifyMessageOwnership(interaction, messageId) {
 async function findEntityByName(name, system) {
     const searchName = name.toLowerCase();
 
-    // Search alters first
     const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
-    let entity = alters.find(a => a.name?.indexable?.toLowerCase() === searchName);
+    let entity = alters.find(a => a.name?.indexable?.toLowerCase() === searchName || a.name?.display?.toLowerCase() === searchName);
     if (!entity) entity = alters.find(a => a.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
     if (entity) return { entity, type: 'alter' };
 
-    // Search states
     const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
-    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName);
+    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName || s.name?.display?.toLowerCase() === searchName);
     if (!entity) entity = states.find(s => s.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
     if (entity) return { entity, type: 'state' };
 
-    // Search groups
     const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
-    entity = groups.find(g => g.name?.indexable?.toLowerCase() === searchName);
+    entity = groups.find(g => g.name?.indexable?.toLowerCase() === searchName || g.name?.display?.toLowerCase() === searchName);
     if (!entity) entity = groups.find(g => g.name?.aliases?.some(alias => alias.toLowerCase() === searchName));
     if (entity) return { entity, type: 'group' };
 

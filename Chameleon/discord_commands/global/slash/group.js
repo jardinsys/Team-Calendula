@@ -385,12 +385,14 @@ async function handleShow(interaction, currentUser, currentSystem) {
 
 async function handleNew(interaction, user, system) {
     const groupName = interaction.options.getString('group_name');
+    const indexable = groupName.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
 
-    if (!utils.isValidIndexableName(groupName)) return await interaction.reply({ content: '❌ Invalid name format. Use only letters, numbers, hyphens, and underscores.', ephemeral: true });
-    if (await utils.findGroupByName(groupName, system)) return await interaction.reply({ content: '❌ A group with this name already exists.', ephemeral: true });
+    if (indexable) {
+        if (await utils.findGroupByName(indexable, system)) return await interaction.reply({ content: '❌ A group with this name already exists.', ephemeral: true });
+    }
 
     const sessionId = utils.generateSessionId(interaction.user.id);
-    utils.setSession(sessionId, { type: 'new', groupName: groupName.toLowerCase(), systemId: system._id, userId: user._id });
+    utils.setSession(sessionId, { type: 'new', groupDisplayName: groupName, groupIndexable: indexable, systemId: system._id, userId: user._id });
 
     const { embed, buttons } = utils.buildSyncConfirmation('group', groupName, sessionId, 'new');
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
@@ -531,7 +533,7 @@ async function handleButtonInteraction(interaction) {
                 systemID: session.systemId,
                 createdAt: new Date(),
                 syncWithApps: { discord: session.syncWithDiscord },
-                name: { indexable: session.groupName, display: session.groupName },
+                name: { ...(session.groupIndexable && { indexable: session.groupIndexable }), display: session.groupDisplayName },
                 metadata: { addedAt: new Date() }
             });
             await newGroup.save();

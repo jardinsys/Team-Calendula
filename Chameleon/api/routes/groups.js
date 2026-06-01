@@ -133,11 +133,12 @@ router.post('/', authMiddleware, async (req, res) => {
             return res.status(400).json({ error: 'Name is required' });
         }
         
+        const grIdx = name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
         const group = new Group({
             systemID: system._id,
             name: {
                 display: name,
-                indexable: name.toLowerCase().replace(/[^a-z0-9]/g, '')
+                ...(grIdx && { indexable: grIdx })
             },
             description,
             color,
@@ -197,9 +198,10 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         
         if (updates.name !== undefined) {
             if (typeof updates.name === 'string') {
+                const grUpIdx = updates.name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
                 group.name = {
                     display: updates.name,
-                    indexable: updates.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+                    ...(grUpIdx && { indexable: grUpIdx }),
                     closedNameDisplay: group.name?.closedNameDisplay,
                     aliases: group.name?.aliases
                 };

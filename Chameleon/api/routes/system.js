@@ -95,12 +95,13 @@ router.post('/', authMiddleware, async (req, res) => {
         
         const { name, description, sys_type } = req.body;
         
+        const sysIdx = (name || 'My System').toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
         const system = new System({
             users: [user._id],
             metadata: { joinedAt: new Date() },
             name: {
                 display: name || 'My System',
-                indexable: (name || 'My System').toLowerCase().replace(/[^a-z0-9]/g, '')
+                ...(sysIdx && { indexable: sysIdx })
             },
             description,
             sys_type: sys_type || { 
@@ -160,9 +161,10 @@ router.patch('/', authMiddleware, async (req, res) => {
             if (updates[field] !== undefined) {
                 // Handle name specially to maintain indexable
                 if (field === 'name' && typeof updates[field] === 'string') {
+                    const sysUpIdx = updates[field].toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
                     system.name = {
                         display: updates[field],
-                        indexable: updates[field].toLowerCase().replace(/[^a-z0-9]/g, ''),
+                        ...(sysUpIdx && { indexable: sysUpIdx }),
                         closedNameDisplay: system.name?.closedNameDisplay
                     };
                 } else if (field === 'name' && typeof updates[field] === 'object') {
@@ -171,7 +173,8 @@ router.patch('/', authMiddleware, async (req, res) => {
                         ...updates[field]
                     };
                     if (updates[field].display && !updates[field].indexable) {
-                        system.name.indexable = updates[field].display.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        const autoIdx = updates[field].display.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
+                        if (autoIdx) system.name.indexable = autoIdx;
                     }
                 } else {
                     system[field] = updates[field];

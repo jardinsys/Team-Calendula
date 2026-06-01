@@ -100,14 +100,16 @@ async function handleNew(message, parsed) {
     if (!await utils.requireSystem(message, system)) return;
     const name = parsed._positional.slice(1).join(' ');
     if (!name) return utils.error(message, 'Please provide a name: `sys!state new <n>`');
-    const indexable = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '');
-    if (!indexable) return utils.error(message, 'Name must contain at least one alphanumeric character.');
-    const existing = await utils.findEntity(indexable, system, 'state');
-    if (existing) return utils.error(message, `A state with the name **${indexable}** already exists.`);
+    const indexable = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
+
+    if (indexable) {
+        const existing = await utils.findEntity(indexable, system, 'state');
+        if (existing) return utils.error(message, `A state with the name **${indexable}** already exists.`);
+    }
 
     const state = new State({
         systemID: system._id,
-        name: { indexable, display: name },
+        name: { ...(indexable && { indexable }), display: name },
         addedAt: new Date()
     });
     await state.save();
@@ -436,7 +438,7 @@ async function handleMask(message, parsed, stateName) {
         const val = parsed._positional.slice(3).join(' ');
         if (!val) return utils.error(message, 'Please provide a mask name.');
         state.mask.name = state.mask.name || {};
-        state.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '');
+        state.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
         state.mask.name.display = val;
         await state.save();
         return utils.success(message, `Mask name set to **${val}**`);

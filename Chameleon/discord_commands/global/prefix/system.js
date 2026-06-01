@@ -240,10 +240,10 @@ async function handleNew(message, parsed) {
     // Create new system
     const newSystem = new System({
         users: [user._id],
-        name: name ? {
-            indexable: name.toLowerCase().replace(/[^a-z0-9\-_]/g, ''),
-            display: name
-        } : undefined,
+        name: name ? (() => {
+            const idx = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
+            return { ...(idx && { indexable: idx }), display: name };
+        })() : undefined,
         metadata: {
             joinedAt: new Date()
         }
@@ -908,7 +908,7 @@ async function handleMask(message, parsed) {
         const val = parsed._positional.slice(2).join(' ');
         if (!val) return utils.error(message, 'Please provide a mask name.');
         system.mask.name = system.mask.name || {};
-        system.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '');
+        system.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
         system.mask.name.display = val;
         await system.save();
         return utils.success(message, `Mask name set to **${val}**`);

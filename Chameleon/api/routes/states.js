@@ -126,10 +126,8 @@ router.post('/', authMiddleware, async (req, res) => {
         
         // Check for duplicate name
         const existingStates = await State.find({ _id: { $in: system.states?.IDs || [] } });
-        const duplicate = existingStates.find(s => 
-            s.name?.indexable?.toLowerCase() === name.toLowerCase() ||
-            s.name?.display?.toLowerCase() === name.toLowerCase()
-        );
+        const stIdx = name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
+        const duplicate = stIdx ? existingStates.find(s => s.name?.indexable?.toLowerCase() === stIdx) : undefined;
         
         if (duplicate) {
             return res.status(400).json({ error: `A state named "${name}" already exists` });
@@ -139,7 +137,7 @@ router.post('/', authMiddleware, async (req, res) => {
             systemID: system._id,
             name: {
                 display: name,
-                indexable: name.toLowerCase().replace(/[^a-z0-9]/g, '')
+                ...(stIdx && { indexable: stIdx })
             },
             description,
             color,
@@ -200,16 +198,18 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         // Handle name update specially
         if (updates.name !== undefined) {
             if (typeof updates.name === 'string') {
+                const stUpIdx = updates.name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
                 state.name = {
                     display: updates.name,
-                    indexable: updates.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+                    ...(stUpIdx && { indexable: stUpIdx }),
                     closedNameDisplay: state.name?.closedNameDisplay,
                     aliases: state.name?.aliases
                 };
             } else if (typeof updates.name === 'object') {
                 state.name = { ...state.name, ...updates.name };
                 if (updates.name.display && !updates.name.indexable) {
-                    state.name.indexable = updates.name.display.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    const autoIdx = updates.name.display.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
+                    if (autoIdx) state.name.indexable = autoIdx;
                 }
             }
         }

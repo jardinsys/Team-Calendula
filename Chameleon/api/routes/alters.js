@@ -124,10 +124,8 @@ router.post('/', authMiddleware, async (req, res) => {
         
         // Check for duplicate name
         const existingAlters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
-        const duplicate = existingAlters.find(a => 
-            a.name?.indexable?.toLowerCase() === name.toLowerCase() ||
-            a.name?.display?.toLowerCase() === name.toLowerCase()
-        );
+        const idx = name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
+        const duplicate = idx ? existingAlters.find(a => a.name?.indexable?.toLowerCase() === idx) : undefined;
         
         if (duplicate) {
             return res.status(400).json({ error: `An alter named "${name}" already exists` });
@@ -137,7 +135,7 @@ router.post('/', authMiddleware, async (req, res) => {
             systemID: system._id,
             name: {
                 display: name,
-                indexable: name.toLowerCase().replace(/[^a-z0-9]/g, '')
+                ...(idx && { indexable: idx })
             },
             pronouns: pronouns || [],
             description,
@@ -196,9 +194,10 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         // Handle name update
         if (updates.name !== undefined) {
             if (typeof updates.name === 'string') {
+                const upIdx = updates.name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
                 alter.name = {
                     display: updates.name,
-                    indexable: updates.name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+                    ...(upIdx && { indexable: upIdx }),
                     closedNameDisplay: alter.name?.closedNameDisplay,
                     aliases: alter.name?.aliases
                 };
