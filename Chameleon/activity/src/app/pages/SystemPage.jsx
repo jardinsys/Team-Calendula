@@ -1,18 +1,18 @@
 import React from 'react'
 
-export function CrisisPage() {
+export function SystemPage() {
     return (
         <div>
             <header className="page-header">
-                <h1>Crisis Tools</h1>
+                <h1>System Management</h1>
             </header>
             <div className="empty-state">
                 <span className="empty-icon" />
                 <h3>Coming soon</h3>
-                <p>Emergency resources, grounding exercises, and crisis support tools.</p>
+                <p>Manage your system, alters, states, and groups from the app.</p>
             </div>
         </div>
     )
 }
 
-export default CrisisPage
+export default SystemPage

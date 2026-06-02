@@ -12,6 +12,7 @@ const System = require('../../schemas/system');
 const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
+const { uploadNoteContent, deleteNoteContent, generatePreview } = require('../utils/r2');
 
 // ===========================================
 // GET ALL NOTES
@@ -71,7 +72,7 @@ router.get('/', authMiddleware, async (req, res) => {
             .sort({ pinned: -1, updatedAt: -1 })
             .skip(parseInt(skip))
             .limit(parseInt(limit))
-            .select('id title tags pinned createdAt updatedAt author users');
+            .select('id title contentPreview tags pinned createdAt updatedAt author users');
         
         const total = await Note.countDocuments(query);
         
@@ -80,6 +81,7 @@ router.get('/', authMiddleware, async (req, res) => {
                 _id: n._id,
                 id: n.id,
                 title: n.title,
+                contentPreview: n.contentPreview,
                 tags: n.tags,
                 pinned: n.pinned,
                 createdAt: n.createdAt,
@@ -105,6 +107,34 @@ router.get('/tags', authMiddleware, async (req, res) => {
         const user = await User.findById(req.user._id);
         res.json(user?.notes?.tags || []);
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/notes/tags/:tag
+ * Delete a tag from the user's tag collection and all their notes
+ */
+router.delete('/tags/:tag', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { tag } = req.params;
+
+        if (!user.notes?.tags?.includes(tag)) {
+            return res.status(404).json({ error: 'Tag not found' });
+        }
+
+        user.notes.tags = user.notes.tags.filter(t => t !== tag);
+        await user.save();
+
+        await Note.updateMany(
+            { _id: { $in: user.notes?.notes || [] }, tags: tag },
+            { $pull: { tags: tag } }
+        );
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[Notes] Delete tag error:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -212,7 +242,7 @@ router.post('/', authMiddleware, async (req, res) => {
         const note = new Note({
             _id: new mongoose.Types.ObjectId(),
             title: title || 'Untitled Note',
-            content: content || '',
+            contentPreview: typeof content === 'string' ? generatePreview(content) : undefined,
             tags: tags || [],
             pinned: pinned || false,
             color,
@@ -230,12 +260,20 @@ router.post('/', authMiddleware, async (req, res) => {
         });
         
         await note.save();
+
+        if (typeof content === 'string' && content.length > 0) {
+            try {
+                const contentMedia = await uploadNoteContent(user._id.toString(), note.id, content);
+                note.content = contentMedia;
+                await note.save();
+            } catch (uploadErr) {
+                console.error('[Notes] R2 upload failed:', uploadErr);
+            }
+        }
         
-        // Add to user's notes
         user.notes = user.notes || { tags: [], notes: [] };
         user.notes.notes.push(note._id);
         
-        // Add new tags
         if (tags?.length) {
             for (const tag of tags) {
                 if (!user.notes.tags.includes(tag)) {
@@ -288,11 +326,25 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         
         const updates = req.body;
         
-        // Allowed fields
-        const allowedFields = ['title', 'content', 'tags', 'pinned', 'color'];
+        const allowedFields = ['title', 'tags', 'pinned', 'color'];
         for (const field of allowedFields) {
             if (updates[field] !== undefined) {
                 note[field] = updates[field];
+            }
+        }
+
+        if (typeof updates.content === 'string') {
+            const oldR2Key = note.content?.r2Key;
+            try {
+                const contentMedia = await uploadNoteContent(user._id.toString(), note.id, updates.content);
+                note.content = contentMedia;
+                note.contentPreview = generatePreview(updates.content);
+                if (oldR2Key && oldR2Key !== contentMedia.r2Key) {
+                    await deleteNoteContent(oldR2Key);
+                }
+            } catch (uploadErr) {
+                console.error('[Notes] R2 upload failed on update:', uploadErr);
+                note.contentPreview = generatePreview(updates.content);
             }
         }
         
@@ -360,6 +412,10 @@ router.delete('/:id', authMiddleware, async (req, res) => {
             return res.status(403).json({ error: 'Only the owner can delete this note' });
         }
         
+        if (note.content?.r2Key) {
+            await deleteNoteContent(note.content.r2Key);
+        }
+
         await Note.findByIdAndDelete(note._id);
         
         // Remove from user's notes

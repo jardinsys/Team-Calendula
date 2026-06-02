@@ -32,7 +32,9 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
                     setFullNote(data)
 
                     let fetchedContent = data.contentPreview || ''
-                    if (data.content?.url) {
+                    if (typeof data.content === 'string') {
+                        fetchedContent = data.content
+                    } else if (data.content?.url) {
                         try {
                             const res = await fetch(data.content.url)
                             fetchedContent = await res.text()
@@ -200,6 +202,23 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
                             onChange={e => setEditTagsInput(e.target.value)}
                             placeholder="tag1, tag2"
                         />
+                        {editTagsInput.split(',').map(t => t.trim()).filter(Boolean).length > 0 && (
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                                {editTagsInput.split(',').map(t => t.trim()).filter(Boolean).map(tag => (
+                                    <span key={tag} style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                        padding: '2px 8px', borderRadius: '12px',
+                                        backgroundColor: 'var(--bg-surface, #383a40)', fontSize: '0.8rem'
+                                    }}>
+                                        {tag}
+                                        <button type="button" onClick={() => {
+                                            const tags = editTagsInput.split(',').map(t => t.trim()).filter(Boolean)
+                                            setEditTagsInput(tags.filter(t => t !== tag).join(', '))
+                                        }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #949ba4)', cursor: 'pointer', padding: 0, fontSize: '0.9rem' }}>×</button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="form-group">

@@ -1,13 +1,30 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useDiscordSdk } from '../hooks/useDiscordSdk'
 import { useApiAuth } from '../hooks/useApiAuth'
+import { LandingPage } from './pages/LandingPage'
+import { SystemPage } from './pages/SystemPage'
+import { FriendsPage } from './pages/FriendsPage'
 import { NotesPage } from './pages/NotesPage'
 import { CrisisPage } from './pages/CrisisPage'
+
+const PAGES = {
+    system: SystemPage,
+    friends: FriendsPage,
+    notes: NotesPage,
+    crisis: CrisisPage,
+}
+
+function getInitialPage() {
+    const params = new URLSearchParams(window.location.search)
+    const page = params.get('page')
+    if (page && PAGES[page]) return page
+    return null
+}
 
 export function Activity() {
   const { status, error } = useDiscordSdk()
   const { authStatus, authError } = useApiAuth()
-  const [activeTab, setActiveTab] = useState('notes')
+  const [activePage, setActivePage] = useState(getInitialPage)
 
   if (status === 'INITIALIZING') {
     return (
@@ -45,28 +62,42 @@ export function Activity() {
     )
   }
 
+  const PageComponent = activePage ? PAGES[activePage] : null
+
   return (
     <div className="app-container">
       <main className="app-content">
-        {activeTab === 'notes' && <NotesPage />}
-        {activeTab === 'crisis' && <CrisisPage />}
+        {activePage && (
+          <div style={{ marginBottom: '12px' }}>
+            <button
+              className="btn-ghost"
+              onClick={() => setActivePage(null)}
+              style={{ fontSize: '0.75rem' }}
+            >
+              ← Home
+            </button>
+          </div>
+        )}
+        {PageComponent ? (
+          <PageComponent />
+        ) : (
+          <LandingPage onNavigate={setActivePage} />
+        )}
       </main>
-      <nav className="bottom-nav">
-        <button
-          className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`}
-          onClick={() => setActiveTab('notes')}
-        >
-          <span className="tab-icon">📝</span>
-          <span>Notes</span>
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'crisis' ? 'active' : ''}`}
-          onClick={() => setActiveTab('crisis')}
-        >
-          <span className="tab-icon">🆘</span>
-          <span>Crisis</span>
-        </button>
-      </nav>
+      {activePage && (
+        <nav className="bottom-nav">
+          {Object.entries(PAGES).map(([id, Comp]) => (
+            <button
+              key={id}
+              className={`tab-btn ${activePage === id ? 'active' : ''}`}
+              onClick={() => setActivePage(id)}
+            >
+              <span className="tab-icon">{id === 'system' ? '⚙️' : id === 'friends' ? '👥' : id === 'notes' ? '📝' : '🆘'}</span>
+              <span>{id === 'system' ? 'System' : id === 'friends' ? 'Friends' : id === 'notes' ? 'Notes' : 'Crisis'}</span>
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }

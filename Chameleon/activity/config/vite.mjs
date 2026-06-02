@@ -21,7 +21,9 @@ export default defineConfig({
   plugins: [react(), isDev && DiscordProxy.Vite()].filter(Boolean),
   resolve: {
     alias: {
-      '@chameleon/shared': resolve(__dirname, '../../shared')
+      '@chameleon/shared': resolve(__dirname, '../../shared'),
+      'react': resolve(__dirname, '../node_modules/react'),
+      'react-dom': resolve(__dirname, '../node_modules/react-dom')
     }
   },
   build: {
@@ -35,6 +37,6 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    include: ['@chameleon/shared', 'react']
+    include: ['@chameleon/shared']
   }
 })

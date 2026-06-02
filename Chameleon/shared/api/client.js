@@ -1,5 +1,3 @@
-import React from 'react'
-
 class ApiClient {
     constructor() {
         this.token = null
@@ -68,6 +66,12 @@ class ApiClient {
 
     async getNoteTags() {
         return this.request('/notes/tags')
+    }
+
+    async deleteNoteTag(tag) {
+        return this.request(`/notes/tags/${encodeURIComponent(tag)}`, {
+            method: 'DELETE'
+        })
     }
 
     async shareNote(id, data) {

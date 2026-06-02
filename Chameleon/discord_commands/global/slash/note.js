@@ -85,13 +85,13 @@ module.exports = {
 
 async function uploadNoteContent(userId, noteId, content) {
     try {
-        const r2Key = `notes/${userId}/${noteId}.txt`;
+        const r2Key = `notes/${userId}/${noteId}.md`;
 
         const command = new PutObjectCommand({
             Bucket: config.r2.system.app.bucketName,
             Key: r2Key,
             Body: content,
-            ContentType: 'text/plain; charset=utf-8',
+            ContentType: 'text/markdown; charset=utf-8',
         });
 
         await sysR2.send(command);
@@ -101,8 +101,8 @@ async function uploadNoteContent(userId, noteId, content) {
         return {
             r2Key: r2Key,
             url: publicUrl,
-            filename: `${noteId}.txt`,
-            mimeType: 'text/plain',
+            filename: `${noteId}.md`,
+            mimeType: 'text/markdown',
             size: Buffer.byteLength(content, 'utf8'),
             uploadedAt: new Date()
         };

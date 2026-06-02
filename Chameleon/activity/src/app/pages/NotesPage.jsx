@@ -12,6 +12,7 @@ export function NotesPage() {
     const [filter, setFilter] = useState('all')
     const [selectedTag, setSelectedTag] = useState(null)
     const [tags, setTags] = useState([])
+    const [manageTags, setManageTags] = useState(false)
 
     const fetchNotes = async () => {
         try {
@@ -40,6 +41,17 @@ export function NotesPage() {
     const handleNoteCreated = () => { fetchNotes(); fetchTags() }
     const handleNoteUpdated = () => { fetchNotes(); fetchTags() }
     const handleNoteDeleted = () => { fetchNotes(); fetchTags(); setSelectedNote(null) }
+
+    const handleDeleteTag = async (tag) => {
+        try {
+            await api.deleteNoteTag(tag)
+            if (selectedTag === tag) setSelectedTag(null)
+            fetchTags()
+            fetchNotes()
+        } catch (err) {
+            console.error('Delete tag error:', err)
+        }
+    }
 
     if (loading && !notes.length) {
         return (
@@ -81,7 +93,7 @@ export function NotesPage() {
             </div>
 
             {tags.length > 0 && (
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', overflowX: 'auto', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', overflowX: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
                     <button
                         className={`btn ${!selectedTag ? 'btn-primary' : 'btn-secondary'}`}
                         style={{ fontSize: '0.7rem', padding: '2px 10px' }}
@@ -90,15 +102,30 @@ export function NotesPage() {
                         All tags
                     </button>
                     {tags.map(tag => (
-                        <button
-                            key={tag}
-                            className={`btn ${selectedTag === tag ? 'btn-primary' : 'btn-secondary'}`}
-                            style={{ fontSize: '0.7rem', padding: '2px 10px' }}
-                            onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
-                        >
-                            #{tag}
-                        </button>
+                        <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                            <button
+                                className={`btn ${selectedTag === tag ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{ fontSize: '0.7rem', padding: '2px 10px' }}
+                                onClick={() => manageTags ? null : setSelectedTag(selectedTag === tag ? null : tag)}
+                            >
+                                #{tag}
+                            </button>
+                            {manageTags && (
+                                <button
+                                    onClick={() => handleDeleteTag(tag)}
+                                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #949ba4)', cursor: 'pointer', padding: '0 2px', fontSize: '0.8rem' }}
+                                    title={`Delete tag "${tag}"`}
+                                >×</button>
+                            )}
+                        </span>
                     ))}
+                    <button
+                        className="btn btn-ghost"
+                        style={{ fontSize: '0.65rem', padding: '2px 8px' }}
+                        onClick={() => setManageTags(!manageTags)}
+                    >
+                        {manageTags ? 'Done' : 'Manage'}
+                    </button>
                 </div>
             )}
 
