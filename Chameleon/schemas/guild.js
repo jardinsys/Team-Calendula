@@ -23,7 +23,8 @@ const guildSchema = new mongoose.Schema({
         logEvents: {
             proxy: { type: Boolean, default: true },      // Log when messages are proxied
             edit: { type: Boolean, default: false },      // Log when proxied messages are edited
-            delete: { type: Boolean, default: false }     // Log when proxied messages are deleted
+            delete: { type: Boolean, default: false },    // Log when proxied messages are deleted
+            reproxy: { type: Boolean, default: false }    // Log when messages are reproxied
         }
     },
 

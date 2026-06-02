@@ -848,6 +848,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('state_upload_media_')) {
         session.uploadMode = true;
         const state = await State.findById(session.stateId);
+        const system = await System.findById(session.systemId);
         const { embed, components } = buildEditInterface(state, session, system);
         return await interaction.update({ embeds: [embed], components });
     }
@@ -856,6 +857,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('state_upload_back_')) {
         session.uploadMode = false;
         const state = await State.findById(session.stateId);
+        const system = await System.findById(session.systemId);
         const { embed, components } = buildEditInterface(state, session, system);
         return await interaction.update({ embeds: [embed], components });
     }
@@ -882,6 +884,8 @@ async function handleButtonInteraction(interaction) {
         if (!config) {
             return await interaction.reply({ content: '❌ Invalid upload type.', ephemeral: true });
         }
+
+        const system = await System.findById(session.systemId);
 
         await interaction.reply({
             content: `📎 Please send the image for your **${config.fieldLabel}**. You have 60 seconds.`,
@@ -982,6 +986,11 @@ async function handleButtonInteraction(interaction) {
         // Remove from system
         system.states.IDs = system.states.IDs.filter(id => id !== session.stateId.toString());
         await system.save();
+
+        // Clean up reverse references from alters and groups
+        const stateId = session.stateId.toString();
+        await Alter.updateMany({ states: stateId }, { $pull: { states: stateId } });
+        await Group.updateMany({ stateIDs: stateId }, { $pull: { stateIDs: stateId } });
 
         // Delete the state
         await State.findByIdAndDelete(session.stateId);

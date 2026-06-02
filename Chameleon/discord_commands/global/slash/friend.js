@@ -497,6 +497,16 @@ async function handleRemoveByUser(interaction, user, targetDiscordUser) {
     user.friends.splice(friendIndex, 1);
     await user.save();
 
+    // Also remove from the target user's friends list
+    const targetUser = await User.findOne({ discordID: targetDiscordUser.id });
+    if (targetUser) {
+        const targetFriendIndex = targetUser.friends?.findIndex(f => f.discordID === user.discordID);
+        if (targetFriendIndex !== -1 && targetFriendIndex !== undefined) {
+            targetUser.friends.splice(targetFriendIndex, 1);
+            await targetUser.save();
+        }
+    }
+
     return interaction.editReply({ content: `✅ Removed **${friendName}** from your friends list.`, ephemeral: true });
 }
 
@@ -630,6 +640,15 @@ async function handleBlockByUser(interaction, user, targetDiscordUser) {
     const friendIndex = user.friends?.findIndex(f => f.discordID === targetDiscordUser.id);
     if (friendIndex !== -1 && friendIndex !== undefined) {
         user.friends.splice(friendIndex, 1);
+    }
+
+    // Also remove the blocker from the target's friends list
+    if (targetUser) {
+        const targetFriendIndex = targetUser.friends?.findIndex(f => f.discordID === user.discordID);
+        if (targetFriendIndex !== -1 && targetFriendIndex !== undefined) {
+            targetUser.friends.splice(targetFriendIndex, 1);
+            await targetUser.save();
+        }
     }
 
     await user.save();

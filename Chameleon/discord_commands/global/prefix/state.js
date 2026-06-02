@@ -275,6 +275,12 @@ async function handleGroups(message, parsed, stateName) {
         state.groupIDs = state.groupIDs || [];
         if (state.groupIDs.includes(gr.entity._id)) return utils.error(message, 'Already in that group.');
         state.groupIDs.push(gr.entity._id); await state.save();
+        // Bidirectional linking: also add state to group's stateIDs
+        gr.entity.stateIDs = gr.entity.stateIDs || [];
+        if (!gr.entity.stateIDs.includes(state._id)) {
+            gr.entity.stateIDs.push(state._id);
+            await gr.entity.save();
+        }
         return utils.success(message, `Added to group **${gr.entity.name?.display || groupName}**`);
     }
     if (action === 'remove') {
@@ -285,6 +291,13 @@ async function handleGroups(message, parsed, stateName) {
         const idx = state.groupIDs.indexOf(gr.entity._id);
         if (idx === -1) return utils.error(message, 'Not in that group.');
         state.groupIDs.splice(idx, 1); await state.save();
+        // Bidirectional linking: also remove state from group's stateIDs
+        gr.entity.stateIDs = gr.entity.stateIDs || [];
+        const groupIdx = gr.entity.stateIDs.indexOf(state._id);
+        if (groupIdx !== -1) {
+            gr.entity.stateIDs.splice(groupIdx, 1);
+            await gr.entity.save();
+        }
         return utils.success(message, `Removed from group.`);
     }
     const groups = await Group.find({ _id: { $in: state.groupIDs || [] } });
@@ -303,6 +316,12 @@ async function handleAlters(message, parsed, stateName) {
         state.alters = state.alters || [];
         if (state.alters.includes(al.entity._id)) return utils.error(message, 'Already linked.');
         state.alters.push(al.entity._id); await state.save();
+        // Bidirectional linking: also add state to alter's states array
+        al.entity.states = al.entity.states || [];
+        if (!al.entity.states.includes(state._id)) {
+            al.entity.states.push(state._id);
+            await al.entity.save();
+        }
         return utils.success(message, `Linked to alter **${al.entity.name?.display || alterName}**`);
     }
     if (action === 'remove') {
@@ -313,6 +332,13 @@ async function handleAlters(message, parsed, stateName) {
         const idx = state.alters.indexOf(al.entity._id);
         if (idx === -1) return utils.error(message, 'Not linked.');
         state.alters.splice(idx, 1); await state.save();
+        // Bidirectional linking: also remove state from alter's states array
+        al.entity.states = al.entity.states || [];
+        const alterIdx = al.entity.states.indexOf(state._id);
+        if (alterIdx !== -1) {
+            al.entity.states.splice(alterIdx, 1);
+            await al.entity.save();
+        }
         return utils.success(message, `Unlinked from alter.`);
     }
     const alters = await Alter.find({ _id: { $in: state.alters || [] } });

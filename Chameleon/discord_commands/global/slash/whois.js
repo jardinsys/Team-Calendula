@@ -226,7 +226,7 @@ async function handleWhoisLookup(interaction, messageId, channelId, targetMessag
     const components = [];
     if (entity) {
         const cardButton = new ButtonBuilder()
-            .setCustomId(`whois_card_${messageRecord.proxy_type}_${messageRecord.proxy_id}_${interaction.user.id}_${interaction.guildId}`)
+            .setCustomId(`whois_card_${messageRecord.proxy_type}_${messageRecord.proxy_id}_${interaction.user.id}_${interaction.guildId}_${messageRecord.discord_webhook_message_id}`)
             .setLabel('View Card in DMs')
             .setStyle(ButtonStyle.Primary)
             .setEmoji('📋');
@@ -244,11 +244,11 @@ async function handleWhoisLookup(interaction, messageId, channelId, targetMessag
  */
 async function handleCardButton(interaction) {
     const parts = interaction.customId.replace('whois_card_', '').split('_');
-    if (parts.length < 4) {
+    if (parts.length < 5) {
         return await interaction.reply({ content: '❌ Invalid button data.', ephemeral: true });
     }
 
-    const [type, entityId, userId, guildId] = parts;
+    const [type, entityId, userId, guildId, webhookMessageId] = parts;
 
     if (interaction.user.id !== userId) {
         return await interaction.reply({ content: '❌ Only the person who ran this whois can view the card.', ephemeral: true });
@@ -268,7 +268,7 @@ async function handleCardButton(interaction) {
     }
 
     const messageRecord = await Message.findOne({
-        discord_webhook_message_id: parts[0] ? undefined : undefined,
+        discord_webhook_message_id: webhookMessageId,
         proxy_type: type,
         proxy_id: entityId
     });

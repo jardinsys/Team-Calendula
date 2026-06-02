@@ -155,6 +155,11 @@ async function handleRename(message, parsed, alterName) {
     const newName = parsed._positional.slice(2).join(' ');
     if (!newName) return utils.error(message, 'Please provide a new name.');
     if (!utils.isValidIndexableName(newName)) return utils.error(message, 'Indexable names can only contain letters, numbers, dashes, and underscores.');
+    // Check for duplicate indexable name within the system
+    const existing = await utils.findEntity(newName, system, 'alter');
+    if (existing && existing.entity._id.toString() !== alter._id.toString()) {
+        return utils.error(message, `An alter with the name **${newName}** already exists.`);
+    }
     alter.name.indexable = newName;
     await alter.save();
     return utils.success(message, `Indexable name changed to **${newName}**`);

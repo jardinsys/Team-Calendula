@@ -9,6 +9,7 @@ const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const Guild = require('../../schemas/guild');
+const { Shift } = require('../../schemas/front');
 const redis = require('../../redis');
 
 // Import shared utilities (for findEntityByName)
@@ -113,7 +114,7 @@ async function handleProxyMessage(message, client) {
  * @returns {Object} { isBreak: boolean, shouldUpdate: boolean }
  */
 async function checkAndUpdateBreakStatus(system) {
-    const cooldownSeconds = system.proxy?.cooldown || 0;
+    const cooldownSeconds = system.setting?.proxyCoolDown || 0;
     const currentBreak = system.proxy?.break || false;
     
     // If no cooldown set, don't auto-break
@@ -342,16 +343,24 @@ async function getAutoProxy(system, guildId) {
     }
 
     if (effectiveStyle === 'front') {
-        // Use the current fronter (first layer, single entity)
+        // Use the current fronter (first layer, single active entity)
         const frontLayers = system.front?.layers || [];
         if (frontLayers.length === 0) return null;
 
         const topLayer = frontLayers[0];
-        const fronters = topLayer?.fronters || [];
+
+        // Find active fronters by querying Shift documents (shifts with no endTime)
+        const activeFronters = [];
+        for (const shiftId of topLayer.shifts || []) {
+            const shift = await Shift.findById(shiftId);
+            if (shift && !shift.endTime) {
+                activeFronters.push(shift);
+            }
+        }
 
         // Only auto-proxy if there's exactly one fronter in the top layer
-        if (fronters.length !== 1) {
-            // Multiple fronters - fall back to 'last' behavior
+        if (activeFronters.length !== 1) {
+            // Multiple or zero fronters - fall back to 'last' behavior
             const recentProxies = await redis.zrevrange(`system:${system._id}:recentProxies`, 0, 0);
             if (!recentProxies || recentProxies.length === 0) {
                 const fallbackProxies = system.proxy?.recentProxies || [];
@@ -368,8 +377,9 @@ async function getAutoProxy(system, guildId) {
             return null;
         }
 
-        const fronterId = fronters[0].alterID || fronters[0].stateID || fronters[0].groupID;
-        const fronterType = fronters[0].alterID ? 'alter' : (fronters[0].stateID ? 'state' : 'group');
+        const fronterShift = activeFronters[0];
+        const fronterId = fronterShift.ID;
+        const fronterType = fronterShift.s_type;
 
         let entity = await getEntityById(fronterType, fronterId);
         if (entity) {
@@ -416,7 +426,7 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
     const webhook = await getOrCreateWebhook(channel);
 
     // Check guild settings for closed characters
-    const guildSettings = await Guild.findOne({ id: guild.id });
+    const guildSettings = await Guild.findOne({ discordId: guild.id });
     const closedCharAllowed = guildSettings?.settings?.closedCharAllowed !== false;
 
     // Get display info (with Redis caching)

@@ -105,6 +105,7 @@ function getAlterTerm(system, { plural = false } = {}) {
 
 // Session storage (for multi-step interactions)
 const activeSessions = new Map();
+const sessionTimeouts = new Map();
 
 // ==== SESSION MANAGEMENT ====
 
@@ -116,9 +117,17 @@ function getSession(sessionId) { return activeSessions.get(sessionId); }
 
 // Set/update a session
 function setSession(sessionId, data) {
+    // Clear any existing timeout for this session to prevent premature deletion
+    if (sessionTimeouts.has(sessionId)) {
+        clearTimeout(sessionTimeouts.get(sessionId));
+    }
     activeSessions.set(sessionId, data);
     // Auto-cleanup after 15 minutes
-    setTimeout(() => activeSessions.delete(sessionId), 15 * 60 * 1000);
+    const timeout = setTimeout(() => {
+        activeSessions.delete(sessionId);
+        sessionTimeouts.delete(sessionId);
+    }, 15 * 60 * 1000);
+    sessionTimeouts.set(sessionId, timeout);
 }
 
 // Delete a session
@@ -573,7 +582,7 @@ function shouldShowEntity(entity, privacyBucket, isOwner, showFullList = false) 
     if (!privacyBucket) return false;
 
     const entityPrivacy = entity.setting?.privacy?.find(p => p.bucket === privacyBucket.name);
-    if (entityPrivacy?.settings?.hidden === false) return false;
+    if (entityPrivacy?.settings?.hidden === true) return false;
 
     return true;
 }
@@ -590,8 +599,6 @@ async function isPingAllowed(entity, pingedUserId, viewerDiscordId) {
     if (entity.setting?.allowPing === false) return false;
 
     // 2. Get the entity's owner system and user
-    const System = require('../../../schemas/system');
-    const User = require('../../../schemas/user');
     const system = await System.findById(entity.systemID);
     if (!system) return false;
 
@@ -1148,6 +1155,24 @@ function getEditTarget(entity, session) {
  * @param {*} value - New value
  */
 function updateEntityProperty(entity, session, property, value) {
+    if (session?.mode === 'server' && session?.serverId) {
+        if (!entity.discord) entity.discord = {};
+        if (!entity.discord.server) entity.discord.server = [];
+        let serverEntry = entity.discord.server.find(s => s.id === session.serverId);
+        if (!serverEntry) {
+            serverEntry = { id: session.serverId };
+            entity.discord.server.push(serverEntry);
+        }
+        const parts = property.split('.');
+        let current = serverEntry;
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (!current[parts[i]]) current[parts[i]] = {};
+            current = current[parts[i]];
+        }
+        current[parts[parts.length - 1]] = value;
+        return;
+    }
+
     const target = session?.mode === 'mask' ? 'mask' : 'discord';
     if (!entity[target]) entity[target] = {};
 
@@ -1359,11 +1384,19 @@ function downloadFromUrl(url) {
         https.get(url, (res) => {
             if (res.statusCode === 302 || res.statusCode === 301) {
                 https.get(res.headers.location, (res2) => {
+                    if (res2.statusCode && res2.statusCode >= 400) {
+                        reject(new Error(`Download failed with status ${res2.statusCode}`));
+                        return;
+                    }
                     const chunks = [];
                     res2.on('data', (chunk) => chunks.push(chunk));
                     res2.on('end', () => resolve(Buffer.concat(chunks)));
                     res2.on('error', reject);
                 });
+                return;
+            }
+            if (res.statusCode && res.statusCode >= 400) {
+                reject(new Error(`Download failed with status ${res.statusCode}`));
                 return;
             }
             const chunks = [];

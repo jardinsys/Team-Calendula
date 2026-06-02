@@ -178,7 +178,7 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
 
     // Battery/Social Battery
     if (system.battery !== undefined && system.battery !== null) {
-        emoji = utils.getBatteryEmoji(system.battery);
+        const emoji = utils.getBatteryEmoji(system.battery);
         embed.addFields({
             name: `${emoji} Social Battery`,
             value: `${system.battery}%`,

@@ -718,6 +718,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('alter_upload_media_')) {
         session.uploadMode = true;
         const alter = await Alter.findById(session.alterId);
+        const system = await System.findById(session.systemId);
         const { embed, components } = buildEditInterface(alter, session, system);
         return await interaction.update({ embeds: [embed], components });
     }
@@ -726,6 +727,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('alter_upload_back_')) {
         session.uploadMode = false;
         const alter = await Alter.findById(session.alterId);
+        const system = await System.findById(session.systemId);
         const { embed, components } = buildEditInterface(alter, session, system);
         return await interaction.update({ embeds: [embed], components });
     }
@@ -752,6 +754,8 @@ async function handleButtonInteraction(interaction) {
         if (!config) {
             return await interaction.reply({ content: '❌ Invalid upload type.', ephemeral: true });
         }
+
+        const system = await System.findById(session.systemId);
 
         await interaction.reply({
             content: `📎 Please send the image for your **${config.fieldLabel}**. You have 60 seconds.`,
@@ -840,6 +844,12 @@ async function handleButtonInteraction(interaction) {
         const system = await System.findById(session.systemId);
         system.alters.IDs = system.alters.IDs.filter(id => id !== session.alterId.toString());
         await system.save();
+
+        // Clean up reverse references from groups and states
+        const alterId = session.alterId.toString();
+        await Group.updateMany({ alterIDs: alterId }, { $pull: { alterIDs: alterId } });
+        await State.updateMany({ alters: alterId }, { $pull: { alters: alterId } });
+
         await Alter.findByIdAndDelete(session.alterId);
         utils.deleteSession(sessionId);
         return await interaction.update({ content: '✅ Alter has been deleted.', embeds: [], components: [] });

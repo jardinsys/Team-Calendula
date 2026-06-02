@@ -129,7 +129,7 @@ if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.join(__dirname, 'dist')));
     
     // Handle webapp React routing - serve index.html for all non-API, non-activity routes
-    app.get('*', (req, res) => {
+    app.get('{*any}', (req, res) => {
         if (req.path.startsWith('/api') || req.path.startsWith('/discord_activity')) return;
         // If this request has frame_id, it's a Discord Activity — serve activity SPA
         if (req.query.frame_id) {

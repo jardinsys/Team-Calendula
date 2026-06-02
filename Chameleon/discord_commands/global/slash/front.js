@@ -558,7 +558,7 @@ async function handleSwitchSessionButton(interaction) {
     }
 
     if (action === 'confirm') {
-        return await executeSwitchSession(interaction, session, system);
+        return await executeSwitchSession(interaction, session, system, sessionId);
     }
 
     // Open modal for the selected field
@@ -628,7 +628,7 @@ async function handleSwitchSessionButton(interaction) {
     return interaction.showModal(modal);
 }
 
-async function executeSwitchSession(interaction, session, system) {
+async function executeSwitchSession(interaction, session, system, sessionId) {
     await interaction.deferUpdate();
 
     if (!session.entities) {

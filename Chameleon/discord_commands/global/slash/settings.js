@@ -141,7 +141,7 @@ async function handleServerSection(interaction, user, system, sessionId) {
             discordId: interaction.guild.id,
             userIDs: [],
             admins: { roleIDs: [], memberIDs: [] },
-            channels: { blacklist: [], whitelist: [], logChannel: null, logEvents: { proxy: true, edit: false, delete: false } },
+            channels: { blacklist: [], whitelist: [], logChannel: null, logEvents: { proxy: true, edit: false, delete: false, reproxy: false } },
             settings: { closedCharAllowed: true, allowProxy: true, forceDisableAutoproxy: false }
         });
         await guildConfig.save();
@@ -1137,7 +1137,6 @@ async function handleGeneralTagsModal(interaction, sessionId) {
         new ButtonBuilder().setCustomId('settings_general_tags_back_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Secondary)
     );
 
-    await interaction.reply({ embeds: [embed], components: [backRow], ephemeral: true });
     return await interaction.showModal(modal);
 }
 
