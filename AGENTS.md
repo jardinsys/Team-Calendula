@@ -23,6 +23,8 @@ Team-Calendula/
 │   ├── api/
 │   │   ├── api.js                  # Express API router (auth, system, alters, states, groups, notes, front, friends, quick)
 │   │   ├── middleware/auth.js      # JWT auth middleware — exports authenticateToken + authMiddleware alias
+│   │   ├── utils/
+│   │   │   └── r2.js              # R2 client + uploadNoteContent, deleteNoteContent, generatePreview
 │   │   └── routes/                 # Per-resource API route files
 │   ├── webapp/
 │   │   ├── server.js               # Express 5 — serves API (/api), webapp SPA fallback, activity SPA (/discord_activity), assets (/assets); root-level activity detection via frame_id
@@ -30,10 +32,18 @@ Team-Calendula/
 │   ├── activity/
 │   │   ├── package.json            # Independent project (not workspace) with "@chameleon/shared": "file:../shared"
 │   │   ├── node_modules/           # Own deps (193 packages) — @robojs/patch breaks with hoisting
-│   │   ├── dist/                   # Built output (index.html, assets/index-*.js 492KB bundle — includes SDK timeouts + env diagnostics, assets/index-*.css 7KB)
-│   │   ├── config/vite.mjs         # Reads ../../config.json (relative to activity/config/ = Chameleon/config.json)
+│   │   ├── dist/                   # Built output (index.html, assets/index-*.js 489KB bundle, assets/index-*.css 7KB)
+│   │   ├── config/vite.mjs         # Reads ../../config.json; resolve.alias for react/react-dom dedup
 │   │   └── src/
-│   │       ├── app/                # Activity React app (pages: NotesPage, CrisisPage placeholder)
+│   │       ├── app/
+│   │       │   ├── App.jsx         # Root — DiscordContextProvider
+│   │       │   ├── Activity.jsx    # Status gate + page routing (deep-link via ?page= param)
+│   │       │   └── pages/
+│   │       │       ├── LandingPage.jsx   # Hub — System, Friends, Notes, Crisis cards
+│   │       │       ├── SystemPage.jsx    # Placeholder — system management
+│   │       │       ├── FriendsPage.jsx   # Placeholder — friends list
+│   │       │       ├── NotesPage.jsx     # Notes CRUD via shared API client
+│   │       │       └── CrisisPage.jsx    # Placeholder — crisis tools
 │   │       └── api/token.js        # Uses process.cwd() to find config.json (not createRequire/import.meta.url)
 │   ├── shared/
 │   │   ├── package.json            # ESM workspace package (@chameleon/shared) — "type": "module"
@@ -425,6 +435,33 @@ await redis.set(`user_msgs:${userId}:${channelId}`, webhookMessageId);
 
 Server-specific `proxyStyle` in `system.discord.server[]` overrides global style.
 
+### Reply Style
+Controls how proxied message replies appear. Two modes:
+- `'embed'` (default) — Custom reply embed with author info, content preview, and thumbnail
+- `'native'` — Discord's built-in reply feature via `message_reference`
+
+**Three-tier resolution** (highest priority wins):
+1. `guild.settings.forceReplyStyle` — Admin force (if !== `'off'`)
+2. `system.discord.server[].replyStyle` — User's per-server override
+3. `system.proxy.replyStyle` — User's global preference (default: `'embed'`)
+
+Resolution function: `getEffectiveReplyStyle(system, guildDoc, guildId)` in `proxy-message.js`
+
+**Schema locations:**
+| Level | Field | Values |
+|-------|-------|--------|
+| User global | `system.proxy.replyStyle` | `'embed'` \| `'native'` |
+| User per-server | `system.discord.server[].replyStyle` | `'embed'` \| `'native'` |
+| Admin force | `guild.settings.forceReplyStyle` | `'off'` \| `'embed'` \| `'native'` |
+
+**Commands:**
+- `sys!system replystyle <embed|native>` — Set global reply style
+- `sys!config proxy replystyle <embed|native>` — Alias
+- `sys!config proxy server <guild> replystyle <embed|native|default>` — Per-server override
+- `sys!serverconfig replystyle <off|embed|native>` — Admin force
+- `/settings` → Proxy → Reply Style — Global + per-server
+- `/settings` → Server → Proxy Controls → Force Reply Style — Admin force
+
 ### Break/Cooldown System
 - `\\` prefix → set break to true (stops all future auto-proxying)
 - `\` prefix → skip this message only (no break change)
@@ -506,6 +543,15 @@ Two S3 clients in `bot_utils.js`: `sysR2` (app bucket) and `discordR2` (discord 
 - Both use the same API backend (`api/routes/`) and MongoDB data
 - Embedded App runs inside Discord's CDN proxy iframe (`{clientId}.discordsays.com`)
 
+### Embedded App Page Routing
+The activity is a single-page app with page-based routing via `useState` (no React Router — CSP + iframe constraints).
+
+- **Landing page** (default) — Hub with feature cards: System, Friends, Notes, Crisis
+- **Deep-linking** — `?page=notes`, `?page=system`, `?page=friends`, `?page=crisis` skips landing page
+- **"← Home" button** — back navigation to landing page
+- **Bottom nav** — visible inside pages for quick switching between features
+- Placeholder pages: SystemPage, FriendsPage, CrisisPage
+
 ### Current Embedded App Links
 | Feature | Button Label | URL | Status |
 |---------|-------------|-----|--------|
@@ -530,6 +576,7 @@ Two S3 clients in `bot_utils.js`: `sysR2` (app bucket) and `discordR2` (discord 
 - Requires EMBEDDED flag (set via URL Mapping in Discord Developer Portal)
 - **URL Mapping: path `/` → `https://systemise.teamcalendula.net`** (root mapping catches all paths including `/api`)
 - Root-level activity detection via `frame_id` query param is wired in `server.js`
+- Supports deep-linking via `?page=` URL param (e.g., `?page=notes` skips landing page)
 
 ### Discord Activity SDK — Fully Working
 
@@ -554,9 +601,12 @@ Two S3 clients in `bot_utils.js`: `sysR2` (app bucket) and `discordR2` (discord 
 | `activity/src/hooks/useDiscordSdk.jsx` | SDK init, auth flow, token caching, context provider |
 | `activity/src/hooks/useApiAuth.js` | Exchange Discord token for JWT (skips in mock mode) |
 | `activity/src/app/App.jsx` | Root component, wraps DiscordContextProvider |
-| `activity/src/app/Activity.jsx` | Status rendering (INITIALIZING → READY → AUTHENTICATED) |
-| `activity/src/app/pages/NotesPage.jsx` | Notes CRUD via shared API client |
-| `activity/src/app/pages/CrisisPage.jsx` | Crisis placeholder |
+| `activity/src/app/Activity.jsx` | Status rendering (INITIALIZING → READY → AUTHENTICATED) + page routing |
+| `activity/src/app/pages/LandingPage.jsx` | Hub — System, Friends, Notes, Crisis feature cards |
+| `activity/src/app/pages/SystemPage.jsx` | Placeholder — system management |
+| `activity/src/app/pages/FriendsPage.jsx` | Placeholder — friends list |
+| `activity/src/app/pages/NotesPage.jsx` | Notes CRUD via shared API client + tag manager |
+| `activity/src/app/pages/CrisisPage.jsx` | Placeholder — crisis tools |
 | `activity/config/vite.mjs` | Vite config — injects `VITE_DISCORD_CLIENT_ID` and `VITE_API_BASE` |
 
 **Build command:** `docker compose exec chameleon-api sh -c "cd Chameleon/activity && npm run build"`
@@ -564,7 +614,6 @@ Two S3 clients in `bot_utils.js`: `sysR2` (app bucket) and `discordR2` (discord 
 **Package.json build script:** `vite build --config config/vite.mjs` (NOT `robo build` — Robo.js hangs)
 
 **Known issues:**
-- `@chameleon/shared` React dedup — `CreateNoteModal` crashes with `Cannot read properties of null (reading 'useState')` due to multiple React instances when shared components are bundled. Fix: add `react` to Vite `resolve.alias` or remove shared from `optimizeDeps.include`
 - `req.userId` → `req.user._id` was broken across all API route files (now fixed)
 - Activity CSP restricts fetch to `*.discordsays.com` — API calls must go through Discord proxy, not direct to `systemise.teamcalendula.net`
 
@@ -577,6 +626,45 @@ Discord's Content Security Policy only allows `connect-src` to `*.discordsays.co
 - Auth via Discord OAuth (passport-discord + JWT)
 - Settings data is already stored in MongoDB (same collections) — just needs API endpoints
 - Existing `GET /api/system` already returns system doc including `setting.*`, `proxy.*` fields
+
+### Notes R2 Content Storage
+
+Note content (markdown text) is stored in R2 as `.md` files, not inline in MongoDB.
+
+**Flow:**
+1. Frontend sends `{ content: "markdown string" }` via POST/PATCH
+2. API uploads markdown to R2 as `notes/{userId}/{noteId}.md` (MIME: `text/markdown; charset=utf-8`)
+3. API stores the R2 media object (`mediaSchema`) in `note.content`
+4. API generates `contentPreview` (first 500 chars) stored inline in MongoDB as fallback
+5. Frontend reads: `content.url` → fetches markdown from R2 → renders via `ReactMarkdown`
+   - Fallback: `contentPreview` (inline text) if R2 fetch fails
+
+**R2 utility:** `Chameleon/api/utils/r2.js`
+- `uploadNoteContent(userId, noteId, content)` — uploads `.md` to R2, returns mediaSchema object
+- `deleteNoteContent(r2Key)` — deletes R2 object
+- `generatePreview(content, length)` — truncates to N chars with `...`
+
+**R2 key format:** `notes/{userId}/{noteId}.md`
+
+**Schema:** `note.content` is `mediaSchema` (r2Key, bucket, url, filename, mimeType, size, uploadedAt)
+
+**API endpoints:**
+- `POST /api/notes` — uploads content to R2 after MongoDB save (graceful fallback on R2 failure)
+- `PATCH /api/notes/:id` — re-uploads to R2, deletes old R2 file
+- `DELETE /api/notes/:id` — deletes R2 file before MongoDB delete
+
+**Note:** The `/note` slash command (`discord_commands/global/slash/note.js`) also uses R2 for note content with the same key format and MIME type.
+
+### Tag Management API
+
+Tags are stored in `user.notes.tags[]` and managed via:
+
+- `GET /api/notes/tags` — returns user's tag list
+- `DELETE /api/notes/tags/:tag` — removes tag from `user.notes.tags[]` AND from all user's notes via `$pull`
+
+The shared API client (`@chameleon/shared`) exposes `api.deleteNoteTag(tag)` for the delete endpoint.
+
+The activity's NotesPage has a tag manager UI — "Manage" button in the tag filter bar shows × buttons on each tag for deletion.
 
 ## Settings Command (`/settings`)
 
@@ -591,7 +679,7 @@ Defaults to main menu (overview) if no section given.
 | Section | Access | What It Controls |
 |---------|--------|------------------|
 | **Server** | Admin only (Administrator OR `guild.admins.memberIDs[]`/`roleIDs[]`) | Admins, Channels, Log Events, Proxy Controls, Display |
-| **Proxy** | System owner | Global + per-server proxy style, cooldown, layouts×3, case sensitivity, break |
+| **Proxy** | System owner | Global + per-server proxy style, reply style, cooldown, layouts×3, case sensitivity, break |
 | **Notifications** | System owner | Delivery method (DM/Webhook), friend requests, friend switches, app messages |
 | **General** | System owner | Sync toggle (placeholder migration), tags, pronoun separator, terminology, timezone, auto-share, friend auto-bucket |
 
@@ -609,6 +697,7 @@ const isAdmin = interaction.member.permissions.has('Administrator')
 
 ### Per-Server Proxy Style
 - `system.discord.server[].proxyStyle` overrides `system.proxy.style` for specific servers
+- `system.discord.server[].replyStyle` overrides `system.proxy.replyStyle` for specific servers
 - Flows through session: `handleProxyServerStyleSelect` stores guildId, `handleProxyServerStyleSave` reads it back
 
 ### Migration Section
@@ -632,11 +721,13 @@ Operates on the caller's own system/user document. No permission check beyond ha
 |------------|---------------|
 | `sys!config timezone <tz>` | `system.timezone` |
 | `sys!config proxy style <off\|last\|front\|name>` | `system.proxy.style` |
+| `sys!config proxy replystyle <embed\|native>` | `system.proxy.replyStyle` |
 | `sys!config proxy case <on\|off>` | `system.proxy.caseSensitive` |
 | `sys!config proxy cooldown <seconds\|off\|reset>` | `system.setting.proxyCoolDown` |
 | `sys!config proxy break <on\|off>` | `system.proxy.break` |
 | `sys!config proxy layout <alter\|state\|group> <format>` | `system.discord.proxylayout.*` |
 | `sys!config proxy server <guild> <style>` | `system.discord.server[].proxyStyle` |
+| `sys!config proxy server <guild> replystyle <embed\|native\|default>` | `system.discord.server[].replyStyle` |
 | `sys!config closedchar <on\|off>` | `user.settings.closedCharAllowed` |
 | `sys!config name format <format>` | `system.discord.name.display` |
 | `sys!config terminology alter <singular> [plural]` | `system.alterSynonym` |
@@ -654,6 +745,7 @@ Requires Manage Server permission, server ownership, or Systemiser admin role. S
 | `sys!serverconfig proxy <on\|off>` | `guild.settings.allowProxy` |
 | `sys!serverconfig autoproxy <on\|off>` | `guild.settings.forceDisableAutoproxy` |
 | `sys!serverconfig closedchar <on\|off>` | `guild.settings.closedCharAllowed` |
+| `sys!serverconfig replystyle <off\|embed\|native>` | `guild.settings.forceReplyStyle` |
 | `sys!serverconfig channel blacklist\|whitelist\|remove\|clear\|list` | `guild.channels.blacklist[]` / `whitelist[]` |
 | `sys!serverconfig log <#channel\|off>` | `guild.channels.logChannel` |
 | `sys!serverconfig log events <proxy\|edit\|delete\|reproxy> <on\|off>` | `guild.channels.logEvents.*` |
@@ -1281,7 +1373,8 @@ Redis on Fly connects via private network: `REDIS_URL=redis://chameleon-redis.in
 | CSP blocks fetch to `systemise.teamcalendula.net` | Discord's CSP only allows `connect-src` to `*.discordsays.com`, `discord.com`, etc. | `VITE_API_BASE` set to `/api` (relative); URL Mapping changed to `/` → `https://systemise.teamcalendula.net` |
 | `POST /api/auth/activity/exchange 404` | API calls used absolute URL (`systemise.teamcalendula.net`) which Discord CSP blocked | Changed to relative `/api` so requests go through discordsays.com proxy |
 | `Cannot read properties of null (reading '_id')` in notes | All API route files used `req.userId` but auth middleware sets `req.user._id` | Fixed `req.userId` → `req.user._id` across all 6 route files (40+ occurrences) |
-| `Cannot read properties of null (reading 'useState')` in CreateNoteModal | `@chameleon/shared` components resolve React to a separate instance when bundled | **Known issue** — React dedup needed in Vite config (deferred — see plan) |
+| `Cannot read properties of null (reading 'useState')` in CreateNoteModal | `@chameleon/shared` components resolve React to a separate instance when bundled | Added `react`/`react-dom` to `resolve.alias` in `activity/config/vite.mjs`; removed `react` from `optimizeDeps.include`; removed unused React import from `shared/api/client.js` |
+| Note creation 500: `Cast to Embedded failed` | `content` field in Note schema was `mediaSchema` but API handler stored a plain string | Changed `content` to accept Mixed type; API now uploads markdown to R2 as `.md` files, stores mediaSchema in `content`, auto-populates `contentPreview` |
 | Discord Activity asks for auth every time | No token caching between activity sessions | Added `localStorage` caching of Discord access token — skips `authorize()` on subsequent loads |
 | `robo build` hangs in Docker | Robo.js build process never completes | Changed package.json build script to `vite build --config config/vite.mjs` |
 | Stale `.robo/public` copy in Dockerfile | Dockerfile had `cp -r .robo/public dist` from old `robo build` | Removed — no longer needed with `vite build` |
