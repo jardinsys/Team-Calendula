@@ -4,9 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Systemiser Activity</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=Poiret+One&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script>
 window.__debug = [];
 window.__debug.push('script start');
@@ -22,7 +19,7 @@ window.addEventListener('unhandledrejection', function(e) {
 });
 // Catch resource loading errors (JS module, CSS, images)
 window.addEventListener('error', function(e) {
-  if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK' || e.target.tagName === 'IMG')) {
+  if (e.target && e.target.tagName === 'SCRIPT') {
     var src = e.target.src || e.target.href;
     window.__debug.push('RESOURCE LOAD ERROR: ' + src);
     console.error('RESOURCE LOAD ERROR:', src);
