@@ -151,6 +151,22 @@ function getEffectiveProxyStyle(system, guildId) {
     return serverSettings?.proxyStyle || proxyStyle;
 }
 
+/**
+ * Get the effective reply style for a guild
+ * Priority: guild admin force > user per-server override > user global preference
+ * @param {Object} system - The system object
+ * @param {Object} guildDoc - The guild document (nullable)
+ * @param {string} guildId - The guild ID
+ * @returns {string} 'embed' or 'native'
+ */
+function getEffectiveReplyStyle(system, guildDoc, guildId) {
+    const forceStyle = guildDoc?.settings?.forceReplyStyle;
+    if (forceStyle && forceStyle !== 'off') return forceStyle;
+    const serverSettings = system.discord?.server?.find(s => s.id === guildId);
+    if (serverSettings?.replyStyle) return serverSettings.replyStyle;
+    return system.proxy?.replyStyle || 'embed';
+}
+
 // ============================================
 // PROXY MATCHING
 // ============================================
@@ -468,16 +484,28 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
     // Get color for reply embed: entity color > system color > none
     const embedColor = getEmbedColor(entity, system);
 
-    // Handle replies with embed
+    // Handle replies based on reply style setting
     if (originalMessage.reference) {
-        try {
-            const referencedMessage = await channel.messages.fetch(originalMessage.reference.messageId);
-            if (referencedMessage) {
-                const replyEmbed = buildReplyEmbed(referencedMessage, channel.id, guild.id, embedColor);
-                webhookOptions.embeds.push(replyEmbed);
+        const replyStyle = getEffectiveReplyStyle(system, guildSettings, guild.id);
+
+        // 'embed' or 'both' → build the custom reply embed
+        if (replyStyle === 'embed') {
+            try {
+                const referencedMessage = await channel.messages.fetch(originalMessage.reference.messageId);
+                if (referencedMessage) {
+                    const replyEmbed = buildReplyEmbed(referencedMessage, channel.id, guild.id, embedColor);
+                    webhookOptions.embeds.push(replyEmbed);
+                }
+            } catch (e) {
+                // Couldn't fetch referenced message, continue without it
             }
-        } catch (e) {
-            // Couldn't fetch referenced message, continue without it
+        }
+
+        // 'native' → use Discord's native reply via message_reference
+        if (replyStyle === 'native') {
+            webhookOptions.message_reference = {
+                message_id: originalMessage.reference.messageId
+            };
         }
     }
 
@@ -1193,5 +1221,6 @@ module.exports = {
     flushToMongoDB,
     reconcileOnStartup,
     invalidateDisplayCache,
-    shouldMask
+    shouldMask,
+    getEffectiveReplyStyle
 };

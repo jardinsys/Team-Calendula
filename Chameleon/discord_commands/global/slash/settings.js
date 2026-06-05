@@ -169,7 +169,8 @@ async function buildServerOverview(interaction, guildConfig, sessionId) {
             ].join('\n'), inline: true },
             { name: 'Proxy Controls', value: [
                 'Allow Proxy: ' + (guildConfig.settings?.allowProxy !== false ? '✅' : '❌'),
-                'Force Disable Autoproxy: ' + (guildConfig.settings?.forceDisableAutoproxy ? '✅' : '❌')
+                'Force Disable Autoproxy: ' + (guildConfig.settings?.forceDisableAutoproxy ? '✅' : '❌'),
+                'Force Reply Style: `' + (guildConfig.settings?.forceReplyStyle || 'off') + '`'
             ].join('\n'), inline: true },
             { name: 'Display', value: 'Closed Char Allowed: ' + (guildConfig.settings?.closedCharAllowed !== false ? '✅' : '❌'), inline: true }
         );
@@ -211,6 +212,7 @@ async function buildProxyOverview(interaction, system, sessionId) {
         .setDescription('Configure how proxied messages look and behave.')
         .addFields(
             { name: 'Style', value: '`' + (system.proxy?.style || 'off') + '`', inline: true },
+            { name: 'Reply Style', value: '`' + (system.proxy?.replyStyle || 'embed') + '`', inline: true },
             { name: 'Cooldown', value: (system.setting?.proxyCoolDown || 3600) + 's', inline: true },
             { name: 'Case Sensitive', value: system.proxy?.caseSensitive ? '✅ Yes' : '❌ No', inline: true },
             { name: 'Alter Layout', value: getLayoutDisplay(system.proxy?.layout?.alter), inline: false },
@@ -220,21 +222,26 @@ async function buildProxyOverview(interaction, system, sessionId) {
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('settings_proxy_style_' + sessionId).setLabel('Style').setStyle(ButtonStyle.Primary).setEmoji('⚙️'),
-        new ButtonBuilder().setCustomId('settings_proxy_serverstyle_' + sessionId).setLabel('Per-Server').setStyle(ButtonStyle.Secondary).setEmoji('🏠'),
+        new ButtonBuilder().setCustomId('settings_proxy_replystyle_' + sessionId).setLabel('Reply Style').setStyle(system.proxy?.replyStyle === 'native' ? ButtonStyle.Success : ButtonStyle.Secondary).setEmoji(system.proxy?.replyStyle === 'native' ? '💬' : '📜'),
         new ButtonBuilder().setCustomId('settings_proxy_cooldown_' + sessionId).setLabel('Cooldown').setStyle(ButtonStyle.Secondary).setEmoji('⏱️')
     );
 
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('settings_proxy_layout_' + sessionId).setLabel('Layout').setStyle(ButtonStyle.Secondary).setEmoji('📝'),
+        new ButtonBuilder().setCustomId('settings_proxy_serverstyle_' + sessionId).setLabel('Per-Server Style').setStyle(ButtonStyle.Secondary).setEmoji('🏠'),
+        new ButtonBuilder().setCustomId('settings_proxy_serverreplystyle_' + sessionId).setLabel('Per-Server Reply').setStyle(ButtonStyle.Secondary).setEmoji('🏠'),
+        new ButtonBuilder().setCustomId('settings_proxy_layout_' + sessionId).setLabel('Layout').setStyle(ButtonStyle.Secondary).setEmoji('📝')
+    );
+
+    const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('settings_proxy_case_' + sessionId).setLabel('Case').setStyle(system.proxy?.caseSensitive ? ButtonStyle.Success : ButtonStyle.Secondary).setEmoji(system.proxy?.caseSensitive ? '✅' : '🔤'),
         new ButtonBuilder().setCustomId('settings_proxy_break_' + sessionId).setLabel('Break').setStyle(system.proxy?.break ? ButtonStyle.Danger : ButtonStyle.Secondary).setEmoji(system.proxy?.break ? '⛔' : '▶️')
     );
 
-    const row3 = new ActionRowBuilder().addComponents(
+    const row4 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('settings_main_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Danger)
     );
 
-    return await interaction.reply({ embeds: [embed], components: [row1, row2, row3], ephemeral: true });
+    return await interaction.reply({ embeds: [embed], components: [row1, row2, row3, row4], ephemeral: true });
 }
 
 // ============================================
@@ -369,8 +376,14 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('settings_proxy_style_') && !customId.includes('server') && !customId.includes('modal') && !customId.includes('select') && !customId.includes('back')) {
         return await handleProxyStyleSelector(interaction, sessionId);
     }
+    if (customId.startsWith('settings_proxy_replystyle_') && !customId.includes('select') && !customId.includes('back')) {
+        return await handleProxyReplyStyleSelect(interaction, sessionId);
+    }
     if (customId.startsWith('settings_proxy_serverstyle_') && !customId.includes('select') && !customId.includes('modal') && !customId.includes('back')) {
         return await handleProxyServerStyle(interaction, sessionId);
+    }
+    if (customId.startsWith('settings_proxy_serverreplystyle_') && !customId.includes('select') && !customId.includes('modal') && !customId.includes('back')) {
+        return await handleProxyServerReplyStyle(interaction, sessionId);
     }
     if (customId.startsWith('settings_proxy_cooldown_') && !customId.includes('modal')) {
         return await handleProxyCooldownModal(interaction, sessionId);
@@ -450,6 +463,18 @@ async function handleButtonInteraction(interaction) {
         return await buildProxyOverview(interaction, system, sessionId);
     }
 
+    // Proxy reply style back
+    if (customId.startsWith('settings_proxy_replystyle_back_')) {
+        const system = await System.findById(session.systemId);
+        return await buildProxyOverview(interaction, system, sessionId);
+    }
+
+    // Proxy server reply style back
+    if (customId.startsWith('settings_proxy_serverreplystyle_back_')) {
+        const system = await System.findById(session.systemId);
+        return await buildProxyOverview(interaction, system, sessionId);
+    }
+
     // Server sub-section back buttons
     if (customId.startsWith('settings_server_admins_back_') ||
         customId.startsWith('settings_server_channels_back_') ||
@@ -476,6 +501,11 @@ async function handleButtonInteraction(interaction) {
     // Server proxy control toggles
     if (customId.startsWith('settings_server_proxycontrols_toggle_')) {
         return await handleServerProxyControlToggle(interaction, sessionId);
+    }
+
+    // Server proxy control force reply style select
+    if (customId.startsWith('settings_server_proxycontrols_forcereplystyle_')) {
+        return await handleServerForceReplyStyleSelect(interaction, sessionId);
     }
 
     // Server display toggle
@@ -532,9 +562,19 @@ async function handleSelectMenu(interaction) {
         return await handleProxyStyleSelect(interaction, sessionId);
     }
 
+    // Proxy reply style select
+    if (customId.startsWith('settings_proxy_replystyle_select_')) {
+        return await handleProxyReplyStyleSave(interaction, sessionId);
+    }
+
     // Proxy server style select
     if (customId.startsWith('settings_proxy_serverstyle_select_')) {
         return await handleProxyServerStyleSelect(interaction, sessionId);
+    }
+
+    // Proxy server reply style select
+    if (customId.startsWith('settings_proxy_serverreplystyle_select_')) {
+        return await handleProxyServerReplyStyleSelect(interaction, sessionId);
     }
 
     // Server admins select
@@ -605,6 +645,11 @@ async function handleModalSubmit(interaction) {
     // Proxy server style modal
     if (customId.startsWith('settings_proxy_serverstyle_modal_')) {
         return await handleProxyServerStyleSave(interaction, sessionId);
+    }
+
+    // Proxy server reply style modal
+    if (customId.startsWith('settings_proxy_serverreplystyle_modal_')) {
+        return await handleProxyServerReplyStyleSave(interaction, sessionId);
     }
 
     // General pronoun separator modal
@@ -842,7 +887,8 @@ async function handleServerProxyControls(interaction, sessionId) {
         .setDescription('Toggle server-level proxy behavior.')
         .addFields(
             { name: 'Allow Proxy', value: settings.allowProxy !== false ? 'Enabled' : 'Disabled', inline: true },
-            { name: 'Force Disable Autoproxy', value: settings.forceDisableAutoproxy ? 'Enabled' : 'Disabled', inline: true }
+            { name: 'Force Disable Autoproxy', value: settings.forceDisableAutoproxy ? 'Enabled' : 'Disabled', inline: true },
+            { name: 'Force Reply Style', value: '`' + (settings.forceReplyStyle || 'off') + '`', inline: true }
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -850,11 +896,22 @@ async function handleServerProxyControls(interaction, sessionId) {
         new ButtonBuilder().setCustomId('settings_server_proxycontrols_toggle_autoproxy_' + sessionId).setLabel('Force Disable Autoproxy').setStyle(settings.forceDisableAutoproxy ? ButtonStyle.Danger : ButtonStyle.Secondary)
     );
 
+    const row2 = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId('settings_server_proxycontrols_forcereplystyle_' + sessionId)
+            .setPlaceholder('Force Reply Style...')
+            .addOptions(
+                new StringSelectMenuOptionBuilder().setLabel('Off (User Choice)').setValue('off').setDescription('Use each user\'s personal reply style').setDefault(settings.forceReplyStyle === 'off' || !settings.forceReplyStyle),
+                new StringSelectMenuOptionBuilder().setLabel('Force Embed').setValue('embed').setDescription('Force custom reply embeds for everyone').setDefault(settings.forceReplyStyle === 'embed'),
+                new StringSelectMenuOptionBuilder().setLabel('Force Native').setValue('native').setDescription('Force Discord native replies for everyone').setDefault(settings.forceReplyStyle === 'native')
+            )
+    );
+
     const backRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('settings_server_proxycontrols_back_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Danger)
     );
 
-    return await interaction.update({ embeds: [embed], components: [row, backRow] });
+    return await interaction.update({ embeds: [embed], components: [row, row2, backRow] });
 }
 
 async function handleServerDisplay(interaction, sessionId) {
@@ -1039,6 +1096,160 @@ async function handleProxyBreakToggle(interaction, sessionId) {
     await system.save();
 
     return await buildProxyOverview(interaction, system, sessionId);
+}
+
+// ============================================
+// REPLY STYLE HANDLERS
+// ============================================
+
+async function handleProxyReplyStyleSelect(interaction, sessionId) {
+    const system = await System.findById(session.systemId);
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
+
+    const current = system.proxy?.replyStyle || 'embed';
+
+    const embed = new EmbedBuilder()
+        .setColor(SETTINGS_COLOR)
+        .setTitle('Reply Style')
+        .setDescription('Choose how proxied message replies appear.')
+        .addFields(
+            { name: 'Current Style', value: '`' + current + '`', inline: true },
+            { name: 'Embed', value: 'Custom reply embed with author info, preview, and thumbnail', inline: false },
+            { name: 'Native', value: 'Discord\'s built-in reply feature ("Replying to...")', inline: false }
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId('settings_proxy_replystyle_select_' + sessionId)
+            .setPlaceholder('Choose reply style...')
+            .addOptions(
+                new StringSelectMenuOptionBuilder().setLabel('Embed').setValue('embed').setDescription('Custom reply embed').setDefault(current === 'embed'),
+                new StringSelectMenuOptionBuilder().setLabel('Native').setValue('native').setDescription('Discord native reply').setDefault(current === 'native')
+            )
+    );
+
+    const backRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('settings_proxy_replystyle_back_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Danger)
+    );
+
+    return await interaction.update({ embeds: [embed], components: [row, backRow] });
+}
+
+async function handleProxyReplyStyleSave(interaction, sessionId) {
+    const system = await System.findById(session.systemId);
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
+
+    const selected = interaction.values[0];
+    if (!system.proxy) system.proxy = {};
+    system.proxy.replyStyle = selected;
+    await system.save();
+
+    return await buildProxyOverview(interaction, system, sessionId);
+}
+
+async function handleProxyServerReplyStyle(interaction, sessionId) {
+    const system = await System.findById(session.systemId);
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
+
+    const servers = system.discord?.server || [];
+    const customServers = servers.filter(s => s.replyStyle);
+
+    let value = 'Global default: `' + (system.proxy?.replyStyle || 'embed') + '`\n';
+    if (customServers.length > 0) {
+        value += '\n**Per-server overrides:**\n';
+        customServers.forEach(s => { value += '• ' + s.name + ': `' + s.replyStyle + '`\n'; });
+    } else {
+        value += '\n*No per-server overrides*';
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(SETTINGS_COLOR)
+        .setTitle('Per-Server Reply Style')
+        .setDescription('Override the global reply style for specific servers.')
+        .addFields({ name: 'Current Config', value: value.trim(), inline: false });
+
+    const options = servers.slice(0, 24).map(s =>
+        new StringSelectMenuOptionBuilder().setLabel(s.name).setValue(s.id).setDescription('Current: ' + (s.replyStyle || 'default'))
+    );
+
+    if (options.length === 0) {
+        options.push(new StringSelectMenuOptionBuilder().setLabel('No servers configured').setValue('none').setDisabled(true));
+    }
+
+    const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId('settings_proxy_serverreplystyle_select_' + sessionId)
+            .setPlaceholder('Select a server...')
+            .addOptions(options)
+    );
+
+    const backRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('settings_proxy_serverreplystyle_back_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Danger)
+    );
+
+    return await interaction.update({ embeds: [embed], components: [row, backRow] });
+}
+
+async function handleProxyServerReplyStyleSelect(interaction, sessionId) {
+    const session = utils.getSession(sessionId);
+    const system = await System.findById(session.systemId);
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
+
+    const guildId = interaction.values[0];
+    if (guildId === 'none') return await handleProxyServerReplyStyle(interaction, sessionId);
+
+    session.serverReplyStyleGuildId = guildId;
+
+    const serverEntry = system.discord?.server?.find(s => s.id === guildId);
+    if (!serverEntry) return await interaction.reply({ content: 'Server not found.', ephemeral: true });
+
+    const modal = new ModalBuilder()
+        .setCustomId('settings_proxy_serverreplystyle_modal_' + sessionId)
+        .setTitle('Edit Reply Style for ' + serverEntry.name);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('server_replystyle')
+                .setLabel('Reply Style (embed/native/default)')
+                .setStyle(TextInputStyle.Short)
+                .setValue(serverEntry.replyStyle || 'default')
+                .setPlaceholder('embed, native, or default')
+                .setRequired(false)
+                .setMaxLength(10)
+        )
+    );
+
+    return await interaction.showModal(modal);
+}
+
+async function handleProxyServerReplyStyleSave(interaction, sessionId) {
+    const session = utils.getSession(sessionId);
+    const system = await System.findById(session.systemId);
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
+
+    const style = interaction.fields.getTextInputValue('server_replystyle')?.toLowerCase()?.trim() || 'default';
+
+    if (!session.serverReplyStyleGuildId) {
+        return await interaction.reply({ content: 'No server selected. Please select a server first.', ephemeral: true });
+    }
+
+    if (!system.discord) system.discord = {};
+    if (!system.discord.server) system.discord.server = [];
+
+    let serverEntry = system.discord.server.find(s => s.id === session.serverReplyStyleGuildId);
+    if (!serverEntry) {
+        return await interaction.reply({ content: 'Server entry not found.', ephemeral: true });
+    }
+
+    if (style === 'default') {
+        delete serverEntry.replyStyle;
+    } else {
+        serverEntry.replyStyle = style;
+    }
+    await system.save();
+
+    return await handleProxyServerReplyStyle(interaction, sessionId);
 }
 
 // ============================================
@@ -1669,6 +1880,18 @@ async function handleServerProxyControlToggle(interaction, sessionId) {
     if (interaction.customId.includes('toggle_autoproxy')) {
         guildConfig.settings.forceDisableAutoproxy = !guildConfig.settings.forceDisableAutoproxy;
     }
+    await guildConfig.save();
+
+    return await handleServerProxyControls(interaction, sessionId);
+}
+
+async function handleServerForceReplyStyleSelect(interaction, sessionId) {
+    const guildConfig = await Guild.findOne({ discordId: interaction.guild.id });
+    if (!guildConfig) return await interaction.reply({ content: 'Server config not found.', ephemeral: true });
+
+    const selected = interaction.values[0];
+    if (!guildConfig.settings) guildConfig.settings = {};
+    guildConfig.settings.forceReplyStyle = selected;
     await guildConfig.save();
 
     return await handleServerProxyControls(interaction, sessionId);

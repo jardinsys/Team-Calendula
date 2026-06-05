@@ -36,7 +36,9 @@ const guildSchema = new mongoose.Schema({
         allowProxy: { type: Boolean, default: true },
         // Force disable autoproxy for all users in this server
         // Users must use proxy tags, no automatic proxying
-        forceDisableAutoproxy: { type: Boolean, default: false }
+        forceDisableAutoproxy: { type: Boolean, default: false },
+        // Force reply style for all users in this server ('off' = use user preferences)
+        forceReplyStyle: { type: String, default: "off" }
     }
 });
 

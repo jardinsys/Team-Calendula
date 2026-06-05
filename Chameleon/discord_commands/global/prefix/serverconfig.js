@@ -63,6 +63,7 @@ module.exports = {
             'logging': () => handleLog(message, parsed, guild),
             'admin': () => handleAdmin(message, parsed, guild),
             'admins': () => handleAdmin(message, parsed, guild),
+            'replystyle': () => handleReplyStyle(message, parsed, guild),
             'help': () => handleHelp(message)
         };
 
@@ -116,7 +117,8 @@ async function handleShow(message, guild) {
         value: [
             `**Proxying:** ${proxyStatus}`,
             `**Autoproxy:** ${autoproxyStatus}`,
-            `**Special Characters:** ${closedCharStatus}`
+            `**Special Characters:** ${closedCharStatus}`,
+            `**Force Reply Style:** \`${guild.settings?.forceReplyStyle || 'off'}\``
         ].join('\n'),
         inline: false
     });
@@ -219,6 +221,30 @@ async function handleAutoproxy(message, parsed, guild) {
 
     if (allow) return utils.success(message, 'Autoproxy is now **allowed**. Users can use their autoproxy settings.');
     else return utils.success(message, 'Autoproxy is now **force disabled**. Users must use proxy tags to proxy.');
+}
+
+/**
+ * Handle force reply style setting
+ */
+async function handleReplyStyle(message, parsed, guild) {
+    const value = parsed._positional[1]?.toLowerCase();
+
+    if (!value) {
+        const current = guild.settings?.forceReplyStyle || 'off';
+        return utils.info(message, `Force reply style is currently **${current}**.\nUse \`sys!serverconfig replystyle <off|embed|native>\` to change.\n\n• \`off\` — Use each user's personal reply style\n• \`embed\` — Force custom reply embeds for everyone\n• \`native\` — Force Discord native replies for everyone`);
+    }
+
+    if (!['off', 'embed', 'native'].includes(value)) {
+        return utils.error(message, 'Invalid reply style. Use `off`, `embed`, or `native`.');
+    }
+
+    guild.settings = guild.settings || {};
+    guild.settings.forceReplyStyle = value;
+    await guild.save();
+
+    if (value === 'off') return utils.success(message, 'Force reply style set to **off**. Users can choose their own reply style.');
+    if (value === 'embed') return utils.success(message, 'Force reply style set to **embed**. All proxied replies will use custom embeds.');
+    if (value === 'native') return utils.success(message, 'Force reply style set to **native**. All proxied replies will use Discord\'s built-in reply feature.');
 }
 
 /**
@@ -522,7 +548,8 @@ async function handleHelp(message) {
                     '`sys!serverconfig` - Show current settings',
                     '`sys!serverconfig proxy <on|off>` - Enable/disable proxying',
                     '`sys!serverconfig autoproxy <on|off>` - Allow/force-disable autoproxy',
-                    '`sys!serverconfig closedchar <on|off>` - Allow/restrict special characters'
+                    '`sys!serverconfig closedchar <on|off>` - Allow/restrict special characters',
+                    '`sys!serverconfig replystyle <off|embed|native>` - Force reply style'
                 ].join('\n'),
                 inline: false
             },

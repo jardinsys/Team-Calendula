@@ -171,6 +171,10 @@ module.exports = {
             case 'ps':
                 return handleProxyStyle(message, parsed);
             
+            case 'replystyle':
+            case 'rs':
+                return handleReplyStyle(message, parsed);
+            
             case 'casesensitive':
             case 'cs':
                 return handleCaseSensitive(message, parsed);
@@ -990,6 +994,21 @@ async function handleProxyStyle(message, parsed) {
     system.proxy.style = val;
     await system.save();
     return utils.success(message, `Proxy style set to **${val}**`);
+}
+
+async function handleReplyStyle(message, parsed) {
+    const { user, system } = await utils.getOrCreateUserAndSystem(message);
+    if (!await utils.requireSystem(message, system)) return;
+    const val = parsed._positional[1]?.toLowerCase();
+    if (!val || !['embed', 'native'].includes(val)) {
+        const current = system.proxy?.replyStyle || 'embed';
+        return utils.info(message, `Current reply style: **${current}**\nOptions: \`embed\`, \`native\`.\nUsage: \`sys!system replystyle <style>\``);
+    }
+    system.proxy = system.proxy || {};
+    system.proxy.replyStyle = val;
+    await system.save();
+    if (val === 'embed') return utils.success(message, 'Reply style set to **embed**. Proxied replies will use a custom embed.');
+    if (val === 'native') return utils.success(message, 'Reply style set to **native**. Proxied replies will use Discord\'s built-in reply feature.');
 }
 
 async function handleCaseSensitive(message, parsed) {

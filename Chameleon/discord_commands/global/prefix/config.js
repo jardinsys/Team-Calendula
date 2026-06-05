@@ -76,6 +76,7 @@ async function handleShow(message, user, system) {
             name: '🎭 Proxy Settings',
             value: [
                 `**Style:** \`${system.proxy?.style || 'off'}\``,
+                `**Reply Style:** \`${system.proxy?.replyStyle || 'embed'}\``,
                 `**Case Sensitive:** ${system.proxy?.caseSensitive ? '✅ Yes' : '❌ No'}`,
                 `**Cooldown:** ${system.setting?.proxyCoolDown || 3600}s`,
                 `**Break:** ${system.proxy?.break ? '⛔ Enabled' : '▶️ Disabled'}`
@@ -158,6 +159,7 @@ async function handleProxy(message, parsed, user, system) {
     if (!action) {
         return utils.info(message, [
             `**Style:** \`${system.proxy?.style || 'off'}\``,
+            `**Reply Style:** \`${system.proxy?.replyStyle || 'embed'}\``,
             `**Case Sensitive:** ${system.proxy?.caseSensitive ? 'Yes' : 'No'}`,
             `**Cooldown:** ${system.setting?.proxyCoolDown || 3600}s`,
             `**Break:** ${system.proxy?.break ? 'Enabled' : 'Disabled'}`,
@@ -172,11 +174,12 @@ async function handleProxy(message, parsed, user, system) {
         'cooldown': () => handleProxyCooldown(message, parsed, system),
         'break': () => handleProxyBreak(message, parsed, system),
         'layout': () => handleProxyLayout(message, parsed, system),
-        'server': () => handleProxyServer(message, parsed, system)
+        'server': () => handleProxyServer(message, parsed, system),
+        'replystyle': () => handleProxyReplyStyle(message, parsed, system)
     };
 
     if (!handlers[action])
-        return utils.error(message, 'Unknown proxy action. Use `style`, `case`, `cooldown`, `break`, `layout`, or `server`.');
+        return utils.error(message, 'Unknown proxy action. Use `style`, `case`, `cooldown`, `break`, `layout`, `server`, or `replystyle`.');
 
     return handlers[action]();
 }
@@ -317,7 +320,12 @@ async function handleProxyServer(message, parsed, system) {
             .map(s => `**${s.name}:** \`${s.proxyStyle}\``)
             .join('\n') || '*No custom styles set*';
 
-        return utils.info(message, `**Per-Server Proxy Styles:**\n${list}`);
+        const replyList = servers
+            .filter(s => s.replyStyle)
+            .map(s => `**${s.name}:** \`${s.replyStyle}\``)
+            .join('\n') || '*No custom reply styles set*';
+
+        return utils.info(message, `**Per-Server Proxy Styles:**\n${list}\n\n**Per-Server Reply Styles:**\n${replyList}`);
     }
 
     const server = servers.find(s => s.name.toLowerCase() === guildName.toLowerCase() || s.id === guildName);
@@ -326,13 +334,49 @@ async function handleProxyServer(message, parsed, system) {
     }
 
     if (!style) {
-        return utils.info(message, `**${server.name}:** \`${server.proxyStyle || 'off'}\`\nUse \`sys!config proxy server ${server.name} <style>\` to change.`);
+        return utils.info(message, `**${server.name}:**\nProxy Style: \`${server.proxyStyle || 'off'}\`\nReply Style: \`${server.replyStyle || 'default'}\`\n\nUse \`sys!config proxy server ${server.name} <style>\` to change proxy style.\nUse \`sys!config proxy server ${server.name} replystyle <embed|native|default>\` to change reply style.`);
+    }
+
+    if (style === 'replystyle') {
+        const replyValue = parsed._positional[4]?.toLowerCase();
+        if (!replyValue) {
+            return utils.info(message, `Current reply style for **${server.name}:** \`${server.replyStyle || 'default'}\`\nUse \`sys!config proxy server ${server.name} replystyle <embed|native|default>\` to change.`);
+        }
+        if (!['embed', 'native', 'default'].includes(replyValue)) {
+            return utils.error(message, 'Invalid reply style. Use `embed`, `native`, or `default`.');
+        }
+        if (replyValue === 'default') {
+            delete server.replyStyle;
+        } else {
+            server.replyStyle = replyValue;
+        }
+        await system.save();
+        return utils.success(message, `Reply style for **${server.name}** set to \`${replyValue}\`.`);
     }
 
     server.proxyStyle = style;
     await system.save();
 
     return utils.success(message, `Proxy style for **${server.name}** set to \`${style}\`.`);
+}
+
+async function handleProxyReplyStyle(message, parsed, system) {
+    const value = parsed._positional[2]?.toLowerCase();
+
+    if (!value) {
+        return utils.info(message, `Current reply style: \`${system.proxy?.replyStyle || 'embed'}\`\nUse \`sys!config proxy replystyle <embed|native>\` to change.`);
+    }
+
+    if (!['embed', 'native'].includes(value)) {
+        return utils.error(message, 'Invalid reply style. Use `embed` or `native`.');
+    }
+
+    system.proxy = system.proxy || {};
+    system.proxy.replyStyle = value;
+    await system.save();
+
+    if (value === 'embed') return utils.success(message, 'Reply style set to **embed**. Proxied replies will use a custom embed.');
+    if (value === 'native') return utils.success(message, 'Reply style set to **native**. Proxied replies will use Discord\'s built-in reply feature.');
 }
 
 async function handleClosedChar(message, parsed, user) {
@@ -583,11 +627,13 @@ async function handleHelp(message) {
                 name: '🎭 Proxy',
                 value: [
                     '`sys!config proxy style <off|last|front|name>`',
+                    '`sys!config proxy replystyle <embed|native>`',
                     '`sys!config proxy case <on|off>`',
                     '`sys!config proxy cooldown <seconds|off|reset>`',
                     '`sys!config proxy break <on|off>`',
                     '`sys!config proxy layout <alter|state|group> <format>`',
-                    '`sys!config proxy server <guild> <style>`'
+                    '`sys!config proxy server <guild> <style>`',
+                    '`sys!config proxy server <guild> replystyle <embed|native|default>`'
                 ].join('\n'),
                 inline: false
             },

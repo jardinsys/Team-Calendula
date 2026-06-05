@@ -152,6 +152,7 @@ function systemHelp() {
                     '`sys!system proxybreak <true|false>` - Toggle proxy break\n' +
                     '`sys!system proxylayout <type> <layout>` - Set proxy layout\n' +
                     '`sys!system proxystyle <off|last|front|name>` - Set proxy style\n' +
+                    '`sys!system replystyle <embed|native>` - Set reply style\n' +
                     '`sys!system casesensitive <true|false>` - Toggle case sensitivity\n' +
                     '`sys!system frontstatus <status>` - Set front status\n' +
                     '`sys!system battery <0-100>` - Set system battery', inline: false
@@ -396,7 +397,8 @@ function configHelp() {
                     '`sys!config` - Show current settings\n' +
                     '`sys!config proxy <on|off>` - Enable/disable proxying\n' +
                     '`sys!config autoproxy <on|off>` - Allow/force-disable autoproxy\n' +
-                    '`sys!config closedchar <on|off>` - Allow/restrict special characters', inline: false
+                    '`sys!config closedchar <on|off>` - Allow/restrict special characters\n' +
+                    '`sys!config replystyle <off|embed|native>` - Force reply style', inline: false
             },
             {
                 name: 'Channels', value:

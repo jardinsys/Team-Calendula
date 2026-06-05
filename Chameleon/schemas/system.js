@@ -155,7 +155,8 @@ const systemSchema = new mongoose.Schema({
             proxyAvatar: mediaSchema,
             tag: [String],
             pronounSeparator: String,
-            proxyStyle: { type: String, default: "off" }
+            proxyStyle: { type: String, default: "off" },
+            replyStyle: String
         }]
     },
     front: {
@@ -186,7 +187,8 @@ const systemSchema = new mongoose.Schema({
         lastProxyTime: Date,
         break: Boolean,
         style: { type: String, default: "off" },
-        caseSensitive: Boolean
+        caseSensitive: Boolean,
+        replyStyle: { type: String, default: "embed" }
     },
     setting: {
         autoshareNotestoUsers: { type: Boolean, default: false },
