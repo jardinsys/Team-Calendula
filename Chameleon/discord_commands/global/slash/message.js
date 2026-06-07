@@ -303,6 +303,7 @@ async function handleDelete(interaction) {
             entityName: messageRecord.proxy_type,
             content: messageRecord.content,
             channelId: messageRecord.discord_channel_id,
+            fallbackDisplayName: interaction.user?.displayName || interaction.user?.username,
             messageLink: `https://discord.com/channels/${interaction.guildId}/${messageRecord.discord_channel_id}/${messageRecord.discord_webhook_message_id}`
         }, interaction.client);
 
@@ -448,6 +449,7 @@ async function handleReproxy(interaction) {
             newEntityName: utils.getDisplayName(entity),
             channelId: messageRecord.discord_channel_id,
             avatarUrl,
+            fallbackDisplayName: interaction.user?.displayName || interaction.user?.username,
             messageLink: `https://discord.com/channels/${interaction.guildId}/${messageRecord.discord_channel_id}/${messageRecord.discord_webhook_message_id}`
         }, interaction.client);
 
@@ -697,7 +699,7 @@ async function handleModalSubmit(interaction) {
             // Send guild log (if configured)
             const logEntityName = session.entityTarget
                 ? utils.getDisplayName(session.entityTarget.entity)
-                : 'Unknown';
+                : utils.getFallbackName(interaction.user, interaction.user?.displayName);
             const logEntityType = session.entityTarget?.type || 'alter';
             utils.sendGuildLog(interaction.guildId, 'edit', {
                 entityType: logEntityType,
@@ -706,6 +708,7 @@ async function handleModalSubmit(interaction) {
                 newContent,
                 channelId: session.channelId,
                 avatarUrl: editPayload.avatarURL || null,
+                fallbackDisplayName: interaction.user?.displayName || interaction.user?.username,
                 messageLink: `https://discord.com/channels/${interaction.guildId}/${session.channelId}/${session.messageId}`
             }, interaction.client);
 

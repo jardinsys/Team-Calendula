@@ -2,13 +2,13 @@ import React from 'react'
 
 const DEFAULT_COLOR = '#c4b5fd'
 
-function getDisplayName(entity) {
-    return entity?.name?.display || entity?.name?.indexable || entity?.name || 'Unknown'
+function getDisplayName(entity, fallbackName) {
+    return entity?.name?.display || entity?.name?.indexable || entity?.name || fallbackName || 'Unknown'
 }
 
-function EntityCard({ entity, type = 'alter', onClick }) {
+function EntityCard({ entity, type = 'alter', onClick, fallbackName }) {
     const color = entity?.color || DEFAULT_COLOR
-    const name = getDisplayName(entity)
+    const name = getDisplayName(entity, fallbackName)
     const avatar = entity?.avatar?.url || entity?.avatar
     const pronouns = entity?.pronouns?.join?.(', ') || entity?.pronouns
 
@@ -53,7 +53,7 @@ function EntityCard({ entity, type = 'alter', onClick }) {
     )
 }
 
-function EntityCardList({ entities, type = 'alter', onEntityClick, emptyMessage }) {
+function EntityCardList({ entities, type = 'alter', onEntityClick, emptyMessage, fallbackName }) {
     if (!entities?.length) {
         return (
             <div className="empty-state">
@@ -72,6 +72,7 @@ function EntityCardList({ entities, type = 'alter', onEntityClick, emptyMessage 
                     entity={entity}
                     type={type}
                     onClick={onEntityClick}
+                    fallbackName={fallbackName}
                 />
             ))}
         </div>

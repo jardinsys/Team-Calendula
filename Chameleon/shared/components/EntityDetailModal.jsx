@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import api from '../api/client.js'
 
-function getDisplayName(entity) {
-    if (!entity) return 'Unknown'
+function getDisplayName(entity, fallbackName) {
+    if (!entity) return fallbackName || 'Unknown'
     if (typeof entity.name === 'string') return entity.name
-    return entity.name?.display || entity.name?.indexable || 'Unknown'
+    return entity.name?.display || entity.name?.indexable || fallbackName || 'Unknown'
 }
 
-function EntityDetailModal({ entity, type = 'alter', onClose, onUpdated, onDeleted }) {
+function EntityDetailModal({ entity, type = 'alter', onClose, onUpdated, onDeleted, fallbackName }) {
     const [fullEntity, setFullEntity] = useState(entity)
     const [loading, setLoading] = useState(!entity?.description && !entity?.pronouns)
     const [error, setError] = useState(null)
@@ -86,7 +86,7 @@ function EntityDetailModal({ entity, type = 'alter', onClose, onUpdated, onDelet
 
     const e = fullEntity || entity
     const color = e.color || '#c4b5fd'
-    const name = getDisplayName(e)
+    const name = getDisplayName(e, fallbackName)
     const avatar = e.avatar?.url || e.avatar
     const pronouns = e.pronouns?.join?.(', ') || e.pronouns
 

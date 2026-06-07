@@ -82,6 +82,7 @@ export function FriendsPage() {
             <FriendCardList
                 friends={friends}
                 onFriendClick={setSelectedFriend}
+                fallbackName={session?.global_name || session?.username}
             />
 
             <button className="fab" title="Add friend" onClick={() => setShowAddFriend(true)}>+</button>
@@ -92,6 +93,7 @@ export function FriendsPage() {
                     onClose={() => setSelectedFriend(null)}
                     onRemoved={handleFriendRemoved}
                     onBlocked={handleFriendBlocked}
+                    fallbackName={session?.global_name || session?.username}
                 />
             )}
 

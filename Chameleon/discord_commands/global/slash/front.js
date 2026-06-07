@@ -1528,9 +1528,9 @@ async function closeAllActiveShifts(system) {
 async function buildFrontEmbed(system, user, interaction, isOwner, closedCharAllowed = true) {
     let systemName;
     if (!closedCharAllowed && system.name?.closedNameDisplay) systemName = system.name.closedNameDisplay;
-    else systemName = system.name?.display || system.name?.indexable || 'Unknown';
+    else systemName = system.name?.display || system.name?.indexable || utils.getFallbackName(interaction.user, interaction.user?.displayName);
 
-    const userName = user.discord?.name?.display || interaction.user?.displayName || 'Unknown User';
+    const userName = user.discord?.name?.display || interaction.user?.displayName || interaction.user?.username || 'Unknown User';
 
     const embed = new EmbedBuilder()
         .setTitle(`🎭 Currently Fronting for ${systemName}`)
@@ -1567,7 +1567,7 @@ async function buildFrontEmbed(system, user, interaction, isOwner, closedCharAll
                 const shift = await Shift.findById(shiftId);
                 if (!shift || shift.endTime) continue;
 
-                const entityInfo = await getEntityInfo(shift.ID, shift.s_type, system, closedCharAllowed);
+                const entityInfo = await getEntityInfo(shift.ID, shift.s_type, system, closedCharAllowed, interaction.user?.displayName);
                 const currentStatus = shift.statuses?.[shift.statuses.length - 1];
 
                 const emoji = shift.s_type === 'alter' ? '🎭' : (shift.s_type === 'state' ? '🔄' : '👥');
@@ -1625,7 +1625,7 @@ async function buildFrontEmbed(system, user, interaction, isOwner, closedCharAll
 }
 
 // Get entity info for a fronter
-async function getEntityInfo(entityId, type, system, closedCharAllowed = true) {
+async function getEntityInfo(entityId, type, system, closedCharAllowed = true, fallbackName = null) {
     try {
         let entity = null;
         switch (type) {
@@ -1637,7 +1637,7 @@ async function getEntityInfo(entityId, type, system, closedCharAllowed = true) {
 
         let displayName;
         if (!closedCharAllowed && entity.name?.closedNameDisplay) displayName = entity.name.closedNameDisplay;
-        else displayName = entity.name?.display || entity.name?.indexable || 'Unknown';
+        else displayName = entity.name?.display || entity.name?.indexable || fallbackName || 'Unknown';
 
         return {
             name: displayName,

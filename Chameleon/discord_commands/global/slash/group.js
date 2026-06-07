@@ -124,7 +124,7 @@ module.exports = {
 
 // ==== EMBED BUILDERS ====
 
-function buildGroupListEmbed(groups, page, system, showFullList) {
+function buildGroupListEmbed(groups, page, system, showFullList, fallbackName) {
     const pageGroups = utils.getPageItems(groups, page);
     const totalPages = utils.getTotalPages(groups.length);
 
@@ -149,7 +149,7 @@ function buildGroupListEmbed(groups, page, system, showFullList) {
 
         for (const [typeName, typeGroups] of Object.entries(groupsByType)) {
             const groupList = typeGroups.map(g => {
-                const name = g.name?.indexable || 'Unknown';
+                const name = g.name?.indexable || fallbackName || 'Unknown';
                 const proxies = utils.formatProxies(g.proxy);
                 return `**${name}** - ${proxies}`;
             }).join('\n');
@@ -160,7 +160,7 @@ function buildGroupListEmbed(groups, page, system, showFullList) {
     return embed;
 }
 
-async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = true, guildId = null) {
+async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = true, guildId = null, fallbackName = null) {
     const embed = new EmbedBuilder();
 
     const session = { mode: null, syncWithDiscord: group.syncWithApps?.discord, serverId: guildId };
@@ -174,11 +174,11 @@ async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = 
 
     const proxyAvatar = utils.resolveProxyAvatarUrl(group, session);
     embed.setAuthor({
-        name: `${group.name?.indexable || 'Unknown'} (from ${utils.getDisplayName(system, closedCharAllowed)})`,
+        name: `${group.name?.indexable || fallbackName || 'Unknown'} (from ${utils.getDisplayName(system, closedCharAllowed)})`,
         iconURL: proxyAvatar || undefined
     });
 
-    embed.setTitle(displayName || 'Unknown Group');
+    embed.setTitle(displayName || fallbackName || 'Unknown Group');
     if (color) embed.setColor(color);
     if (description) embed.setDescription(description);
 
@@ -335,7 +335,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         systemId: targetSystem._id
     });
 
-    const embed = buildGroupListEmbed(visibleGroups, 0, targetSystem, false);
+    const embed = buildGroupListEmbed(visibleGroups, 0, targetSystem, false, interaction.user?.displayName);
     const buttons = utils.buildListButtons(visibleGroups.length, 0, isOwner, false, sessionId, 'group');
 
     await interaction.reply({ embeds: [embed], components: buttons, ephemeral: true });
@@ -371,7 +371,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         return await interaction.reply({ content: '❌ Group cannot be found.', ephemeral: true });
 
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
-    const embed = await buildGroupCard(group, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId);
+    const embed = await buildGroupCard(group, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, { type: 'show', groupId: group._id, systemId: targetSystem._id, isOwner });
@@ -510,7 +510,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('group_list_')) {
         const groups = session.showFullList ? session.allGroups : session.groups;
         return await interaction.update({
-            embeds: [buildGroupListEmbed(groups, session.page, system, session.showFullList)],
+            embeds: [buildGroupListEmbed(groups, session.page, system, session.showFullList, interaction.user?.displayName)],
             components: utils.buildListButtons(groups.length, session.page, session.isOwner, session.showFullList, sessionId, 'group')
         });
     }
@@ -518,7 +518,7 @@ async function handleButtonInteraction(interaction) {
     // Show full
     if (customId.startsWith('group_show_full_')) {
         const group = await Group.findById(session.groupId);
-        const embed = await buildGroupCard(group, system, null, true, interaction.guildId);
+        const embed = await buildGroupCard(group, system, null, true, interaction.guildId, interaction.user?.displayName);
         if (group.metadata?.addedAt) embed.addFields({ name: '📊 Metadata', value: `**Added:** ${utils.formatDate(group.metadata.addedAt)}`, inline: false });
         return await interaction.update({ embeds: [embed], components: [] });
     }

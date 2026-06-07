@@ -97,7 +97,7 @@ async function handleShow(message, parsed, groupName) {
     if (!system) return utils.error(message, targetUserId === message.author.id ? 'Not registered yet.' : 'Not registered.');
     const result = await utils.findEntity(groupName, system, 'group');
     if (!result) return utils.error(message, `Group **${groupName}** not found.`);
-    const embed = await buildGroupEmbed(result.entity, system);
+    const embed = await buildGroupEmbed(result.entity, system, message.author?.displayName);
     return message.reply({ embeds: [embed] });
 }
 
@@ -712,9 +712,9 @@ async function handleHelp(message) {
     return message.reply({ embeds: [embed] });
 }
 
-async function buildGroupEmbed(group, system) {
+async function buildGroupEmbed(group, system, fallbackName = null) {
     const embed = new EmbedBuilder().setColor(group.color || utils.ENTITY_COLORS.group);
-    const displayName = group.name?.display || group.name?.indexable || '(no name)';
+    const displayName = group.name?.display || group.name?.indexable || fallbackName || '(no name)';
     if (group.name?.indexable) embed.setAuthor({ name: group.name.indexable, iconURL: group.avatar?.url });
     embed.setTitle(displayName);
     if (group.description) embed.setDescription(group.description);

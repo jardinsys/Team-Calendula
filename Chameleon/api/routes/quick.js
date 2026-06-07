@@ -13,7 +13,7 @@ const { Shift } = require('../../schemas/front');
 
 // Helper to get display name
 function getDisplayName(entity) {
-    return entity?.name?.display || entity?.name?.indexable || 'Unknown';
+    return entity?.name?.display || entity?.name?.indexable || entity?.name || 'Unknown';
 }
 
 // ==========================================

@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react'
 import api from '../api/client.js'
 import FrontDisplay from './FrontDisplay.jsx'
 
-function FriendDetailModal({ friend, onClose, onRemoved, onBlocked }) {
+function FriendDetailModal({ friend, onClose, onRemoved, onBlocked, fallbackName }) {
     const [frontData, setFrontData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [actionLoading, setActionLoading] = useState(false)
     const [confirmAction, setConfirmAction] = useState(null) // 'remove' | 'block'
 
-    const displayName = friend.customName || friend.system?.name || 'Unknown'
+    const displayName = friend.customName || friend.system?.name || fallbackName || 'Unknown'
 
     useEffect(() => {
         let cancelled = false

@@ -132,7 +132,7 @@ module.exports = {
 
 // ==== EMBED BUILDERS ====
 
-function buildAlterListEmbed(alters, page, system, showFullList) {
+function buildAlterListEmbed(alters, page, system, showFullList, fallbackName) {
     const pageAlters = utils.getPageItems(alters, page);
     const totalPages = utils.getTotalPages(alters.length);
 
@@ -151,7 +151,7 @@ function buildAlterListEmbed(alters, page, system, showFullList) {
         embed.addFields({ name: 'No alters', value: 'No alters to display on this page.' });
     } else {
         const alterList = pageAlters.map(alter => {
-            const name = alter.name?.indexable || 'Unknown';
+            const name = alter.name?.indexable || fallbackName || 'Unknown';
             const proxies = utils.formatProxies(alter.proxy);
             return `**${name}** - ${proxies}`;
         }).join('\n');
@@ -162,7 +162,7 @@ function buildAlterListEmbed(alters, page, system, showFullList) {
     return embed;
 }
 
-async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = true, guildId = null) {
+async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = true, guildId = null, fallbackName = null) {
     const embed = new EmbedBuilder();
 
     const session = { mode: null, syncWithDiscord: alter.syncWithApps?.discord, serverId: guildId };
@@ -178,11 +178,11 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
     const proxyAvatar = utils.resolveProxyAvatarUrl(alter, session);
     const systemDisplayName = utils.getDisplayName(system, closedCharAllowed);
     embed.setAuthor({
-        name: `${alter.name?.indexable || 'unknown'} (from ${systemDisplayName})`,
+        name: `${alter.name?.indexable || fallbackName || 'unknown'} (from ${systemDisplayName})`,
         iconURL: proxyAvatar || undefined
     });
 
-    embed.setTitle(displayName || '*No Name*');
+    embed.setTitle(displayName || fallbackName || '*No Name*');
     if (color) embed.setColor(color);
     if (description) embed.setDescription(description); 
 
@@ -411,7 +411,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         systemId: targetSystem._id
     });
 
-    const embed = buildAlterListEmbed(visibleAlters, 0, targetSystem, false);
+    const embed = buildAlterListEmbed(visibleAlters, 0, targetSystem, false, interaction.user?.displayName);
     const buttons = utils.buildListButtons(visibleAlters.length, 0, isOwner, false, sessionId, 'alter');
 
     await interaction.reply({ embeds: [embed], components: buttons, ephemeral: true });
@@ -447,7 +447,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     if (!isOwner && !utils.shouldShowEntity(alter, privacyBucket, isOwner)) return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
 
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
-    const embed = await buildAlterCard(alter, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId);
+    const embed = await buildAlterCard(alter, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
@@ -636,7 +636,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('alter_list_')) {
         const alters = session.showFullList ? session.allAlters : session.alters;
         const system = await System.findById(session.systemId);
-        const embed = buildAlterListEmbed(alters, session.page, system, session.showFullList);
+        const embed = buildAlterListEmbed(alters, session.page, system, session.showFullList, interaction.user?.displayName);
         const buttons = utils.buildListButtons(alters.length, session.page, session.isOwner, session.showFullList, sessionId, 'alter');
         return await interaction.update({ embeds: [embed], components: buttons });
     }
@@ -645,7 +645,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('alter_show_full_')) {
         const alter = await Alter.findById(session.alterId);
         const system = await System.findById(session.systemId);
-        const embed = await buildAlterCard(alter, system, null, true, interaction.guildId);
+        const embed = await buildAlterCard(alter, system, null, true, interaction.guildId, interaction.user?.displayName);
 
         let metadataInfo = '';
         if (alter.metadata?.addedAt) metadataInfo += `**Added:** ${utils.formatDate(alter.metadata.addedAt)}\n`;

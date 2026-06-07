@@ -134,7 +134,7 @@ module.exports = {
 // ==== EMBED BUILDERS (State-specific) =====
 
 // Build the state list embed
-function buildStateListEmbed(states, page, system, showFullList) {
+function buildStateListEmbed(states, page, system, showFullList, fallbackName) {
     const pageStates = utils.getPageItems(states, page);
     const totalPages = utils.getTotalPages(states.length);
 
@@ -156,7 +156,7 @@ function buildStateListEmbed(states, page, system, showFullList) {
         });
     } else {
         const stateList = pageStates.map(state => {
-            const name = state.name?.indexable || 'Unknown';
+            const name = state.name?.indexable || fallbackName || 'Unknown';
             const proxies = utils.formatProxies(state.proxy);
             return `**${name}** - ${proxies}`;
         }).join('\n');
@@ -168,7 +168,7 @@ function buildStateListEmbed(states, page, system, showFullList) {
 }
 
 // Build the state card embed
-async function buildStateCard(state, system, privacyBucket, closedCharAllowed = true, guildId = null) {
+async function buildStateCard(state, system, privacyBucket, closedCharAllowed = true, guildId = null, fallbackName = null) {
     const embed = new EmbedBuilder();
 
     const session = { mode: null, syncWithDiscord: state.syncWithApps?.discord, serverId: guildId };
@@ -185,11 +185,11 @@ async function buildStateCard(state, system, privacyBucket, closedCharAllowed = 
     const systemDisplayName = utils.getDisplayName(system, closedCharAllowed);
 
     embed.setAuthor({
-        name: `${state.name?.indexable || 'Unknown'} (from ${systemDisplayName})`,
+        name: `${state.name?.indexable || fallbackName || 'Unknown'} (from ${systemDisplayName})`,
         iconURL: proxyAvatar || undefined
     });
 
-    embed.setTitle(displayName || 'Unknown State');
+    embed.setTitle(displayName || fallbackName || 'Unknown State');
     if (color) embed.setColor(color);
     if (description) embed.setDescription(description);
 
@@ -448,7 +448,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         systemId: targetSystem._id
     });
 
-    const embed = buildStateListEmbed(visibleStates, 0, targetSystem, false);
+    const embed = buildStateListEmbed(visibleStates, 0, targetSystem, false, interaction.user?.displayName);
     const buttons = utils.buildListButtons(visibleStates.length, 0, isOwner, false, sessionId, 'state');
 
     await interaction.reply({ embeds: [embed], components: buttons, ephemeral: false });
@@ -492,7 +492,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
 
     // Build the card
-    const embed = await buildStateCard(state, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId);
+    const embed = await buildStateCard(state, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -739,7 +739,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('state_list_')) {
         const states = session.showFullList ? session.allStates : session.states;
         const system = await System.findById(session.systemId);
-        const embed = buildStateListEmbed(states, session.page, system, session.showFullList);
+        const embed = buildStateListEmbed(states, session.page, system, session.showFullList, interaction.user?.displayName);
         const buttons = utils.buildListButtons(states.length, session.page, session.isOwner, session.showFullList, sessionId, 'state');
         return await interaction.update({ embeds: [embed], components: buttons });
     }
@@ -748,7 +748,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('state_show_full_')) {
         const state = await State.findById(session.stateId);
         const system = await System.findById(session.systemId);
-        const embed = await buildStateCard(state, system, null, true, interaction.guildId);
+        const embed = await buildStateCard(state, system, null, true, interaction.guildId, interaction.user?.displayName);
 
         // Add metadata
         let metadataInfo = '';

@@ -544,6 +544,7 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
             channelId: channel.id,
             avatarUrl,
             displayName,
+            fallbackDisplayName: originalMessage.author?.displayName || originalMessage.author?.username,
             messageLink: `https://discord.com/channels/${guild.id}/${channel.id}/${webhookMessage.id}`
         }, client);
     }

@@ -1,7 +1,7 @@
 import React from 'react'
 
-function FriendCard({ friend, onClick }) {
-    const displayName = friend.customName || friend.system?.name || 'Unknown'
+function FriendCard({ friend, onClick, fallbackName }) {
+    const displayName = friend.customName || friend.system?.name || fallbackName || 'Unknown'
     const systemName = friend.system?.name || 'No system'
     const avatar = friend.currentFront?.[0]?.avatar || friend.system?.avatar
     const fronters = friend.currentFront || []
@@ -57,7 +57,7 @@ function FriendCard({ friend, onClick }) {
     )
 }
 
-function FriendCardList({ friends, onFriendClick, emptyMessage }) {
+function FriendCardList({ friends, onFriendClick, emptyMessage, fallbackName }) {
     if (!friends?.length) {
         return (
             <div className="empty-state">
@@ -75,6 +75,7 @@ function FriendCardList({ friends, onFriendClick, emptyMessage }) {
                     key={friend._id || friend.friendID}
                     friend={friend}
                     onClick={onFriendClick}
+                    fallbackName={fallbackName}
                 />
             ))}
         </div>

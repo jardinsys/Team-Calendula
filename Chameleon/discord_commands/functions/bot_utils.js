@@ -643,6 +643,15 @@ function getDisplayName(entity, closedCharAllowed = true) {
     return entity.name?.display || entity.name?.indexable || '';
 }
 
+/* Get a fallback display name using Discord user info when entity/system name is missing
+ * @param {Object|null} fallbackUser - Discord user object (interaction.user or message.author)
+ * @param {string|null} fallbackDisplayName - Pre-resolved display name (e.g. interaction.user?.displayName)
+ * @returns {string}
+ */
+function getFallbackName(fallbackUser, fallbackDisplayName) {
+    return fallbackDisplayName || fallbackUser?.displayName || fallbackUser?.username || 'Unknown';
+}
+
 /* Get a property from discord element or fall back to base property
  * @param {Object} entity - The entity
  * @param {string} property - Property name to get
@@ -1691,9 +1700,9 @@ function buildLogEmbed(eventType, data) {
     switch (eventType) {
         case 'proxy': {
             const avatarUrl = data.avatarUrl || null;
-            const displayName = data.displayName || 'Unknown';
-            const entityName = data.entity?.name?.display || data.entity?.name?.indexable || 'Unknown';
-            const systemName = data.system?.name || 'Unknown';
+            const displayName = data.displayName || data.fallbackDisplayName || 'Unknown';
+            const entityName = data.entity?.name?.display || data.entity?.name?.indexable || data.fallbackDisplayName || 'Unknown';
+            const systemName = data.system?.name || data.fallbackDisplayName || 'Unknown';
             const content = (data.content || '').substring(0, 1024);
             const color = data.entity?.color || data.system?.color || ENTITY_COLORS.success;
 
@@ -1717,7 +1726,7 @@ function buildLogEmbed(eventType, data) {
 
         case 'edit': {
             const avatarUrl = data.avatarUrl || null;
-            const entityName = data.entityName || 'Unknown';
+            const entityName = data.entityName || data.fallbackDisplayName || 'Unknown';
             const oldContent = (data.oldContent || '').substring(0, 1024);
             const newContent = (data.newContent || '').substring(0, 1024);
             const color = ENTITY_COLORS.group;
@@ -1741,7 +1750,7 @@ function buildLogEmbed(eventType, data) {
 
         case 'delete': {
             const avatarUrl = data.avatarUrl || null;
-            const entityName = data.entityName || 'Unknown';
+            const entityName = data.entityName || data.fallbackDisplayName || 'Unknown';
             const content = (data.content || '').substring(0, 1024);
             const color = ENTITY_COLORS.error;
 
@@ -1763,8 +1772,8 @@ function buildLogEmbed(eventType, data) {
 
         case 'reproxy': {
             const avatarUrl = data.avatarUrl || null;
-            const oldEntityName = data.oldEntityName || 'Unknown';
-            const newEntityName = data.newEntityName || 'Unknown';
+            const oldEntityName = data.oldEntityName || data.fallbackDisplayName || 'Unknown';
+            const newEntityName = data.newEntityName || data.fallbackDisplayName || 'Unknown';
             const color = ENTITY_COLORS.info;
 
             embed
@@ -1835,6 +1844,7 @@ module.exports = {
 
     // Display helpers
     getDisplayName,
+    getFallbackName,
     getDiscordOrDefault,
     checkClosedCharAllowed,
     isValidIndexableName,

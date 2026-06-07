@@ -32,7 +32,7 @@ Team-Calendula/
 │   ├── activity/
 │   │   ├── package.json            # Independent project (not workspace) with "@chameleon/shared": "file:../shared"
 │   │   ├── node_modules/           # Own deps (193 packages) — @robojs/patch breaks with hoisting
-│   │   ├── dist/                   # Built output (index.html, assets/index-*.js 489KB bundle, assets/index-*.css 7KB)
+│   │   ├── dist/                   # Built output (index.html, assets/index-*.js ~524KB bundle, assets/index-*.css ~22KB, assets/fonts/*.woff2)
 │   │   ├── config/vite.mjs         # Reads ../../config.json; resolve.alias for react/react-dom dedup
 │   │   └── src/
 │   │       ├── app/
@@ -40,17 +40,28 @@ Team-Calendula/
 │   │       │   ├── Activity.jsx    # Status gate + page routing (deep-link via ?page= param)
 │   │       │   └── pages/
 │   │       │       ├── LandingPage.jsx   # Hub — System, Friends, Notes, Crisis cards
-│   │       │       ├── SystemPage.jsx    # Placeholder — system management
-│   │       │       ├── FriendsPage.jsx   # Placeholder — friends list
+│   │       │       ├── SystemPage.jsx    # Full page — overview, front, alter/state/group sub-pages with CRUD
+│   │       │       ├── FriendsPage.jsx   # Full page — friend list, front detail, add friend
 │   │       │       ├── NotesPage.jsx     # Notes CRUD via shared API client
 │   │       │       └── CrisisPage.jsx    # Placeholder — crisis tools
 │   │       └── api/token.js        # Uses process.cwd() to find config.json (not createRequire/import.meta.url)
 │   ├── shared/
 │   │   ├── package.json            # ESM workspace package (@chameleon/shared) — "type": "module"
 │   │   └── src/
-│   │       ├── index.js            # Barrel exports: api, ApiClient, NoteCard, NoteCardGrid, NoteModal, CreateNoteModal
-│   │       ├── api/                # API client (notes CRUD + sharing + entity linking)
-│   │       └── components/         # NoteCard, NoteCardGrid, NoteModal, CreateNoteModal (Google Keep-style)
+│   │       ├── index.js            # Barrel exports: api, ApiClient, NoteCard, NoteCardGrid, NoteModal, CreateNoteModal, EntityCard, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, FronterAvatar, FriendCard, FriendCardList, FriendDetailModal, AddFriendModal
+│   │       ├── api/
+│   │       │   └── client.js       # ApiClient — 40+ methods: notes, system, alters, states, groups, front, friends, quick switch
+│   │       └── components/
+│   │           ├── NoteCard.jsx, NoteCardGrid.jsx    # Note cards (Google Keep-style)
+│   │           ├── NoteModal.jsx                     # Note viewer/editor
+│   │           ├── CreateNoteModal.jsx               # Note creation form
+│   │           ├── EntityCard.jsx, EntityCardList.jsx # Alter/State/Group list cards
+│   │           ├── EntityDetailModal.jsx              # Entity detail bottom-sheet (view, edit, delete)
+│   │           ├── EntityFormModal.jsx                # Entity create/edit form
+│   │           ├── FrontDisplay.jsx                   # Front layers + fronters with avatars, status, battery, duration
+│   │           ├── FriendCard.jsx, FriendCardList.jsx # Friend list cards with front preview
+│   │           ├── FriendDetailModal.jsx              # Friend front detail (privacy-gated via API)
+│   │           └── AddFriendModal.jsx                 # Add friend by ID form
 │   ├── schemas/
 │   │   ├── alter.js                # Alter entity schema
 │   │   ├── state.js                # State entity schema
@@ -550,7 +561,9 @@ The activity is a single-page app with page-based routing via `useState` (no Rea
 - **Deep-linking** — `?page=notes`, `?page=system`, `?page=friends`, `?page=crisis` skips landing page
 - **"← Home" button** — back navigation to landing page
 - **Bottom nav** — visible inside pages for quick switching between features
-- Placeholder pages: SystemPage, FriendsPage, CrisisPage
+- **SystemPage** — Full page with sub-page navigation: overview card, compact front, buttons to Front/Alters/States/Groups/Edit sub-pages. Each sub-page has entity list + FAB + detail/form modals
+- **FriendsPage** — Full page: friend list with front preview, friend ID badge (tap to copy), tap friend for detail modal, FAB to add friend
+- **CrisisPage** — Placeholder
 
 ### Current Embedded App Links
 | Feature | Button Label | URL | Status |
@@ -603,8 +616,8 @@ The activity is a single-page app with page-based routing via `useState` (no Rea
 | `activity/src/app/App.jsx` | Root component, wraps DiscordContextProvider |
 | `activity/src/app/Activity.jsx` | Status rendering (INITIALIZING → READY → AUTHENTICATED) + page routing |
 | `activity/src/app/pages/LandingPage.jsx` | Hub — System, Friends, Notes, Crisis feature cards |
-| `activity/src/app/pages/SystemPage.jsx` | Placeholder — system management |
-| `activity/src/app/pages/FriendsPage.jsx` | Placeholder — friends list |
+| `activity/src/app/pages/SystemPage.jsx` | Full page — overview, front, alter/state/group sub-pages with CRUD |
+| `activity/src/app/pages/FriendsPage.jsx` | Full page — friend list, front detail, add friend |
 | `activity/src/app/pages/NotesPage.jsx` | Notes CRUD via shared API client + tag manager |
 | `activity/src/app/pages/CrisisPage.jsx` | Placeholder — crisis tools |
 | `activity/config/vite.mjs` | Vite config — injects `VITE_DISCORD_CLIENT_ID` and `VITE_API_BASE` |
@@ -619,6 +632,49 @@ The activity is a single-page app with page-based routing via `useState` (no Rea
 
 ### CSP Constraint (Important)
 Discord's Content Security Policy only allows `connect-src` to `*.discordsays.com`, `discord.com`, `cdn.discordapp.com`, `media.discordapp.net`. **All API calls from inside the activity iframe MUST go through the discordsays.com proxy.** This is why `VITE_API_BASE` is set to `/api` (relative) and the URL Mapping uses root `/` → `https://systemise.teamcalendula.net`.
+
+### Design System — Cozy Pastel + Dark Glass
+
+The embedded app uses a custom design system with glassmorphism and pastel accents on a dark background.
+
+**CSS Variables** (defined in `activity/src/app/App.css`):
+| Token | Value | Purpose |
+|-------|-------|---------|
+| `--bg` | `#0d0d14` | Page background |
+| `--bg-card` | `rgba(26, 26, 40, 0.55)` | Card/glass background |
+| `--bg-surface` | `rgba(38, 38, 58, 0.5)` | Elevated surface |
+| `--glass-blur` | `blur(16px)` | Backdrop blur amount |
+| `--glass-border` | `rgba(255, 255, 255, 0.07)` | Glass edge border |
+| `--accent` | `#c4b5fd` | Primary accent (pastel lavender) |
+| `--accent-subtle` | `rgba(196, 181, 253, 0.12)` | Accent background tint |
+| `--text` | `#e8e8f0` | Primary text |
+| `--text-secondary` | `#9898a8` | Muted text |
+| `--radius` | `12px` | Base border radius |
+| `--font-title` | `'Poiret One'` | Display titles |
+| `--font-accent` | `'Quicksand'` | Labels, badges, buttons |
+| `--font-body` | `'Nunito'` | Body text, inputs |
+
+**Pastel palette:** `--pastel-lavender`, `--pastel-mint`, `--pastel-peach`, `--pastel-sky`, `--pastel-rose`, `--pastel-lilac`, `--pastel-cream`
+
+**Semantic colors:** `--color-error` (#fca5a5), `--color-success` (#86efac), `--color-warning` (#fdba74)
+
+**Font utility classes:** `.font-title`, `.font-accent`, `.font-body`
+
+### Self-Hosted Fonts (Discord CSP Fix)
+
+Google Fonts cannot load inside Discord's Activity iframe due to CSP restrictions. Fonts are self-hosted from `/assets/fonts/` (same path as JS/CSS bundles, goes through Discord CDN proxy).
+
+**Font files** (`activity/public/assets/fonts/`):
+| Font | Weights | File |
+|------|---------|------|
+| Nunito | 100-900 (variable) | `Nunito-latin.woff2`, `Nunito-latin-ext.woff2` |
+| Quicksand | 100-900 (variable) | `Quicksand-latin.woff2`, `Quicksand-latin-ext.woff2` |
+| Poiret One | 400 | `PoiretOne-latin.woff2`, `PoiretOne-latin-ext.woff2` |
+
+- Fonts served via `app.use('/assets', express.static(...))` in `webapp/server.js`
+- CSS `@font-face` declarations at top of `App.css` with `font-display: swap`
+- Error handler in `index.html` narrowed to only catch `<script>` failures (no longer kills page for font/image load errors)
+- Total font size: ~143KB (latin + latin-ext subsets)
 
 ### API Backend
 - Express router at `Chameleon/api/api.js`
@@ -1378,3 +1434,5 @@ Redis on Fly connects via private network: `REDIS_URL=redis://chameleon-redis.in
 | Discord Activity asks for auth every time | No token caching between activity sessions | Added `localStorage` caching of Discord access token — skips `authorize()` on subsequent loads |
 | `robo build` hangs in Docker | Robo.js build process never completes | Changed package.json build script to `vite build --config config/vite.mjs` |
 | Stale `.robo/public` copy in Dockerfile | Dockerfile had `cp -r .robo/public dist` from old `robo build` | Removed — no longer needed with `vite build` |
+| Google Fonts blocked by Discord CSP | Discord's iframe CSP blocks `fonts.googleapis.com` and `fonts.gstatic.com` | Self-hosted fonts in `activity/public/assets/fonts/`; CSS `@font-face` declarations use `/assets/fonts/` path (same as JS/CSS bundles, passes through CDN proxy) |
+| Error handler kills page on font load failure | `window.addEventListener('error')` caught `<link>` tag failures and replaced entire page | Narrowed handler to only catch `<script>` tag failures |

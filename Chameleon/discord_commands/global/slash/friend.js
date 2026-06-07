@@ -201,7 +201,7 @@ async function handleViewSelectMenu(interaction, user, system) {
 
 async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, privacyBucket, closedCharAllowed, interaction) {
     const systemName = utils.getDisplayName(targetSystem, closedCharAllowed);
-    const targetUserName = targetUser.discord?.name?.display || 'Unknown';
+    const targetUserName = targetUser.discord?.name?.display || utils.getFallbackName(interaction.user, interaction.user?.displayName);
 
     const embed = new EmbedBuilder()
         .setTitle(`🎭 ${systemName}'s Front`)
@@ -944,7 +944,7 @@ async function handleRequestAccept(interaction) {
     user.friendRequests.splice(reqIndex, 1);
     await user.save();
 
-    const friendName = request.fromName || targetUser.discord?.name?.display || 'Unknown';
+    const friendName = request.fromName || targetUser.discord?.name?.display || utils.getFallbackName(interaction.user, interaction.user?.displayName);
     return interaction.update({
         content: `✅ You are now friends with **${friendName}**!`,
         embeds: [],
@@ -968,7 +968,7 @@ async function handleRequestDecline(interaction) {
     }
 
     const request = user.friendRequests[reqIndex];
-    const friendName = request.fromName || 'Unknown';
+    const friendName = request.fromName || utils.getFallbackName(interaction.user, interaction.user?.displayName);
 
     user.friendRequests.splice(reqIndex, 1);
     await user.save();

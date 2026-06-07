@@ -109,7 +109,7 @@ async function handleShow(message, parsed, alterName) {
     }
     const result = await utils.findEntity(alterName, system, 'alter');
     if (!result) return utils.error(message, `Alter **${alterName}** not found.`);
-    const embed = await buildAlterEmbed(result.entity, system, parsed.full);
+    const embed = await buildAlterEmbed(result.entity, system, parsed.full, message.author?.displayName);
     return message.reply({ embeds: [embed] });
 }
 
@@ -652,9 +652,9 @@ async function handleHelp(message) {
     return message.reply({ embeds: [embed] });
 }
 
-async function buildAlterEmbed(alter, system, showFull = false) {
+async function buildAlterEmbed(alter, system, showFull = false, fallbackName = null) {
     const embed = new EmbedBuilder().setColor(alter.color || utils.ENTITY_COLORS.alter);
-    const displayName = alter.name?.display || alter.name?.indexable || '(no name)';
+    const displayName = alter.name?.display || alter.name?.indexable || fallbackName || '(no name)';
     if (alter.name?.indexable) embed.setAuthor({ name: alter.name.indexable, iconURL: alter.avatar?.url });
     embed.setTitle(displayName);
     if (alter.description) embed.setDescription(alter.description);

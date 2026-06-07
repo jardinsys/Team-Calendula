@@ -376,7 +376,7 @@ async function handleView(message, parsed, user) {
 
 async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, privacyBucket, closedCharAllowed, message) {
     const systemName = utils.getDisplayName(targetSystem, closedCharAllowed);
-    const targetUserName = targetUser.discord?.name?.display || '(no name)';
+    const targetUserName = targetUser.discord?.name?.display || message.author?.displayName || '(no name)';
 
     const embed = new EmbedBuilder()
         .setTitle(`🎭 ${systemName}'s Front`)

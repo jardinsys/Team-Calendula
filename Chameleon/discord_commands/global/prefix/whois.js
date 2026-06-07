@@ -94,7 +94,7 @@ module.exports = {
 
         // System info (if available and public)
         if (system) {
-            const systemName = system.name?.display || system.name?.indexable || 'Unknown';
+            const systemName = system.name?.display || system.name?.indexable || message.author?.displayName || 'Unknown';
             embed.addFields({
                 name: `🎡 ${getSystemTerm(system)}`,
                 value: systemName,
@@ -104,7 +104,7 @@ module.exports = {
 
         // Entity info
         if (entity) {
-            const entityName = entity.name?.display || entity.name?.indexable || 'Unknown';
+            const entityName = entity.name?.display || entity.name?.indexable || message.author?.displayName || 'Unknown';
             const synonym = entityType === 'alter' && system
                 ? getAlterTerm(system).charAt(0).toUpperCase() + getAlterTerm(system).slice(1)
                 : entityType.charAt(0).toUpperCase() + entityType.slice(1);

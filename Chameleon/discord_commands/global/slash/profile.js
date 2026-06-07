@@ -74,7 +74,7 @@ module.exports = {
 async function buildProfileCard(user, system, isOwner, privacyBucket, closedCharAllowed, interaction) {
     const embed = new EmbedBuilder();
 
-    const displayName = user.discord?.name?.display || '(unknown)';
+    const displayName = user.discord?.name?.display || utils.getFallbackName(interaction.user, interaction.user?.displayName);
 
     embed.setAuthor({
         name: `${displayName}'s Profile`,
@@ -134,8 +134,8 @@ async function buildProfileCard(user, system, isOwner, privacyBucket, closedChar
     return embed;
 }
 
-function buildEditInterface(user, system, session) {
-    const displayName = user.discord?.name?.display || '(unknown)';
+function buildEditInterface(user, system, session, fallbackName) {
+    const displayName = user.discord?.name?.display || fallbackName || '(unknown)';
 
     const embed = new EmbedBuilder()
         .setTitle(`✏️ Editing: ${displayName}'s Profile`)
@@ -262,7 +262,7 @@ async function handleEdit(interaction, user, system) {
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, { type: 'edit', userId: user._id, systemId: system?._id });
 
-    const { embed, components } = buildEditInterface(user, system, { id: sessionId });
+    const { embed, components } = buildEditInterface(user, system, { id: sessionId }, interaction.user?.displayName);
     await interaction.reply({ embeds: [embed], components, ephemeral: true });
 }
 
@@ -289,7 +289,7 @@ async function handleButtonInteraction(interaction) {
     // Edit button from show view
     if (customId.startsWith('profile_edit_') && !customId.includes('_select_') && !customId.includes('_done_') && !customId.includes('_settings_')) {
         session.type = 'edit';
-        const { embed, components } = buildEditInterface(user, system, session);
+        const { embed, components } = buildEditInterface(user, system, session, interaction.user?.displayName);
         return await interaction.update({ embeds: [embed], components });
     }
 
@@ -309,7 +309,7 @@ async function handleButtonInteraction(interaction) {
     // Settings → Back to Edit
     if (customId.startsWith('profile_settings_back_')) {
         session.type = 'edit';
-        const { embed, components } = buildEditInterface(user, system, session);
+        const { embed, components } = buildEditInterface(user, system, session, interaction.user?.displayName);
         return await interaction.update({ embeds: [embed], components });
     }
 
@@ -555,7 +555,7 @@ async function handleModalSubmit(interaction) {
 
         await user.save();
 
-        const { embed, components } = buildEditInterface(user, system, session);
+        const { embed, components } = buildEditInterface(user, system, session, interaction.user?.displayName);
         return await interaction.update({ embeds: [embed], components });
     }
 
@@ -580,7 +580,7 @@ async function handleModalSubmit(interaction) {
             await system.save();
         }
 
-        const { embed, components } = buildEditInterface(user, system, session);
+        const { embed, components } = buildEditInterface(user, system, session, interaction.user?.displayName);
         return await interaction.update({ embeds: [embed], components });
     }
 
@@ -603,7 +603,7 @@ async function handleModalSubmit(interaction) {
             await system.save();
         }
 
-        const { embed, components } = buildEditInterface(user, system, session);
+        const { embed, components } = buildEditInterface(user, system, session, interaction.user?.displayName);
         return await interaction.update({ embeds: [embed], components });
     }
 

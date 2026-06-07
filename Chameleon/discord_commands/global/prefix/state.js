@@ -91,7 +91,7 @@ async function handleShow(message, parsed, stateName) {
     if (!system) return utils.error(message, targetUserId === message.author.id ? 'Not registered yet.' : 'Not registered.');
     const result = await utils.findEntity(stateName, system, 'state');
     if (!result) return utils.error(message, `State **${stateName}** not found.`);
-    const embed = await buildStateEmbed(result.entity, system);
+    const embed = await buildStateEmbed(result.entity, system, message.author?.displayName);
     return message.reply({ embeds: [embed] });
 }
 
@@ -614,9 +614,9 @@ async function handleHelp(message) {
     return message.reply({ embeds: [embed] });
 }
 
-async function buildStateEmbed(state, system) {
+async function buildStateEmbed(state, system, fallbackName = null) {
     const embed = new EmbedBuilder().setColor(state.color || utils.ENTITY_COLORS.state);
-    const displayName = state.name?.display || state.name?.indexable || '(no name)';
+    const displayName = state.name?.display || state.name?.indexable || fallbackName || '(no name)';
     if (state.name?.indexable) embed.setAuthor({ name: state.name.indexable, iconURL: state.avatar?.url });
     embed.setTitle(displayName);
     if (state.description) embed.setDescription(state.description);

@@ -158,15 +158,15 @@ async function handleWhoisLookup(interaction, messageId, channelId, targetMessag
         ? proxyMessageHandler.shouldMask(entity, system, interaction.guildId)
         : false;
 
-    const entityDisplayName = entity ? utils.getDisplayName(entity) : 'Unknown';
+    const entityDisplayName = entity ? utils.getDisplayName(entity) : utils.getFallbackName(interaction.user, interaction.user?.displayName);
     const entityIndexable = entity?.name?.indexable || '';
-    const systemName = system ? utils.getDisplayName(system) : 'Unknown';
+    const systemName = system ? utils.getDisplayName(system) : utils.getFallbackName(interaction.user, interaction.user?.displayName);
 
     let discordUser;
     try {
         discordUser = await interaction.client.users.fetch(messageRecord.discord_user_id);
     } catch {
-        discordUser = { username: 'Unknown', globalName: null, id: messageRecord.discord_user_id };
+        discordUser = { username: interaction.user?.username || 'Unknown', globalName: null, id: messageRecord.discord_user_id };
     }
 
     const session = {
@@ -291,7 +291,7 @@ async function handleCardButton(interaction) {
     try {
         discordUser = await interaction.client.users.fetch(messageRecord?.discord_user_id);
     } catch {
-        discordUser = { username: 'Unknown', globalName: null, id: messageRecord?.discord_user_id || 'unknown' };
+        discordUser = { username: interaction.user?.username || 'Unknown', globalName: null, id: messageRecord?.discord_user_id || 'unknown' };
     }
 
     const guild = interaction.guild;

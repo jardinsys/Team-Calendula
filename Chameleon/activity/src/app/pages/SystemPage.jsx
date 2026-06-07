@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
 import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay } from '@chameleon/shared'
 
-function getDisplayName(entity) {
-    if (!entity) return 'Unknown'
+function getDisplayName(entity, fallbackName) {
+    if (!entity) return fallbackName || 'Unknown'
     if (typeof entity.name === 'string') return entity.name
-    return entity.name?.display || entity.name?.indexable || 'Unknown'
+    return entity.name?.display || entity.name?.indexable || fallbackName || 'Unknown'
 }
 
 export function SystemPage() {
@@ -93,9 +93,10 @@ export function SystemPage() {
         )
     }
 
-    const systemName = getDisplayName(system)
+    const systemName = getDisplayName(system, session?.global_name || session?.username)
     const avatar = system.avatar?.url
     const counts = system.counts || { alters: alters.length, states: states.length, groups: groups.length }
+    const fallbackName = session?.global_name || session?.username
 
     if (subPage === 'alters') {
         return (
@@ -113,6 +114,7 @@ export function SystemPage() {
                     entities={alters}
                     type="alter"
                     onEntityClick={(e) => handleEntityClick(e, 'alter')}
+                    fallbackName={fallbackName}
                 />
                 <button className="fab" onClick={() => setShowCreateEntity('alter')}>+</button>
                 {selectedEntity && selectedEntityType === 'alter' && (
@@ -122,6 +124,7 @@ export function SystemPage() {
                         onClose={() => setSelectedEntity(null)}
                         onUpdated={handleEditEntity}
                         onDeleted={handleEntityDeleted}
+                        fallbackName={fallbackName}
                     />
                 )}
                 {showCreateEntity === 'alter' && (
@@ -159,6 +162,7 @@ export function SystemPage() {
                     entities={states}
                     type="state"
                     onEntityClick={(e) => handleEntityClick(e, 'state')}
+                    fallbackName={fallbackName}
                 />
                 <button className="fab" onClick={() => setShowCreateEntity('state')}>+</button>
                 {selectedEntity && selectedEntityType === 'state' && (
@@ -168,6 +172,7 @@ export function SystemPage() {
                         onClose={() => setSelectedEntity(null)}
                         onUpdated={handleEditEntity}
                         onDeleted={handleEntityDeleted}
+                        fallbackName={fallbackName}
                     />
                 )}
                 {showCreateEntity === 'state' && (
@@ -205,6 +210,7 @@ export function SystemPage() {
                     entities={groups}
                     type="group"
                     onEntityClick={(e) => handleEntityClick(e, 'group')}
+                    fallbackName={fallbackName}
                 />
                 <button className="fab" onClick={() => setShowCreateEntity('group')}>+</button>
                 {selectedEntity && selectedEntityType === 'group' && (
@@ -214,6 +220,7 @@ export function SystemPage() {
                         onClose={() => setSelectedEntity(null)}
                         onUpdated={handleEditEntity}
                         onDeleted={handleEntityDeleted}
+                        fallbackName={fallbackName}
                     />
                 )}
                 {showCreateEntity === 'group' && (
