@@ -21,6 +21,7 @@ const State = require('../schemas/state');
 const Group = require('../schemas/group');
 const { Shift } = require('../schemas/front');
 const config = require('../config.json');
+const { authenticateToken } = require('./middleware/auth');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -131,6 +132,23 @@ app.get('/api/health', (req, res) => {
         timestamp: new Date(),
         service: 'Systemiser API'
     });
+});
+
+// Activity pending page — reads + clears Redis key set by bot commands
+const redis = require('../redis');
+app.get('/api/activity/pending-page', authenticateToken, async (req, res) => {
+    try {
+        const key = `pendingActivity:${req.user._id}`;
+        const page = await redis.get(key);
+        if (page) {
+            await redis.del(key);
+            return res.json({ page });
+        }
+        res.json({ page: null });
+    } catch (err) {
+        console.error('[Activity] Pending page error:', err);
+        res.json({ page: null });
+    }
 });
 
 // Error handling middleware

@@ -56,21 +56,16 @@ module.exports = {
         switch (section) {
             case 'server':
                 return await handleServerSection(interaction, user, system, sessionId);
-                break;
             case 'proxy':
                 if (!system) return await interaction.reply({ content: 'You need a system to configure proxy settings.', ephemeral: true });
                 return await handleProxySection(interaction, user, system, sessionId);
-                break;
             case 'notifications':
                 return await handleNotificationSection(interaction, user, sessionId);
-                break;
             case 'general':
                 if (!system) return await interaction.reply({ content: 'You need a system to configure general settings.', ephemeral: true });
                 return await handleGeneralSection(interaction, user, system, sessionId);
-                break;
             default:
                 return await handleMainMenu(interaction, user, system, sessionId);
-                break;
         }
     },
 
@@ -92,7 +87,7 @@ async function handleMainMenu(interaction, user, system, sessionId) {
     if (system) {
         embed.addFields(
             { name: 'Current Style', value: '`' + (system.proxy?.style || 'off') + '`', inline: true },
-            { name: 'Cooldown', value: (system.setting?.proxyCoolDown || 3600) + 's', inline: true },
+            { name: 'Cooldown', value: (system.setting?.proxyCoolDown || 3600) + ' seconds', inline: true },
             { name: 'Sync', value: system.syncWithApps?.discord ? 'Enabled' : 'Disabled', inline: true }
         );
     }
@@ -153,7 +148,7 @@ async function handleServerSection(interaction, user, system, sessionId) {
     return await buildServerOverview(interaction, guildConfig, sessionId);
 }
 
-async function buildServerOverview(interaction, guildConfig, sessionId) {
+async function buildServerOverview(interaction, guildConfig, sessionId, isUpdate = false) {
     const embed = new EmbedBuilder()
         .setColor(SETTINGS_COLOR)
         .setTitle('Server Settings — ' + interaction.guild.name)
@@ -165,7 +160,8 @@ async function buildServerOverview(interaction, guildConfig, sessionId) {
             { name: 'Log Events', value: [
                 'Proxy: ' + (guildConfig.channels?.logEvents?.proxy ? '✅' : '❌'),
                 'Edit: ' + (guildConfig.channels?.logEvents?.edit ? '✅' : '❌'),
-                'Delete: ' + (guildConfig.channels?.logEvents?.delete ? '✅' : '❌')
+                'Delete: ' + (guildConfig.channels?.logEvents?.delete ? '✅' : '❌'),
+                'Reproxy: ' + (guildConfig.channels?.logEvents?.reproxy ? '✅' : '❌')
             ].join('\n'), inline: true },
             { name: 'Proxy Controls', value: [
                 'Allow Proxy: ' + (guildConfig.settings?.allowProxy !== false ? '✅' : '❌'),
@@ -187,6 +183,7 @@ async function buildServerOverview(interaction, guildConfig, sessionId) {
         new ButtonBuilder().setCustomId('settings_main_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Danger)
     );
 
+    if (isUpdate) return await interaction.update({ embeds: [embed], components: [row1, row2] });
     return await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
 }
 
@@ -200,7 +197,7 @@ async function handleProxySection(interaction, user, system, sessionId) {
     return await buildProxyOverview(interaction, system, sessionId);
 }
 
-async function buildProxyOverview(interaction, system, sessionId) {
+async function buildProxyOverview(interaction, system, sessionId, isUpdate = false) {
     const getLayoutDisplay = (layout) => {
         if (!layout) return '*Not set*';
         return layout.length > 50 ? layout.substring(0, 47) + '...' : layout;
@@ -241,6 +238,7 @@ async function buildProxyOverview(interaction, system, sessionId) {
         new ButtonBuilder().setCustomId('settings_main_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Danger)
     );
 
+    if (isUpdate) return await interaction.update({ embeds: [embed], components: [row1, row2, row3, row4] });
     return await interaction.reply({ embeds: [embed], components: [row1, row2, row3, row4], ephemeral: true });
 }
 
@@ -275,7 +273,7 @@ async function handleGeneralSection(interaction, user, system, sessionId) {
     return await buildGeneralOverview(interaction, user, system, sessionId);
 }
 
-async function buildGeneralOverview(interaction, user, system, sessionId) {
+async function buildGeneralOverview(interaction, user, system, sessionId, isUpdate = false) {
     const embed = new EmbedBuilder()
         .setColor(SETTINGS_COLOR)
         .setTitle('General Settings')
@@ -313,6 +311,7 @@ async function buildGeneralOverview(interaction, user, system, sessionId) {
         new ButtonBuilder().setCustomId('settings_main_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Danger)
     );
 
+    if (isUpdate) return await interaction.update({ embeds: [embed], components: [row1, row2, row3] });
     return await interaction.reply({ embeds: [embed], components: [row1, row2, row3], ephemeral: true });
 }
 
@@ -448,31 +447,31 @@ async function handleButtonInteraction(interaction) {
     }
     if (customId.startsWith('settings_proxy_layout_back_')) {
         const system = await System.findById(session.systemId);
-        return await buildProxyOverview(interaction, system, sessionId);
+        return await buildProxyOverview(interaction, system, sessionId, true);
     }
 
     // Proxy style back
     if (customId.startsWith('settings_proxy_style_back_')) {
         const system = await System.findById(session.systemId);
-        return await buildProxyOverview(interaction, system, sessionId);
+        return await buildProxyOverview(interaction, system, sessionId, true);
     }
 
     // Proxy server style back
     if (customId.startsWith('settings_proxy_serverstyle_back_')) {
         const system = await System.findById(session.systemId);
-        return await buildProxyOverview(interaction, system, sessionId);
+        return await buildProxyOverview(interaction, system, sessionId, true);
     }
 
     // Proxy reply style back
     if (customId.startsWith('settings_proxy_replystyle_back_')) {
         const system = await System.findById(session.systemId);
-        return await buildProxyOverview(interaction, system, sessionId);
+        return await buildProxyOverview(interaction, system, sessionId, true);
     }
 
     // Proxy server reply style back
     if (customId.startsWith('settings_proxy_serverreplystyle_back_')) {
         const system = await System.findById(session.systemId);
-        return await buildProxyOverview(interaction, system, sessionId);
+        return await buildProxyOverview(interaction, system, sessionId, true);
     }
 
     // Server sub-section back buttons
@@ -482,7 +481,7 @@ async function handleButtonInteraction(interaction) {
         customId.startsWith('settings_server_proxycontrols_back_') ||
         customId.startsWith('settings_server_display_back_')) {
         const guildConfig = await Guild.findOne({ discordId: interaction.guild.id });
-        return await buildServerOverview(interaction, guildConfig, sessionId);
+        return await buildServerOverview(interaction, guildConfig, sessionId, true);
     }
 
     // General sub-section back buttons
@@ -490,7 +489,7 @@ async function handleButtonInteraction(interaction) {
         customId.startsWith('settings_general_friendbucket_back_')) {
         const system = await System.findById(session.systemId);
         const user = await User.findById(session.userId);
-        return await buildGeneralOverview(interaction, user, system, sessionId);
+        return await buildGeneralOverview(interaction, user, system, sessionId, true);
     }
 
     // Server log event toggles
@@ -859,13 +858,15 @@ async function handleServerLogEvents(interaction, sessionId) {
         .addFields(
             { name: 'Proxy', value: logEvents.proxy ? 'Enabled' : 'Disabled', inline: true },
             { name: 'Edit', value: logEvents.edit ? 'Enabled' : 'Disabled', inline: true },
-            { name: 'Delete', value: logEvents.delete ? 'Enabled' : 'Disabled', inline: true }
+            { name: 'Delete', value: logEvents.delete ? 'Enabled' : 'Disabled', inline: true },
+            { name: 'Reproxy', value: logEvents.reproxy ? 'Enabled' : 'Disabled', inline: true }
         );
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('settings_server_logevents_toggle_proxy_' + sessionId).setLabel('Proxy').setStyle(logEvents.proxy ? ButtonStyle.Success : ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('settings_server_logevents_toggle_edit_' + sessionId).setLabel('Edit').setStyle(logEvents.edit ? ButtonStyle.Success : ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('settings_server_logevents_toggle_delete_' + sessionId).setLabel('Delete').setStyle(logEvents.delete ? ButtonStyle.Success : ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('settings_server_logevents_toggle_delete_' + sessionId).setLabel('Delete').setStyle(logEvents.delete ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('settings_server_logevents_toggle_reproxy_' + sessionId).setLabel('Reproxy').setStyle(logEvents.reproxy ? ButtonStyle.Success : ButtonStyle.Secondary)
     );
 
     const backRow = new ActionRowBuilder().addComponents(
@@ -1084,7 +1085,7 @@ async function handleProxyCaseToggle(interaction, sessionId) {
     system.proxy.caseSensitive = !system.proxy.caseSensitive;
     await system.save();
 
-    return await buildProxyOverview(interaction, system, sessionId);
+    return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
 async function handleProxyBreakToggle(interaction, sessionId) {
@@ -1095,7 +1096,7 @@ async function handleProxyBreakToggle(interaction, sessionId) {
     system.proxy.break = !system.proxy.break;
     await system.save();
 
-    return await buildProxyOverview(interaction, system, sessionId);
+    return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
 // ============================================
@@ -1144,7 +1145,7 @@ async function handleProxyReplyStyleSave(interaction, sessionId) {
     system.proxy.replyStyle = selected;
     await system.save();
 
-    return await buildProxyOverview(interaction, system, sessionId);
+    return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
 async function handleProxyServerReplyStyle(interaction, sessionId) {
@@ -1267,8 +1268,7 @@ async function handleNotificationMethodSelect(interaction, sessionId) {
     user.settings.notificationPreferences.friendNotifications = selectedMethod;
     await user.save();
 
-    const methodDisplay = { dm: 'Discord DM', command: 'In Command', none: 'Disabled' };
-    return await interaction.reply({ content: 'Notification delivery method set to: **' + methodDisplay[selectedMethod] + '**', ephemeral: true });
+    return await buildNotificationOverview(interaction, user, sessionId);
 }
 
 async function handleNotificationToggle(interaction, sessionId) {
@@ -1280,12 +1280,12 @@ async function handleNotificationToggle(interaction, sessionId) {
     if (interaction.customId.includes('friendRequests')) field = 'friendRequests';
     if (interaction.customId.includes('friendSwitches')) field = 'friendSwitches';
     if (interaction.customId.includes('appMessages')) field = 'appMessages';
-    if (!field) return;
+    if (!field) return await interaction.reply({ content: 'Unknown notification setting.', ephemeral: true });
 
     if (!user.settings) user.settings = {};
     if (!user.settings.notificationPreferences) user.settings.notificationPreferences = {};
-    user.settings.notificationPreferences[field] = !user.settings.notificationPreferences[field];
-    if (user.settings.notificationPreferences[field] === undefined) user.settings.notificationPreferences[field] = true;
+    const currentEnabled = user.settings.notificationPreferences[field] !== false;
+    user.settings.notificationPreferences[field] = !currentEnabled;
     await user.save();
 
     const prefs = user.settings.notificationPreferences;
@@ -1312,7 +1312,7 @@ async function handleGeneralSyncToggle(interaction, sessionId) {
     await system.save();
 
     const user = await User.findById(session.userId);
-    return await buildGeneralOverview(interaction, user, system, sessionId);
+    return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
 
 async function handleGeneralTagsModal(interaction, sessionId) {
@@ -1450,7 +1450,7 @@ async function handleGeneralAutoshareToggle(interaction, sessionId) {
     await system.save();
 
     const user = await User.findById(session.userId);
-    return await buildGeneralOverview(interaction, user, system, sessionId);
+    return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
 
 async function handleGeneralAllowPingToggle(interaction, sessionId) {
@@ -1463,7 +1463,7 @@ async function handleGeneralAllowPingToggle(interaction, sessionId) {
     await user.save();
 
     const system = await System.findById(session.systemId);
-    return await buildGeneralOverview(interaction, user, system, sessionId);
+    return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
 
 async function handleGeneralFriendBucket(interaction, sessionId) {
@@ -1536,7 +1536,7 @@ async function handleProxyCooldownSave(interaction, sessionId) {
     system.setting.proxyCoolDown = cooldown;
     await system.save();
 
-    return await buildProxyOverview(interaction, system, sessionId);
+    return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
 async function handleProxyStyleSave(interaction, sessionId) {
@@ -1569,7 +1569,7 @@ async function handleProxyStyleSave(interaction, sessionId) {
     system.proxy.break = onBreak?.toLowerCase() === 'yes';
     await system.save();
 
-    return await buildProxyOverview(interaction, system, sessionId);
+    return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
 async function handleProxyLayoutSave(interaction, sessionId, type) {
@@ -1587,7 +1587,7 @@ async function handleProxyLayoutSave(interaction, sessionId, type) {
     system.proxy.layout[type] = layout || '';
     await system.save();
 
-    return await buildProxyOverview(interaction, system, sessionId);
+    return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
 async function handleProxyStyleSelect(interaction, sessionId) {
@@ -1604,7 +1604,7 @@ async function handleProxyStyleSelect(interaction, sessionId) {
     system.proxy.style = selected;
     await system.save();
 
-    return await buildProxyOverview(interaction, system, sessionId);
+    return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
 async function handleProxyStyleModal(interaction, sessionId) {
@@ -1860,10 +1860,11 @@ async function handleServerLogEventToggle(interaction, sessionId) {
     if (interaction.customId.includes('toggle_proxy')) field = 'proxy';
     if (interaction.customId.includes('toggle_edit')) field = 'edit';
     if (interaction.customId.includes('toggle_delete')) field = 'delete';
-    if (!field) return;
+    if (interaction.customId.includes('toggle_reproxy')) field = 'reproxy';
+    if (!field) return await interaction.reply({ content: 'Unknown log event.', ephemeral: true });
 
-    if (!guildConfig.channels) guildConfig.channels = { logEvents: { proxy: true, edit: false, delete: false } };
-    if (!guildConfig.channels.logEvents) guildConfig.channels.logEvents = { proxy: true, edit: false, delete: false };
+    if (!guildConfig.channels) guildConfig.channels = { logEvents: { proxy: true, edit: false, delete: false, reproxy: false } };
+    if (!guildConfig.channels.logEvents) guildConfig.channels.logEvents = { proxy: true, edit: false, delete: false, reproxy: false };
     guildConfig.channels.logEvents[field] = !guildConfig.channels.logEvents[field];
     await guildConfig.save();
 
@@ -1918,7 +1919,7 @@ async function handleGeneralFriendBucketSelect(interaction, sessionId) {
     await system.save();
 
     const user = await User.findById(session.userId);
-    return await buildGeneralOverview(interaction, user, system, sessionId);
+    return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
 
 async function handleGeneralPronounSepSave(interaction, sessionId) {
@@ -1932,7 +1933,7 @@ async function handleGeneralPronounSepSave(interaction, sessionId) {
     await system.save();
 
     const user = await User.findById(session.userId);
-    return await buildGeneralOverview(interaction, user, system, sessionId);
+    return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
 
 async function handleGeneralTerminologySave(interaction, sessionId) {
@@ -1951,7 +1952,7 @@ async function handleGeneralTerminologySave(interaction, sessionId) {
     await system.save();
 
     const user = await User.findById(session.userId);
-    return await buildGeneralOverview(interaction, user, system, sessionId);
+    return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
 
 async function handleGeneralTimezoneSave(interaction, sessionId) {
@@ -1964,7 +1965,7 @@ async function handleGeneralTimezoneSave(interaction, sessionId) {
     await system.save();
 
     const user = await User.findById(session.userId);
-    return await buildGeneralOverview(interaction, user, system, sessionId);
+    return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
 
 async function handleGeneralTagsSave(interaction, sessionId) {
@@ -1981,5 +1982,5 @@ async function handleGeneralTagsSave(interaction, sessionId) {
     await system.save();
 
     const user = await User.findById(session.userId);
-    return await buildGeneralOverview(interaction, user, system, sessionId);
+    return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }

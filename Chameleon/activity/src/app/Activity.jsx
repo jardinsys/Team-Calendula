@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useDiscordSdk } from '../hooks/useDiscordSdk'
 import { useApiAuth } from '../hooks/useApiAuth'
+import { api } from '@chameleon/shared'
 import { LandingPage } from './pages/LandingPage'
 import { SystemPage } from './pages/SystemPage'
 import { FriendsPage } from './pages/FriendsPage'
@@ -25,6 +26,21 @@ export function Activity() {
   const { status, error } = useDiscordSdk()
   const { authStatus, authError } = useApiAuth()
   const [activePage, setActivePage] = useState(getInitialPage)
+
+  useEffect(() => {
+    if (authStatus !== 'READY') return
+    let cancelled = false
+
+    api.getPendingActivityPage()
+      .then(({ page }) => {
+        if (!cancelled && page && PAGES[page]) {
+          setActivePage(page)
+        }
+      })
+      .catch(() => {})
+
+    return () => { cancelled = true }
+  }, [authStatus])
 
   if (status === 'INITIALIZING') {
     return (

@@ -288,20 +288,6 @@ async function getUser(context) {
     return user;
 }
 
-async function getSystem(context) {
-    // Handle both interaction and message contexts
-    const discordId = context.user?.id || context.author?.id;
-
-    let user = await User.findOne({ discordID: discordId });
-    let system = null;
-
-    if (!user) return null;
-
-    if (user.systemID) system = await System.findById(user.systemID);
-    
-    return { user, system, isNew };
-}
-
 // Get or create user for an interaction or message
 async function getOrCreateUser(context) {
     // Handle both interaction and message contexts
@@ -666,7 +652,7 @@ function getDiscordOrDefault(entity, property) {
 // Check if closedCharAllowed for a guild
 async function checkClosedCharAllowed(guild) {
     if (!guild) return true;
-    const guildSettings = await Guild.findOne({ id: guild.id });
+    const guildSettings = await Guild.findOne({ discordId: guild.id });
     return guildSettings?.settings?.closedCharAllowed !== false;
 }
 
@@ -1671,8 +1657,7 @@ function getEntityEmbedColor(entity, system) {
 
 async function sendGuildLog(guildId, eventType, logData, client) {
     try {
-        let guildDoc = await Guild.findOne({ id: guildId });
-        if (!guildDoc) guildDoc = await Guild.findOne({ discordId: guildId });
+        let guildDoc = await Guild.findOne({ discordId: guildId });
         if (!guildDoc) return;
 
         const logChannelId = guildDoc.channels?.logChannel;

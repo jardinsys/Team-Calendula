@@ -351,6 +351,14 @@ class ApiClient {
     async getBlocked() {
         return this.request('/friends/blocked')
     }
+
+    // ═══════════════════════════════════════════
+    // ACTIVITY
+    // ═══════════════════════════════════════════
+
+    async getPendingActivityPage() {
+        return this.request('/activity/pending-page')
+    }
 }
 
 const api = new ApiClient()

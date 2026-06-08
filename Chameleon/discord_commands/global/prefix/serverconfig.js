@@ -38,10 +38,10 @@ module.exports = {
         const subcommand = parsed._positional[0]?.toLowerCase();
 
         // Get or create guild settings
-        let guild = await Guild.findOne({ id: message.guild.id });
+        let guild = await Guild.findOne({ discordId: message.guild.id });
         if (!guild) {
             guild = new Guild({
-                id: message.guild.id,
+                discordId: message.guild.id,
                 userIDs: [],
                 admins: { roleIDs: [], memberIDs: [] },
                 channels: { blacklist: [], whitelist: [], logEvents: {} },
@@ -85,7 +85,7 @@ async function checkAdminPermission(message) {
     if (message.member.permissions.has(PermissionFlagsBits.ManageGuild)) return true;
     
     // Check Systemiser admin roles/members
-    const guild = await Guild.findOne({ id: message.guild.id });
+    const guild = await Guild.findOne({ discordId: message.guild.id });
     if (guild) {
         // Check if user is in admin members
         if (guild.admins?.memberIDs?.includes(message.author.id)) return true;
@@ -155,6 +155,7 @@ async function handleShow(message, guild) {
         if (logEvents.proxy !== false) events.push('proxy');
         if (logEvents.edit) events.push('edit');
         if (logEvents.delete) events.push('delete');
+        if (logEvents.reproxy) events.push('reproxy');
         logInfo += `**Events:** ${events.length ? events.join(', ') : 'none'}`;
     }
 
@@ -399,6 +400,7 @@ async function handleLog(message, parsed, guild) {
         if (events.proxy !== false) enabledEvents.push('proxy');
         if (events.edit) enabledEvents.push('edit');
         if (events.delete) enabledEvents.push('delete');
+        if (events.reproxy) enabledEvents.push('reproxy');
         
         return utils.info(message, `Logging to <#${logChannel}>\n**Events:** ${enabledEvents.join(', ') || 'none'}`);
     }
@@ -415,8 +417,8 @@ async function handleLog(message, parsed, guild) {
         const eventName = parsed._positional[2]?.toLowerCase();
         const eventValue = parsed._positional[3]?.toLowerCase();
         
-        if (!eventName || !['proxy', 'edit', 'delete'].includes(eventName)) 
-            return utils.error(message, 'Valid events: `proxy`, `edit`, `delete`\nUsage: `sys!serverconfig log events <event> <on|off>`');
+        if (!eventName || !['proxy', 'edit', 'delete', 'reproxy'].includes(eventName)) 
+            return utils.error(message, 'Valid events: `proxy`, `edit`, `delete`, `reproxy`\nUsage: `sys!serverconfig log events <event> <on|off>`');
         
         if (!eventValue || !['on', 'off'].includes(eventValue)) {
             const current = guild.channels.logEvents?.[eventName] ? 'on' : 'off';
@@ -443,7 +445,7 @@ async function handleLog(message, parsed, guild) {
 
     guild.channels.logChannel = channelId;
     // Set default log events if not set
-    guild.channels.logEvents = guild.channels.logEvents || { proxy: true, edit: false, delete: false };
+    guild.channels.logEvents = guild.channels.logEvents || { proxy: true, edit: false, delete: false, reproxy: false };
     await guild.save();
 
     return utils.success(message, `Proxy events will now be logged to <#${channelId}>.`);
@@ -569,7 +571,7 @@ async function handleHelp(message) {
                 value: [
                     '`sys!serverconfig log #channel` - Set log channel',
                     '`sys!serverconfig log off` - Disable logging',
-                    '`sys!serverconfig log events <proxy|edit|delete> <on|off>`'
+                    '`sys!serverconfig log events <proxy|edit|delete|reproxy> <on|off>`'
                 ].join('\n'),
                 inline: false
             },

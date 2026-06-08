@@ -78,7 +78,7 @@ async function handleShow(message, user, system) {
                 `**Style:** \`${system.proxy?.style || 'off'}\``,
                 `**Reply Style:** \`${system.proxy?.replyStyle || 'embed'}\``,
                 `**Case Sensitive:** ${system.proxy?.caseSensitive ? '✅ Yes' : '❌ No'}`,
-                `**Cooldown:** ${system.setting?.proxyCoolDown || 3600}s`,
+                `**Cooldown:** ${system.setting?.proxyCoolDown || 3600} seconds`,
                 `**Break:** ${system.proxy?.break ? '⛔ Enabled' : '▶️ Disabled'}`
             ].join('\n'),
             inline: false

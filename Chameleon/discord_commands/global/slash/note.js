@@ -2,7 +2,7 @@
 // Quick note creation with embedded app launch
 
 // (/note [quick:boolean])
-//   quick:false (default) → Hub embed with "Launch Notes App" + "Quick Note" buttons
+//   quick:false (default) → Launches Discord Activity on notes page
 //   quick:true → Opens quick note modal directly
 
 const {
@@ -14,11 +14,10 @@ const {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
-    StringSelectMenuBuilder,
-    StringSelectMenuOptionBuilder
+    REST,
+    Routes
 } = require('discord.js');
 
-const mongoose = require('mongoose');
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 const Note = require('../../../schemas/note');
@@ -27,6 +26,7 @@ const User = require('../../../schemas/user');
 const { Shift } = require('../../../schemas/front');
 const config = require('../../../config.json');
 const utils = require('../../functions/bot_utils');
+const redis = require('../../../redis');
 
 // Initialize R2 Client
 const sysR2 = new S3Client({
@@ -71,7 +71,7 @@ module.exports = {
 
         switch (quick) {
             case true: return await handleQuick(interaction, user, system); break;
-            case false: return await handleHub(interaction, user, system); break;
+            case false: return await handleLaunch(interaction, user, system); break;
         }
     },
 
@@ -217,28 +217,13 @@ async function autoShareToSystemUsers(note, system, ownerUserId) {
 // COMMAND HANDLERS
 // ============================================
 
-async function handleHub(interaction, user, system) {
-    const embed = new EmbedBuilder()
-        .setColor(NOTE_COLORS.default)
-        .setTitle('📝 Notes')
-        .setDescription('Launch the Notes app to create, edit, and organize your notes with full features.\n\nOr use **Quick Note** for fast, one-shot notes.');
+async function handleLaunch(interaction, user, system) {
+    await redis.set(`pendingActivity:${user._id}`, 'notes', 'EX', 60);
 
-    const components = [
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setLabel('Launch Notes App')
-                .setStyle(ButtonStyle.Link)
-                .setURL(`${WEBAPP_URL}/app/notes`)
-                .setEmoji('🌐'),
-            new ButtonBuilder()
-                .setCustomId(`note_quick_${user._id}`)
-                .setLabel('Quick Note')
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji('✏️')
-        )
-    ];
-
-    await interaction.reply({ embeds: [embed], components });
+    const rest = new REST({ version: '10' }).setToken(interaction.client.token);
+    await rest.post(Routes.interactionCallback(interaction.id, interaction.token), {
+        body: { type: 12 }
+    });
 }
 
 async function handleQuick(interaction, user, system) {
