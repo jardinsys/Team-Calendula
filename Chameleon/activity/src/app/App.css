@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════
-   Self-hosted Fonts (Nunito, Quicksand, Poiret One)
+   Self-hosted Fonts (Nunito, Quicksand, Poiret One, Rudiment)
    ═══════════════════════════════════════════ */
 
 /* Nunito — variable weight via single file per subset */
@@ -56,6 +56,16 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* Rudiment — weight 400 ("Your Notes" heading) */
+@font-face {
+  font-family: 'Rudiment';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/assets/fonts/Rudiment-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   /* ── Accent ── */
   --accent: #c4b5fd;
@@ -79,7 +89,7 @@
   --glass-shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.35);
 
   /* ── Text ── */
-  --text: #e8e8f0;
+  --text: #ffffff;
   --text-secondary: #9898a8;
   --text-muted: #6b6b80;
 
@@ -91,6 +101,7 @@
   --radius-lg: 16px;
   --radius-xl: 20px;
   --radius-pill: 999px;
+  --radius-card: 60px;
 
   /* ── Spacing ── */
   --space-xs: 4px;
@@ -108,6 +119,7 @@
   --font-title: 'Poiret One', cursive;
   --font-accent: 'Quicksand', sans-serif;
   --font-body: 'Nunito', sans-serif;
+  --font-notes: 'Rudiment', 'Nunito', sans-serif;
 
   /* ── Semantic ── */
   --color-error: #fca5a5;
@@ -122,6 +134,16 @@
   --pastel-rose: #fda4af;
   --pastel-lilac: #d8b4fe;
   --pastel-cream: #fef3c7;
+
+  /* ── Penpot Design System ── */
+  --bg-gradient: linear-gradient(to bottom, rgba(24,40,89,1) 56%, rgba(1,21,58,1) 100%);
+  --btn-gradient: linear-gradient(to bottom, rgba(211,189,242,1) 0%, rgba(89,108,217,1) 100%);
+  --btn-gradient-border: linear-gradient(to bottom, rgba(211,189,242,1) 25%, rgba(89,108,217,1) 100%);
+  --btn-crisis-gradient: linear-gradient(to bottom, rgba(242,191,94,1) 25%, rgba(242,164,68,1) 100%);
+  --btn-success-gradient: linear-gradient(to bottom, rgba(147,191,163,1) 25%, rgba(89,186,217,1) 100%);
+  --btn-error-gradient: linear-gradient(to bottom, rgba(217,123,115,1) 25%, rgba(242,75,75,1) 100%);
+  --btn-warning-gradient: linear-gradient(to bottom, rgba(242,191,94,1) 25%, rgba(242,164,68,1) 100%);
+  --avatar-border-gradient: linear-gradient(to bottom, rgba(211,189,242,1) 0%, rgba(89,108,217,1) 100%);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -129,7 +151,8 @@ html, body, #root { height: 100%; }
 
 body {
   font-family: var(--font-body);
-  background-color: var(--bg);
+  background: var(--bg-gradient);
+  background-attachment: fixed;
   color: var(--text);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -782,4 +805,533 @@ select.text-input {
 @media (max-width: 480px) {
   .notes-grid { grid-template-columns: 1fr; }
   .modal-content { padding: var(--space-md); }
+}
+
+/* ═══════════════════════════════════════════
+   Penpot Design System — Gradient Buttons
+   ═══════════════════════════════════════════ */
+
+/* Gradient Button Base — pill-shaped, Quicksand font */
+.btn-gradient {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  height: 89px;
+  padding: 0 48px;
+  border-radius: 30px;
+  font-family: var(--font-accent);
+  font-size: 48px;
+  font-weight: 700;
+  color: #ffffff;
+  cursor: pointer;
+  border: none;
+  transition: transform var(--transition-smooth), box-shadow var(--transition-smooth), filter var(--transition-fast);
+  position: relative;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn-gradient:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+.btn-gradient:active:not(:disabled) {
+  transform: translateY(0);
+}
+.btn-gradient:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary Button — gradient fill, no border */
+.btn-gradient-primary {
+  background: var(--btn-gradient);
+  color: #ffffff;
+}
+
+/* Secondary Button — gradient fill + gradient border */
+.btn-gradient-secondary {
+  background: var(--btn-gradient);
+  color: #ffffff;
+}
+.btn-gradient-secondary::before {
+  content: '';
+  position: absolute;
+  inset: -7.5px;
+  border-radius: calc(30px + 7.5px);
+  background: var(--btn-gradient-border);
+  z-index: -1;
+}
+.btn-gradient-secondary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 30px;
+  background: var(--btn-gradient);
+  z-index: -1;
+}
+
+/* Success Button */
+.btn-gradient-success {
+  background: var(--btn-success-gradient);
+  color: #ffffff;
+}
+
+/* Warning Button */
+.btn-gradient-warning {
+  background: var(--btn-warning-gradient);
+  color: #ffffff;
+}
+
+/* Error Button */
+.btn-gradient-error {
+  background: var(--btn-error-gradient);
+  color: #ffffff;
+}
+
+/* Crisis Button — larger, yellow gradient */
+.btn-gradient-crisis {
+  background: var(--btn-crisis-gradient);
+  color: #ffffff;
+  width: 175px;
+  height: 175px;
+  border-radius: 50%;
+  font-size: 24px;
+  padding: 0;
+}
+
+/* ═══════════════════════════════════════════
+   Gradient Border — SVG-based for responsiveness
+   ═══════════════════════════════════════════ */
+
+/* Gradient border container — uses background-clip technique */
+.gradient-border-wrap {
+  position: relative;
+  border-radius: var(--radius-card);
+  padding: 12.5px;
+  background: var(--avatar-border-gradient);
+}
+.gradient-border-wrap-inner {
+  border-radius: calc(var(--radius-card) - 12.5px);
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+/* Small circle gradient border (40px buttons) */
+.gradient-border-sm {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  padding: 5px;
+  background: var(--avatar-border-gradient);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.gradient-border-sm-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--btn-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+/* ═══════════════════════════════════════════
+   Landing Page — Returning User
+   ═══════════════════════════════════════════ */
+.landing-returning {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: var(--space-xl);
+  gap: var(--space-lg);
+  overflow: hidden;
+}
+.landing-returning-title {
+  font-family: var(--font-accent);
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-weight: 400;
+  color: #ffffff;
+  text-align: center;
+  margin-bottom: var(--space-sm);
+}
+.landing-returning-title strong {
+  font-weight: 700;
+}
+.landing-returning-subtitle {
+  font-family: var(--font-body);
+  font-size: clamp(0.9rem, 2.5vw, 1.2rem);
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: var(--space-md);
+}
+.landing-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-xl);
+  max-width: 680px;
+  width: 100%;
+  justify-items: center;
+}
+.landing-feature-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xl);
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+.landing-feature-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #ffffff;
+  transition: transform var(--transition-smooth);
+  padding: var(--space-sm);
+  border-radius: var(--radius-lg);
+}
+.landing-feature-btn:hover {
+  transform: translateY(-4px);
+}
+.landing-feature-btn:active {
+  transform: translateY(0);
+}
+.landing-feature-circle {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  padding: 12.5px;
+  background: var(--btn-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.landing-feature-circle--sm {
+  width: 120px;
+  height: 120px;
+  padding: 10px;
+}
+.landing-feature-circle--crisis {
+  width: 140px;
+  height: 140px;
+  padding: 10px;
+  background: var(--btn-crisis-gradient);
+}
+.landing-feature-circle::before {
+  content: '';
+  position: absolute;
+  inset: -12.5px;
+  border-radius: 50%;
+  background: var(--btn-gradient-border);
+  z-index: -1;
+}
+.landing-feature-circle--crisis::before {
+  background: var(--btn-crisis-gradient);
+}
+.landing-feature-circle-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--btn-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.landing-feature-circle-inner--crisis {
+  background: var(--btn-crisis-gradient);
+}
+.landing-feature-icon {
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.landing-feature-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.landing-feature-label {
+  font-family: var(--font-accent);
+  font-size: clamp(0.75rem, 1.5vw, 0.9rem);
+  font-weight: 600;
+  color: #ffffff;
+}
+.landing-settings-btn {
+  position: fixed;
+  top: var(--space-lg);
+  right: var(--space-lg);
+  z-index: 10;
+}
+
+/* ═══════════════════════════════════════════
+   Landing Page — New User
+   ═══════════════════════════════════════════ */
+.landing-newuser {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: var(--space-xl);
+  gap: var(--space-lg);
+  text-align: center;
+  overflow: hidden;
+}
+.landing-newuser-greeting {
+  font-family: var(--font-accent);
+  font-size: clamp(2rem, 6vw, 100px);
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.1;
+}
+.landing-newuser-greeting .username {
+  display: block;
+  font-weight: 700;
+}
+.landing-newuser-welcome {
+  font-family: var(--font-accent);
+  font-size: clamp(1.5rem, 4vw, 100px);
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.1;
+  margin-top: var(--space-md);
+}
+.landing-avatar-wrap {
+  position: relative;
+  width: 351px;
+  height: 351px;
+  border-radius: 50%;
+  padding: 13px;
+  background: var(--avatar-border-gradient);
+  margin: var(--space-lg) 0;
+}
+.landing-avatar-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #000000;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.landing-avatar-inner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.landing-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(89, 108, 217, 0.3);
+  color: #ffffff;
+  font-family: var(--font-accent);
+  font-weight: 700;
+  font-size: 5rem;
+}
+.landing-newuser-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg);
+  margin-top: var(--space-xl);
+  width: 100%;
+  max-width: 522px;
+}
+
+/* ═══════════════════════════════════════════
+   What Is Page
+   ═══════════════════════════════════════════ */
+.what-is-page {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-md);
+}
+.what-is-page h1 {
+  font-family: var(--font-accent);
+  font-size: clamp(1.8rem, 5vw, 2.5rem);
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+  margin-bottom: var(--space-xl);
+}
+.what-is-page p {
+  font-family: var(--font-body);
+  font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: var(--space-md);
+}
+.what-is-page .highlight {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════
+   Settings Page
+   ═══════════════════════════════════════════ */
+.settings-page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-md);
+}
+.settings-page h1 {
+  font-family: var(--font-accent);
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: var(--space-xl);
+}
+.settings-section {
+  margin-bottom: var(--space-xl);
+}
+.settings-section-title {
+  font-family: var(--font-accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-md);
+}
+
+/* ═══════════════════════════════════════════
+   Activities Page (Coming Soon)
+   ═══════════════════════════════════════════ */
+.activities-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  padding: var(--space-xl);
+}
+.activities-page h1 {
+  font-family: var(--font-accent);
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: var(--space-md);
+}
+.activities-page p {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+.coming-soon-badge {
+  display: inline-block;
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-pill);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-family: var(--font-accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: var(--space-lg);
+}
+
+/* ═══════════════════════════════════════════
+   Register Page
+   ═══════════════════════════════════════════ */
+.register-page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-md);
+  text-align: center;
+}
+.register-page h1 {
+  font-family: var(--font-accent);
+  font-size: clamp(1.8rem, 5vw, 2.5rem);
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: var(--space-md);
+}
+.register-page p {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xl);
+}
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  text-align: left;
+}
+
+/* ═══════════════════════════════════════════
+   Responsive — Penpot Design System
+   ═══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .landing-feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-lg);
+  }
+  .landing-feature-circle {
+    width: 140px;
+    height: 140px;
+  }
+  .landing-feature-icon {
+    width: 70px;
+    height: 70px;
+  }
+  .landing-avatar-wrap {
+    width: 250px;
+    height: 250px;
+  }
+  .btn-gradient {
+    height: 70px;
+    padding: 0 36px;
+    font-size: 36px;
+  }
+  .btn-gradient-crisis {
+    width: 140px;
+    height: 140px;
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .landing-feature-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-md);
+  }
+  .landing-feature-circle {
+    width: 120px;
+    height: 120px;
+  }
+  .landing-feature-icon {
+    width: 60px;
+    height: 60px;
+  }
+  .landing-avatar-wrap {
+    width: 200px;
+    height: 200px;
+  }
+  .btn-gradient {
+    height: 60px;
+    padding: 0 32px;
+    font-size: 28px;
+    width: 100%;
+  }
+  .landing-newuser-actions {
+    max-width: 100%;
+  }
 }

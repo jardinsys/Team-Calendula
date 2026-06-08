@@ -6,7 +6,7 @@ function getDisplayName(entity, fallbackName) {
     return entity?.name?.display || entity?.name?.indexable || entity?.name || fallbackName || 'Unknown'
 }
 
-function EntityCard({ entity, type = 'alter', onClick, fallbackName }) {
+function EntityCard({ entity, type = 'alter', typeLabel, onClick, fallbackName }) {
     const color = entity?.color || DEFAULT_COLOR
     const name = getDisplayName(entity, fallbackName)
     const avatar = entity?.avatar?.url || entity?.avatar
@@ -53,13 +53,14 @@ function EntityCard({ entity, type = 'alter', onClick, fallbackName }) {
     )
 }
 
-function EntityCardList({ entities, type = 'alter', onEntityClick, emptyMessage, fallbackName }) {
+function EntityCardList({ entities, type = 'alter', typeLabel, onEntityClick, emptyMessage, fallbackName }) {
+    const label = typeLabel || type
     if (!entities?.length) {
         return (
             <div className="empty-state">
                 <span className="empty-icon">{type === 'alter' ? '👤' : type === 'state' ? '🌊' : '📦'}</span>
-                <h3>{emptyMessage || `No ${type}s yet`}</h3>
-                <p>Create your first {type} to get started</p>
+                <h3>{emptyMessage || `No ${label}s yet`}</h3>
+                <p>Create your first {label} to get started</p>
             </div>
         )
     }

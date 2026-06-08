@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm } from '@chameleon/shared'
+import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, NoteCardGrid, NoteModal } from '@chameleon/shared'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -8,38 +8,35 @@ function getDisplayName(entity, fallbackName) {
     return entity.name?.display || entity.name?.indexable || fallbackName || 'Unknown'
 }
 
-export function SystemPage({ system: systemProp }) {
+export function ProfilePage({ system: systemProp }) {
     const { session } = useDiscordSdk()
     const [subPage, setSubPage] = useState(null)
     const [system, setSystem] = useState(systemProp)
     const [frontData, setFrontData] = useState(null)
-    const [alters, setAlters] = useState([])
     const [states, setStates] = useState([])
-    const [groups, setGroups] = useState([])
+    const [notes, setNotes] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
     const [selectedEntity, setSelectedEntity] = useState(null)
-    const [selectedEntityType, setSelectedEntityType] = useState(null)
-    const [showCreateEntity, setShowCreateEntity] = useState(null)
+    const [showCreateEntity, setShowCreateEntity] = useState(false)
     const [editingEntity, setEditingEntity] = useState(null)
-    const [editingEntityType, setEditingEntityType] = useState(null)
+
+    const [selectedNote, setSelectedNote] = useState(null)
 
     const fetchAll = useCallback(async () => {
         try {
             setLoading(true)
-            const [sysData, frontResult, altersData, statesData, groupsData] = await Promise.all([
+            const [sysData, frontResult, statesData, notesData] = await Promise.all([
                 systemProp ? Promise.resolve(systemProp) : api.getSystemFull(),
                 api.getFront().catch(() => null),
-                api.getAlters().catch(() => []),
                 api.getStates().catch(() => []),
-                api.getGroups().catch(() => [])
+                api.getNotes('all', null, 0, 6).catch(() => ({ notes: [] }))
             ])
             setSystem(sysData)
             setFrontData(frontResult)
-            setAlters(altersData)
             setStates(statesData)
-            setGroups(groupsData)
+            setNotes(notesData.notes || [])
             setLoading(false)
         } catch (err) {
             setError(err.message)
@@ -53,30 +50,20 @@ export function SystemPage({ system: systemProp }) {
     const handleEntityUpdated = () => { fetchAll(); setEditingEntity(null); setSelectedEntity(null) }
     const handleEntityDeleted = () => { fetchAll(); setSelectedEntity(null) }
 
-    const handleEntityClick = (entity, type) => {
+    const handleEntityClick = (entity) => {
         setSelectedEntity(entity)
-        setSelectedEntityType(type)
     }
 
-    const handleEditEntity = (entity, type) => {
+    const handleEditEntity = (entity) => {
         setSelectedEntity(null)
         setEditingEntity(entity)
-        setEditingEntityType(type)
     }
-
-    const alterLabel = useMemo(() => getAlterTerm(system, { plural: false }), [system])
-    const alterLabelPlural = useMemo(() => getAlterTerm(system, { plural: true }), [system])
-    const stateLabel = useMemo(() => getStateTerm(system, { plural: false }), [system])
-    const stateLabelPlural = useMemo(() => getStateTerm(system, { plural: true }), [system])
-    const groupLabel = useMemo(() => getGroupTerm(system, { plural: false }), [system])
-    const groupLabelPlural = useMemo(() => getGroupTerm(system, { plural: true }), [system])
-    const systemLabel = useMemo(() => getSystemTerm(system, { context: 'activity' }), [system])
 
     if (loading && !system) {
         return (
             <div className="status-screen">
                 <div className="spinner" />
-                <p>Loading system...</p>
+                <p>Loading...</p>
             </div>
         )
     }
@@ -95,68 +82,15 @@ export function SystemPage({ system: systemProp }) {
         return (
             <div className="empty-state">
                 <span className="empty-icon">🌐</span>
-                <h3>No system found</h3>
-                <p>Create a system to get started</p>
+                <h3>No profile found</h3>
+                <p>Create a profile to get started</p>
             </div>
         )
     }
 
     const systemName = getDisplayName(system, session?.global_name || session?.username)
     const avatar = system.avatar?.url
-    const counts = system.counts || { alters: alters.length, states: states.length, groups: groups.length }
     const fallbackName = session?.global_name || session?.username
-
-    if (subPage === 'alters') {
-        return (
-            <div>
-                <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
-                    ← Back
-                </button>
-                <div className="section-header">
-                    <div>
-                        <h2 className="section-title">{alterLabelPlural.charAt(0).toUpperCase() + alterLabelPlural.slice(1)}</h2>
-                        <span className="section-count">{alters.length} {alterLabel}{alters.length !== 1 ? 's' : ''}</span>
-                    </div>
-                </div>
-                <EntityCardList
-                    entities={alters}
-                    type="alter"
-                    typeLabel={alterLabel}
-                    onEntityClick={(e) => handleEntityClick(e, 'alter')}
-                    fallbackName={fallbackName}
-                />
-                <button className="fab" onClick={() => setShowCreateEntity('alter')}>+</button>
-                {selectedEntity && selectedEntityType === 'alter' && (
-                    <EntityDetailModal
-                        entity={selectedEntity}
-                        type="alter"
-                        typeLabel={alterLabel}
-                        onClose={() => setSelectedEntity(null)}
-                        onUpdated={handleEditEntity}
-                        onDeleted={handleEntityDeleted}
-                        fallbackName={fallbackName}
-                    />
-                )}
-                {showCreateEntity === 'alter' && (
-                    <EntityFormModal
-                        type="alter"
-                        typeLabel={alterLabel}
-                        onClose={() => setShowCreateEntity(null)}
-                        onCreated={handleEntityCreated}
-                    />
-                )}
-                {editingEntity && editingEntityType === 'alter' && (
-                    <EntityFormModal
-                        entity={editingEntity}
-                        type="alter"
-                        typeLabel={alterLabel}
-                        onClose={() => setEditingEntity(null)}
-                        onUpdated={handleEntityUpdated}
-                    />
-                )}
-            </div>
-        )
-    }
 
     if (subPage === 'states') {
         return (
@@ -166,94 +100,42 @@ export function SystemPage({ system: systemProp }) {
                 </button>
                 <div className="section-header">
                     <div>
-                        <h2 className="section-title">{stateLabelPlural.charAt(0).toUpperCase() + stateLabelPlural.slice(1)}</h2>
-                        <span className="section-count">{states.length} {stateLabel}{states.length !== 1 ? 's' : ''}</span>
+                        <h2 className="section-title">States</h2>
+                        <span className="section-count">{states.length} state{states.length !== 1 ? 's' : ''}</span>
                     </div>
                 </div>
                 <EntityCardList
                     entities={states}
                     type="state"
-                    typeLabel={stateLabel}
-                    onEntityClick={(e) => handleEntityClick(e, 'state')}
+                    typeLabel="State"
+                    onEntityClick={handleEntityClick}
                     fallbackName={fallbackName}
                 />
-                <button className="fab" onClick={() => setShowCreateEntity('state')}>+</button>
-                {selectedEntity && selectedEntityType === 'state' && (
+                <button className="fab" onClick={() => setShowCreateEntity(true)}>+</button>
+                {selectedEntity && (
                     <EntityDetailModal
                         entity={selectedEntity}
                         type="state"
-                        typeLabel={stateLabel}
+                        typeLabel="State"
                         onClose={() => setSelectedEntity(null)}
                         onUpdated={handleEditEntity}
                         onDeleted={handleEntityDeleted}
                         fallbackName={fallbackName}
                     />
                 )}
-                {showCreateEntity === 'state' && (
+                {showCreateEntity && (
                     <EntityFormModal
                         type="state"
-                        typeLabel={stateLabel}
-                        onClose={() => setShowCreateEntity(null)}
+                        typeLabel="State"
+                        onClose={() => setShowCreateEntity(false)}
                         onCreated={handleEntityCreated}
                     />
                 )}
-                {editingEntity && editingEntityType === 'state' && (
+                {editingEntity && (
                     <EntityFormModal
                         entity={editingEntity}
                         type="state"
-                        typeLabel={stateLabel}
-                        onClose={() => setEditingEntity(null)}
-                        onUpdated={handleEntityUpdated}
-                    />
-                )}
-            </div>
-        )
-    }
-
-    if (subPage === 'groups') {
-        return (
-            <div>
-                <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
-                    ← Back
-                </button>
-                <div className="section-header">
-                    <div>
-                        <h2 className="section-title">{groupLabelPlural.charAt(0).toUpperCase() + groupLabelPlural.slice(1)}</h2>
-                        <span className="section-count">{groups.length} {groupLabel}{groups.length !== 1 ? 's' : ''}</span>
-                    </div>
-                </div>
-                <EntityCardList
-                    entities={groups}
-                    type="group"
-                    typeLabel={groupLabel}
-                    onEntityClick={(e) => handleEntityClick(e, 'group')}
-                    fallbackName={fallbackName}
-                />
-                <button className="fab" onClick={() => setShowCreateEntity('group')}>+</button>
-                {selectedEntity && selectedEntityType === 'group' && (
-                    <EntityDetailModal
-                        entity={selectedEntity}
-                        type="group"
-                        typeLabel={groupLabel}
-                        onClose={() => setSelectedEntity(null)}
-                        onUpdated={handleEditEntity}
-                        onDeleted={handleEntityDeleted}
-                        fallbackName={fallbackName}
-                    />
-                )}
-                {showCreateEntity === 'group' && (
-                    <EntityFormModal
-                        type="group"
-                        typeLabel={groupLabel}
-                        onClose={() => setShowCreateEntity(null)}
-                        onCreated={handleEntityCreated}
-                    />
-                )}
-                {editingEntity && editingEntityType === 'group' && (
-                    <EntityFormModal
-                        entity={editingEntity}
-                        type="group"
-                        typeLabel={groupLabel}
+                        typeLabel="State"
                         onClose={() => setEditingEntity(null)}
                         onUpdated={handleEntityUpdated}
                     />
@@ -274,13 +156,33 @@ export function SystemPage({ system: systemProp }) {
         )
     }
 
+    if (subPage === 'notes') {
+        return (
+            <div>
+                <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
+                    ← Back
+                </button>
+                <h2 className="section-title" style={{ marginBottom: '16px' }}>Notes</h2>
+                <NoteCardGrid notes={notes} onNoteClick={setSelectedNote} />
+                {selectedNote && (
+                    <NoteModal
+                        note={selectedNote}
+                        onClose={() => setSelectedNote(null)}
+                        onUpdated={() => fetchAll()}
+                        onDeleted={() => { fetchAll(); setSelectedNote(null) }}
+                    />
+                )}
+            </div>
+        )
+    }
+
     if (subPage === 'edit') {
         return (
             <div>
                 <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
-                <EditSystemSubPage system={system} onSaved={() => { fetchAll(); setSubPage(null) }} />
+                <EditProfileSubPage system={system} onSaved={() => { fetchAll(); setSubPage(null) }} />
             </div>
         )
     }
@@ -288,7 +190,7 @@ export function SystemPage({ system: systemProp }) {
     return (
         <div>
             <header className="page-header">
-                <h1>{systemLabel}</h1>
+                <h1>You</h1>
             </header>
 
             <div className="system-overview">
@@ -322,34 +224,26 @@ export function SystemPage({ system: systemProp }) {
                     </div>
                     <span className="subpage-btn-arrow">›</span>
                 </button>
-                <button className="subpage-btn" onClick={() => setSubPage('alters')}>
-                    <span className="subpage-btn-icon">👤</span>
-                    <div className="subpage-btn-info">
-                        <div className="subpage-btn-label">{alterLabelPlural.charAt(0).toUpperCase() + alterLabelPlural.slice(1)}</div>
-                        <div className="subpage-btn-count">{counts.alters} {alterLabel}{counts.alters !== 1 ? 's' : ''}</div>
-                    </div>
-                    <span className="subpage-btn-arrow">›</span>
-                </button>
                 <button className="subpage-btn" onClick={() => setSubPage('states')}>
                     <span className="subpage-btn-icon">🌊</span>
                     <div className="subpage-btn-info">
-                        <div className="subpage-btn-label">{stateLabelPlural.charAt(0).toUpperCase() + stateLabelPlural.slice(1)}</div>
-                        <div className="subpage-btn-count">{counts.states} {stateLabel}{counts.states !== 1 ? 's' : ''}</div>
+                        <div className="subpage-btn-label">States</div>
+                        <div className="subpage-btn-count">{states.length} state{states.length !== 1 ? 's' : ''}</div>
                     </div>
                     <span className="subpage-btn-arrow">›</span>
                 </button>
-                <button className="subpage-btn" onClick={() => setSubPage('groups')}>
-                    <span className="subpage-btn-icon">📦</span>
+                <button className="subpage-btn" onClick={() => setSubPage('notes')}>
+                    <span className="subpage-btn-icon">📝</span>
                     <div className="subpage-btn-info">
-                        <div className="subpage-btn-label">{groupLabelPlural.charAt(0).toUpperCase() + groupLabelPlural.slice(1)}</div>
-                        <div className="subpage-btn-count">{counts.groups} {groupLabel}{counts.groups !== 1 ? 's' : ''}</div>
+                        <div className="subpage-btn-label">Notes</div>
+                        <div className="subpage-btn-count">{notes.length} note{notes.length !== 1 ? 's' : ''}</div>
                     </div>
                     <span className="subpage-btn-arrow">›</span>
                 </button>
                 <button className="subpage-btn" onClick={() => setSubPage('edit')}>
                     <span className="subpage-btn-icon">⚙️</span>
                     <div className="subpage-btn-info">
-                        <div className="subpage-btn-label">Edit {systemLabel}</div>
+                        <div className="subpage-btn-label">Edit Profile</div>
                         <div className="subpage-btn-count">Name, description, settings</div>
                     </div>
                     <span className="subpage-btn-arrow">›</span>
@@ -359,7 +253,7 @@ export function SystemPage({ system: systemProp }) {
     )
 }
 
-function EditSystemSubPage({ system, onSaved }) {
+function EditProfileSubPage({ system, onSaved }) {
     const [name, setName] = useState(system?.name?.display || '')
     const [description, setDescription] = useState(system?.description || '')
     const [color, setColor] = useState(system?.color || '#c4b5fd')
@@ -388,20 +282,18 @@ function EditSystemSubPage({ system, onSaved }) {
         }
     }
 
-    const systemLabel = getSystemTerm(system, { context: 'activity' })
-
     return (
         <div>
-            <h2 className="section-title" style={{ marginBottom: '16px' }}>Edit {systemLabel}</h2>
+            <h2 className="section-title" style={{ marginBottom: '16px' }}>Edit Profile</h2>
             <form onSubmit={handleSave}>
                 <div className="form-group">
-                    <label>{systemLabel} name</label>
+                    <label>Profile name</label>
                     <input
                         className="text-input"
                         type="text"
                         value={name}
                         onChange={e => setName(e.target.value)}
-                        placeholder={`Your ${systemLabel.toLowerCase()} name`}
+                        placeholder="Your profile name"
                         maxLength={100}
                     />
                 </div>
@@ -411,7 +303,7 @@ function EditSystemSubPage({ system, onSaved }) {
                         className="text-input"
                         value={description}
                         onChange={e => setDescription(e.target.value)}
-                        placeholder={`About your ${systemLabel.toLowerCase()}...`}
+                        placeholder="About your profile..."
                         rows={4}
                     />
                 </div>
@@ -447,4 +339,4 @@ function EditSystemSubPage({ system, onSaved }) {
     )
 }
 
-export default SystemPage
+export default ProfilePage

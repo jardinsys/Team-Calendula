@@ -118,8 +118,19 @@ class ApiClient {
         return this.request('/system/full')
     }
 
+    async getMe() {
+        return this.request('/auth/me')
+    }
+
     async updateSystem(data) {
         return this.request('/system', {
+            method: 'PATCH',
+            body: JSON.stringify(data)
+        })
+    }
+
+    async updateSystemType(data) {
+        return this.request('/system/type', {
             method: 'PATCH',
             body: JSON.stringify(data)
         })
@@ -364,3 +375,48 @@ class ApiClient {
 const api = new ApiClient()
 export default api
 export { ApiClient }
+
+// ═══════════════════════════════════════════
+// TERMINOLOGY HELPERS
+// ═══════════════════════════════════════════
+
+const NEUTRAL_TERMS = {
+    label: 'Profile',
+    title: '',
+    error: 'Registration',
+    ownership: 'profile',
+    ownershipCap: 'Profile'
+};
+
+export function isSystemUser(system) {
+    return system?.sys_type?.isSystem === true;
+}
+
+export function getSystemTerm(system, { context = 'label' } = {}) {
+    if (!isSystemUser(system)) {
+        return NEUTRAL_TERMS[context] || NEUTRAL_TERMS.label;
+    }
+    const synonym = system?.systemSynonym || 'system';
+    switch (context) {
+        case 'title': return synonym.charAt(0).toUpperCase() + synonym.slice(1);
+        case 'error': return synonym.charAt(0).toUpperCase() + synonym.slice(1);
+        case 'ownership': return synonym.toLowerCase();
+        case 'ownershipCap': return synonym.charAt(0).toUpperCase() + synonym.slice(1);
+        case 'activity': return 'You';
+        default: return synonym.charAt(0).toUpperCase() + synonym.slice(1);
+    }
+}
+
+export function getAlterTerm(system, { plural = false } = {}) {
+    return plural
+        ? (system?.alterSynonym?.plural || 'alters')
+        : (system?.alterSynonym?.singular || 'alter');
+}
+
+export function getStateTerm(system, { plural = false } = {}) {
+    return plural ? 'states' : 'state';
+}
+
+export function getGroupTerm(system, { plural = false } = {}) {
+    return plural ? 'groups' : 'group';
+}

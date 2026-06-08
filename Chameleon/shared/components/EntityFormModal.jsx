@@ -6,7 +6,7 @@ const COLORS = [
     '#86efac', '#7dd3fc', '#d8b4fe', '#f9a8d4', '#94a3b8'
 ]
 
-function EntityFormModal({ entity, type = 'alter', onClose, onCreated, onUpdated }) {
+function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onClose, onCreated, onUpdated }) {
     const isEdit = !!entity
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
@@ -82,7 +82,7 @@ function EntityFormModal({ entity, type = 'alter', onClose, onCreated, onUpdated
         }
     }
 
-    const typeLabel = type.charAt(0).toUpperCase() + type.slice(1)
+    const typeLabel = typeLabelProp || type.charAt(0).toUpperCase() + type.slice(1)
 
     return (
         <div className="modal-overlay" onClick={handleBackdropClick}>

@@ -7,7 +7,7 @@ function getDisplayName(entity, fallbackName) {
     return entity.name?.display || entity.name?.indexable || fallbackName || 'Unknown'
 }
 
-function EntityDetailModal({ entity, type = 'alter', onClose, onUpdated, onDeleted, fallbackName }) {
+function EntityDetailModal({ entity, type = 'alter', typeLabel, onClose, onUpdated, onDeleted, fallbackName }) {
     const [fullEntity, setFullEntity] = useState(entity)
     const [loading, setLoading] = useState(!entity?.description && !entity?.pronouns)
     const [error, setError] = useState(null)
@@ -89,6 +89,7 @@ function EntityDetailModal({ entity, type = 'alter', onClose, onUpdated, onDelet
     const name = getDisplayName(e, fallbackName)
     const avatar = e.avatar?.url || e.avatar
     const pronouns = e.pronouns?.join?.(', ') || e.pronouns
+    const label = typeLabel || type
 
     if (confirmDelete) {
         return (
@@ -96,7 +97,7 @@ function EntityDetailModal({ entity, type = 'alter', onClose, onUpdated, onDelet
                 <div className="modal-content">
                     <div className="modal-header">
                         <button className="btn-ghost" onClick={() => setConfirmDelete(false)}>← Back</button>
-                        <h2 className="modal-title">Delete {type}</h2>
+                        <h2 className="modal-title">Delete {label}</h2>
                         <div style={{ width: '60px' }} />
                     </div>
                     <p style={{ marginBottom: '24px' }}>
@@ -140,7 +141,7 @@ function EntityDetailModal({ entity, type = 'alter', onClose, onUpdated, onDelet
                     <div>
                         <h2 className="modal-title" style={{ color }}>{name}</h2>
                         {pronouns && <div className="entity-detail-pronouns">{pronouns}</div>}
-                        <div className="entity-detail-type" style={{ textTransform: 'capitalize' }}>{type}</div>
+                        <div className="entity-detail-type" style={{ textTransform: 'capitalize' }}>{label}</div>
                     </div>
                 </div>
 

@@ -7,6 +7,8 @@ export function useApiAuth() {
   const [jwt, setJwt] = useState(null)
   const [authStatus, setAuthStatus] = useState('PENDING')
   const [authError, setAuthError] = useState(null)
+  const [hasSystem, setHasSystem] = useState(false)
+  const [discordUser, setDiscordUser] = useState(null)
 
   useEffect(() => {
     if (status !== 'AUTHENTICATED') return
@@ -52,6 +54,8 @@ export function useApiAuth() {
         if (!cancelled) {
           api.setToken(data.token)
           setJwt(data.token)
+          setHasSystem(data.user?.hasSystem || false)
+          setDiscordUser(data.user || null)
           setAuthStatus('READY')
         }
       } catch (err) {
@@ -67,5 +71,5 @@ export function useApiAuth() {
     return () => { cancelled = true }
   }, [accessToken, session?.id, status, isMock])
 
-  return { jwt, authStatus, authError }
+  return { jwt, authStatus, authError, hasSystem, discordUser }
 }

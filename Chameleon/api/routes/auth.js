@@ -250,6 +250,7 @@ router.post('/activity/token', async (req, res) => {
                 discordID: user.discordID,
                 username: user.username,
                 globalName: user.globalName,
+                avatar: user.avatar,
                 type: user.type || 'basic',
                 hasSystem: !!user.systemID,
                 systemID: user.systemID
