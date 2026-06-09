@@ -6,40 +6,19 @@ export function WhatIsPage({ onNavigate }) {
       <h1>What is Systemiser?</h1>
 
       <p>
-        <span className="highlight">Systemiser</span> is a tool designed for
-        plural systems — people who share a body with multiple alters, headmates,
-        or identities.
+        <span className="highlight">Systemiser</span> is intended to be a tool designed for
+        those with dissociative disorders, those who generally need a tool to manage multiple states of mind, or other related needs.
       </p>
 
       <p>
-        It gives your system a shared space to manage profiles, track who's
-        fronting, share notes, and stay connected with friends — all from
-        within Discord or the web app.
+        This current version you playing is a relatively basic starting point, but it will eventually give a wide array of features to help with
+        organization, tracking, and the ability to aid during mental episodes. This is currently within Discord, but will eventually have 
+        standalone applications on webapp, desktop, and mobile devices.
       </p>
 
       <p>
-        Each member of your system can have their own{' '}
-        <span className="highlight">profile</span> with a name, avatar,
-        description, pronouns, and more. You can track{' '}
-        <span className="highlight">who's fronting</span> right now, manage
-        layers, and keep a history of switches.
-      </p>
-
-      <p>
-        <span className="highlight">Notes</span> let you write down thoughts,
-        memories, or anything else — shared across your system or kept private.
-        You can tag notes and link them to specific alters.
-      </p>
-
-      <p>
-        <span className="highlight">Friends</span> lets you connect with other
-        systems. You can see each other's front status and share information
-        based on privacy settings you control.
-      </p>
-
-      <p>
-        Everything is configurable — from the names you use (system, DID
-        system, polycule, etc.) to who can see what. Your system, your rules.
+        That's all for now, but if you have any questions, feel free to join the current makeshift <a href="https://discord.com/invite/DWNckqXxES" target="_blank" rel="noopener noreferrer">support and testing server</a>!
+        - <span className="highlight">JardinSys</span>
       </p>
 
       <div style={{ marginTop: 'var(--space-2xl)', display: 'flex', gap: 'var(--space-md)', justifyContent: 'center' }}>

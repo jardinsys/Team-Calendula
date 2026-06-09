@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Paintbrush } from 'lucide-react'
 import api from '../api/client.js'
 
 const COLORS = [
@@ -6,12 +7,24 @@ const COLORS = [
     '#86efac', '#7dd3fc', '#d8b4fe', '#f9a8d4', '#94a3b8'
 ]
 
+function normalizeHexColor(color) {
+    if (!color) return null
+    const cleaned = color.replace('#', '')
+    if (/^[0-9A-Fa-f]{6}$/.test(cleaned)) {
+        return `#${cleaned.toLowerCase()}`
+    }
+    return null
+}
+
 function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onClose, onCreated, onUpdated }) {
     const isEdit = !!entity
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [pronouns, setPronouns] = useState('')
     const [color, setColor] = useState(COLORS[0])
+    const [showCustomColor, setShowCustomColor] = useState(false)
+    const [customColorValue, setCustomColorValue] = useState('')
+    const [customColorError, setCustomColorError] = useState(false)
     const [signoff, setSignoff] = useState('')
     const [proxy, setProxy] = useState('')
     const [groupType, setGroupType] = useState('')
@@ -23,7 +36,16 @@ function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onC
             setName(typeof entity.name === 'string' ? entity.name : entity.name?.display || '')
             setDescription(entity.description || '')
             setPronouns(entity.pronouns?.join?.(', ') || '')
-            setColor(entity.color || COLORS[0])
+            const entityColor = entity.color
+            if (entityColor && !COLORS.includes(entityColor.toLowerCase())) {
+                setColor(COLORS[0])
+                setShowCustomColor(true)
+                setCustomColorValue(entityColor)
+            } else {
+                setColor(entityColor || COLORS[0])
+                setShowCustomColor(false)
+                setCustomColorValue('')
+            }
             setSignoff(entity.signoff || '')
             setProxy(entity.proxy?.[0] || '')
             if (type === 'group' && entity.type) {
@@ -40,14 +62,26 @@ function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onC
         e.preventDefault()
         if (!name.trim()) return
 
+        let finalColor = color
+        if (showCustomColor && customColorValue) {
+            const normalized = normalizeHexColor(customColorValue)
+            if (!normalized) {
+                setCustomColorError(true)
+                setSaving(false)
+                return
+            }
+            finalColor = normalized
+        }
+
         setSaving(true)
         setError(null)
+        setCustomColorError(false)
 
         try {
             const data = {
                 name: name.trim(),
                 description: description.trim() || undefined,
-                color: color !== COLORS[0] ? color : undefined,
+                color: finalColor || undefined,
                 signoff: signoff.trim() || undefined
             }
 
@@ -147,22 +181,72 @@ function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onC
 
                     <div className="form-group">
                         <label>Color</label>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                             {COLORS.map(c => (
                                 <button
                                     key={c}
                                     type="button"
-                                    onClick={() => setColor(c)}
+                                    onClick={() => {
+                                        setColor(c)
+                                        setShowCustomColor(false)
+                                        setCustomColorValue('')
+                                        setCustomColorError(false)
+                                    }}
                                     style={{
                                         width: '28px', height: '28px', borderRadius: '50%',
                                         backgroundColor: c,
-                                        border: color === c ? '2px solid white' : '2px solid transparent',
+                                        border: color === c && !showCustomColor ? '2px solid white' : '2px solid transparent',
                                         cursor: 'pointer',
-                                        boxShadow: color === c ? `0 0 8px ${c}40` : 'none'
+                                        boxShadow: color === c && !showCustomColor ? `0 0 8px ${c}40` : 'none'
                                     }}
                                 />
                             ))}
+                            <button
+                                type="button"
+                                onClick={() => setShowCustomColor(!showCustomColor)}
+                                style={{
+                                    width: '28px', height: '28px', borderRadius: '50%',
+                                    backgroundColor: showCustomColor ? color : 'transparent',
+                                    border: showCustomColor ? '2px solid white' : '2px dashed var(--glass-border)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: showCustomColor ? 'white' : 'var(--text-muted)',
+                                    transition: 'all var(--transition-smooth)'
+                                }}
+                                aria-label={showCustomColor ? 'Use palette color' : 'Custom color'}
+                            >
+                                <Paintbrush size={14} strokeWidth={2.5} />
+                            </button>
+                            {showCustomColor && (
+                                <input
+                                    type="text"
+                                    className="text-input"
+                                    style={{ width: '100px', marginLeft: '8px' }}
+                                    value={customColorValue}
+                                    onChange={e => {
+                                        setCustomColorValue(e.target.value)
+                                        setCustomColorError(false)
+                                    }}
+                                    onBlur={e => {
+                                        const normalized = normalizeHexColor(e.target.value)
+                                        if (normalized) {
+                                            setCustomColorValue(normalized)
+                                        }
+                                    }}
+                                    placeholder="#RRGGBB"
+                                    maxLength={7}
+                                    spellCheck={false}
+                                    autoComplete="off"
+                                />
+                            )}
                         </div>
+                        {showCustomColor && customColorError && (
+                            <p style={{ fontSize: '0.7rem', color: 'var(--color-error)', marginTop: '4px' }}>
+                                Invalid hex color. Use format #RRGGBB
+                            </p>
+                        )}
                     </div>
 
                     <div className="form-group">

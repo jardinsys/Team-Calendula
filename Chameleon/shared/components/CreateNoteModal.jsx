@@ -1,5 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import api from '../api/client.js'
+import RichTextEditor from './RichTextEditor.jsx'
+import TagInput from './TagInput.jsx'
 
 const NOTE_COLORS = [
     '#8b5cf6', '#ED4245', '#E67E22', '#F1C40F',
@@ -9,31 +11,29 @@ const NOTE_COLORS = [
 function CreateNoteModal({ onClose, onCreated }) {
     const [title, setTitle] = useState('')
     const [content, setContent] = useState('')
-    const [tagsInput, setTagsInput] = useState('')
+    const [tags, setTags] = useState([])
     const [selectedColor, setSelectedColor] = useState(NOTE_COLORS[0])
+    const [editorMode, setEditorMode] = useState('rich')
     const [creating, setCreating] = useState(false)
     const [error, setError] = useState(null)
+    const [existingTags, setExistingTags] = useState([])
+
+    useEffect(() => {
+        api.getNoteTags().then(t => setExistingTags(t || [])).catch(() => {})
+    }, [])
 
     const handleCreate = async (e) => {
         e.preventDefault()
         if (!content.trim()) return
-
         setCreating(true)
         setError(null)
-
         try {
-            const tags = tagsInput
-                .split(',')
-                .map(t => t.trim())
-                .filter(Boolean)
-
             await api.createNote({
                 title: title.trim() || undefined,
                 content,
                 tags,
                 color: selectedColor
             })
-
             onCreated?.()
             onClose?.()
         } catch (err) {
@@ -48,7 +48,7 @@ function CreateNoteModal({ onClose, onCreated }) {
 
     return (
         <div className="modal-overlay" onClick={handleBackdropClick}>
-            <div className="modal-content">
+            <div className="modal-content modal-note-create">
                 <div className="modal-header">
                     <button className="btn-ghost" onClick={() => onClose?.()}>← Back</button>
                     <h2 className="modal-title">New Note</h2>
@@ -70,43 +70,35 @@ function CreateNoteModal({ onClose, onCreated }) {
 
                     <div className="form-group">
                         <label>Content</label>
-                        <textarea
-                            className="text-input"
-                            value={content}
-                            onChange={e => setContent(e.target.value)}
-                            placeholder="Write your note in markdown..."
-                            rows={6}
-                            required
+                        <RichTextEditor
+                            content={content}
+                            onChange={setContent}
+                            placeholder="Write your note..."
+                            mode={editorMode}
+                            onModeChange={setEditorMode}
+                            height={250}
                         />
                     </div>
 
                     <div className="form-group">
-                        <label>Tags (comma-separated)</label>
-                        <input
-                            className="text-input"
-                            type="text"
-                            value={tagsInput}
-                            onChange={e => setTagsInput(e.target.value)}
-                            placeholder="personal, ideas, todo"
+                        <label>Tags</label>
+                        <TagInput
+                            tags={tags}
+                            onChange={setTags}
+                            existingTags={existingTags}
                         />
                     </div>
 
                     <div className="form-group">
                         <label>Color</label>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div className="color-picker">
                             {NOTE_COLORS.map(color => (
                                 <button
                                     key={color}
                                     type="button"
+                                    className={`color-swatch ${selectedColor === color ? 'selected' : ''}`}
+                                    style={{ backgroundColor: color }}
                                     onClick={() => setSelectedColor(color)}
-                                    style={{
-                                        width: '28px',
-                                        height: '28px',
-                                        borderRadius: '50%',
-                                        backgroundColor: color,
-                                        border: selectedColor === color ? '2px solid white' : '2px solid transparent',
-                                        cursor: 'pointer'
-                                    }}
                                 />
                             ))}
                         </div>

@@ -26,7 +26,7 @@ const { uploadNoteContent, deleteNoteContent, generatePreview } = require('../ut
 router.get('/', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
-        const { filter = 'all', tag, pinned, limit = 50, skip = 0 } = req.query;
+        const { filter = 'all', tag, pinned, limit = 50, skip = 0, sort = 'pinned' } = req.query;
         
         let noteIds = user?.notes?.notes || [];
         let query = {};
@@ -58,21 +58,31 @@ router.get('/', authMiddleware, async (req, res) => {
             };
         }
         
-        // Tag filter
+        // Tag filter (supports multiple comma-separated tags)
         if (tag) {
-            query.tags = tag;
+            const tags = tag.split(',').map(t => t.trim())
+            if (tags.length === 1) {
+                query.tags = tags[0]
+            } else {
+                query.tags = { $all: tags }
+            }
         }
         
         // Pinned filter
         if (pinned === 'true') {
             query.pinned = true;
         }
+
+        // Sort
+        const sortBy = sort === 'recent'
+            ? { updatedAt: -1 }
+            : { pinned: -1, updatedAt: -1 }
         
         const notes = await Note.find(query)
-            .sort({ pinned: -1, updatedAt: -1 })
+            .sort(sortBy)
             .skip(parseInt(skip))
             .limit(parseInt(limit))
-            .select('id title contentPreview tags pinned createdAt updatedAt author users');
+            .select('id title contentPreview tags pinned color createdAt updatedAt author users media');
         
         const total = await Note.countDocuments(query);
         
@@ -84,6 +94,8 @@ router.get('/', authMiddleware, async (req, res) => {
                 contentPreview: n.contentPreview,
                 tags: n.tags,
                 pinned: n.pinned,
+                color: n.color,
+                media: n.media,
                 createdAt: n.createdAt,
                 updatedAt: n.updatedAt,
                 isOwner: n.users?.owner?.userID?.toString() === user._id.toString() ||
@@ -425,6 +437,87 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         console.error('[Notes] Delete error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
+// APPEND CONTENT
+// ===========================================
+
+/**
+ * PATCH /api/notes/:id/append
+ * Append content to a note with timestamp
+ */
+router.patch('/:id/append', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { id } = req.params;
+        const { content } = req.body;
+
+        if (!content) {
+            return res.status(400).json({ error: 'Content required' });
+        }
+
+        let note = await Note.findOne({ id: id });
+        if (!note && mongoose.Types.ObjectId.isValid(id)) {
+            note = await Note.findById(id);
+        }
+
+        if (!note) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+
+        const userId = user._id.toString();
+        const isOwner = note.users?.owner?.userID?.toString() === userId ||
+                       note.author?.userID?.toString() === userId;
+        const hasWrite = note.users?.rwAccess?.some(a => a.userID?.toString() === userId);
+
+        if (!isOwner && !hasWrite) {
+            return res.status(403).json({ error: 'You cannot edit this note' });
+        }
+
+        let existingContent = ''
+        if (typeof note.content === 'string') {
+            existingContent = note.content
+        } else if (note.content?.url) {
+            try {
+                const https = require('https');
+                const fetchContent = (url) => new Promise((resolve, reject) => {
+                    https.get(url, (response) => {
+                        let data = ''
+                        response.on('data', (chunk) => { data += chunk })
+                        response.on('end', () => resolve(data))
+                    }).on('error', reject)
+                })
+                existingContent = await fetchContent(note.content.url)
+            } catch {
+                existingContent = note.contentPreview || ''
+            }
+        }
+
+        const timestamp = `\n\n---\n**${new Date().toLocaleString()}**\n`
+        const newContent = existingContent + timestamp + content
+
+        try {
+            const contentMedia = await uploadNoteContent(user._id.toString(), note.id, newContent)
+            const oldR2Key = note.content?.r2Key
+            note.content = contentMedia
+            note.contentPreview = generatePreview(newContent)
+            if (oldR2Key && oldR2Key !== contentMedia.r2Key) {
+                await deleteNoteContent(oldR2Key)
+            }
+        } catch (uploadErr) {
+            console.error('[Notes] R2 upload failed on append:', uploadErr)
+            note.contentPreview = generatePreview(newContent)
+        }
+
+        note.updatedAt = new Date()
+        await note.save()
+
+        res.json(note)
+    } catch (err) {
+        console.error('[Notes] Append error:', err);
         res.status(500).json({ error: err.message });
     }
 });

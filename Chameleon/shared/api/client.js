@@ -1,11 +1,18 @@
 class ApiClient {
     constructor() {
-        this.token = null
+        this.token = typeof window !== 'undefined' ? localStorage.getItem('systemiser_token') : null
         this.baseUrl = '/api'
     }
 
     setToken(token) {
         this.token = token
+        if (typeof window !== 'undefined') {
+            if (token) {
+                localStorage.setItem('systemiser_token', token)
+            } else {
+                localStorage.removeItem('systemiser_token')
+            }
+        }
     }
 
     setBaseUrl(url) {
@@ -18,6 +25,12 @@ class ApiClient {
             headers['Authorization'] = `Bearer ${this.token}`
         }
         return headers
+    }
+
+    loadTokenFromStorage() {
+        if (typeof window !== 'undefined') {
+            this.token = localStorage.getItem('systemiser_token')
+        }
     }
 
     async request(endpoint, options = {}) {
@@ -103,6 +116,22 @@ class ApiClient {
         return this.request(`/notes/${id}/link`, {
             method: 'DELETE',
             body: JSON.stringify(data)
+        })
+    }
+
+    // Quick notes (convenience wrappers for backward compat)
+    async getQuickNotes(limit = 10) {
+        return this.request(`/notes?filter=all&limit=${limit}&sort=recent`)
+    }
+
+    async createQuickNote(data) {
+        return this.createNote(data)
+    }
+
+    async appendToNote(id, content) {
+        return this.request(`/notes/${id}/append`, {
+            method: 'PATCH',
+            body: JSON.stringify({ content })
         })
     }
 

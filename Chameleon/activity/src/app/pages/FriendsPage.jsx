@@ -61,7 +61,7 @@ export function FriendsPage() {
                     <h1>Friends</h1>
                     <p>{friends.length} friend{friends.length !== 1 ? 's' : ''}</p>
                 </div>
-                {myFriendId?.friendID && (
+                { myFriendId?.friendID && (
                     <div
                         style={{
                             background: 'var(--bg-surface)', border: '1px solid var(--glass-border)',
@@ -70,9 +70,9 @@ export function FriendsPage() {
                             flexShrink: 0
                         }}
                         onClick={() => {
-                            navigator.clipboard?.writeText(myFriendId.friendID)
+                            {/* try { navigator.clipboard?.writeText(myFriendId.friendID) } catch {} */}
                         }}
-                        title="Click to copy"
+                        title="Use this ID to add friends!"
                     >
                         ID: {myFriendId.friendID}
                     </div>

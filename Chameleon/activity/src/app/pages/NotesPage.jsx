@@ -1,59 +1,83 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, NoteCardGrid, NoteModal, CreateNoteModal } from '@chameleon/shared'
+import {
+    api,
+    NoteCardGrid,
+    NoteModal,
+    CreateNoteModal,
+    TagFilterBar,
+    ManageTagsModal,
+    noteKeys,
+} from '@chameleon/shared'
 
 export function NotesPage() {
     const { session } = useDiscordSdk()
-    const [notes, setNotes] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
+    const queryClient = useQueryClient()
     const [selectedNote, setSelectedNote] = useState(null)
     const [showCreate, setShowCreate] = useState(false)
     const [filter, setFilter] = useState('all')
-    const [selectedTag, setSelectedTag] = useState(null)
-    const [tags, setTags] = useState([])
-    const [manageTags, setManageTags] = useState(false)
+    const [selectedTags, setSelectedTags] = useState([])
+    const [showManageTags, setShowManageTags] = useState(false)
+    const [viewVariant, setViewVariant] = useState('grid')
 
-    const fetchNotes = async () => {
-        try {
-            setLoading(true)
-            const data = await api.getNotes(filter, selectedTag)
-            setNotes(data.notes || [])
-            setLoading(false)
-        } catch (err) {
-            setError(err.message)
-            setLoading(false)
-        }
-    }
+    const { data: notesData, isLoading } = useQuery({
+        queryKey: noteKeys.list({ filter, tags: selectedTags }),
+        queryFn: async () => {
+            const tagParam = selectedTags.length > 0 ? selectedTags.join(',') : undefined
+            return api.getNotes(filter, tagParam, 0, 100)
+        },
+    })
 
-    const fetchTags = async () => {
-        try {
-            const data = await api.getNoteTags()
-            setTags(data || [])
-        } catch (err) {
-            console.error('Tags fetch error:', err)
-        }
-    }
+    const { data: tags = [] } = useQuery({
+        queryKey: noteKeys.tags(),
+        queryFn: () => api.getNoteTags(),
+    })
 
-    useEffect(() => { fetchNotes() }, [filter, selectedTag])
-    useEffect(() => { fetchTags() }, [])
+    const deleteTagMutation = useMutation({
+        mutationFn: (tag) => api.deleteNoteTag(tag),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: noteKeys.tags() })
+            queryClient.invalidateQueries({ queryKey: noteKeys.lists() })
+        },
+    })
 
-    const handleNoteCreated = () => { fetchNotes(); fetchTags() }
-    const handleNoteUpdated = () => { fetchNotes(); fetchTags() }
-    const handleNoteDeleted = () => { fetchNotes(); fetchTags(); setSelectedNote(null) }
+    const notes = notesData?.notes || []
 
-    const handleDeleteTag = async (tag) => {
-        try {
-            await api.deleteNoteTag(tag)
-            if (selectedTag === tag) setSelectedTag(null)
-            fetchTags()
-            fetchNotes()
-        } catch (err) {
-            console.error('Delete tag error:', err)
-        }
-    }
+    const handleNoteCreated = useCallback(() => {
+        queryClient.invalidateQueries({ queryKey: noteKeys.lists() })
+        queryClient.invalidateQueries({ queryKey: noteKeys.tags() })
+    }, [queryClient])
 
-    if (loading && !notes.length) {
+    const handleNoteUpdated = useCallback(() => {
+        queryClient.invalidateQueries({ queryKey: noteKeys.lists() })
+        queryClient.invalidateQueries({ queryKey: noteKeys.tags() })
+    }, [queryClient])
+
+    const handleNoteDeleted = useCallback(() => {
+        queryClient.invalidateQueries({ queryKey: noteKeys.lists() })
+        queryClient.invalidateQueries({ queryKey: noteKeys.tags() })
+        setSelectedNote(null)
+    }, [queryClient])
+
+    const handleToggleTag = useCallback((tag) => {
+        setSelectedTags(prev =>
+            prev.includes(tag)
+                ? prev.filter(t => t !== tag)
+                : [...prev, tag]
+        )
+    }, [])
+
+    const handleClearTags = useCallback(() => {
+        setSelectedTags([])
+    }, [])
+
+    const handleDeleteTag = useCallback((tag) => {
+        deleteTagMutation.mutate(tag)
+        setSelectedTags(prev => prev.filter(t => t !== tag))
+    }, [deleteTagMutation])
+
+    if (isLoading && !notes.length) {
         return (
             <div className="status-screen">
                 <div className="spinner" />
@@ -62,74 +86,48 @@ export function NotesPage() {
         )
     }
 
-    if (error) {
-        return (
-            <div className="empty-state">
-                <span className="empty-icon" />
-                <h3>Something went wrong</h3>
-                <p>{error}</p>
-            </div>
-        )
-    }
-
     return (
         <div>
             <header className="page-header">
-                <h1>Your Notes</h1>
-                <p>{notes.length} note{notes.length !== 1 ? 's' : ''}</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                        <h1>Your Notes</h1>
+                        <p>{notes.length} note{notes.length !== 1 ? 's' : ''}</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                            className={`btn btn-ghost btn-sm ${viewVariant === 'grid' ? 'active' : ''}`}
+                            onClick={() => setViewVariant('grid')}
+                            title="Grid view"
+                        >
+                            ▦
+                        </button>
+                        <button
+                            className={`btn btn-ghost btn-sm ${viewVariant === 'list' ? 'active' : ''}`}
+                            onClick={() => setViewVariant('list')}
+                            title="List view"
+                        >
+                            ☰
+                        </button>
+                    </div>
+                </div>
             </header>
 
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto' }}>
-                {['all', 'owned', 'shared'].map(f => (
-                    <button
-                        key={f}
-                        className={`btn ${filter === f ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ fontSize: '0.75rem', padding: '4px 12px' }}
-                        onClick={() => { setFilter(f); setSelectedTag(null) }}
-                    >
-                        {f === 'all' ? 'All' : f === 'owned' ? 'Owned' : 'Shared'}
-                    </button>
-                ))}
-            </div>
+            <TagFilterBar
+                tags={tags}
+                selectedTags={selectedTags}
+                onToggleTag={handleToggleTag}
+                onClearTags={handleClearTags}
+                onManageTags={() => setShowManageTags(true)}
+                filter={filter}
+                onFilterChange={setFilter}
+            />
 
-            {tags.length > 0 && (
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', overflowX: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <button
-                        className={`btn ${!selectedTag ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ fontSize: '0.7rem', padding: '2px 10px' }}
-                        onClick={() => setSelectedTag(null)}
-                    >
-                        All tags
-                    </button>
-                    {tags.map(tag => (
-                        <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                            <button
-                                className={`btn ${selectedTag === tag ? 'btn-primary' : 'btn-secondary'}`}
-                                style={{ fontSize: '0.7rem', padding: '2px 10px' }}
-                                onClick={() => manageTags ? null : setSelectedTag(selectedTag === tag ? null : tag)}
-                            >
-                                #{tag}
-                            </button>
-                            {manageTags && (
-                                <button
-                                    onClick={() => handleDeleteTag(tag)}
-                                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #949ba4)', cursor: 'pointer', padding: '0 2px', fontSize: '0.8rem' }}
-                                    title={`Delete tag "${tag}"`}
-                                >×</button>
-                            )}
-                        </span>
-                    ))}
-                    <button
-                        className="btn btn-ghost"
-                        style={{ fontSize: '0.65rem', padding: '2px 8px' }}
-                        onClick={() => setManageTags(!manageTags)}
-                    >
-                        {manageTags ? 'Done' : 'Manage'}
-                    </button>
-                </div>
-            )}
-
-            <NoteCardGrid notes={notes} onNoteClick={setSelectedNote} />
+            <NoteCardGrid
+                notes={notes}
+                onNoteClick={setSelectedNote}
+                variant={viewVariant}
+            />
 
             <button className="fab" title="New note" onClick={() => setShowCreate(true)}>+</button>
 
@@ -146,6 +144,15 @@ export function NotesPage() {
                 <CreateNoteModal
                     onClose={() => setShowCreate(false)}
                     onCreated={handleNoteCreated}
+                />
+            )}
+
+            {showManageTags && (
+                <ManageTagsModal
+                    tags={tags}
+                    notes={notes}
+                    onDelete={handleDeleteTag}
+                    onClose={() => setShowManageTags(false)}
                 />
             )}
         </div>

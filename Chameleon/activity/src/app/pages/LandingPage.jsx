@@ -72,8 +72,8 @@ function ReturningLanding({ onNavigate, system, discordUser }) {
                 <div className="landing-feature-circle-inner">
                   <Icon
                     size={60}
-                    strokeWidth={8}
-                    fill="rgba(0,0,0,0.8)"
+                    strokeWidth={3}
+                    //fill="rgba(0,0,0,0.8)"
                     stroke="white"
                   />
                 </div>
@@ -91,8 +91,8 @@ function ReturningLanding({ onNavigate, system, discordUser }) {
             <div className="landing-feature-circle-inner landing-feature-circle-inner--crisis">
               <TriangleAlert
                 size={60}
-                strokeWidth={8}
-                fill="rgba(0,0,0,0.8)"
+                strokeWidth={2}
+                //fill="rgba(0,0,0,0.8)"
                 stroke="white"
               />
             </div>

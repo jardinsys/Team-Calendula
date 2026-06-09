@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import api from '../api/client.js'
+import RichTextEditor from './RichTextEditor.jsx'
+import TagInput from './TagInput.jsx'
+import ShareNoteModal from './ShareNoteModal.jsx'
+import LinkEntityModal from './LinkEntityModal.jsx'
 
 const DEFAULT_NOTE_COLOR = '#8b5cf6'
 const NOTE_COLORS = [
@@ -14,22 +18,29 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
     const [editMode, setEditMode] = useState(false)
-
     const [editTitle, setEditTitle] = useState('')
     const [editContent, setEditContent] = useState('')
-    const [editTagsInput, setEditTagsInput] = useState('')
+    const [editTags, setEditTags] = useState([])
     const [editColor, setEditColor] = useState(DEFAULT_NOTE_COLOR)
+    const [editorMode, setEditorMode] = useState('rich')
     const [saving, setSaving] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [showShare, setShowShare] = useState(false)
+    const [showLinkEntity, setShowLinkEntity] = useState(false)
+    const [existingTags, setExistingTags] = useState([])
 
     useEffect(() => {
         let cancelled = false
         async function fetchNote() {
             try {
-                const data = await api.getNote(note._id)
+                const [data, tags] = await Promise.all([
+                    api.getNote(note._id),
+                    api.getNoteTags()
+                ])
                 if (!cancelled) {
                     setFullNote(data)
+                    setExistingTags(tags || [])
 
                     let fetchedContent = data.contentPreview || ''
                     if (typeof data.content === 'string') {
@@ -46,7 +57,7 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
                         setContentText(fetchedContent)
                         setEditTitle(data.title || '')
                         setEditContent(fetchedContent)
-                        setEditTagsInput((data.tags || []).join(', '))
+                        setEditTags(data.tags || [])
                         setEditColor(data.color || DEFAULT_NOTE_COLOR)
                         setLoading(false)
                     }
@@ -65,6 +76,8 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
     const handleClose = () => {
         setEditMode(false)
         setShowDeleteConfirm(false)
+        setShowShare(false)
+        setShowLinkEntity(false)
         onClose?.()
     }
 
@@ -75,18 +88,12 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
     const handleSave = async () => {
         setSaving(true)
         try {
-            const tags = editTagsInput
-                .split(',')
-                .map(t => t.trim())
-                .filter(Boolean)
-
             await api.updateNote(note._id, {
                 title: editTitle.trim() || undefined,
                 content: editContent,
-                tags,
+                tags: editTags,
                 color: editColor === DEFAULT_NOTE_COLOR ? undefined : editColor
             })
-
             setEditMode(false)
             onUpdated?.()
         } catch (err) {
@@ -136,6 +143,14 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
     const displayNote = fullNote || note
     const noteColor = displayNote.color || DEFAULT_NOTE_COLOR
 
+    if (showShare) {
+        return <ShareNoteModal note={displayNote} onClose={() => setShowShare(false)} onShared={onUpdated} />
+    }
+
+    if (showLinkEntity) {
+        return <LinkEntityModal note={displayNote} onClose={() => setShowLinkEntity(false)} onLinked={onUpdated} />
+    }
+
     if (showDeleteConfirm) {
         return (
             <div className="modal-overlay" onClick={handleBackdropClick}>
@@ -164,7 +179,7 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
     if (editMode) {
         return (
             <div className="modal-overlay" onClick={handleBackdropClick}>
-                <div className="modal-content">
+                <div className="modal-content modal-note-edit">
                     <div className="modal-header">
                         <button className="btn-ghost" onClick={() => setEditMode(false)}>← Back</button>
                         <h2 className="modal-title">Edit Note</h2>
@@ -185,58 +200,35 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
 
                     <div className="form-group">
                         <label>Content</label>
-                        <textarea
-                            className="text-input"
-                            value={editContent}
-                            onChange={e => setEditContent(e.target.value)}
-                            rows={8}
+                        <RichTextEditor
+                            content={editContent}
+                            onChange={setEditContent}
+                            placeholder="Write your note..."
+                            mode={editorMode}
+                            onModeChange={setEditorMode}
+                            height={250}
                         />
                     </div>
 
                     <div className="form-group">
-                        <label>Tags (comma-separated)</label>
-                        <input
-                            className="text-input"
-                            type="text"
-                            value={editTagsInput}
-                            onChange={e => setEditTagsInput(e.target.value)}
-                            placeholder="tag1, tag2"
+                        <label>Tags</label>
+                        <TagInput
+                            tags={editTags}
+                            onChange={setEditTags}
+                            existingTags={existingTags}
                         />
-                        {editTagsInput.split(',').map(t => t.trim()).filter(Boolean).length > 0 && (
-                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
-                                {editTagsInput.split(',').map(t => t.trim()).filter(Boolean).map(tag => (
-                                    <span key={tag} style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                        padding: '2px 8px', borderRadius: '12px',
-                                        backgroundColor: 'var(--bg-surface, #383a40)', fontSize: '0.8rem'
-                                    }}>
-                                        {tag}
-                                        <button type="button" onClick={() => {
-                                            const tags = editTagsInput.split(',').map(t => t.trim()).filter(Boolean)
-                                            setEditTagsInput(tags.filter(t => t !== tag).join(', '))
-                                        }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #949ba4)', cursor: 'pointer', padding: 0, fontSize: '0.9rem' }}>×</button>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
                     </div>
 
                     <div className="form-group">
                         <label>Color</label>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div className="color-picker">
                             {NOTE_COLORS.map(color => (
                                 <button
                                     key={color}
                                     type="button"
+                                    className={`color-swatch ${editColor === color ? 'selected' : ''}`}
+                                    style={{ backgroundColor: color }}
                                     onClick={() => setEditColor(color)}
-                                    style={{
-                                        width: '28px',
-                                        height: '28px',
-                                        borderRadius: '50%',
-                                        backgroundColor: color,
-                                        border: editColor === color ? '2px solid white' : '2px solid transparent',
-                                        cursor: 'pointer'
-                                    }}
                                 />
                             ))}
                         </div>
@@ -263,16 +255,24 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
 
     return (
         <div className="modal-overlay" onClick={handleBackdropClick}>
-            <div className="modal-content" style={{ borderTop: `4px solid ${noteColor}` }}>
+            <div
+                className="modal-content modal-note-view"
+                style={{
+                    '--note-color': noteColor,
+                    '--note-gradient': `linear-gradient(180deg, ${noteColor}50 25%, ${noteColor}12 50%, transparent 100%)`,
+                }}
+            >
                 <div className="modal-header">
                     <button className="btn-ghost" onClick={handleClose}>← Back</button>
                     <div className="modal-actions">
+                        <button className="btn-icon" title="Link Entity" onClick={() => setShowLinkEntity(true)}>🔗</button>
+                        <button className="btn-icon" title="Share" onClick={() => setShowShare(true)}>👥</button>
                         <button className="btn-icon" title="Edit" onClick={() => setEditMode(true)}>✏️</button>
                         <button className="btn-icon" title="Delete" onClick={() => setShowDeleteConfirm(true)}>🗑️</button>
                     </div>
                 </div>
 
-                <h2 className="modal-title" style={{ color: noteColor }}>
+                <h2 className="modal-title note-view-title" style={{ color: 'var(--text)' }}>
                     {displayNote.title || 'Untitled'}
                 </h2>
 
