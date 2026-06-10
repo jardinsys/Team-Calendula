@@ -1553,7 +1553,7 @@ async function handleGeneralMigration(interaction, sessionId) {
     const embed = new EmbedBuilder()
         .setColor(SETTINGS_COLOR)
         .setTitle('Migration Tools')
-        .setDescription('Import and export tools are coming soon!\n\n**Planned support:**\n• PluralKit (API + file)\n• Simply Plural (API)\n• Octocon\n• Tupperbox (file)\n• JSON export/import\n\nFor now, use the prefix commands:\n`sys!import` — Import from other platforms\n`sys!convert` — Convert alters to states');
+        .setDescription('Import and export tools are available via prefix commands!\n\n**Supported sources:**\n• PluralKit (API + file)\n• Simply Plural (API)\n• Octocon (API + file)\n• Tupperbox (file)\n• Auto-detect (file)\n\n**Commands:**\n`sys!import` — Import from other platforms\n`sys!convert` — Convert alters to states\n\nA settings UI for imports is coming soon.');
 
     const backRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('settings_main_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Danger)

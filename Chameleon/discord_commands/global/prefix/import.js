@@ -1,12 +1,14 @@
 // sys!import - Import system data from other platforms
-// Supports: PluralKit (file + API), Tupperbox (file), Simply Plural (API)
+// Supports: PluralKit (file + API), Tupperbox (file), Simply Plural (API), Octocon (file + API)
 //
 // USAGE:
 //   sys!import                           - Show help
-//   sys!import pluralkit                 - Import from attached PK export file
-//   sys!import pluralkit <token>         - Import via PluralKit API
+//   sys!import pluralkit                 - Import via PluralKit API (opens modal for token)
+//   sys!import pluralkit <file>          - Import from attached PK export file
 //   sys!import tupperbox                 - Import from attached Tupperbox export file
-//   sys!import simplyplural <token>      - Import via Simply Plural API
+//   sys!import simplyplural              - Import via SP API (opens modal for token)
+//   sys!import octocon                   - Import via Octocon API (opens modal for system ID)
+//   sys!import octocon <file>            - Import from attached Octocon export file
 //   sys!import <file>                    - Auto-detect format from attached file
 //
 // FLAGS:
@@ -19,13 +21,16 @@
 //   -target:discord                      - Import to Discord-specific fields
 //
 // MULTI-SOURCE WORKFLOW:
-//   1. sys!import simplyplural <token>              - Import SP data as main profile
-//   2. sys!import pluralkit <token> -target:discord - Add PK data as Discord overlay
+//   1. sys!import simplyplural           - Import SP data as main profile
+//   2. sys!import pluralkit -target:discord - Add PK data as Discord overlay
 //
 // NOTE: Other platforms don't have "states" - all members import as alters by default.
 //       Use -states: flag or sys!convert after import to change alters to states.
 
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const {
+    EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+    ModalBuilder, TextInputBuilder, TextInputStyle
+} = require('discord.js');
 const mongoose = require('mongoose');
 const System = require('../../../schemas/system');
 const User = require('../../../schemas/user');
@@ -37,15 +42,16 @@ const {
     TARGET_DISCORD,
     IMPORT_COLOR,
     parsePluralKitUrl,
+    parseOctoconId,
     importPluralKitAPI,
     importPluralKitFile,
     importTupperboxFile,
     importSimplyPluralAPI,
+    importOctoconAPI,
+    importOctoconFile,
     importAutoDetect,
     createBackup,
 } = importFunctions;
-
-// Octocon: TODO — add Octocon as an import source (file + API)
 
 module.exports = {
     name: 'import',
@@ -95,79 +101,223 @@ module.exports = {
             target: targetMode
         };
 
+        // Build session ID for button/modal routing
+        const sessionId = utils.generateSessionId(message.author.id);
+
+        // Store session data for button/modal handlers
+        utils.setSession(sessionId, {
+            type: 'import',
+            userId: message.author.id,
+            systemId: system._id,
+            options,
+            source
+        });
+
         // Route based on source
         try {
             if (source === 'pluralkit' || source === 'pk') {
-                const token = parsed._positional[1];
-                if (token) return await handlePKAPI(message, system, user, token, options);
-                else if (message.attachments.size > 0) return await handlePKFile(message, system, user, options);
-                else return utils.error(message, 'Please provide a PluralKit token or attach an export file.\n\nGet your token: DM PluralKit with `pk;token`\nOr export: `pk;export` and attach the file');
+                if (message.attachments.size > 0) return await handlePKFile(message, system, user, options);
+                return await showTokenButton(message, 'pluralkit', sessionId);
             }
 
             if (source === 'tupperbox' || source === 'tb' || source === 'tupper') {
                 if (message.attachments.size > 0) return await handleTBFile(message, system, user, options);
-                else return utils.error(message, 'Please attach a Tupperbox export file.\n\nExport with: `tul!export`');
+                return utils.error(message, 'Please attach a Tupperbox export file.\n\nExport with: `tul!export`');
             }
 
             if (source === 'simplyplural' || source === 'sp') {
-                const token = parsed._positional[1];
-                if (token) return await handleSPAPI(message, system, user, token, options);
-                else return utils.error(message, 'Please provide a Simply Plural API token.\n\nGet your token: Settings → Developer → Add Token (Read permission)');
+                return await showTokenButton(message, 'simplyplural', sessionId);
+            }
+
+            if (source === 'octocon' || source === 'oc') {
+                if (message.attachments.size > 0) return await handleOctoconFile(message, system, user, options);
+                return await showTokenButton(message, 'octocon', sessionId);
             }
 
             // Auto-detect from attached file
             if (message.attachments.size > 0) return await handleAutoDetect(message, system, user, options);
 
-            return utils.error(message, `Unknown import source: \`${source}\`\nSupported: \`pluralkit\`, \`tupperbox\`, \`simplyplural\`\n\nUse \`sys!import\` for help.`);
+            return utils.error(message, `Unknown import source: \`${source}\`\nSupported: \`pluralkit\`, \`tupperbox\`, \`simplyplural\`, \`octocon\`\n\nUse \`sys!import\` for help.`);
 
         } catch (error) {
             console.error('Import error:', error);
             return utils.error(message, `Import failed: ${error.message}`);
         }
+    },
+
+    // Handle button interactions (token entry buttons)
+    async handleButtonInteraction(interaction) {
+        const customId = interaction.customId;
+
+        if (customId.startsWith('import_token_')) {
+            const parts = customId.split('_');
+            const source = parts[2]; // pluralkit, simplyplural, octocon
+            const sessionId = parts.slice(3).join('_');
+
+            const session = utils.getSession(sessionId);
+            if (!session || session.userId !== interaction.user.id) {
+                return interaction.reply({ content: 'Session expired. Run the import command again.', ephemeral: true });
+            }
+
+            const modal = buildTokenModal(source, sessionId);
+            return await interaction.showModal(modal);
+        }
+
+        if (customId.startsWith('import_pronouns_')) {
+            const parts = customId.split('_');
+            const answer = parts[2]; // yes or no
+            const sessionId = parts.slice(3).join('_');
+
+            const session = utils.getSession(sessionId);
+            if (!session || session.userId !== interaction.user.id) {
+                return interaction.reply({ content: 'Session expired. Run the import command again.', ephemeral: true });
+            }
+
+            session.options.applyPronouns = answer === 'yes';
+            utils.setSession(sessionId, session);
+
+            // Re-trigger the modal for token entry
+            const modal = buildTokenModal(session.source, sessionId);
+            return await interaction.showModal(modal);
+        }
+    },
+
+    // Handle modal submissions (token input)
+    async handleModalSubmit(interaction) {
+        const customId = interaction.customId;
+
+        if (customId.startsWith('import_modal_')) {
+            const parts = customId.split('_');
+            const source = parts[2]; // pluralkit, simplyplural, octocon
+            const sessionId = parts.slice(3).join('_');
+
+            const session = utils.getSession(sessionId);
+            if (!session || session.userId !== interaction.user.id) {
+                return interaction.reply({ content: 'Session expired. Run the import command again.', ephemeral: true });
+            }
+
+            const tokenOrId = interaction.fields.getTextInputValue('token_input');
+
+            if (!tokenOrId || tokenOrId.trim().length === 0) {
+                return interaction.reply({ content: 'No token/ID provided. Run the import command again.', ephemeral: true });
+            }
+
+            // Fetch system and user
+            const system = await System.findById(session.systemId);
+            const user = await User.findOne({ systemID: session.systemId });
+            if (!system) {
+                return interaction.reply({ content: 'System not found. Run the import command again.', ephemeral: true });
+            }
+
+            // Defer reply since import may take a while
+            await interaction.deferReply();
+
+            try {
+                await createBackup(system, source);
+
+                let result;
+                if (source === 'pluralkit') {
+                    result = await importPluralKitAPI(system, user, tokenOrId.trim(), session.options);
+                } else if (source === 'simplyplural') {
+                    result = await importSimplyPluralAPI(system, user, tokenOrId.trim(), session.options);
+                } else if (source === 'octocon') {
+                    const systemId = parseOctoconId(tokenOrId.trim());
+                    if (!systemId) {
+                        return interaction.editReply('Invalid Octocon system ID. Expected 7 characters (e.g. `abcdefg`) or a URL like `octocon.app/u/abcdefg`.');
+                    }
+                    result = await importOctoconAPI(system, user, systemId, session.options);
+                }
+
+                utils.deleteSession(sessionId);
+
+                await interaction.editReply({
+                    embeds: [buildImportResultEmbed(getSourceLabel(source), result, session.options.target)]
+                });
+            } catch (error) {
+                console.error('Import modal error:', error);
+                await interaction.editReply({
+                    embeds: [new EmbedBuilder()
+                        .setColor(utils.ENTITY_COLORS.error)
+                        .setDescription(`❌ ${error.message}`)]
+                });
+            }
+        }
     }
 };
 
 // ============================================
-// HANDLERS — Discord-specific UI wrapping
+// UI HELPERS — Token Button + Modal
 // ============================================
 
-async function handlePKAPI(message, system, user, token, options) {
-    const statusMsg = await message.reply({
+function getSourceLabel(source) {
+    const labels = {
+        pluralkit: 'PluralKit',
+        simplyplural: 'Simply Plural',
+        octocon: 'Octocon'
+    };
+    return labels[source] || source;
+}
+
+async function showTokenButton(message, source, sessionId) {
+    const labels = {
+        pluralkit: { title: '🔷 PluralKit Import', desc: 'Click the button below to enter your PluralKit API token.\n\nGet your token: DM PluralKit with `pk;token`' },
+        simplyplural: { title: '💜 Simply Plural Import', desc: 'Click the button below to enter your Simply Plural API token.\n\nGet your token: Settings → Developer → Add Token (Read permission)' },
+        octocon: { title: '🐙 Octocon Import', desc: 'Click the button below to enter your Octocon system ID.\n\nFind it at: `octocon.app/u/yourid`\nID is 7 characters (e.g. `abcdefg`)\n\n⚠️ Private/trusted alters may not appear via API.' }
+    };
+
+    const info = labels[source];
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`import_token_${source}_${sessionId}`)
+            .setLabel('Enter Token')
+            .setStyle(ButtonStyle.Primary)
+    );
+
+    return message.reply({
         embeds: [new EmbedBuilder()
             .setColor(IMPORT_COLOR)
-            .setDescription('🔄 Connecting to PluralKit API...')]
+            .setTitle(info.title)
+            .setDescription(info.desc)],
+        components: [row]
     });
-
-    try {
-        // Backup before import
-        await createBackup(system, 'pluralkit');
-        await statusMsg.edit({
-            embeds: [new EmbedBuilder()
-                .setColor(IMPORT_COLOR)
-                .setDescription('🔄 Backup saved. Fetching data from PluralKit...')]
-        });
-
-        const result = await importPluralKitAPI(system, user, token, options);
-
-        await statusMsg.edit({
-            embeds: [buildImportResultEmbed('PluralKit', result, options.target)]
-        });
-    } catch (error) {
-        if (error.message?.includes('Invalid or expired token')) {
-            await statusMsg.edit({
-                embeds: [new EmbedBuilder()
-                    .setColor(utils.ENTITY_COLORS.error)
-                    .setDescription('❌ Invalid or expired PluralKit token.\n\nGet a new one with `pk;token`')]
-            });
-        } else {
-            await statusMsg.edit({
-                embeds: [new EmbedBuilder()
-                    .setColor(utils.ENTITY_COLORS.error)
-                    .setDescription(`❌ ${error.message}`)]
-            });
-        }
-    }
 }
+
+function buildTokenModal(source, sessionId) {
+    const placeholders = {
+        pluralkit: 'pk;token or your 5-6 char system token',
+        simplyplural: 'Your SP API token',
+        octocon: 'Your 7-char system ID or octocon.app/u/yourid URL'
+    };
+
+    const labels = {
+        pluralkit: 'PluralKit Token',
+        simplyplural: 'Simply Plural Token',
+        octocon: 'Octocon System ID'
+    };
+
+    const modal = new ModalBuilder()
+        .setCustomId(`import_modal_${source}_${sessionId}`)
+        .setTitle(`Import from ${getSourceLabel(source)}`);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('token_input')
+                .setLabel(labels[source])
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder(placeholders[source])
+                .setRequired(true)
+                .setMaxLength(200)
+        )
+    );
+
+    return modal;
+}
+
+// ============================================
+// HANDLERS — File-based imports (no modal needed)
+// ============================================
 
 async function handlePKFile(message, system, user, options) {
     const attachment = message.attachments.first();
@@ -241,25 +391,32 @@ async function handleTBFile(message, system, user, options) {
     }
 }
 
-async function handleSPAPI(message, system, user, token, options) {
+async function handleOctoconFile(message, system, user, options) {
+    const attachment = message.attachments.first();
+    if (!attachment.name.endsWith('.json'))
+        return utils.error(message, 'Please attach a JSON file.');
+
     const statusMsg = await message.reply({
         embeds: [new EmbedBuilder()
             .setColor(IMPORT_COLOR)
-            .setDescription('🔄 Connecting to Simply Plural API...')]
+            .setDescription('🔄 Downloading file...')]
     });
 
     try {
-        await createBackup(system, 'simplyplural');
+        const response = await fetch(attachment.url);
+        const fileData = await response.json();
+
+        await createBackup(system, 'octocon');
         await statusMsg.edit({
             embeds: [new EmbedBuilder()
                 .setColor(IMPORT_COLOR)
-                .setDescription('🔄 Backup saved. Fetching data from Simply Plural...')]
+                .setDescription(`🔄 Processing **${fileData.alters?.length || 0}** alters...`)]
         });
 
-        const result = await importSimplyPluralAPI(system, user, token, options);
+        const result = await importOctoconFile(system, user, fileData, options);
 
         await statusMsg.edit({
-            embeds: [buildImportResultEmbed('Simply Plural', result, options.target)]
+            embeds: [buildImportResultEmbed('Octocon', result, options.target)]
         });
     } catch (error) {
         await statusMsg.edit({
@@ -288,7 +445,11 @@ async function handleAutoDetect(message, system, user, options) {
         await createBackup(system, 'auto');
 
         // Detect source for backup label
-        const source = fileData.tuppers ? 'Tupperbox' : (fileData.members || fileData.id) ? 'PluralKit' : 'Unknown';
+        let source = 'Unknown';
+        if (fileData.tuppers) source = 'Tupperbox';
+        else if (fileData.user && fileData.alters && fileData.tags) source = 'Octocon';
+        else if (fileData.members || fileData.id) source = 'PluralKit';
+
         await statusMsg.edit({
             embeds: [new EmbedBuilder()
                 .setColor(IMPORT_COLOR)
@@ -323,11 +484,11 @@ async function handleHelp(message) {
                 name: '🔷 PluralKit',
                 value: [
                     '**Via API (recommended):**',
-                    '`sys!import pluralkit <token>`',
+                    '`sys!import pluralkit` → enter token in modal',
                     'Get token: DM PluralKit with `pk;token`',
                     '',
                     '**Via file:**',
-                    '`sys!import pluralkit` (attach file)',
+                    '`sys!import pluralkit` + attach file',
                     'Export with: `pk;export`'
                 ].join('\n'),
                 inline: false
@@ -335,7 +496,7 @@ async function handleHelp(message) {
             {
                 name: '📦 Tupperbox',
                 value: [
-                    '`sys!import tupperbox` (attach file)',
+                    '`sys!import tupperbox` + attach file',
                     'Export with: `tul!export`',
                     '',
                     '*Tupperbox doesn\'t have an API*'
@@ -345,13 +506,26 @@ async function handleHelp(message) {
             {
                 name: '💜 Simply Plural',
                 value: [
-                    '`sys!import simplyplural <token>`',
+                    '`sys!import simplyplural` → enter token in modal',
                     'Get token: Settings → Developer → Add Token',
                     '*(Check "Read" permission)*'
                 ].join('\n'),
                 inline: false
             },
-            // Octocon: TODO — add Octocon import option here
+            {
+                name: '🐙 Octocon',
+                value: [
+                    '**Via API (recommended):**',
+                    '`sys!import octocon` → enter system ID in modal',
+                    'Find ID at: `octocon.app/u/yourid`',
+                    '',
+                    '**Via file:**',
+                    '`sys!import octocon` + attach file',
+                    '',
+                    '⚠️ Private/trusted alters may not appear via API.'
+                ].join('\n'),
+                inline: false
+            },
             {
                 name: '🎯 Target Mode',
                 value: [
@@ -368,10 +542,10 @@ async function handleHelp(message) {
                 value: [
                     '```',
                     '# 1. Import Simply Plural as main profile',
-                    'sys!import simplyplural <token>',
+                    'sys!import simplyplural',
                     '',
                     '# 2. Add PluralKit data for Discord',
-                    'sys!import pluralkit <token> -target:discord',
+                    'sys!import pluralkit -target:discord',
                     '```',
                     'Now your alters have SP avatars for the app,',
                     'and PK avatars for Discord proxying!'
@@ -393,7 +567,7 @@ async function handleHelp(message) {
                 name: '🔄 Converting Members to States',
                 value: [
                     'Use `-states:` flag during import:',
-                    '`sys!import pk <token> -states:Tired,Anxious`',
+                    '`sys!import pk -states:Tired,Anxious`',
                     '',
                     'Or convert after import:',
                     '`sys!convert alter Tired to state`'

@@ -2,10 +2,10 @@ import React, { useMemo } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
 import { getSystemTerm } from '@chameleon/shared'
 import {
-  UserRound,
+  PersonStanding,
   Users,
-  BookOpen,
-  Dice5,
+  NotepadText,
+  Dices,
   TriangleAlert,
   Settings,
 } from 'lucide-react'
@@ -33,10 +33,10 @@ function ReturningLanding({ onNavigate, system, discordUser }) {
   }, [system, discordUser])
 
   const FEATURES = useMemo(() => [
-    { id: 'system', icon: UserRound, label: systemLabel },
+    { id: 'system', icon: PersonStanding, label: systemLabel },
     { id: 'friends', icon: Users, label: 'Friends' },
-    { id: 'notes', icon: BookOpen, label: 'Notes' },
-    { id: 'activities', icon: Dice5, label: 'Activities' },
+    { id: 'notes', icon: NotepadText, label: 'Notes' },
+    { id: 'activities', icon: Dices, label: 'Activities' },
   ], [systemLabel])
 
   return (

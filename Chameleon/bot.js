@@ -272,6 +272,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
+			// Import command buttons (token entry)
+			if (customId.startsWith('import_')) {
+				const cmd = interaction.client.prefixCommands.get('import');
+				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
+			}
+
 			// Add more button handlers here as needed...
 
 		} catch (error) {
@@ -452,6 +458,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 			// Settings command modals
 			if (customId.startsWith('settings_')) {
 				const cmd = interaction.client.commands.get('settings');
+				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
+			}
+
+			// Import command modals (token submission)
+			if (customId.startsWith('import_')) {
+				const cmd = interaction.client.prefixCommands.get('import');
 				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
