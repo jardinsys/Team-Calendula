@@ -302,6 +302,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
+			// new_user_ select menus (onboarding disorder selection)
+			if (customId.startsWith('new_user_disorder_')) return await utils.handleNewUserButton(interaction);
+
 			// Alter command select menus
 			if (customId.startsWith('alter_')) {
 				const cmd = interaction.client.commands.get('alter');
@@ -387,6 +390,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				const cmd = interaction.client.commands.get('system');
 				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
+
+			// new_user_ modals (onboarding)
+			if (customId.startsWith('new_user_other_modal_')) return await utils.handleNewUserModal(interaction);
+			if (customId.startsWith('new_user_name_modal_')) return await utils.handleNewUserNameModal(interaction);
 
 			// Alter command modals
 			if (customId.startsWith('alter_')) {

@@ -14,7 +14,7 @@ function NoteCard({ note, onClick, variant = 'grid' }) {
             className={`note-card note-card-${variant}`}
             style={{
                 '--note-color': color,
-                '--note-gradient': `radial-gradient(ellipse at top left, ${color}50 025%, ${color}12 60%, var(--bg-card) 100%)`,
+                '--note-gradient': `linear-gradient(135deg, ${color}14 0%, ${color}06 100%)`,
             }}
             onClick={() => onClick?.(note)}
             role="button"

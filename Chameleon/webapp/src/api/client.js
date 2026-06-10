@@ -143,6 +143,14 @@ class ApiClient {
     async getFriendFront(friendId) {
         return this.request(`/friends/${friendId}/front`);
     }
+
+    // States (for creating dissociative state during onboarding)
+    async createState(data) {
+        return this.request('/states', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    }
 }
 
 const api = new ApiClient();

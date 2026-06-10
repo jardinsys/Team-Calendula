@@ -285,7 +285,9 @@ async function buildGeneralOverview(interaction, user, system, sessionId, isUpda
             { name: 'Pronoun Separator', value: system.discord?.pronounSeparator || '*Not set*', inline: true },
             { name: 'Friend Auto-Bucket', value: system.setting?.friendAutoBucket || '*Not set*', inline: true },
             { name: 'Auto-share Notes', value: system.setting?.autoshareNotestoUsers ? '✅ Enabled' : '❌ Disabled', inline: true },
-            { name: 'Message Pings', value: user.settings?.allowPing !== false ? '✅ Enabled' : '❌ Disabled', inline: true }
+            { name: 'Message Pings', value: user.settings?.allowPing !== false ? '✅ Enabled' : '❌ Disabled', inline: true },
+            { name: 'Note Auto-Attribution', value: { topLayer: 'Top Layer', allFronters: 'All Fronters', off: 'Off' }[system.setting?.noteAutoAttribution || 'topLayer'], inline: true },
+            { name: 'Attribution Display', value: user.settings?.noteAttributionStyle === 'entityOnly' ? 'Entity Only' : 'Entity + User', inline: true }
         );
 
     if (system.discord?.tag?.normal?.length > 0) {
@@ -311,8 +313,13 @@ async function buildGeneralOverview(interaction, user, system, sessionId, isUpda
         new ButtonBuilder().setCustomId('settings_main_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Danger)
     );
 
-    if (isUpdate) return await interaction.update({ embeds: [embed], components: [row1, row2, row3] });
-    return await interaction.reply({ embeds: [embed], components: [row1, row2, row3], ephemeral: true });
+    const row4 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('settings_general_autoattribution_' + sessionId).setLabel('Auto-Attribution').setStyle(system.setting?.noteAutoAttribution !== 'off' ? ButtonStyle.Success : ButtonStyle.Secondary).setEmoji(system.setting?.noteAutoAttribution !== 'off' ? '✅' : '🏷️'),
+        new ButtonBuilder().setCustomId('settings_general_attributionstyle_' + sessionId).setLabel('Attribution Display').setStyle(ButtonStyle.Secondary).setEmoji('👁️')
+    );
+
+    if (isUpdate) return await interaction.update({ embeds: [embed], components: [row1, row2, row3, row4] });
+    return await interaction.reply({ embeds: [embed], components: [row1, row2, row3, row4], ephemeral: true });
 }
 
 // ============================================
@@ -433,6 +440,12 @@ async function handleButtonInteraction(interaction) {
     }
     if (customId.startsWith('settings_general_migration_')) {
         return await handleGeneralMigration(interaction, sessionId);
+    }
+    if (customId.startsWith('settings_general_autoattribution_')) {
+        return await handleGeneralAutoAttribution(interaction, sessionId);
+    }
+    if (customId.startsWith('settings_general_attributionstyle_')) {
+        return await handleGeneralAttributionStyle(interaction, sessionId);
     }
 
     // Proxy layout sub-buttons
@@ -1460,6 +1473,37 @@ async function handleGeneralAllowPingToggle(interaction, sessionId) {
 
     if (!user.settings) user.settings = {};
     user.settings.allowPing = user.settings.allowPing === false ? true : (user.settings.allowPing === undefined ? false : !user.settings.allowPing);
+    await user.save();
+
+    const system = await System.findById(session.systemId);
+    return await buildGeneralOverview(interaction, user, system, sessionId, true);
+}
+
+const AUTO_ATTRIBUTION_OPTIONS = ['topLayer', 'allFronters', 'off'];
+const AUTO_ATTRIBUTION_LABELS = { topLayer: 'Top Layer', allFronters: 'All Fronters', off: 'Off' };
+
+async function handleGeneralAutoAttribution(interaction, sessionId) {
+    const session = utils.getSession(sessionId);
+    const system = await System.findById(session.systemId);
+    if (!system) return await interaction.reply({ content: 'Not registered.', ephemeral: true });
+
+    if (!system.setting) system.setting = {};
+    const current = system.setting.noteAutoAttribution || 'topLayer';
+    const nextIndex = (AUTO_ATTRIBUTION_OPTIONS.indexOf(current) + 1) % AUTO_ATTRIBUTION_OPTIONS.length;
+    system.setting.noteAutoAttribution = AUTO_ATTRIBUTION_OPTIONS[nextIndex];
+    await system.save();
+
+    const user = await User.findById(session.userId);
+    return await buildGeneralOverview(interaction, user, system, sessionId, true);
+}
+
+async function handleGeneralAttributionStyle(interaction, sessionId) {
+    const session = utils.getSession(sessionId);
+    const user = await User.findById(session.userId);
+    if (!user) return await interaction.reply({ content: 'User not found.', ephemeral: true });
+
+    if (!user.settings) user.settings = {};
+    user.settings.noteAttributionStyle = user.settings.noteAttributionStyle === 'entityOnly' ? 'entityAndUser' : 'entityOnly';
     await user.save();
 
     const system = await System.findById(session.systemId);

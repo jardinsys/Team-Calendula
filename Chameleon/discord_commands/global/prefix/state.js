@@ -73,7 +73,13 @@ module.exports = {
             'id': handleId
         };
 
-        if (handlers[subcommand]) return handlers[subcommand](message, parsed, stateName);
+        if (handlers[subcommand]) {
+            const { system } = await utils.getOrCreateUserAndSystem(message);
+            if (system && !system.sys_type?.isFragmented && !system.sys_type?.isDissociative) {
+                return utils.error(message, 'Your current setup does not allow states. You can update this in `sys!system edit` if you need a change.');
+            }
+            return handlers[subcommand](message, parsed, stateName);
+        }
         return handleShow(message, parsed, stateName);
     }
 };
@@ -92,12 +98,19 @@ async function handleShow(message, parsed, stateName) {
     const result = await utils.findEntity(stateName, system, 'state');
     if (!result) return utils.error(message, `State **${stateName}** not found.`);
     const embed = await buildStateEmbed(result.entity, system, message.author?.displayName);
+    const isSelf = targetUserId === message.author.id;
+    if (isSelf && !system.sys_type?.isFragmented && !system.sys_type?.isDissociative) {
+        embed.addFields({ name: '⚠️ Notice', value: 'Your current setup does not allow states. You can update this in `sys!system edit` if you need a change.' });
+    }
     return message.reply({ embeds: [embed] });
 }
 
 async function handleNew(message, parsed) {
     const { system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
+    if (!system.sys_type?.isFragmented && !system.sys_type?.isDissociative) {
+        return utils.error(message, 'Your current setup does not allow states. You can update this in `sys!system edit` if you need a change.');
+    }
     const name = parsed._positional.slice(1).join(' ');
     if (!name) return utils.error(message, 'Please provide a name: `sys!state new <n>`');
     const indexable = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
@@ -583,6 +596,10 @@ async function handleList(message, parsed) {
         embed.setDescription(desc);
     } else {
         embed.setDescription(states.map(s => s.name?.display || s.name?.indexable).join(', '));
+    }
+    const isSelf = targetUserId === message.author.id;
+    if (isSelf && !system.sys_type?.isFragmented && !system.sys_type?.isDissociative) {
+        embed.addFields({ name: '⚠️ Notice', value: 'Your current setup does not allow states. You can update this in `sys!system edit` if you need a change.' });
     }
     return message.reply({ embeds: [embed] });
 }

@@ -33,10 +33,12 @@ const systemSchema = new mongoose.Schema({
         name: String,
         dd: {
             DSM: { type: String, enum: ["DID", "Amnesia", "Dereal/Depers", "OSDD-1A", "OSDD-1B", "OSDD-2", "OSDD-3", "OSDD-4", "UDD"] },
-            ICD: { type: String, enum: ["P-DID", "Trance", "DNSD", "Possession Trance", "SDS"] },
+            ICD: { type: String, enum: ["P-DID", "Trance", "DNSD", "Possession Trance"] },
         },
         isSystem: Boolean, // Alters, States, Groups
-        isFragmented: Boolean // States + Groups
+        isFragmented: Boolean, // States + Groups
+        isDissociative: { type: Boolean, default: false }, // Dereal/Depers — tracking dissociative states, no groups
+        onboardingCompleted: { type: Boolean, default: false }
     },
     description: String,
     birthday: Date,
@@ -193,6 +195,7 @@ const systemSchema = new mongoose.Schema({
     setting: {
         autoshareNotestoUsers: { type: Boolean, default: false },
         proxyCoolDown: { type: Number, default: 3600 },
+        noteAutoAttribution: { type: String, enum: ['topLayer', 'allFronters', 'off'], default: 'topLayer' },
         mask: {
             maskTo: [{
                 userFriendID: String,

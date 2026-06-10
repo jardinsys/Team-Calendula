@@ -51,9 +51,13 @@ class ApiClient {
     // NOTES
     // ═══════════════════════════════════════════
 
-    async getNotes(filter = 'all', tag, skip = 0, limit = 50) {
+    async getNotes(filter = 'all', tag, skip = 0, limit = 50, { entityId, entityType } = {}) {
         const params = new URLSearchParams({ filter, skip, limit })
         if (tag) params.set('tag', tag)
+        if (entityId && entityType) {
+            params.set('entityId', entityId)
+            params.set('entityType', entityType)
+        }
         return this.request(`/notes?${params}`)
     }
 
@@ -128,11 +132,18 @@ class ApiClient {
         return this.createNote(data)
     }
 
-    async appendToNote(id, content) {
+    async appendToNote(id, content, attribution) {
+        const body = { content }
+        if (attribution) body.attribution = attribution
         return this.request(`/notes/${id}/append`, {
             method: 'PATCH',
-            body: JSON.stringify({ content })
+            body: JSON.stringify(body)
         })
+    }
+
+    async getNoteHistory(id, skip = 0, limit = 20) {
+        const params = new URLSearchParams({ skip, limit })
+        return this.request(`/notes/${id}/history?${params}`)
     }
 
     // ═══════════════════════════════════════════
@@ -418,7 +429,19 @@ const NEUTRAL_TERMS = {
 };
 
 export function isSystemUser(system) {
-    return system?.sys_type?.isSystem === true;
+    return !!system?.sys_type?.isSystem;
+}
+
+export function isFragmentedUser(system) {
+    return !!system?.sys_type?.isFragmented;
+}
+
+export function isDissociativeUser(system) {
+    return !!system?.sys_type?.isDissociative;
+}
+
+export function isBasicUser(system) {
+    return !isSystemUser(system) && !isFragmentedUser(system) && !isDissociativeUser(system);
 }
 
 export function getSystemTerm(system, { context = 'label' } = {}) {

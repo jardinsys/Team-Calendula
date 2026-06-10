@@ -55,6 +55,8 @@ module.exports = {
             'notif': () => handleNotifications(message, parsed, user),
             'friendbucket': () => handleFriendBucket(message, parsed, system),
             'ping': () => handlePing(message, parsed, user),
+            'autoattribution': () => handleAutoAttribution(message, parsed, system),
+            'attributionstyle': () => handleAttributionStyle(message, parsed, user),
             'help': () => handleHelp(message)
         };
 
@@ -92,7 +94,8 @@ async function handleShow(message, user, system) {
                 `**Pronoun Separator:** ${system.discord?.pronounSeparator || '*Not set*'}`,
                 `**Discord Sync:** ${system.syncWithApps?.discord ? '✅ Enabled' : '❌ Disabled'}`,
                 `**Auto-share Notes:** ${system.setting?.autoshareNotestoUsers ? '✅ Enabled' : '❌ Disabled'}`,
-                `**Friend Auto-Bucket:** ${system.setting?.friendAutoBucket || '*Not set*'}`
+                `**Friend Auto-Bucket:** ${system.setting?.friendAutoBucket || '*Not set*'}`,
+                `**Note Auto-Attribution:** ${{ topLayer: 'Top Layer', allFronters: 'All Fronters', off: 'Off' }[system.setting?.noteAutoAttribution || 'topLayer']}`
             ].join('\n'),
             inline: false
         });
@@ -121,7 +124,10 @@ async function handleShow(message, user, system) {
 
         embed.addFields({
             name: '🔤 Display',
-            value: `**Special Characters:** ${user.settings?.closedCharAllowed !== false ? '✅ Allowed' : '❌ Restricted'}`,
+            value: [
+                `**Special Characters:** ${user.settings?.closedCharAllowed !== false ? '✅ Allowed' : '❌ Restricted'}`,
+                `**Attribution Display:** ${user.settings?.noteAttributionStyle === 'entityOnly' ? 'Entity Only' : 'Entity + User'}`
+            ].join('\n'),
             inline: false
         });
 
@@ -617,6 +623,39 @@ async function handlePing(message, parsed, user) {
     return utils.success(message, `Message pings are now **${enable ? 'enabled' : 'disabled'}**.`);
 }
 
+const AUTO_ATTRIBUTION_OPTIONS = ['topLayer', 'allFronters', 'off'];
+const AUTO_ATTRIBUTION_LABELS = { topLayer: 'Top Layer', allFronters: 'All Fronters', off: 'Off' };
+
+async function handleAutoAttribution(message, parsed, system) {
+    const value = parsed._positional[1]?.toLowerCase();
+
+    if (!value || !AUTO_ATTRIBUTION_OPTIONS.includes(value)) {
+        const current = system?.setting?.noteAutoAttribution || 'topLayer';
+        return utils.info(message, `Note auto-attribution is currently **${AUTO_ATTRIBUTION_LABELS[current]}**.\nUse \`sys!config autoattribution <topLayer|allFronters|off>\` to change.`);
+    }
+
+    system.setting = system.setting || {};
+    system.setting.noteAutoAttribution = value;
+    await system.save();
+
+    return utils.success(message, `Note auto-attribution set to **${AUTO_ATTRIBUTION_LABELS[value]}**.`);
+}
+
+async function handleAttributionStyle(message, parsed, user) {
+    const value = parsed._positional[1]?.toLowerCase();
+
+    if (!value || !['entityanduser', 'entityonly'].includes(value)) {
+        const current = user.settings?.noteAttributionStyle === 'entityOnly' ? 'entityonly' : 'entityanduser';
+        return utils.info(message, `Attribution display is currently **${current === 'entityonly' ? 'Entity Only' : 'Entity + User'}**.\nUse \`sys!config attributionstyle <entityAndUser|entityOnly>\` to change.`);
+    }
+
+    user.settings = user.settings || {};
+    user.settings.noteAttributionStyle = value === 'entityonly' ? 'entityOnly' : 'entityAndUser';
+    await user.save();
+
+    return utils.success(message, `Attribution display set to **${value === 'entityonly' ? 'Entity Only' : 'Entity + User'}**.`);
+}
+
 async function handleHelp(message) {
     const embed = new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.info)
@@ -668,6 +707,14 @@ async function handleHelp(message) {
             {
                 name: '📢 Pings',
                 value: '`sys!config ping <on|off>` - Toggle message pings',
+                inline: false
+            },
+            {
+                name: '🏷️ Attribution',
+                value: [
+                    '`sys!config autoattribution <topLayer|allFronters|off>`',
+                    '`sys!config attributionstyle <entityAndUser|entityOnly>`'
+                ].join('\n'),
                 inline: false
             }
         )

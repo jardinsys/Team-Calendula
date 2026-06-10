@@ -104,10 +104,13 @@ router.post('/', authMiddleware, async (req, res) => {
                 ...(sysIdx && { indexable: sysIdx })
             },
             description,
-            sys_type: sys_type || { 
+            sys_type: sys_type || {
                 name: 'None',
+                dd: {},
                 isSystem: false,
-                isFragmented: false
+                isFragmented: false,
+                isDissociative: false,
+                onboardingCompleted: false
             },
             alters: { IDs: [] },
             states: { IDs: [] },
@@ -198,7 +201,7 @@ router.patch('/', authMiddleware, async (req, res) => {
 /**
  * PATCH /api/system/type
  * Update system type (affects UI features available)
- * Body: { isSystem?, isFragmented?, name?, dd?: { DSM?, ICD? } }
+ * Body: { isSystem?, isFragmented?, isDissociative?, name?, dd?: { DSM?, ICD? }, onboardingCompleted? }
  */
 router.patch('/type', authMiddleware, async (req, res) => {
     try {
@@ -212,14 +215,16 @@ router.patch('/type', authMiddleware, async (req, res) => {
             return res.status(404).json({ error: 'Not registered' });
         }
         
-        const { isSystem, isFragmented, name, dd } = req.body;
+        const { isSystem, isFragmented, isDissociative, name, dd, onboardingCompleted } = req.body;
         
         system.sys_type = system.sys_type || {};
         
         if (isSystem !== undefined) system.sys_type.isSystem = isSystem;
         if (isFragmented !== undefined) system.sys_type.isFragmented = isFragmented;
+        if (isDissociative !== undefined) system.sys_type.isDissociative = isDissociative;
         if (name !== undefined) system.sys_type.name = name;
         if (dd !== undefined) system.sys_type.dd = dd;
+        if (onboardingCompleted !== undefined) system.sys_type.onboardingCompleted = onboardingCompleted;
         
         await system.save();
         
@@ -229,6 +234,8 @@ router.patch('/type', authMiddleware, async (req, res) => {
             userType = 'system';
         } else if (system.sys_type.isFragmented) {
             userType = 'fractured';
+        } else if (system.sys_type.isDissociative) {
+            userType = 'dissociative';
         }
         
         res.json({ 

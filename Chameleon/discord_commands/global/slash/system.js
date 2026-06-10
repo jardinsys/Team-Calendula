@@ -1581,6 +1581,15 @@ async function handleSelectMenu(interaction) {
                         .setValue(system.sys_type?.isSystem ? 'yes' : 'no')
                         .setRequired(false)
                         .setMaxLength(3)
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('called_fragmented')
+                        .setLabel('Experiences fragmented states? (yes/no)')
+                        .setStyle(TextInputStyle.Short)
+                        .setValue(system.sys_type?.isFragmented ? 'yes' : 'no')
+                        .setRequired(false)
+                        .setMaxLength(3)
                 )
             );
             break;
@@ -2023,6 +2032,7 @@ async function handleModalSubmit(interaction) {
             const dsmType = interaction.fields.getTextInputValue('dsm_type');
             const icdType = interaction.fields.getTextInputValue('icd_type');
             const isSystem = interaction.fields.getTextInputValue('called_system');
+            const isFragmented = interaction.fields.getTextInputValue('called_fragmented');
 
             if (!system.sys_type) system.sys_type = { dd: {} };
             if (!system.sys_type.dd) system.sys_type.dd = {};
@@ -2044,6 +2054,7 @@ async function handleModalSubmit(interaction) {
             }
 
             system.sys_type.isSystem = isSystem?.toLowerCase() === 'yes';
+            system.sys_type.isFragmented = isFragmented?.toLowerCase() === 'yes';
 
             await system.save();
         }

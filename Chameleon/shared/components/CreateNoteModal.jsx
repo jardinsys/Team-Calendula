@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import api from '../api/client.js'
 import RichTextEditor from './RichTextEditor.jsx'
 import TagInput from './TagInput.jsx'
+import AttributionEditor from './AttributionEditor.jsx'
 
 const NOTE_COLORS = [
     '#8b5cf6', '#ED4245', '#E67E22', '#F1C40F',
@@ -17,10 +18,31 @@ function CreateNoteModal({ onClose, onCreated }) {
     const [creating, setCreating] = useState(false)
     const [error, setError] = useState(null)
     const [existingTags, setExistingTags] = useState([])
+    const [entityOwner, setEntityOwner] = useState(null)
+    const [entities, setEntities] = useState([])
+    const [entityTab, setEntityTab] = useState('alter')
+    const [attribution, setAttribution] = useState([])
 
     useEffect(() => {
         api.getNoteTags().then(t => setExistingTags(t || [])).catch(() => {})
+        loadEntities()
     }, [])
+
+    useEffect(() => {
+        loadEntities()
+    }, [entityTab])
+
+    const loadEntities = async () => {
+        try {
+            let data
+            if (entityTab === 'alter') data = await api.getAlters()
+            else if (entityTab === 'state') data = await api.getStates()
+            else data = await api.getGroups()
+            setEntities(data || [])
+        } catch {
+            setEntities([])
+        }
+    }
 
     const handleCreate = async (e) => {
         e.preventDefault()
@@ -28,12 +50,17 @@ function CreateNoteModal({ onClose, onCreated }) {
         setCreating(true)
         setError(null)
         try {
-            await api.createNote({
+            const payload = {
                 title: title.trim() || undefined,
                 content,
                 tags,
-                color: selectedColor
-            })
+                color: selectedColor,
+                attribution: attribution.map(e => ({ type: e.type, id: e.id }))
+            }
+            if (entityOwner) {
+                payload.entityOwner = { type: entityOwner.type, id: entityOwner.id }
+            }
+            await api.createNote(payload)
             onCreated?.()
             onClose?.()
         } catch (err) {
@@ -86,6 +113,48 @@ function CreateNoteModal({ onClose, onCreated }) {
                             tags={tags}
                             onChange={setTags}
                             existingTags={existingTags}
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label>Owned by Entity (optional)</label>
+                        <select
+                            className="text-input"
+                            value={entityOwner ? `${entityOwner.type}:${entityOwner.id}` : ''}
+                            onChange={e => {
+                                const val = e.target.value
+                                if (!val) { setEntityOwner(null); return }
+                                const [type, id] = val.split(':')
+                                const ent = entities.find(en => en._id === id)
+                                setEntityOwner({ type, id, name: ent?.name?.display || ent?.name?.indexable || 'Unknown' })
+                            }}
+                        >
+                            <option value="">None</option>
+                            {entities.map(ent => {
+                                const name = ent.name?.display || ent.name?.indexable || 'Unknown'
+                                return <option key={ent._id} value={`${entityTab}:${ent._id}`}>{name}</option>
+                            })}
+                        </select>
+                        <div className="entity-tabs" style={{ marginTop: '8px' }}>
+                            {['alter', 'state', 'group'].map(tab => (
+                                <button
+                                    key={tab}
+                                    type="button"
+                                    className={`entity-tab ${entityTab === tab ? 'active' : ''}`}
+                                    onClick={() => setEntityTab(tab)}
+                                >
+                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}s
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="form-group">
+                        <label>Attribution</label>
+                        <AttributionEditor
+                            attribution={attribution}
+                            onChange={setAttribution}
+                            compact
                         />
                     </div>
 

@@ -48,6 +48,12 @@ module.exports = {
         if (firstArg === 'list') return handleList(message, parsed);
         if (firstArg === 'help' || !firstArg) return handleHelp(message);
 
+        // Groups are not available for dissociative profiles
+        const { system } = await utils.getOrCreateUserAndSystem(message);
+        if (system?.sys_type?.isDissociative) {
+            return utils.error(message, 'Groups are not available for your profile type. Dissociative profiles use states instead.');
+        }
+
         const groupName = parsed._positional[0];
         const subcommand = parsed._positional[1]?.toLowerCase();
 

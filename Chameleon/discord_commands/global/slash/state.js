@@ -115,6 +115,15 @@ module.exports = {
             });
 
         const action = interaction.options.getString('action');
+
+        const MUTATING_ACTIONS = ['new', 'edit', 'settings', 'remission', 'delete'];
+        if (system && MUTATING_ACTIONS.includes(action) && !system.sys_type?.isFragmented && !system.sys_type?.isDissociative) {
+            return await interaction.reply({
+                content: '❌ Your current setup does not allow states. You can update this in `/system edit` if you need a change.',
+                ephemeral: true
+            });
+        }
+
         switch (action) {
             case 'list': return await handleShowList(interaction, user, system); break;
             case 'show': return await handleShow(interaction, user, system); break;
@@ -449,6 +458,11 @@ async function handleShowList(interaction, currentUser, currentSystem) {
     });
 
     const embed = buildStateListEmbed(visibleStates, 0, targetSystem, false, interaction.user?.displayName);
+
+    if (isOwner && !targetSystem.sys_type?.isFragmented && !targetSystem.sys_type?.isDissociative) {
+        embed.addFields({ name: '⚠️ Notice', value: 'Your current setup does not allow states. You can update this in `/system edit` if you need a change.' });
+    }
+
     const buttons = utils.buildListButtons(visibleStates.length, 0, isOwner, false, sessionId, 'state');
 
     await interaction.reply({ embeds: [embed], components: buttons, ephemeral: false });
@@ -493,6 +507,10 @@ async function handleShow(interaction, currentUser, currentSystem) {
 
     // Build the card
     const embed = await buildStateCard(state, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
+
+    if (isOwner && !targetSystem.sys_type?.isFragmented && !targetSystem.sys_type?.isDissociative) {
+        embed.addFields({ name: '⚠️ Notice', value: 'Your current setup does not allow states. You can update this in `/system edit` if you need a change.' });
+    }
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);

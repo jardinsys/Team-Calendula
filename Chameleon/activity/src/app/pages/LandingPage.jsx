@@ -82,26 +82,18 @@ function ReturningLanding({ onNavigate, system, discordUser }) {
             </button>
           )
         })}
-
-        <button
-          className="landing-feature-btn"
-          onClick={() => onNavigate('crisis')}
-        >
-          <div className="landing-feature-circle landing-feature-circle--crisis">
-            <div className="landing-feature-circle-inner landing-feature-circle-inner--crisis">
-              <TriangleAlert
-                size={60}
-                strokeWidth={2}
-                //fill="rgba(0,0,0,0.8)"
-                stroke="white"
-              />
-            </div>
-          </div>
-          <span className="landing-feature-label">Crisis</span>
-        </button>
       </div>
 
-      <div className="landing-settings-btn">
+      <div className="landing-top-right-btns">
+        <button
+          className="gradient-border-sm gradient-border-sm--warning"
+          onClick={() => onNavigate('crisis')}
+          title="Crisis"
+        >
+          <div className="gradient-border-sm-inner">
+            <TriangleAlert size={24} strokeWidth={2} stroke="#ffffff" fill="none" />
+          </div>
+        </button>
         <button
           className="gradient-border-sm"
           onClick={() => onNavigate('settings')}

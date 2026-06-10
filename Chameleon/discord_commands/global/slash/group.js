@@ -106,6 +106,14 @@ module.exports = {
         if (isNew) return await utils.handleNewUserFlow(interaction, 'group');
         if (!system && subcommand !== 'view') return await interaction.reply({ content: '❌ You need to set up a system first. Use `/system` to get started.', ephemeral: true });
 
+        // Groups are not available for dissociative profiles
+        if (system?.sys_type?.isDissociative) {
+            return await interaction.reply({
+                content: '❌ Groups are not available for your profile type. Dissociative profiles use states instead.',
+                ephemeral: true
+            });
+        }
+
         const action = interaction.options.getString('action');
         switch (action) {
             case 'list': return await handleShowList(interaction, user, system); break;

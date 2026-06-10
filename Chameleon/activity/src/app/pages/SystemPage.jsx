@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm } from '@chameleon/shared'
+import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm, isFragmentedUser, isDissociativeUser } from '@chameleon/shared'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -28,11 +28,12 @@ export function SystemPage({ system: systemProp }) {
     const fetchAll = useCallback(async () => {
         try {
             setLoading(true)
-            const [sysData, frontResult, altersData, statesData, groupsData] = await Promise.all([
-                systemProp ? Promise.resolve(systemProp) : api.getSystemFull(),
+            const sysData = systemProp ? await Promise.resolve(systemProp) : await api.getSystemFull()
+            const isStatesEnabled = isFragmentedUser(sysData) || isDissociativeUser(sysData)
+            const [frontResult, altersData, statesData, groupsData] = await Promise.all([
                 api.getFront().catch(() => null),
                 api.getAlters().catch(() => []),
-                api.getStates().catch(() => []),
+                isStatesEnabled ? api.getStates().catch(() => []) : Promise.resolve([]),
                 api.getGroups().catch(() => [])
             ])
             setSystem(sysData)
@@ -159,6 +160,10 @@ export function SystemPage({ system: systemProp }) {
     }
 
     if (subPage === 'states') {
+        if (!isFragmentedUser(system) && !isDissociativeUser(system)) {
+            setSubPage(null)
+            return null
+        }
         return (
             <div>
                 <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
@@ -330,6 +335,7 @@ export function SystemPage({ system: systemProp }) {
                     </div>
                     <span className="subpage-btn-arrow">›</span>
                 </button>
+                {(isFragmentedUser(system) || isDissociativeUser(system)) && (
                 <button className="subpage-btn" onClick={() => setSubPage('states')}>
                     <span className="subpage-btn-icon">🌊</span>
                     <div className="subpage-btn-info">
@@ -338,14 +344,17 @@ export function SystemPage({ system: systemProp }) {
                     </div>
                     <span className="subpage-btn-arrow">›</span>
                 </button>
-                <button className="subpage-btn" onClick={() => setSubPage('groups')}>
-                    <span className="subpage-btn-icon">📦</span>
-                    <div className="subpage-btn-info">
-                        <div className="subpage-btn-label">{groupLabelPlural.charAt(0).toUpperCase() + groupLabelPlural.slice(1)}</div>
-                        <div className="subpage-btn-count">{counts.groups} {groupLabel}{counts.groups !== 1 ? 's' : ''}</div>
-                    </div>
-                    <span className="subpage-btn-arrow">›</span>
-                </button>
+                )}
+                {!isDissociativeUser(system) && (
+                    <button className="subpage-btn" onClick={() => setSubPage('groups')}>
+                        <span className="subpage-btn-icon">📦</span>
+                        <div className="subpage-btn-info">
+                            <div className="subpage-btn-label">{groupLabelPlural.charAt(0).toUpperCase() + groupLabelPlural.slice(1)}</div>
+                            <div className="subpage-btn-count">{counts.groups} {groupLabel}{counts.groups !== 1 ? 's' : ''}</div>
+                        </div>
+                        <span className="subpage-btn-arrow">›</span>
+                    </button>
+                )}
                 <button className="subpage-btn" onClick={() => setSubPage('edit')}>
                     <span className="subpage-btn-icon">⚙️</span>
                     <div className="subpage-btn-info">

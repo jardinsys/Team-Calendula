@@ -46,7 +46,20 @@ const noteSchema = new mongoose.Schema({
         caption: String,
         placeholder: String
     }],
-    color: String
+    color: String,
+    entityOwner: {
+        type: { type: String, enum: ['alter', 'state', 'group'] },
+        ID: String
+    },
+    attribution: [{
+        entities: [{
+            type: { type: String, enum: ['alter', 'state', 'group'] },
+            ID: String
+        }],
+        userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        timestamp: { type: Date, default: Date.now },
+        action: { type: String, enum: ['create', 'edit', 'append'] }
+    }]
 }, {
     timestamps: true
 });

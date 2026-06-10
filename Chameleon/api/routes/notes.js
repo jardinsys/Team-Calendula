@@ -1,5 +1,5 @@
 // Notes Routes
-// CRUD operations for note management with sharing and R2 integration
+// CRUD operations for note management with sharing, R2 integration, and entity attribution
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -12,7 +12,111 @@ const System = require('../../schemas/system');
 const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
+const { Shift } = require('../../schemas/front');
 const { uploadNoteContent, deleteNoteContent, generatePreview } = require('../utils/r2');
+
+const ATTRIBUTION_CAP = 50;
+
+// ===========================================
+// HELPER FUNCTIONS
+// ===========================================
+
+async function getTopLayerEntities(system) {
+    const topLayer = system.front?.layers?.[0];
+    if (!topLayer) return [];
+    const fronters = [];
+    for (const shiftId of topLayer.shifts || []) {
+        const shift = await Shift.findById(shiftId);
+        if (!shift || shift.endTime) continue;
+        fronters.push({ type: shift.s_type, ID: shift.ID });
+    }
+    return fronters;
+}
+
+async function getFrontingEntities(system) {
+    const fronters = [];
+    for (const layer of system.front?.layers || []) {
+        for (const shiftId of layer.shifts || []) {
+            const shift = await Shift.findById(shiftId);
+            if (!shift || shift.endTime) continue;
+            fronters.push({ type: shift.s_type, ID: shift.ID });
+        }
+    }
+    return fronters;
+}
+
+async function resolveEntityData(type, id) {
+    let entity = null;
+    if (type === 'alter') entity = await Alter.findById(id).select('name avatar color');
+    else if (type === 'state') entity = await State.findById(id).select('name avatar color');
+    else if (type === 'group') entity = await Group.findById(id).select('name avatar color');
+
+    if (!entity) return null;
+    return {
+        type,
+        ID: id,
+        name: entity.name?.display || entity.name?.indexable || 'Unknown',
+        avatar: entity.avatar?.url,
+        color: entity.color
+    };
+}
+
+async function resolveSystemFallback(userId) {
+    const user = await User.findById(userId).select('systemID');
+    if (!user?.systemID) return null;
+    const system = await System.findById(user.systemID).select('name systemSynonym avatar color');
+    if (!system) return null;
+    return {
+        type: 'system',
+        name: system.systemSynonym || system.name || 'System',
+        avatar: system.avatar?.url,
+        color: system.color
+    };
+}
+
+async function resolveAttributionEntities(entities, userId) {
+    if (!entities?.length) {
+        const fallback = await resolveSystemFallback(userId);
+        return fallback ? [fallback] : [];
+    }
+    const resolved = [];
+    for (const ent of entities) {
+        const data = await resolveEntityData(ent.type, ent.ID);
+        if (data) resolved.push(data);
+    }
+    if (!resolved.length) {
+        const fallback = await resolveSystemFallback(userId);
+        if (fallback) resolved.push(fallback);
+    }
+    return resolved;
+}
+
+function trimAttribution(note) {
+    if (note.attribution && note.attribution.length > ATTRIBUTION_CAP) {
+        note.attribution = note.attribution.slice(-ATTRIBUTION_CAP);
+    }
+}
+
+async function buildAttributionResponse(note) {
+    const enriched = [];
+    for (const entry of (note.attribution || [])) {
+        const entities = [];
+        for (const ent of (entry.entities || [])) {
+            const data = await resolveEntityData(ent.type, ent.ID);
+            if (data) entities.push(data);
+        }
+        if (!entities.length && entry.userID) {
+            const fallback = await resolveSystemFallback(entry.userID);
+            if (fallback) entities.push(fallback);
+        }
+        enriched.push({
+            entities,
+            timestamp: entry.timestamp,
+            action: entry.action
+        });
+    }
+    return enriched;
+}
 
 // ===========================================
 // GET ALL NOTES
@@ -21,16 +125,16 @@ const { uploadNoteContent, deleteNoteContent, generatePreview } = require('../ut
 /**
  * GET /api/notes
  * Get all notes for the current user (owned + shared)
- * Query params: ?filter=owned|shared|all&tag=tagname&pinned=true
+ * Query params: ?filter=owned|shared|all&tag=tagname&pinned=true&entityId=&entityType=
  */
 router.get('/', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
-        const { filter = 'all', tag, pinned, limit = 50, skip = 0, sort = 'pinned' } = req.query;
-        
+        const { filter = 'all', tag, pinned, limit = 50, skip = 0, sort = 'pinned', entityId, entityType } = req.query;
+
         let noteIds = user?.notes?.notes || [];
         let query = {};
-        
+
         if (filter === 'owned') {
             query = {
                 $or: [
@@ -46,7 +150,6 @@ router.get('/', authMiddleware, async (req, res) => {
                 ]
             };
         } else {
-            // All notes user has access to
             query = {
                 $or: [
                     { _id: { $in: noteIds } },
@@ -57,35 +160,33 @@ router.get('/', authMiddleware, async (req, res) => {
                 ]
             };
         }
-        
-        // Tag filter (supports multiple comma-separated tags)
+
         if (tag) {
-            const tags = tag.split(',').map(t => t.trim())
-            if (tags.length === 1) {
-                query.tags = tags[0]
-            } else {
-                query.tags = { $all: tags }
-            }
+            const tags = tag.split(',').map(t => t.trim());
+            query.tags = tags.length === 1 ? tags[0] : { $all: tags };
         }
-        
-        // Pinned filter
+
         if (pinned === 'true') {
             query.pinned = true;
         }
 
-        // Sort
+        if (entityId && entityType) {
+            query['entityOwner.type'] = entityType;
+            query['entityOwner.ID'] = entityId;
+        }
+
         const sortBy = sort === 'recent'
             ? { updatedAt: -1 }
-            : { pinned: -1, updatedAt: -1 }
-        
+            : { pinned: -1, updatedAt: -1 };
+
         const notes = await Note.find(query)
             .sort(sortBy)
             .skip(parseInt(skip))
             .limit(parseInt(limit))
-            .select('id title contentPreview tags pinned color createdAt updatedAt author users media');
-        
+            .select('id title contentPreview tags pinned color createdAt updatedAt author users media entityOwner attribution');
+
         const total = await Note.countDocuments(query);
-        
+
         res.json({
             notes: notes.map(n => ({
                 _id: n._id,
@@ -98,11 +199,13 @@ router.get('/', authMiddleware, async (req, res) => {
                 media: n.media,
                 createdAt: n.createdAt,
                 updatedAt: n.updatedAt,
+                entityOwner: n.entityOwner,
+                attributionCount: n.attribution?.length || 0,
                 isOwner: n.users?.owner?.userID?.toString() === user._id.toString() ||
                          n.author?.userID?.toString() === user._id.toString()
             })),
             total,
-            hasMore: skip + notes.length < total
+            hasMore: parseInt(skip) + notes.length < total
         });
     } catch (err) {
         console.error('[Notes] List error:', err);
@@ -163,68 +266,50 @@ router.get('/:id', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
-        
-        // Try by snowflake ID first, then MongoDB ObjectId
+
         let note = await Note.findOne({ id: id });
         if (!note && mongoose.Types.ObjectId.isValid(id)) {
             note = await Note.findById(id);
         }
-        
+
         if (!note) {
             return res.status(404).json({ error: 'Note not found' });
         }
-        
-        // Check access
+
         const userId = user._id.toString();
         const isOwner = note.users?.owner?.userID?.toString() === userId ||
                        note.author?.userID?.toString() === userId;
         const hasRead = note.users?.rAccess?.some(a => a.userID?.toString() === userId);
         const hasWrite = note.users?.rwAccess?.some(a => a.userID?.toString() === userId);
         const inUserNotes = user.notes?.notes?.some(n => n.toString() === note._id.toString());
-        
+
         if (!isOwner && !hasRead && !hasWrite && !inUserNotes) {
             return res.status(403).json({ error: 'You do not have access to this note' });
         }
-        
-        // Get linked entity names
+
         const linkedEntities = { alters: [], states: [], groups: [] };
-        
-        if (note.author?.alterIDs?.length) {
-            const alters = await Alter.find({ _id: { $in: note.author.alterIDs } })
-                .select('_id name avatar color');
-            linkedEntities.alters = alters.map(a => ({
-                _id: a._id,
-                name: a.name?.display || a.name?.indexable,
-                avatar: a.avatar?.url,
-                color: a.color
-            }));
+
+        if (note.author?.subs?.length) {
+            for (const sub of note.author.subs) {
+                const data = await resolveEntityData(sub.s_type, sub.ID);
+                if (!data) continue;
+                if (sub.s_type === 'alter') linkedEntities.alters.push(data);
+                else if (sub.s_type === 'state') linkedEntities.states.push(data);
+                else if (sub.s_type === 'group') linkedEntities.groups.push(data);
+            }
         }
-        
-        if (note.author?.stateIDs?.length) {
-            const states = await State.find({ _id: { $in: note.author.stateIDs } })
-                .select('_id name avatar color');
-            linkedEntities.states = states.map(s => ({
-                _id: s._id,
-                name: s.name?.display || s.name?.indexable,
-                avatar: s.avatar?.url,
-                color: s.color
-            }));
-        }
-        
-        if (note.author?.groupIDs?.length) {
-            const groups = await Group.find({ _id: { $in: note.author.groupIDs } })
-                .select('_id name avatar color');
-            linkedEntities.groups = groups.map(g => ({
-                _id: g._id,
-                name: g.name?.display || g.name?.indexable,
-                avatar: g.avatar?.url,
-                color: g.color
-            }));
-        }
-        
+
+        const entityOwnerData = note.entityOwner
+            ? await resolveEntityData(note.entityOwner.type, note.entityOwner.ID)
+            : null;
+
+        const enrichedAttribution = await buildAttributionResponse(note);
+
         res.json({
             ...note.toObject(),
             linkedEntities,
+            entityOwner: entityOwnerData,
+            attribution: enrichedAttribution,
             access: {
                 isOwner,
                 canEdit: isOwner || hasWrite,
@@ -238,19 +323,95 @@ router.get('/:id', authMiddleware, async (req, res) => {
 });
 
 // ===========================================
+// GET NOTE HISTORY
+// ===========================================
+
+/**
+ * GET /api/notes/:id/history
+ * Get edit history for a note
+ * Query: ?skip=0&limit=20
+ */
+router.get('/:id/history', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { id } = req.params;
+        const { skip = 0, limit = 20 } = req.query;
+
+        let note = await Note.findOne({ id: id });
+        if (!note && mongoose.Types.ObjectId.isValid(id)) {
+            note = await Note.findById(id);
+        }
+
+        if (!note) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+
+        const userId = user._id.toString();
+        const isOwner = note.users?.owner?.userID?.toString() === userId ||
+                       note.author?.userID?.toString() === userId;
+        const hasRead = note.users?.rAccess?.some(a => a.userID?.toString() === userId);
+        const hasWrite = note.users?.rwAccess?.some(a => a.userID?.toString() === userId);
+
+        if (!isOwner && !hasRead && !hasWrite) {
+            return res.status(403).json({ error: 'You do not have access to this note' });
+        }
+
+        const allEntries = note.attribution || [];
+        const sliced = allEntries.slice(parseInt(skip), parseInt(skip) + parseInt(limit));
+
+        const enriched = [];
+        for (const entry of sliced) {
+            const entities = [];
+            for (const ent of (entry.entities || [])) {
+                const data = await resolveEntityData(ent.type, ent.ID);
+                if (data) entities.push(data);
+            }
+            if (!entities.length && entry.userID) {
+                const fallback = await resolveSystemFallback(entry.userID);
+                if (fallback) entities.push(fallback);
+            }
+            enriched.push({
+                entities,
+                timestamp: entry.timestamp,
+                action: entry.action
+            });
+        }
+
+        res.json({
+            history: enriched,
+            total: allEntries.length,
+            hasMore: parseInt(skip) + sliced.length < allEntries.length
+        });
+    } catch (err) {
+        console.error('[Notes] History error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
 // CREATE NOTE
 // ===========================================
 
 /**
  * POST /api/notes
  * Create a new note
- * Body: { title, content?, tags?, linkedEntity?: { id, type } }
+ * Body: { title, content?, tags?, entityOwner?: {type, id}, attribution?: [{type, id}] }
  */
 router.post('/', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
-        const { title, content, tags, linkedEntity, pinned, color } = req.body;
-        
+        const { title, content, tags, entityOwner, attribution, pinned, color } = req.body;
+
+        const system = user.systemID ? await System.findById(user.systemID) : null;
+        const autoMode = system?.setting?.noteAutoAttribution || 'topLayer';
+
+        let initialAttribution = attribution || [];
+        if (!initialAttribution.length && autoMode !== 'off' && system) {
+            initialAttribution = autoMode === 'allFronters'
+                ? await getFrontingEntities(system)
+                : await getTopLayerEntities(system);
+        }
+
         const note = new Note({
             _id: new mongoose.Types.ObjectId(),
             title: title || 'Untitled Note',
@@ -260,17 +421,22 @@ router.post('/', authMiddleware, async (req, res) => {
             color,
             author: {
                 userID: user._id,
-                ...(linkedEntity?.type === 'alter' && { alterIDs: [linkedEntity.id] }),
-                ...(linkedEntity?.type === 'state' && { stateIDs: [linkedEntity.id] }),
-                ...(linkedEntity?.type === 'group' && { groupIDs: [linkedEntity.id] })
+                subs: entityOwner ? [{ ID: entityOwner.id, s_type: entityOwner.type }] : []
             },
             users: {
                 owner: { userID: user._id }
             },
+            entityOwner: entityOwner ? { type: entityOwner.type, ID: entityOwner.id } : undefined,
+            attribution: [{
+                entities: initialAttribution.map(e => ({ type: e.type, ID: e.id || e.ID })),
+                userID: user._id,
+                timestamp: new Date(),
+                action: 'create'
+            }],
             createdAt: new Date(),
             updatedAt: new Date()
         });
-        
+
         await note.save();
 
         if (typeof content === 'string' && content.length > 0) {
@@ -282,10 +448,10 @@ router.post('/', authMiddleware, async (req, res) => {
                 console.error('[Notes] R2 upload failed:', uploadErr);
             }
         }
-        
+
         user.notes = user.notes || { tags: [], notes: [] };
         user.notes.notes.push(note._id);
-        
+
         if (tags?.length) {
             for (const tag of tags) {
                 if (!user.notes.tags.includes(tag)) {
@@ -293,9 +459,9 @@ router.post('/', authMiddleware, async (req, res) => {
                 }
             }
         }
-        
+
         await user.save();
-        
+
         res.status(201).json(note);
     } catch (err) {
         console.error('[Notes] Create error:', err);
@@ -310,34 +476,33 @@ router.post('/', authMiddleware, async (req, res) => {
 /**
  * PATCH /api/notes/:id
  * Update a note
- * Body: { title?, content?, tags?, pinned?, color?, linkedEntity? }
+ * Body: { title?, content?, tags?, pinned?, color?, entityOwner?, attribution?: [{type, id}] }
  */
 router.patch('/:id', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
-        
+
         let note = await Note.findOne({ id: id });
         if (!note && mongoose.Types.ObjectId.isValid(id)) {
             note = await Note.findById(id);
         }
-        
+
         if (!note) {
             return res.status(404).json({ error: 'Note not found' });
         }
-        
-        // Check write access
+
         const userId = user._id.toString();
         const isOwner = note.users?.owner?.userID?.toString() === userId ||
                        note.author?.userID?.toString() === userId;
         const hasWrite = note.users?.rwAccess?.some(a => a.userID?.toString() === userId);
-        
+
         if (!isOwner && !hasWrite) {
             return res.status(403).json({ error: 'You cannot edit this note' });
         }
-        
+
         const updates = req.body;
-        
+
         const allowedFields = ['title', 'tags', 'pinned', 'color'];
         for (const field of allowedFields) {
             if (updates[field] !== undefined) {
@@ -359,20 +524,11 @@ router.patch('/:id', authMiddleware, async (req, res) => {
                 note.contentPreview = generatePreview(updates.content);
             }
         }
-        
-        // Handle linked entity update
-        if (updates.linkedEntity) {
-            note.author = note.author || { userID: user._id };
-            if (updates.linkedEntity.type === 'alter') {
-                note.author.alterIDs = [updates.linkedEntity.id];
-            } else if (updates.linkedEntity.type === 'state') {
-                note.author.stateIDs = [updates.linkedEntity.id];
-            } else if (updates.linkedEntity.type === 'group') {
-                note.author.groupIDs = [updates.linkedEntity.id];
-            }
+
+        if (updates.entityOwner && isOwner) {
+            note.entityOwner = { type: updates.entityOwner.type, ID: updates.entityOwner.id };
         }
-        
-        // Add new tags to user's collection
+
         if (updates.tags?.length) {
             for (const tag of updates.tags) {
                 if (!user.notes?.tags?.includes(tag)) {
@@ -382,10 +538,32 @@ router.patch('/:id', authMiddleware, async (req, res) => {
             }
             await user.save();
         }
-        
+
+        let attributionEntities = updates.attribution || [];
+        if (!attributionEntities.length && isOwner) {
+            const system = user.systemID ? await System.findById(user.systemID) : null;
+            const autoMode = system?.setting?.noteAutoAttribution || 'topLayer';
+            if (autoMode !== 'off' && system) {
+                attributionEntities = autoMode === 'allFronters'
+                    ? await getFrontingEntities(system)
+                    : await getTopLayerEntities(system);
+            }
+        }
+
+        if (attributionEntities.length || updates.attribution !== undefined) {
+            note.attribution = note.attribution || [];
+            note.attribution.push({
+                entities: attributionEntities.map(e => ({ type: e.type, ID: e.id || e.ID })),
+                userID: user._id,
+                timestamp: new Date(),
+                action: 'edit'
+            });
+            trimAttribution(note);
+        }
+
         note.updatedAt = new Date();
         await note.save();
-        
+
         res.json(note);
     } catch (err) {
         console.error('[Notes] Update error:', err);
@@ -405,35 +583,33 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
-        
+
         let note = await Note.findOne({ id: id });
         if (!note && mongoose.Types.ObjectId.isValid(id)) {
             note = await Note.findById(id);
         }
-        
+
         if (!note) {
             return res.status(404).json({ error: 'Note not found' });
         }
-        
-        // Only owner can delete
+
         const userId = user._id.toString();
         const isOwner = note.users?.owner?.userID?.toString() === userId ||
                        note.author?.userID?.toString() === userId;
-        
+
         if (!isOwner) {
             return res.status(403).json({ error: 'Only the owner can delete this note' });
         }
-        
+
         if (note.content?.r2Key) {
             await deleteNoteContent(note.content.r2Key);
         }
 
         await Note.findByIdAndDelete(note._id);
-        
-        // Remove from user's notes
+
         user.notes.notes = user.notes.notes.filter(n => n.toString() !== note._id.toString());
         await user.save();
-        
+
         res.json({ success: true });
     } catch (err) {
         console.error('[Notes] Delete error:', err);
@@ -448,12 +624,13 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 /**
  * PATCH /api/notes/:id/append
  * Append content to a note with timestamp
+ * Body: { content, attribution?: [{type, id}] }
  */
 router.patch('/:id/append', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
-        const { content } = req.body;
+        const { content, attribution } = req.body;
 
         if (!content) {
             return res.status(400).json({ error: 'Content required' });
@@ -477,45 +654,65 @@ router.patch('/:id/append', authMiddleware, async (req, res) => {
             return res.status(403).json({ error: 'You cannot edit this note' });
         }
 
-        let existingContent = ''
+        let existingContent = '';
         if (typeof note.content === 'string') {
-            existingContent = note.content
+            existingContent = note.content;
         } else if (note.content?.url) {
             try {
                 const https = require('https');
                 const fetchContent = (url) => new Promise((resolve, reject) => {
                     https.get(url, (response) => {
-                        let data = ''
-                        response.on('data', (chunk) => { data += chunk })
-                        response.on('end', () => resolve(data))
-                    }).on('error', reject)
-                })
-                existingContent = await fetchContent(note.content.url)
+                        let data = '';
+                        response.on('data', (chunk) => { data += chunk; });
+                        response.on('end', () => resolve(data));
+                    }).on('error', reject);
+                });
+                existingContent = await fetchContent(note.content.url);
             } catch {
-                existingContent = note.contentPreview || ''
+                existingContent = note.contentPreview || '';
             }
         }
 
-        const timestamp = `\n\n---\n**${new Date().toLocaleString()}**\n`
-        const newContent = existingContent + timestamp + content
+        const timestamp = `\n\n---\n**${new Date().toLocaleString()}**\n`;
+        const newContent = existingContent + timestamp + content;
 
         try {
-            const contentMedia = await uploadNoteContent(user._id.toString(), note.id, newContent)
-            const oldR2Key = note.content?.r2Key
-            note.content = contentMedia
-            note.contentPreview = generatePreview(newContent)
+            const contentMedia = await uploadNoteContent(user._id.toString(), note.id, newContent);
+            const oldR2Key = note.content?.r2Key;
+            note.content = contentMedia;
+            note.contentPreview = generatePreview(newContent);
             if (oldR2Key && oldR2Key !== contentMedia.r2Key) {
-                await deleteNoteContent(oldR2Key)
+                await deleteNoteContent(oldR2Key);
             }
         } catch (uploadErr) {
-            console.error('[Notes] R2 upload failed on append:', uploadErr)
-            note.contentPreview = generatePreview(newContent)
+            console.error('[Notes] R2 upload failed on append:', uploadErr);
+            note.contentPreview = generatePreview(newContent);
         }
 
-        note.updatedAt = new Date()
-        await note.save()
+        let attributionEntities = attribution || [];
+        if (!attributionEntities.length) {
+            const system = user.systemID ? await System.findById(user.systemID) : null;
+            const autoMode = system?.setting?.noteAutoAttribution || 'topLayer';
+            if (autoMode !== 'off' && system) {
+                attributionEntities = autoMode === 'allFronters'
+                    ? await getFrontingEntities(system)
+                    : await getTopLayerEntities(system);
+            }
+        }
 
-        res.json(note)
+        note.attribution = note.attribution || [];
+        note.attribution.push({
+            entities: attributionEntities.map(e => ({ type: e.type, ID: e.id || e.ID })),
+            userID: user._id,
+            timestamp: new Date(),
+            action: 'append'
+        });
+        trimAttribution(note);
+
+        note.updatedAt = new Date();
+        await note.save();
+
+        res.json(note);
     } catch (err) {
         console.error('[Notes] Append error:', err);
         res.status(500).json({ error: err.message });
@@ -529,62 +726,62 @@ router.patch('/:id/append', authMiddleware, async (req, res) => {
 /**
  * POST /api/notes/:id/share
  * Share a note with another user
- * Body: { discordId: "123", access: "r" | "rw" }
+ * Body: { discordId?: "123", friendId?: "123", access: "r" | "rw", subs?: [{ID, s_type}] }
  */
 router.post('/:id/share', authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
-        const { discordId, friendId, access } = req.body;
-        
+        const { discordId, friendId, access, subs } = req.body;
+
         let note = await Note.findOne({ id: id });
         if (!note && mongoose.Types.ObjectId.isValid(id)) {
             note = await Note.findById(id);
         }
-        
+
         if (!note) {
             return res.status(404).json({ error: 'Note not found' });
         }
-        
-        // Only owner can share
+
         const userId = user._id.toString();
         const isOwner = note.users?.owner?.userID?.toString() === userId ||
                        note.author?.userID?.toString() === userId;
-        
+
         if (!isOwner) {
             return res.status(403).json({ error: 'Only the owner can share this note' });
         }
-        
-        // Find target user
+
         let targetUser;
         if (discordId) {
             targetUser = await User.findOne({ discordID: discordId });
         } else if (friendId) {
             targetUser = await User.findOne({ friendID: friendId });
         }
-        
+
         if (!targetUser) {
             return res.status(404).json({ error: 'User not found' });
         }
-        
-        // Remove from other access list first
+
         note.users.rAccess = (note.users.rAccess || []).filter(
             a => a.userID?.toString() !== targetUser._id.toString()
         );
         note.users.rwAccess = (note.users.rwAccess || []).filter(
             a => a.userID?.toString() !== targetUser._id.toString()
         );
-        
-        // Add to appropriate access list
+
         if (access === 'rw') {
-            note.users.rwAccess.push({ userID: targetUser._id });
+            const rwEntry = { userID: targetUser._id };
+            if (subs?.length) {
+                rwEntry.subs = subs.map(s => ({ ID: s.ID || s.id, s_type: s.s_type || s.type }));
+            }
+            note.users.rwAccess.push(rwEntry);
         } else {
             note.users.rAccess = note.users.rAccess || [];
             note.users.rAccess.push({ userID: targetUser._id });
         }
-        
+
         await note.save();
-        
+
         res.json({ success: true, message: `Note shared with ${access} access` });
     } catch (err) {
         console.error('[Notes] Share error:', err);
@@ -602,47 +799,44 @@ router.delete('/:id/share', authMiddleware, async (req, res) => {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
         const { discordId, friendId } = req.body;
-        
+
         let note = await Note.findOne({ id: id });
         if (!note && mongoose.Types.ObjectId.isValid(id)) {
             note = await Note.findById(id);
         }
-        
+
         if (!note) {
             return res.status(404).json({ error: 'Note not found' });
         }
-        
-        // Only owner can unshare
+
         const userId = user._id.toString();
         const isOwner = note.users?.owner?.userID?.toString() === userId ||
                        note.author?.userID?.toString() === userId;
-        
+
         if (!isOwner) {
             return res.status(403).json({ error: 'Only the owner can modify sharing' });
         }
-        
-        // Find target user
+
         let targetUser;
         if (discordId) {
             targetUser = await User.findOne({ discordID: discordId });
         } else if (friendId) {
             targetUser = await User.findOne({ friendID: friendId });
         }
-        
+
         if (!targetUser) {
             return res.status(404).json({ error: 'User not found' });
         }
-        
-        // Remove from both access lists
+
         note.users.rAccess = (note.users.rAccess || []).filter(
             a => a.userID?.toString() !== targetUser._id.toString()
         );
         note.users.rwAccess = (note.users.rwAccess || []).filter(
             a => a.userID?.toString() !== targetUser._id.toString()
         );
-        
+
         await note.save();
-        
+
         res.json({ success: true });
     } catch (err) {
         console.error('[Notes] Unshare error:', err);
@@ -651,50 +845,42 @@ router.delete('/:id/share', authMiddleware, async (req, res) => {
 });
 
 // ===========================================
-// LINK/UNLINK ENTITIES
+// LINK/UNLINK ENTITIES (author.subs)
 // ===========================================
 
 /**
  * POST /api/notes/:id/link
- * Link an entity to a note
+ * Link an entity to a note's author subs
  * Body: { type: "alter"|"state"|"group", entityId: "123" }
  */
 router.post('/:id/link', authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const { type, entityId } = req.body;
-        
+
         let note = await Note.findOne({ id: id });
         if (!note && mongoose.Types.ObjectId.isValid(id)) {
             note = await Note.findById(id);
         }
-        
+
         if (!note) {
             return res.status(404).json({ error: 'Note not found' });
         }
-        
+
         note.author = note.author || {};
-        
-        if (type === 'alter') {
-            note.author.alterIDs = note.author.alterIDs || [];
-            if (!note.author.alterIDs.includes(entityId)) {
-                note.author.alterIDs.push(entityId);
-            }
-        } else if (type === 'state') {
-            note.author.stateIDs = note.author.stateIDs || [];
-            if (!note.author.stateIDs.includes(entityId)) {
-                note.author.stateIDs.push(entityId);
-            }
-        } else if (type === 'group') {
-            note.author.groupIDs = note.author.groupIDs || [];
-            if (!note.author.groupIDs.includes(entityId)) {
-                note.author.groupIDs.push(entityId);
-            }
+        note.author.subs = note.author.subs || [];
+
+        const alreadyLinked = note.author.subs.some(
+            s => s.s_type === type && s.ID === entityId
+        );
+
+        if (!alreadyLinked) {
+            note.author.subs.push({ s_type: type, ID: entityId });
         }
-        
+
         note.updatedAt = new Date();
         await note.save();
-        
+
         res.json({ success: true });
     } catch (err) {
         console.error('[Notes] Link error:', err);
@@ -704,34 +890,32 @@ router.post('/:id/link', authMiddleware, async (req, res) => {
 
 /**
  * DELETE /api/notes/:id/link
- * Unlink an entity from a note
+ * Unlink an entity from a note's author subs
  * Body: { type: "alter"|"state"|"group", entityId: "123" }
  */
 router.delete('/:id/link', authMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const { type, entityId } = req.body;
-        
+
         let note = await Note.findOne({ id: id });
         if (!note && mongoose.Types.ObjectId.isValid(id)) {
             note = await Note.findById(id);
         }
-        
+
         if (!note) {
             return res.status(404).json({ error: 'Note not found' });
         }
-        
-        if (type === 'alter' && note.author?.alterIDs) {
-            note.author.alterIDs = note.author.alterIDs.filter(id => id !== entityId);
-        } else if (type === 'state' && note.author?.stateIDs) {
-            note.author.stateIDs = note.author.stateIDs.filter(id => id !== entityId);
-        } else if (type === 'group' && note.author?.groupIDs) {
-            note.author.groupIDs = note.author.groupIDs.filter(id => id !== entityId);
+
+        if (note.author?.subs?.length) {
+            note.author.subs = note.author.subs.filter(
+                s => !(s.s_type === type && s.ID === entityId)
+            );
         }
-        
+
         note.updatedAt = new Date();
         await note.save();
-        
+
         res.json({ success: true });
     } catch (err) {
         console.error('[Notes] Unlink error:', err);

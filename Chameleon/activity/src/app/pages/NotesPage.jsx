@@ -87,7 +87,7 @@ export function NotesPage() {
     }
 
     return (
-        <div>
+        <div className="notes-page">
             <header className="page-header">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>

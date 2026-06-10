@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, NoteCardGrid, NoteModal } from '@chameleon/shared'
+import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, NoteCardGrid, NoteModal, isFragmentedUser, isDissociativeUser } from '@chameleon/shared'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -27,10 +27,11 @@ export function ProfilePage({ system: systemProp }) {
     const fetchAll = useCallback(async () => {
         try {
             setLoading(true)
-            const [sysData, frontResult, statesData, notesData] = await Promise.all([
-                systemProp ? Promise.resolve(systemProp) : api.getSystemFull(),
+            const sysData = systemProp ? await Promise.resolve(systemProp) : await api.getSystemFull()
+            const isStatesEnabled = isFragmentedUser(sysData) || isDissociativeUser(sysData)
+            const [frontResult, statesData, notesData] = await Promise.all([
                 api.getFront().catch(() => null),
-                api.getStates().catch(() => []),
+                isStatesEnabled ? api.getStates().catch(() => []) : Promise.resolve([]),
                 api.getNotes('all', null, 0, 6).catch(() => ({ notes: [] }))
             ])
             setSystem(sysData)
@@ -93,6 +94,10 @@ export function ProfilePage({ system: systemProp }) {
     const fallbackName = session?.global_name || session?.username
 
     if (subPage === 'states') {
+        if (!isFragmentedUser(system) && !isDissociativeUser(system)) {
+            setSubPage(null)
+            return null
+        }
         return (
             <div>
                 <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
@@ -224,6 +229,7 @@ export function ProfilePage({ system: systemProp }) {
                     </div>
                     <span className="subpage-btn-arrow">›</span>
                 </button>
+                {(isFragmentedUser(system) || isDissociativeUser(system)) && (
                 <button className="subpage-btn" onClick={() => setSubPage('states')}>
                     <span className="subpage-btn-icon">🌊</span>
                     <div className="subpage-btn-info">
@@ -232,6 +238,7 @@ export function ProfilePage({ system: systemProp }) {
                     </div>
                     <span className="subpage-btn-arrow">›</span>
                 </button>
+                )}
                 <button className="subpage-btn" onClick={() => setSubPage('notes')}>
                     <span className="subpage-btn-icon">📝</span>
                     <div className="subpage-btn-info">

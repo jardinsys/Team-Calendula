@@ -71,7 +71,39 @@ const ENTITY_COLORS = {
 
 // DSM and ICD type definitions for system type validation
 const DSM_TYPES = ['DID', 'Amnesia', 'Dereal/Depers', 'OSDD-1A', 'OSDD-1B', 'OSDD-2', 'OSDD-3', 'OSDD-4', 'UDD'];
-const ICD_TYPES = ['P-DID', 'Trance', 'DNSD', 'Possession Trance', 'SDS'];
+const ICD_TYPES = ['P-DID', 'Trance', 'DNSD', 'Possession Trance'];
+
+// ═══════════════════════════════════════════
+// DISORDER MAP (CommonJS version for Discord bot)
+// ═══════════════════════════════════════════
+
+const DISORDER_MAP = {
+    'DID':           { fullName: 'Dissociative Identity Disorder', source: 'DSM', isSystem: true, isFragmented: false },
+    'OSDD-1A':       { fullName: 'Other Specified Dissociative Disorder, Type 1A', source: 'DSM', extraQuestion: true,
+                       extraQuestionText: 'Do you experience distinct identity states (alters)?',
+                       extraQuestionYes: { isSystem: true, isFragmented: false },
+                       extraQuestionNo:  { isSystem: false, isFragmented: true } },
+    'OSDD-1B':       { fullName: 'Other Specified Dissociative Disorder, Type 1B', source: 'DSM', isSystem: true, isFragmented: false },
+    'OSDD-2':        { fullName: 'Other Specified Dissociative Disorder, Type 2', source: 'DSM', isSystem: false, isFragmented: true },
+    'OSDD-3':        { fullName: 'Other Specified Dissociative Disorder, Type 3', source: 'DSM', isSystem: false, isFragmented: true },
+    'OSDD-4':        { fullName: 'Other Specified Dissociative Disorder, Type 4', source: 'DSM', isSystem: false, isFragmented: true },
+    'Amnesia':        { fullName: 'Dissociative Amnesia', source: 'DSM', isSystem: false, isFragmented: false },
+    'Dereal/Depers': { fullName: 'Derealization/Depersonalization Disorder', source: 'DSM', isSystem: false, isFragmented: false, isDissociative: true },
+    'UDD':           { fullName: 'Unspecified Dissociative Disorder', source: 'DSM', isSystem: false, isFragmented: false },
+    'P-DID':         { fullName: 'Partial Dissociative Identity Disorder', source: 'ICD', isSystem: true, isFragmented: false },
+    'Possession Trance': { fullName: 'Possession Trance Disorder', source: 'ICD', extraQuestion: true,
+                       extraQuestionText: 'Do you experience distinct entities or spirits taking control of your body?',
+                       extraQuestionYes: { isSystem: true, isFragmented: false },
+                       extraQuestionNo:  { isSystem: false, isFragmented: true } },
+    'Trance':        { fullName: 'Dissociative Trance Disorder', source: 'ICD', isSystem: false, isFragmented: true },
+    'DNSD':          { fullName: 'Dissociative Neurological Symptom Disorder', source: 'ICD', extraQuestion: true,
+                       extraQuestionText: 'Would you describe it as states you\'d want to track?',
+                       extraQuestionYes: { isSystem: false, isFragmented: true },
+                       extraQuestionNo:  { isSystem: false, isFragmented: false } },
+};
+
+const DSM_DISORDER_OPTIONS = ['DID', 'OSDD-1A', 'OSDD-1B', 'OSDD-2', 'OSDD-3', 'OSDD-4', 'Amnesia', 'Dereal/Depers', 'UDD'];
+const ICD_DISORDER_OPTIONS = ['P-DID', 'Trance', 'Possession Trance', 'DNSD'];
 
 // ==== TERMINOLOGY HELPERS ====
 
@@ -354,36 +386,311 @@ async function createUser(discordId) {
 }
 
 /* Handle new user flow for slash commands
+ * Shows disorder category selection (DSM-5 / ICD-10 / Other / None / Skip)
  * @param {Interaction} interaction 
  * @param {string} entityType - 'system', 'alter', 'state', or 'group'
  */
 async function handleNewUserFlow(interaction, entityType) {
+    const sessionId = generateSessionId(interaction.user.id);
+
+    setSession(sessionId, {
+        type: 'new_user_onboarding',
+        step: 'category',
+        entityType,
+    });
+
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.system)
-        .setTitle('Hihi! Welcome to Systemiser! 👋')
+        .setTitle('Welcome to Systemiser!')
         .setDescription(
-            'It looks like you don\'t have a profile set up. 😅\n\n' +
-            'If you need to, would you like to register yours now?'
+            'It looks like you don\'t have a profile set up yet.\n\n' +
+            '**Do you identify with a dissociative condition?**\n' +
+            'This helps us set up your profile with the right features.\n' +
+            'You can always change this later in settings.'
         );
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`new_user_has_system_${entityType}`)
-            .setLabel('Yes, register my profile!')
-            .setStyle(ButtonStyle.Success),
+            .setCustomId(`new_user_cat_DSM_${sessionId}`)
+            .setLabel('DSM-5')
+            .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
-            .setCustomId(`new_user_no_system_${entityType}`)
-            .setLabel('No, thank you.')
-            .setStyle(ButtonStyle.Secondary)
+            .setCustomId(`new_user_cat_ICD_${sessionId}`)
+            .setLabel('ICD-10/11')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId(`new_user_cat_OTHER_${sessionId}`)
+            .setLabel('Other')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`new_user_cat_NONE_${sessionId}`)
+            .setLabel('None')
+            .setStyle(ButtonStyle.Secondary),
     );
 
-    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+    const skipRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`new_user_cat_SKIP_${sessionId}`)
+            .setLabel('Skip for now')
+            .setStyle(ButtonStyle.Link),
+    );
+
+    await interaction.reply({ embeds: [embed], components: [row, skipRow], ephemeral: true });
+}
+
+/* Build a select menu for disorders in a given category
+ * @param {string} category - 'DSM' or 'ICD'
+ * @param {string} sessionId
+ * @returns {ActionRowBuilder}
+ */
+function buildDisorderSelectMenu(category, sessionId) {
+    const options = category === 'DSM' ? DSM_DISORDER_OPTIONS : ICD_DISORDER_OPTIONS;
+
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`new_user_disorder_${sessionId}`)
+        .setPlaceholder('Select your condition...')
+        .addOptions(
+            options.map(key => {
+                const mapping = DISORDER_MAP[key];
+                const desc = mapping.fullName.length > 100
+                    ? mapping.fullName.substring(0, 97) + '...'
+                    : mapping.fullName;
+                return new StringSelectMenuOptionBuilder()
+                    .setLabel(mapping.fullName)
+                    .setValue(key)
+                    .setDescription(desc);
+            })
+        );
+
+    return new ActionRowBuilder().addComponents(selectMenu);
 }
 
 // Handle new user button interaction
 async function handleNewUserButton(interaction) {
     const customId = interaction.customId;
 
+    // ═══ STEP 1: Category selection ═══
+    if (customId.startsWith('new_user_cat_')) {
+        const parts = customId.split('_');
+        // new_user_cat_{CATEGORY}_{sessionId}
+        const category = parts[3];
+        const sessionId = parts.slice(4).join('_');
+
+        const session = getSession(sessionId);
+        if (!session || session.type !== 'new_user_onboarding') {
+            return await interaction.reply({ content: '❌ Session expired. Please try again.', ephemeral: true });
+        }
+
+        // Skip — just close
+        if (category === 'SKIP') {
+            deleteSession(sessionId);
+            return await interaction.update({
+                content: 'No problem! Come back when you\'re ready. 💙',
+                embeds: [],
+                components: []
+            });
+        }
+
+        // None — both false
+        if (category === 'NONE') {
+            session.resolvedIsSystem = false;
+            session.resolvedIsFragmented = false;
+            session.isDissociative = false;
+            session.selectedDisorder = null;
+            session.step = 'name';
+            setSession(sessionId, session);
+
+            return await showNameStep(interaction, sessionId, session);
+        }
+
+        // Other — show manual selection modal
+        if (category === 'OTHER') {
+            session.step = 'other';
+            session.selectedDisorder = null;
+            setSession(sessionId, session);
+
+            const modal = new ModalBuilder()
+                .setCustomId(`new_user_other_modal_${sessionId}`)
+                .setTitle('Custom Profile Setup');
+
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('other_name')
+                        .setLabel('What might you call it? (optional)')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(false)
+                        .setMaxLength(100)
+                        .setPlaceholder('e.g. Complex Trauma Response')
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('other_is_system')
+                        .setLabel('Are you a system? (yes/no)')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(3)
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('other_is_fragmented')
+                        .setLabel('Do you experience fragmented states? (yes/no)')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(3)
+                ),
+            );
+
+            return await interaction.showModal(modal);
+        }
+
+        // DSM or ICD — show disorder select menu
+        session.category = category;
+        session.step = 'disorder';
+        setSession(sessionId, session);
+
+        const embed = new EmbedBuilder()
+            .setColor(ENTITY_COLORS.system)
+            .setTitle(category === 'DSM' ? 'DSM-5 Conditions' : 'ICD-10/11 Conditions')
+            .setDescription('Select the condition that best describes your experience:');
+
+        const selectRow = buildDisorderSelectMenu(category, sessionId);
+        const backRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`new_user_cat_BACK_${sessionId}`)
+                .setLabel('← Back')
+                .setStyle(ButtonStyle.Link),
+        );
+
+        return await interaction.update({ embeds: [embed], components: [selectRow, backRow] });
+    }
+
+    // ═══ Back button from disorder select ═══
+    if (customId.startsWith('new_user_cat_BACK_')) {
+        const sessionId = customId.replace('new_user_cat_BACK_', '');
+        const session = getSession(sessionId);
+        if (!session) {
+            return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
+        }
+
+        session.step = 'category';
+        setSession(sessionId, session);
+
+        const embed = new EmbedBuilder()
+            .setColor(ENTITY_COLORS.system)
+            .setTitle('Welcome to Systemiser!')
+            .setDescription(
+                'It looks like you don\'t have a profile set up yet.\n\n' +
+                '**Do you identify with a dissociative condition?**\n' +
+                'This helps us set up your profile with the right features.\n' +
+                'You can always change this later in settings.'
+            );
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`new_user_cat_DSM_${sessionId}`)
+                .setLabel('DSM-5')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId(`new_user_cat_ICD_${sessionId}`)
+                .setLabel('ICD-10/11')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId(`new_user_cat_OTHER_${sessionId}`)
+                .setLabel('Other')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId(`new_user_cat_NONE_${sessionId}`)
+                .setLabel('None')
+                .setStyle(ButtonStyle.Secondary),
+        );
+
+        const skipRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`new_user_cat_SKIP_${sessionId}`)
+                .setLabel('Skip for now')
+                .setStyle(ButtonStyle.Link),
+        );
+
+        return await interaction.update({ embeds: [embed], components: [row, skipRow] });
+    }
+
+    // ═══ STEP 2: Disorder selected ═══
+    if (customId.startsWith('new_user_disorder_')) {
+        const sessionId = customId.replace('new_user_disorder_', '');
+        const session = getSession(sessionId);
+        if (!session) {
+            return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
+        }
+
+        const selectedKey = interaction.values[0];
+        const mapping = DISORDER_MAP[selectedKey];
+        if (!mapping) {
+            return await interaction.reply({ content: '❌ Unknown condition selected.', ephemeral: true });
+        }
+
+        session.selectedDisorder = selectedKey;
+        setSession(sessionId, session);
+
+        // Check if extra question needed
+        if (mapping.extraQuestion) {
+            session.step = 'extra_question';
+            setSession(sessionId, session);
+
+            const embed = new EmbedBuilder()
+                .setColor(ENTITY_COLORS.system)
+                .setTitle('One more question...')
+                .setDescription(mapping.extraQuestionText);
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`new_user_extra_YES_${sessionId}`)
+                    .setLabel('Yes')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId(`new_user_extra_NO_${sessionId}`)
+                    .setLabel('No')
+                    .setStyle(ButtonStyle.Secondary),
+            );
+
+            return await interaction.update({ embeds: [embed], components: [row] });
+        }
+
+        // No extra question — auto-resolve
+        session.resolvedIsSystem = mapping.isSystem || false;
+        session.resolvedIsFragmented = mapping.isFragmented || false;
+        session.isDissociative = mapping.isDissociative || false;
+        session.step = 'name';
+        setSession(sessionId, session);
+
+        return await showNameStep(interaction, sessionId, session);
+    }
+
+    // ═══ STEP 3: Extra question answer ═══
+    if (customId.startsWith('new_user_extra_')) {
+        const parts = customId.split('_');
+        // new_user_extra_{YES|NO}_{sessionId}
+        const answer = parts[3] === 'YES';
+        const sessionId = parts.slice(4).join('_');
+
+        const session = getSession(sessionId);
+        if (!session || session.step !== 'extra_question') {
+            return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
+        }
+
+        const mapping = DISORDER_MAP[session.selectedDisorder];
+        const result = answer ? mapping.extraQuestionYes : mapping.extraQuestionNo;
+
+        session.resolvedIsSystem = result.isSystem;
+        session.resolvedIsFragmented = result.isFragmented;
+        session.isDissociative = mapping.isDissociative || false;
+        session.step = 'name';
+        setSession(sessionId, session);
+
+        return await showNameStep(interaction, sessionId, session);
+    }
+
+    // ═══ STEP 4: Old "Yes, register my profile!" button (backward compat) ═══
     if (customId.startsWith('new_user_has_system_')) {
         const user = await User.findOne({ discordID: interaction.user.id });
         const system = await System.findById(user?.systemID);
@@ -407,7 +714,7 @@ async function handleNewUserButton(interaction) {
             .setTitle('✅ Profile Created!')
             .setDescription(
                 'Your profile has been registered! 👍\n\n' +
-                'Use `/system edit` to customize your profile, or `/alter new` to register your first alter.\n'+
+                'Use `/system edit` to customize your profile, or `/alter new` to register your first alter.\n' +
                 'If you need any help, feel free to use `/help`'
             );
         await interaction.update({ embeds: [embed], components: [] });
@@ -415,6 +722,251 @@ async function handleNewUserButton(interaction) {
     } else if (customId.startsWith('new_user_no_system_')) {
         await interaction.update({
             content: 'No problem! Come back when you\'re ready. 💙',
+            embeds: [],
+            components: []
+        });
+    }
+
+    // ═══ STEP 4: Name step buttons ═══
+    if (customId.startsWith('new_user_name_custom_')) {
+        const sessionId = customId.replace('new_user_name_custom_', '');
+        const session = getSession(sessionId);
+        if (!session) {
+            return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
+        }
+
+        const modal = new ModalBuilder()
+            .setCustomId(`new_user_name_modal_${sessionId}`)
+            .setTitle('Name Your Profile');
+
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('profile_name')
+                    .setLabel('Profile name (optional)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(false)
+                    .setMaxLength(100)
+                    .setPlaceholder('e.g. The Colorwheel')
+            ),
+        );
+
+        return await interaction.showModal(modal);
+    }
+
+    if (customId.startsWith('new_user_name_save_')) {
+        const sessionId = customId.replace('new_user_name_save_', '');
+        const session = getSession(sessionId);
+        if (!session) {
+            return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
+        }
+
+        return await finalizeOnboarding(interaction, sessionId, session, null);
+    }
+}
+
+/* Show the name entry step (step 4) — shared by normal and extra-question paths
+ * @param {Interaction} interaction
+ * @param {string} sessionId
+ * @param {Object} session
+ */
+async function showNameStep(interaction, sessionId, session) {
+    const typeName = session.selectedDisorder
+        ? DISORDER_MAP[session.selectedDisorder]?.fullName
+        : (session.otherName || 'None');
+
+    const statusParts = [];
+    if (session.resolvedIsSystem) statusParts.push('System');
+    if (session.resolvedIsFragmented) statusParts.push('Fragmented');
+    if (session.isDissociative) statusParts.push('Dissociative');
+    if (statusParts.length === 0) statusParts.push('Basic');
+
+    const embed = new EmbedBuilder()
+        .setColor(ENTITY_COLORS.system)
+        .setTitle('Almost done!')
+        .setDescription(
+            `**Condition:** ${typeName || 'Custom'}\n` +
+            `**Profile type:** ${statusParts.join(', ')}\n\n` +
+            'Would you like to give your profile a custom name?\n' +
+            'You can also leave it blank and use the default.'
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`new_user_name_save_${sessionId}`)
+            .setLabel('Continue without a name')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`new_user_name_custom_${sessionId}`)
+            .setLabel('Set a custom name')
+            .setStyle(ButtonStyle.Primary),
+    );
+
+    await interaction.update({ embeds: [embed], components: [row] });
+}
+
+/* Handle modal submissions for the onboarding flow
+ * Called from bot.js when a modal submit comes in with new_user_ prefix
+ * @param {Interaction} interaction
+ */
+async function handleNewUserModal(interaction) {
+    const customId = interaction.customId;
+
+    // ═══ Other path modal ═══
+    if (customId.startsWith('new_user_other_modal_')) {
+        const sessionId = customId.replace('new_user_other_modal_', '');
+        const session = getSession(sessionId);
+        if (!session) {
+            return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
+        }
+
+        const otherName = interaction.fields.getTextInputValue('other_name');
+        const isSystemStr = interaction.fields.getTextInputValue('other_is_system').toLowerCase();
+        const isFragStr = interaction.fields.getTextInputValue('other_is_fragmented').toLowerCase();
+
+        session.resolvedIsSystem = isSystemStr === 'yes' || isSystemStr === 'y';
+        session.resolvedIsFragmented = isFragStr === 'yes' || isFragStr === 'y';
+        session.isDissociative = false;
+        session.otherName = otherName || null;
+        session.step = 'name';
+        setSession(sessionId, session);
+
+        return await showNameStep(interaction, sessionId, session);
+    }
+}
+
+/* Handle the name modal submission
+ * Called from bot.js when a modal with new_user_name_modal_ prefix is submitted
+ * @param {Interaction} interaction
+ */
+async function handleNewUserNameModal(interaction) {
+    const customId = interaction.customId;
+
+    if (customId.startsWith('new_user_name_modal_')) {
+        const sessionId = customId.replace('new_user_name_modal_', '');
+        const session = getSession(sessionId);
+        if (!session) {
+            return await interaction.reply({ content: '❌ Session expired.', ephemeral: true });
+        }
+
+        const customName = interaction.fields.getTextInputValue('profile_name');
+        return await finalizeOnboarding(interaction, sessionId, session, customName || null);
+    }
+}
+
+/* Finalize the onboarding — create the system with resolved sys_type
+ * @param {Interaction} interaction
+ * @param {string} sessionId
+ * @param {Object} session
+ * @param {string|null} customName
+ */
+async function finalizeOnboarding(interaction, sessionId, session, customName) {
+    await interaction.deferUpdate();
+
+    try {
+        const user = await User.findOne({ discordID: interaction.user.id });
+        if (!user) {
+            return await interaction.editReply({ content: '❌ Something went wrong. Please try again.', embeds: [], components: [] });
+        }
+
+        // If user already has a system, just complete
+        let system = user.systemID ? await System.findById(user.systemID) : null;
+        if (system) {
+            return await interaction.editReply({
+                content: '✅ Profile already exists! You can update your type with `/system edit`.',
+                embeds: [],
+                components: []
+            });
+        }
+
+        // Build sys_type
+        const sysType = {
+            isSystem: session.resolvedIsSystem || false,
+            isFragmented: session.resolvedIsFragmented || false,
+            isDissociative: session.isDissociative || false,
+            onboardingCompleted: true,
+        };
+
+        // Set name and dd from disorder selection
+        if (session.selectedDisorder && DISORDER_MAP[session.selectedDisorder]) {
+            const mapping = DISORDER_MAP[session.selectedDisorder];
+            sysType.name = customName || mapping.fullName;
+            sysType.dd = mapping.source === 'DSM'
+                ? { DSM: session.selectedDisorder }
+                : { ICD: session.selectedDisorder };
+        } else {
+            // Other or None path
+            sysType.name = customName || 'None';
+            sysType.dd = {};
+        }
+
+        // Create system
+        system = new System({
+            users: [user._id],
+            metadata: { joinedAt: new Date() },
+            sys_type: sysType,
+            privacyBuckets: [{ name: 'Default', friends: [] }],
+            alters: { IDs: [] },
+            states: { IDs: [] },
+            groups: { IDs: [] },
+        });
+
+        if (customName) {
+            const idx = customName.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
+            system.name = {
+                display: customName,
+                ...(idx && { indexable: idx }),
+            };
+        }
+
+        await system.save();
+        user.systemID = system._id;
+        await user.save();
+
+        // Auto-create "Dissociated" state for Dereal/Depers users
+        if (session.isDissociative) {
+            const dissociatedState = new State({
+                systemID: system._id,
+                name: { display: 'Dissociated', indexable: 'dissociated' },
+                description: 'A dissociative state',
+                proxy: ['dissociated'],
+            });
+            await dissociatedState.save();
+            system.states.IDs.push(dissociatedState._id);
+            await system.save();
+        }
+
+        deleteSession(sessionId);
+
+        // Build success message
+        const statusParts = [];
+        if (session.resolvedIsSystem) statusParts.push('System');
+        if (session.resolvedIsFragmented) statusParts.push('Fragmented');
+        if (session.isDissociative) statusParts.push('Dissociative');
+        if (statusParts.length === 0) statusParts.push('Basic');
+
+        const successEmbed = new EmbedBuilder()
+            .setColor(ENTITY_COLORS.success)
+            .setTitle('✅ Profile Created!')
+            .setDescription(
+                `**Type:** ${statusParts.join(', ')}\n` +
+                (sysType.dd?.DSM || sysType.dd?.ICD
+                    ? `**Condition:** ${sysType.name}\n`
+                    : '') +
+                (session.isDissociative
+                    ? '**Note:** A "Dissociated" state has been created for you.\n'
+                    : '') +
+                '\nUse `/system edit` to customize your profile further, ' +
+                'or `/alter new` to register your first alter.\n' +
+                'If you need any help, feel free to use `/help`'
+            );
+
+        await interaction.editReply({ embeds: [successEmbed], components: [] });
+
+    } catch (err) {
+        console.error('[Onboarding] Finalize error:', err);
+        await interaction.editReply({
+            content: '❌ Something went wrong during setup. Please try `/system edit` to set your type.',
             embeds: [],
             components: []
         });
@@ -1789,6 +2341,9 @@ module.exports = {
     ENTITY_COLORS,
     DSM_TYPES,
     ICD_TYPES,
+    DISORDER_MAP,
+    DSM_DISORDER_OPTIONS,
+    ICD_DISORDER_OPTIONS,
 
     // Terminology helpers
     getSystemTerm,
@@ -1811,6 +2366,8 @@ module.exports = {
     createNewUserAndSystem,
     handleNewUserFlow,
     handleNewUserButton,
+    handleNewUserModal,
+    handleNewUserNameModal,
     requireSystem,
 
     // Entity search (case-insensitive)

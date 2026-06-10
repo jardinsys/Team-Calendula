@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useDiscordSdk } from '../hooks/useDiscordSdk'
 import { useApiAuth } from '../hooks/useApiAuth'
-import { api, isSystemUser, getSystemTerm } from '@chameleon/shared'
+import { api, isSystemUser } from '@chameleon/shared'
+import { ArrowLeft } from 'lucide-react'
 import { LandingPage } from './pages/LandingPage'
 import { SystemPage } from './pages/SystemPage'
 import { ProfilePage } from './pages/ProfilePage'
@@ -71,11 +72,6 @@ export function Activity() {
       crisis: CrisisPage,
   }), [isSys])
 
-  const systemLabel = useMemo(() => {
-      if (!system) return 'You'
-      return getSystemTerm(system, { context: 'activity' })
-  }, [system])
-
   const handleRegistered = useCallback(async () => {
     try {
       const data = await api.getSystemFull()
@@ -130,21 +126,21 @@ export function Activity() {
   const PageComponent = activePage ? PAGES[activePage] : null
 
   const showBackButton = activePage && activePage !== 'what-is' && activePage !== 'register'
-  const showBottomNav = activePage && PAGES[activePage]
 
   return (
     <div className="app-container">
-      <main className="app-content">
+      <main className="app-content" style={{ position: 'relative', paddingTop: showBackButton ? '52px' : undefined }}>
         {showBackButton && (
-          <div style={{ marginBottom: '12px' }}>
-            <button
-              className="btn-ghost"
-              onClick={() => setActivePage(null)}
-              style={{ fontSize: '0.75rem' }}
-            >
-              ← Home
-            </button>
-          </div>
+          <button
+            className="gradient-border-sm"
+            onClick={() => setActivePage(null)}
+            title="Home"
+            style={{ position: 'absolute', top: 0, left: 0, zIndex: 10 }}
+          >
+            <div className="gradient-border-sm-inner">
+              <ArrowLeft size={20} strokeWidth={2} stroke="#ffffff" fill="none" />
+            </div>
+          </button>
         )}
         {PageComponent ? (
           <PageComponent system={system} />
@@ -165,20 +161,6 @@ export function Activity() {
           />
         )}
       </main>
-      {showBottomNav && (
-        <nav className="bottom-nav">
-          {Object.entries(PAGES).map(([id, Comp]) => (
-            <button
-              key={id}
-              className={`tab-btn ${activePage === id ? 'active' : ''}`}
-              onClick={() => setActivePage(id)}
-            >
-              <span className="tab-icon">{id === 'system' ? '⚙️' : id === 'friends' ? '👥' : id === 'notes' ? '📝' : '🆘'}</span>
-              <span>{id === 'system' ? systemLabel : id === 'friends' ? 'Friends' : id === 'notes' ? 'Notes' : 'Crisis'}</span>
-            </button>
-          ))}
-        </nav>
-      )}
     </div>
   )
 }
