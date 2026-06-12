@@ -16,7 +16,7 @@ const Group = require('../../../schemas/group');
 const redis = require('../../../redis');
 const utils = require('../../functions/bot_utils');
 
-const { getSystemTerm } = utils;
+const { getSystemTerm, getAlterTerm } = utils;
 
 module.exports = {
     name: 'whois',
@@ -37,7 +37,7 @@ module.exports = {
         // Look up the message — Redis first, MongoDB fallback
         let msgRecord = null;
         const cached = await redis.get(`msg:${targetMessageId}`);
-        if (cached) msgRecord = JSON.parse(cached);
+        if (cached) try { msgRecord = JSON.parse(cached); } catch { msgRecord = null; }
         if (!msgRecord) {
             msgRecord = await Message.findOne({
                 discord_webhook_message_id: targetMessageId

@@ -11,6 +11,7 @@ const User = require('../../schemas/user');
 const Group = require('../../schemas/group');
 const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
+const { checkProxyExists } = require('../../discord_commands/functions/bot_utils');
 
 // ===========================================
 // GET ALL GROUPS
@@ -210,7 +211,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
             }
         }
         
-        const allowedFields = ['description', 'color', 'avatar', 'signoff', 'type', 'proxy', 'discord', 'mask', 'caution'];
+        const allowedFields = ['description', 'color', 'avatar', 'signoff', 'type', 'discord', 'mask', 'caution'];
         for (const field of allowedFields) {
             if (updates[field] !== undefined) {
                 group[field] = updates[field];
@@ -219,6 +220,62 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         
         await group.save();
         res.json(group);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
+// PROXY MANAGEMENT
+// ===========================================
+
+router.post('/:id/proxy', authMiddleware, async (req, res) => {
+    try {
+        const group = await Group.findById(req.params.id);
+        if (!group) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+        
+        const { proxy } = req.body;
+        if (!proxy || !proxy.includes('text')) {
+            return res.status(400).json({ error: 'Proxy must contain "text" placeholder' });
+        }
+
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+
+        const { exists, entity, type } = await checkProxyExists(proxy, system, group._id.toString());
+        if (exists) {
+            return res.status(409).json({ error: `Proxy is already used by ${type} "${entity.name?.display || entity.name?.indexable || 'Unknown'}"` });
+        }
+        
+        group.proxy = group.proxy || [];
+        if (!group.proxy.includes(proxy)) {
+            group.proxy.push(proxy);
+        }
+        
+        await group.save();
+        res.json({ success: true, proxies: group.proxy });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.delete('/:id/proxy', authMiddleware, async (req, res) => {
+    try {
+        const group = await Group.findById(req.params.id);
+        if (!group) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+        
+        const { proxy } = req.body;
+        group.proxy = (group.proxy || []).filter(p => p !== proxy);
+        
+        await group.save();
+        res.json({ success: true, proxies: group.proxy });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

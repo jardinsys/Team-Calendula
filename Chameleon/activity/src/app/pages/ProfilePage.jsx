@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, NoteCardGrid, NoteModal, isFragmentedUser, isDissociativeUser } from '@chameleon/shared'
+import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, Icon, NoteCardGrid, NoteModal, isFragmentedUser, isDissociativeUser } from '@chameleon/shared'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -72,7 +72,7 @@ export function ProfilePage({ system: systemProp }) {
     if (error) {
         return (
             <div className="empty-state">
-                <span className="empty-icon">⚠️</span>
+                <span className="empty-icon"><Icon name="alert" size={48} /></span>
                 <h3>Something went wrong</h3>
                 <p>{error}</p>
             </div>
@@ -82,7 +82,7 @@ export function ProfilePage({ system: systemProp }) {
     if (!system) {
         return (
             <div className="empty-state">
-                <span className="empty-icon">🌐</span>
+                <span className="empty-icon"><Icon name="globe" size={48} /></span>
                 <h3>No profile found</h3>
                 <p>Create a profile to get started</p>
             </div>
@@ -220,7 +220,7 @@ export function ProfilePage({ system: systemProp }) {
 
             <div className="subpage-nav">
                 <button className="subpage-btn" onClick={() => setSubPage('front')}>
-                    <span className="subpage-btn-icon">🌙</span>
+                    <span className="subpage-btn-icon"><Icon name="moon" size={24} /></span>
                     <div className="subpage-btn-info">
                         <div className="subpage-btn-label">Current Front</div>
                         <div className="subpage-btn-count">
@@ -231,7 +231,7 @@ export function ProfilePage({ system: systemProp }) {
                 </button>
                 {(isFragmentedUser(system) || isDissociativeUser(system)) && (
                 <button className="subpage-btn" onClick={() => setSubPage('states')}>
-                    <span className="subpage-btn-icon">🌊</span>
+                    <span className="subpage-btn-icon"><Icon name="waves" size={24} /></span>
                     <div className="subpage-btn-info">
                         <div className="subpage-btn-label">States</div>
                         <div className="subpage-btn-count">{states.length} state{states.length !== 1 ? 's' : ''}</div>
@@ -240,7 +240,7 @@ export function ProfilePage({ system: systemProp }) {
                 </button>
                 )}
                 <button className="subpage-btn" onClick={() => setSubPage('notes')}>
-                    <span className="subpage-btn-icon">📝</span>
+                    <span className="subpage-btn-icon"><Icon name="fileText" size={24} /></span>
                     <div className="subpage-btn-info">
                         <div className="subpage-btn-label">Notes</div>
                         <div className="subpage-btn-count">{notes.length} note{notes.length !== 1 ? 's' : ''}</div>
@@ -248,7 +248,7 @@ export function ProfilePage({ system: systemProp }) {
                     <span className="subpage-btn-arrow">›</span>
                 </button>
                 <button className="subpage-btn" onClick={() => setSubPage('edit')}>
-                    <span className="subpage-btn-icon">⚙️</span>
+                    <span className="subpage-btn-icon"><Icon name="settings" size={24} /></span>
                     <div className="subpage-btn-info">
                         <div className="subpage-btn-label">Edit Profile</div>
                         <div className="subpage-btn-count">Name, description, settings</div>

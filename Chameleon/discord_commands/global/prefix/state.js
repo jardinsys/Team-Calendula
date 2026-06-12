@@ -215,13 +215,15 @@ async function handleColor(message, parsed, stateName) {
 }
 
 async function handleProxy(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
+    const { state, system } = await getState(message, stateName);
     if (!state) return;
     const action = parsed._positional[2]?.toLowerCase();
     if (parsed.clear || action === 'clear') { state.proxy = []; await state.save(); return utils.success(message, 'Proxy tags cleared.'); }
     if (action === 'add') {
         const tag = parsed._positional.slice(3).join(' ');
         if (!tag) return utils.error(message, 'Please provide a proxy tag.');
+        const { exists, entity, type } = await utils.checkProxyExists(tag, system, state._id.toString());
+        if (exists) return utils.error(message, `Proxy \`${tag}\` is already used by ${type} **${utils.getDisplayName(entity)}**.`);
         state.proxy = state.proxy || []; state.proxy.push(tag); await state.save();
         return utils.success(message, `Proxy tag \`${tag}\` added.`);
     }
@@ -238,8 +240,13 @@ async function handleProxy(message, parsed, stateName) {
         const proxies = state.proxy || [];
         return proxies.length ? utils.info(message, `Proxy tags: ${utils.formatProxies(proxies)}`) : utils.info(message, 'No proxy tags set.');
     }
+    const { exists, entity, type } = await utils.checkProxyExists(tag, system, state._id.toString());
+    if (exists) return utils.error(message, `Proxy \`${tag}\` is already used by ${type} **${utils.getDisplayName(entity)}**.`);
+    const oldCount = state.proxy?.length || 0;
     state.proxy = [tag]; await state.save();
-    return utils.success(message, `Proxy tag set to \`${tag}\``);
+    return utils.success(message, oldCount > 0
+        ? `Proxy tag set to \`${tag}\` (replaced ${oldCount} previous proxy${oldCount > 1 ? 's' : ''}).`
+        : `Proxy tag set to \`${tag}\`.`);
 }
 
 async function handleSignoff(message, parsed, stateName) {
@@ -331,8 +338,12 @@ async function handleAlters(message, parsed, stateName) {
         state.alters.push(al.entity._id); await state.save();
         // Bidirectional linking: also add state to alter's states array
         al.entity.states = al.entity.states || [];
-        if (!al.entity.states.includes(state._id)) {
-            al.entity.states.push(state._id);
+        const stateIdStr = state._id.toString();
+        if (!al.entity.states.some(s => s.connected_id === stateIdStr)) {
+            al.entity.states.push({
+                connected_id: stateIdStr,
+                name: { indexable: state.name?.indexable, display: state.name?.display }
+            });
             await al.entity.save();
         }
         return utils.success(message, `Linked to alter **${al.entity.name?.display || alterName}**`);
@@ -347,7 +358,8 @@ async function handleAlters(message, parsed, stateName) {
         state.alters.splice(idx, 1); await state.save();
         // Bidirectional linking: also remove state from alter's states array
         al.entity.states = al.entity.states || [];
-        const alterIdx = al.entity.states.indexOf(state._id);
+        const stateIdStr = state._id.toString();
+        const alterIdx = al.entity.states.findIndex(s => s.connected_id === stateIdStr);
         if (alterIdx !== -1) {
             al.entity.states.splice(alterIdx, 1);
             await al.entity.save();
@@ -516,7 +528,7 @@ async function handleMask(message, parsed, stateName) {
         return utils.success(message, 'Mask avatar updated.');
     }
     if (field === 'banner') {
-        if (parsed.clear) { if (state.mask.discord) state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.banner = undefined; await state.save(); return utils.success(message, 'Mask banner cleared.'); }
+        if (parsed.clear) { state.mask.discord = state.mask.discord || {}; state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.banner = undefined; await state.save(); return utils.success(message, 'Mask banner cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         state.mask.discord = state.mask.discord || {};
@@ -526,7 +538,7 @@ async function handleMask(message, parsed, stateName) {
         return utils.success(message, 'Mask banner updated.');
     }
     if (field === 'proxyavatar' || field === 'pav') {
-        if (parsed.clear) { if (state.mask.discord) state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.proxyAvatar = undefined; await state.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        if (parsed.clear) { state.mask.discord = state.mask.discord || {}; state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.proxyAvatar = undefined; await state.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL.');
         state.mask.discord = state.mask.discord || {};
@@ -566,6 +578,17 @@ async function handleDelete(message, parsed, stateName) {
     const { state, system } = await getState(message, stateName);
     if (!state) return;
     if (!parsed.confirm) return utils.error(message, `⚠️ This will permanently delete **${state.name?.display || stateName}**.\nConfirm: \`sys!state ${stateName} delete -confirm\``);
+
+    // Clean up bidirectional links
+    for (const alterId of state.alters || []) {
+        const alter = await Alter.findById(alterId);
+        if (alter) { alter.states = alter.states?.filter(s => s.connected_id?.toString() !== state._id.toString()) || []; await alter.save(); }
+    }
+    for (const groupId of state.groupIDs || []) {
+        const group = await Group.findById(groupId);
+        if (group) { group.stateIDs = group.stateIDs?.filter(id => id !== state._id) || []; await group.save(); }
+    }
+
     system.states.IDs = system.states.IDs?.filter(id => id !== state._id) || [];
     await system.save(); await State.deleteOne({ _id: state._id });
     return utils.success(message, `**${state.name?.display || stateName}** deleted.`);

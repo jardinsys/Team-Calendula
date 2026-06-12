@@ -183,6 +183,13 @@ class ApiClient {
         })
     }
 
+    async createSystemLayers(data) {
+        return this.request('/system/layers', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        })
+    }
+
     // ═══════════════════════════════════════════
     // ALTERS
     // ═══════════════════════════════════════════
@@ -329,6 +336,60 @@ class ApiClient {
         })
     }
 
+    async guidedSwitch(data) {
+        return this.request('/front/switch', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        })
+    }
+
+    async addShiftToLayer(entityId, entityType, layerId, parentShiftId) {
+        return this.request('/front/shift', {
+            method: 'POST',
+            body: JSON.stringify({ entityId, entityType, layerId, parentShiftId })
+        })
+    }
+
+    async removeShift(shiftId) {
+        return this.request(`/front/shift/${shiftId}`, {
+            method: 'DELETE'
+        })
+    }
+
+    async renameLayer(layerId, name, color) {
+        return this.request(`/front/layers/${layerId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ name, color })
+        })
+    }
+
+    async reorderLayers(layerIds) {
+        return this.request('/front/layers/reorder', {
+            method: 'PATCH',
+            body: JSON.stringify({ layerIds })
+        })
+    }
+
+    async addChildShift(parentShiftId, entityId, entityType) {
+        return this.request(`/front/shift/${parentShiftId}/children`, {
+            method: 'POST',
+            body: JSON.stringify({ entityId, entityType })
+        })
+    }
+
+    async removeChildShift(parentShiftId, childId) {
+        return this.request(`/front/shift/${parentShiftId}/children/${childId}`, {
+            method: 'DELETE'
+        })
+    }
+
+    async updateShiftStatus(shiftId, status) {
+        return this.request(`/front/shift/${shiftId}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status })
+        })
+    }
+
     // ═══════════════════════════════════════════
     // QUICK SWITCH
     // ═══════════════════════════════════════════
@@ -404,11 +465,116 @@ class ApiClient {
     }
 
     // ═══════════════════════════════════════════
+    // USER ACCOUNT
+    // ═══════════════════════════════════════════
+
+    async wipeData(keepFriends = false) {
+        return this.request('/user/wipe', {
+            method: 'POST',
+            body: JSON.stringify({ confirm: true, keepFriends })
+        })
+    }
+
+    async deleteAccount(systemName) {
+        return this.request('/user/account', {
+            method: 'DELETE',
+            body: JSON.stringify({ confirm: true, systemName })
+        })
+    }
+
+    // ═══════════════════════════════════════════
+    // PUBLIC ENTITY VIEW
+    // ═══════════════════════════════════════════
+
+    async getPublicEntity(type, id) {
+        return this.request(`/public/entity/${type}/${id}`)
+    }
+
+    // ═══════════════════════════════════════════
     // ACTIVITY
     // ═══════════════════════════════════════════
 
     async getPendingActivityPage() {
         return this.request('/activity/pending-page')
+    }
+
+    // ═══════════════════════════════════════════
+    // IMPORT
+    // ═══════════════════════════════════════════
+
+    async importFromSource(source, tokenOrId, options = {}, fileData = null) {
+        const body = { source, tokenOrId, options }
+        if (fileData) body.fileData = fileData
+        return this.request('/import', {
+            method: 'POST',
+            body: JSON.stringify(body)
+        })
+    }
+
+    async previewImport(source, tokenOrId, fileData = null) {
+        const body = { source, tokenOrId }
+        if (fileData) body.fileData = fileData
+        return this.request('/import/preview', {
+            method: 'POST',
+            body: JSON.stringify(body)
+        })
+    }
+
+    importFromSourceStream(source, tokenOrId, options = {}, fileData = null, onProgress) {
+        const body = { source, tokenOrId, options }
+        if (fileData) body.fileData = fileData
+
+        const controller = new AbortController()
+
+        const promise = fetch(`${this.baseUrl}/import/stream`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.token}`,
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+        }).then(async (response) => {
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ error: 'Import failed' }))
+                throw new Error(err.error || 'Import failed')
+            }
+
+            const reader = response.body.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ''
+
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split('\n')
+                buffer = lines.pop()
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const event = JSON.parse(line.slice(6))
+                            if (event.type === 'progress' && onProgress) {
+                                onProgress(event)
+                            } else if (event.type === 'complete') {
+                                return event
+                            } else if (event.type === 'error') {
+                                throw new Error(event.message)
+                            }
+                        } catch (e) {
+                            if (e.message && !e.message.includes('JSON')) throw e
+                        }
+                    }
+                }
+            }
+
+            throw new Error('Stream ended without completion')
+        })
+
+        promise.abort = () => controller.abort()
+        return promise
     }
 }
 

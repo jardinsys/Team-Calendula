@@ -43,6 +43,12 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
 
+/* ── Lucide Icon Utilities ── */
+.lucide-icon { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+.nav-item .lucide-icon { width: 20px; height: 20px; }
+.quick-action .icon .lucide-icon { width: 24px; height: 24px; }
+.user-type-badge .lucide-icon { width: 14px; height: 14px; }
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     background-color: var(--color-bg);

@@ -359,6 +359,7 @@ async function createNewUserAndSystem(discordId) {
 
 async function createSystem(discordId) {
     let user = await User.findOne({ discordID: discordId });
+    if (!user) throw new Error(`User not found for Discord ID: ${discordId}`);
 
     const system = new System({
         users: [user._id],
@@ -763,6 +764,94 @@ async function handleNewUserButton(interaction) {
 
         return await finalizeOnboarding(interaction, sessionId, session, null);
     }
+
+    // Import from another tool (after registration)
+    if (customId.startsWith('new_user_import_start_')) {
+        const sessionId = customId.replace('new_user_import_start_', '');
+        const session = getSession(sessionId);
+        if (!session) {
+            return await interaction.reply({ content: '❌ Session expired. Use `sys!import` to import later.', ephemeral: true });
+        }
+
+        deleteSession(sessionId);
+
+        const WEBAPP_URL = 'https://systemise.teamcalendula.net';
+        const sourceTerm = session.resolvedIsSystem ? 'alters' : 'states';
+        const embed = new EmbedBuilder()
+            .setColor(ENTITY_COLORS.system)
+            .setTitle('📥 Import Data')
+            .setDescription(
+                `Choose where you're importing from, or open the full import tool in the app for preview and selection.\n\n` +
+                `*Imported members will be created as **${sourceTerm}** to match your profile type.*`
+            );
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('import_help_pluralkit')
+                .setLabel('PluralKit')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('import_help_simplyplural')
+                .setLabel('Simply Plural')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('import_help_octocon')
+                .setLabel('Octocon')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('import_help_tupperbox')
+                .setLabel('Tupperbox')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('import_help_autodetect')
+                .setLabel('Auto-detect (file)')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        const row3 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setLabel('Open Import Tool in App')
+                .setStyle(ButtonStyle.Link)
+                .setURL(`${WEBAPP_URL}/app/import`)
+                .setEmoji('🌐')
+        );
+
+        return await interaction.update({ embeds: [embed], components: [row, row2, row3] });
+    }
+
+    // Skip import after registration
+    if (customId.startsWith('new_user_import_skip_')) {
+        const sessionId = customId.replace('new_user_import_skip_', '');
+        deleteSession(sessionId);
+
+        return await interaction.update({
+            embeds: [new EmbedBuilder()
+                .setColor(ENTITY_COLORS.success)
+                .setTitle('✅ All Set!')
+                .setDescription('You can import later with `sys!import`. Check `sys!import` for help.')],
+            components: []
+        });
+    }
+
+    // Import help buttons — redirect to sys!import usage
+    if (customId.startsWith('import_help_')) {
+        const source = customId.replace('import_help_', '');
+        const tips = {
+            pluralkit: 'Run `sys!import pluralkit` and enter your token when prompted.\n\nGet your token: DM PluralKit with `pk;token`',
+            simplyplural: 'Run `sys!import simplyplural` and enter your token when prompted.\n\nGet your token: Settings → Developer → Add Token',
+            octocon: 'Run `sys!import octocon` and enter your system ID when prompted.\n\nFind it at: `octocon.app/u/yourid`',
+            tupperbox: 'Run `sys!import tupperbox` and attach your export file.\n\nExport with: `tul!export`',
+            autodetect: 'Attach a JSON export file and run `sys!import` (without specifying a source).\n\nThe format will be auto-detected.'
+        };
+
+        return await interaction.reply({
+            content: tips[source] || 'Run `sys!import` for help.',
+            ephemeral: true
+        });
+    }
 }
 
 /* Show the name entry step (step 4) — shared by normal and extra-question paths
@@ -824,8 +913,19 @@ async function handleNewUserModal(interaction) {
         const isSystemStr = interaction.fields.getTextInputValue('other_is_system').toLowerCase();
         const isFragStr = interaction.fields.getTextInputValue('other_is_fragmented').toLowerCase();
 
-        session.resolvedIsSystem = isSystemStr === 'yes' || isSystemStr === 'y';
-        session.resolvedIsFragmented = isFragStr === 'yes' || isFragStr === 'y';
+        const resolvedIsSystem = isSystemStr === 'yes' || isSystemStr === 'y';
+        const resolvedIsFragmented = isFragStr === 'yes' || isFragStr === 'y';
+
+        // Validation: at least one tracking type must be enabled
+        if (!resolvedIsSystem && !resolvedIsFragmented) {
+            return await interaction.reply({
+                content: '❌ You need at least one tracking type to use Systemiser. Please answer **yes** to at least one of "Are you a system?" or "Do you experience fragmented states?"',
+                ephemeral: true
+            });
+        }
+
+        session.resolvedIsSystem = resolvedIsSystem;
+        session.resolvedIsFragmented = resolvedIsFragmented;
         session.isDissociative = false;
         session.otherName = otherName || null;
         session.step = 'name';
@@ -945,6 +1045,10 @@ async function finalizeOnboarding(interaction, sessionId, session, customName) {
         if (session.isDissociative) statusParts.push('Dissociative');
         if (statusParts.length === 0) statusParts.push('Basic');
 
+        const importLine = session.resolvedIsSystem
+            ? '\n\n📥 **Coming from another tool?** You can import your data from PluralKit, Simply Plural, Octocon, or Tupperbox!'
+            : '\n\n📥 **Coming from another tool?** You can import your data — imported members will be set as **states** to match your profile.';
+
         const successEmbed = new EmbedBuilder()
             .setColor(ENTITY_COLORS.success)
             .setTitle('✅ Profile Created!')
@@ -956,12 +1060,30 @@ async function finalizeOnboarding(interaction, sessionId, session, customName) {
                 (session.isDissociative
                     ? '**Note:** A "Dissociated" state has been created for you.\n'
                     : '') +
-                '\nUse `/system edit` to customize your profile further, ' +
+                importLine +
+                '\n\nUse `/system edit` to customize your profile further, ' +
                 'or `/alter new` to register your first alter.\n' +
                 'If you need any help, feel free to use `/help`'
             );
 
-        await interaction.editReply({ embeds: [successEmbed], components: [] });
+        // Build components with optional import button
+        const components = [];
+        if (session.resolvedIsSystem || session.resolvedIsFragmented || session.isDissociative) {
+            components.push(
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`new_user_import_start_${sessionId}`)
+                        .setLabel('Import from Another Tool')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId(`new_user_import_skip_${sessionId}`)
+                        .setLabel('Skip for Now')
+                        .setStyle(ButtonStyle.Secondary)
+                )
+            );
+        }
+
+        await interaction.editReply({ embeds: [successEmbed], components });
 
     } catch (err) {
         console.error('[Onboarding] Finalize error:', err);
@@ -1401,10 +1523,10 @@ function buildProxyStyleModal(sessionId, system, prefix = 'system_edit') {
         new ActionRowBuilder().addComponents(
             new TextInputBuilder()
                 .setCustomId('proxy_style')
-                .setLabel('Proxy Style (off/last/front/[entity name])')
+                .setLabel('Proxy Style (off/last/front/state/[entity name])')
                 .setStyle(TextInputStyle.Short)
                 .setValue(system.proxy?.style || 'off')
-                .setPlaceholder('off, last, front, or an entity indexable name')
+                .setPlaceholder('off, last, front, state, or an entity indexable name')
                 .setRequired(false)
                 .setMaxLength(50)
         ),
@@ -1425,7 +1547,7 @@ function buildProxyStyleModal(sessionId, system, prefix = 'system_edit') {
 // Validate proxy style string (pure logic, no DB calls)
 function validateProxyStyle(style) {
     const normalized = style?.toLowerCase()?.trim();
-    const validStyles = ['off', 'last', 'front'];
+    const validStyles = ['off', 'last', 'front', 'state'];
     if (validStyles.includes(normalized)) {
         return { valid: true, finalStyle: normalized, isEntityName: false };
     }
@@ -1797,21 +1919,37 @@ async function checkProxyExists(proxy, system, excludeEntityId = null) {
     return { exists: false, entity: null, type: null };
 }
 
-/* Validate proxy patterns
+/* Validate proxy patterns — format + cross-entity uniqueness
  * @param {string[]} proxies - Array of proxy patterns
- * @returns {{valid: boolean, errors: string[]}}
+ * @param {System} system - The system to check duplicates against
+ * @param {string} excludeEntityId - Entity ID to exclude from duplicate check
+ * @param {string} entityType - Entity type ('alter', 'state', 'group')
+ * @returns {Promise<{valid: string[], errors: string[], duplicates: Array<{proxy: string, owner: string}>}>}
  */
-function validateProxies(proxies) {
+async function validateProxies(proxies, system, excludeEntityId, entityType) {
+    const valid = [];
     const errors = [];
+    const duplicates = [];
 
     for (const proxy of proxies) {
-        if (!proxy.includes('text')) 
+        if (!proxy.includes('text')) {
             errors.push(`Proxy "${proxy}" must contain "text" as a placeholder`);
-        if (proxy.length > 100) 
+            continue;
+        }
+        if (proxy.length > 100) {
             errors.push(`Proxy "${proxy}" is too long (max 100 characters)!!! How would you even remember that??? 😰`);
+            continue;
+        }
+
+        const { exists, entity, type } = await checkProxyExists(proxy, system, excludeEntityId);
+        if (exists) {
+            duplicates.push({ proxy, owner: `${type} ${getDisplayName(entity)}` });
+        } else {
+            valid.push(proxy);
+        }
     }
 
-    return { valid: errors.length === 0, errors };
+    return { valid, errors, duplicates };
 }
 
 /* Get proxy layout help text
@@ -1926,20 +2064,12 @@ async function deleteFromR2(r2Key, bucket = 'app') {
  * @param {string} url - URL to download from
  * @returns {Promise<Buffer>} File content buffer
  */
-function downloadFromUrl(url) {
+function downloadFromUrl(url, redirects = 0) {
+    if (redirects > 5) return Promise.reject(new Error('Too many redirects'));
     return new Promise((resolve, reject) => {
-        https.get(url, (res) => {
+        const req = https.get(url, (res) => {
             if (res.statusCode === 302 || res.statusCode === 301) {
-                https.get(res.headers.location, (res2) => {
-                    if (res2.statusCode && res2.statusCode >= 400) {
-                        reject(new Error(`Download failed with status ${res2.statusCode}`));
-                        return;
-                    }
-                    const chunks = [];
-                    res2.on('data', (chunk) => chunks.push(chunk));
-                    res2.on('end', () => resolve(Buffer.concat(chunks)));
-                    res2.on('error', reject);
-                });
+                downloadFromUrl(res.headers.location, redirects + 1).then(resolve, reject);
                 return;
             }
             if (res.statusCode && res.statusCode >= 400) {
@@ -1951,6 +2081,7 @@ function downloadFromUrl(url) {
             res.on('end', () => resolve(Buffer.concat(chunks)));
             res.on('error', reject);
         }).on('error', reject);
+        req.setTimeout(30000, () => { req.destroy(); reject(new Error('Download timed out')); });
     });
 }
 
@@ -2205,6 +2336,73 @@ function getEntityEmbedColor(entity, system) {
     return entity?.color || system?.color || ENTITY_COLORS.system || null;
 }
 
+/**
+ * Resolve display fields for an alter with active states.
+ * Priority: activeStates.all[0] (priority) > activeStates.all[1..n] > alter's own fields.
+ * @param {Object} alter - Alter document
+ * @param {Object} system - System document (unused, kept for API consistency)
+ * @returns {Object} Merged display: { name, avatar, color, description, signoff, pronouns, proxy, caution }
+ */
+async function resolveAlterDisplay(alter, system) {
+    const display = {
+        name: alter.name?.display || alter.name?.indexable || null,
+        avatar: alter.avatar?.url || null,
+        color: alter.color || null,
+        description: alter.description || null,
+        signoff: alter.signoff || null,
+        pronouns: alter.pronouns || null,
+        proxy: alter.proxy || null,
+        caution: alter.caution || null,
+        hasActiveStates: false
+    };
+
+    const activeIds = alter.activeStates?.all;
+    if (!activeIds || activeIds.length === 0) return display;
+
+    display.hasActiveStates = true;
+
+    let states;
+    try {
+        states = await State.find({ _id: { $in: activeIds } });
+    } catch {
+        return display;
+    }
+
+    const stateMap = new Map();
+    for (const s of states) {
+        stateMap.set(s._id.toString(), s);
+    }
+
+    for (const stateId of activeIds) {
+        const state = stateMap.get(stateId.toString());
+        if (!state) continue;
+
+        if (!display.name && (state.name?.display || state.name?.indexable)) {
+            display.name = state.name?.display || state.name?.indexable;
+        }
+        if (!display.avatar && state.avatar?.url) {
+            display.avatar = state.avatar.url;
+        }
+        if (!display.color && state.color) {
+            display.color = state.color;
+        }
+        if (!display.description && state.description) {
+            display.description = state.description;
+        }
+        if (!display.signoff && state.signoff) {
+            display.signoff = state.signoff;
+        }
+        if (!display.proxy && state.proxy?.length) {
+            display.proxy = state.proxy;
+        }
+        if (!display.caution && state.caution?.c_type) {
+            display.caution = state.caution;
+        }
+    }
+
+    return display;
+}
+
 // ==== GUILD LOGGING ====
 
 async function sendGuildLog(guildId, eventType, logData, client) {
@@ -2239,7 +2437,7 @@ function buildLogEmbed(eventType, data) {
             const avatarUrl = data.avatarUrl || null;
             const displayName = data.displayName || data.fallbackDisplayName || 'Unknown';
             const entityName = data.entity?.name?.display || data.entity?.name?.indexable || data.fallbackDisplayName || 'Unknown';
-            const systemName = data.system?.name || data.fallbackDisplayName || 'Unknown';
+            const systemName = data.system?.name?.display || data.system?.name?.indexable || data.fallbackDisplayName || 'Unknown';
             const content = (data.content || '').substring(0, 1024);
             const color = data.entity?.color || data.system?.color || ENTITY_COLORS.success;
 
@@ -2450,6 +2648,7 @@ module.exports = {
     // Embed color helpers
     getSystemEmbedColor,
     getEntityEmbedColor,
+    resolveAlterDisplay,
 
     // Front management helpers
     updateRecentProxies,

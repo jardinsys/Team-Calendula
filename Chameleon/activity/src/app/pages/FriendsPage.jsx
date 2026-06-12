@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, FriendCardList, FriendDetailModal, AddFriendModal } from '@chameleon/shared'
+import { api, FriendCardList, FriendDetailModal, AddFriendModal, Icon } from '@chameleon/shared'
 
-export function FriendsPage() {
+export function FriendsPage({ onNavigate }) {
     const { session } = useDiscordSdk()
     const [friends, setFriends] = useState([])
     const [loading, setLoading] = useState(true)
@@ -47,7 +47,7 @@ export function FriendsPage() {
     if (error) {
         return (
             <div className="empty-state">
-                <span className="empty-icon">⚠️</span>
+                <span className="empty-icon"><Icon name="alert" size={48} /></span>
                 <h3>Something went wrong</h3>
                 <p>{error}</p>
             </div>
@@ -93,6 +93,7 @@ export function FriendsPage() {
                     onClose={() => setSelectedFriend(null)}
                     onRemoved={handleFriendRemoved}
                     onBlocked={handleFriendBlocked}
+                    onEntityClick={onNavigate ? (fronter) => onNavigate('entity', { entityType: fronter.type, entityId: fronter._id }) : undefined}
                     fallbackName={session?.global_name || session?.username}
                 />
             )}

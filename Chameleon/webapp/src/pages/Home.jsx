@@ -1,12 +1,10 @@
 // Home Page
 // Landing page with Discord login
 
-import { useAuth } from '../context/AuthContext';
-import { Navigate } from 'react-router-dom';
-
 const React = require('react');
 const { useAuth } = require('../context/AuthContext');
 const { Navigate } = require('react-router-dom');
+const { Icon } = require('@chameleon/shared');
 
 function Home() {
     const { isAuthenticated, loading, login } = useAuth();
@@ -30,7 +28,7 @@ function Home() {
                 {/* Hero Section */}
                 <div className="hero">
                     <div className="logo">
-                        <span className="logo-icon">🦎</span>
+                        <span className="logo-icon">🎡</span>
                         <h1>Systemiser</h1>
                     </div>
 
@@ -47,19 +45,19 @@ function Home() {
                 {/* Features */}
                 <div className="features">
                     <div className="feature">
-                        <span className="feature-icon">🎭</span>
+                        <span className="feature-icon"><Icon name="drama" size={32} /></span>
                         <h3>For Systems</h3>
                         <p>Full alter management, switching, and front tracking</p>
                     </div>
 
                     <div className="feature">
-                        <span className="feature-icon">🔀</span>
+                        <span className="feature-icon"><Icon name="shuffle" size={32} /></span>
                         <h3>For Fractured</h3>
                         <p>States and groups without full system management</p>
                     </div>
 
                     <div className="feature">
-                        <span className="feature-icon">📝</span>
+                        <span className="feature-icon"><Icon name="fileText" size={32} /></span>
                         <h3>For Everyone</h3>
                         <p>Notes, journaling, and friend front watching</p>
                     </div>

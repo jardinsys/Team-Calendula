@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react'
-import { api, DISORDER_MAP, DISORDER_DEFINITIONS, DSM_OPTIONS, ICD_OPTIONS, resolveSysTypeFromDisorder, resolveSysTypeFromExtraAnswer } from '@chameleon/shared'
+import { api, DISORDER_MAP, DISORDER_DEFINITIONS, DSM_OPTIONS, ICD_OPTIONS, Icon, resolveSysTypeFromDisorder, resolveSysTypeFromExtraAnswer } from '@chameleon/shared'
 
 // ═══════════════════════════════════════════
 // Step 1: Category Selection
@@ -8,7 +8,7 @@ import { api, DISORDER_MAP, DISORDER_DEFINITIONS, DSM_OPTIONS, ICD_OPTIONS, reso
 function CategoryStep({ onSelect }) {
   return (
     <div className="register-step">
-      <h2>Do you identify with a dissociative condition?</h2>
+      <h2>Do you have a dissociative condition?</h2>
       <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
         This helps us set up your profile with the right features.
         You can always change this later in settings.
@@ -16,19 +16,19 @@ function CategoryStep({ onSelect }) {
 
       <div className="category-grid">
         <button className="category-card" onClick={() => onSelect('DSM')}>
-          <span className="category-icon">📋</span>
+          <span className="category-icon"><Icon name="fileText" size={24} /></span>
           <span className="category-label">DSM-5</span>
           <span className="category-desc">Diagnostic and Statistical Manual</span>
         </button>
         <button className="category-card" onClick={() => onSelect('ICD')}>
-          <span className="category-icon">🌍</span>
+          <span className="category-icon"><Icon name="globe" size={24} /></span>
           <span className="category-label">ICD-10/11</span>
           <span className="category-desc">International Classification</span>
         </button>
         <button className="category-card" onClick={() => onSelect('OTHER')}>
-          <span className="category-icon">✏️</span>
+          <span className="category-icon"><Icon name="pencil" size={24} /></span>
           <span className="category-label">Other</span>
-          <span className="category-desc">Custom or self-identified</span>
+          <span className="category-desc">Other conditions or Custom identifiers</span>
         </button>
         <button className="category-card" onClick={() => onSelect('NONE')}>
           <span className="category-icon">—</span>
@@ -45,25 +45,125 @@ function CategoryStep({ onSelect }) {
 // Step 2: Disorder Selection (expandable cards)
 // ═══════════════════════════════════════════
 
-function DisorderStep({ category, onSelect, onBack }) {
+function DisorderStep({ category, onSelect, onBack, onStartOver }) {
   const options = category === 'DSM' ? DSM_OPTIONS : ICD_OPTIONS
   const [expandedKey, setExpandedKey] = useState(null)
+  const [selectedSubtype, setSelectedSubtype] = useState(null)
+  const [selectedSubtype2, setSelectedSubtype2] = useState(null)
   const [extraAnswer, setExtraAnswer] = useState(null)
 
   const handleToggle = (key) => {
     setExpandedKey(expandedKey === key ? null : key)
+    setSelectedSubtype(null)
+    setSelectedSubtype2(null)
+    setExtraAnswer(null)
+  }
+
+  const handleSubtypeSelect = (subtypeKey) => {
+    setSelectedSubtype(subtypeKey)
+    setSelectedSubtype2(null)
+    setExtraAnswer(null)
+  }
+
+  const handleSubtype2Select = (subtypeKey) => {
+    setSelectedSubtype2(subtypeKey)
     setExtraAnswer(null)
   }
 
   const handleSelect = (key) => {
     const mapping = DISORDER_MAP[key]
-    if (mapping?.extraQuestion && extraAnswer === null) return // need to answer first
-    onSelect(key, extraAnswer)
+    if (mapping?.extraQuestion && extraAnswer === null) return
+    onSelect(key, extraAnswer, category)
+  }
+
+  // Render a selectable item (leaf node with possible extra question)
+  const renderItem = (key, showDefinition = true) => {
+    const mapping = DISORDER_MAP[key]
+    const definition = DISORDER_DEFINITIONS[key]
+    const hasExtraQ = mapping.extraQuestion
+
+    return (
+      <div className="subtype-details">
+        {showDefinition && definition && (
+          <p className="subtype-definition">{definition}</p>
+        )}
+
+        {hasExtraQ && (
+          <div className="disorder-extra-question">
+            <p>{mapping.extraQuestionText}</p>
+            <div className="extra-question-btns">
+              <button
+                className={`extra-btn ${extraAnswer === true ? 'active' : ''}`}
+                onClick={() => setExtraAnswer(true)}
+              >
+                {mapping.extraQuestionYesLabel || 'Yes'}
+              </button>
+              <button
+                className={`extra-btn ${extraAnswer === false ? 'active' : ''}`}
+                onClick={() => setExtraAnswer(false)}
+              >
+                {mapping.extraQuestionNoLabel || 'No'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <button
+          className="btn-gradient btn-gradient-primary disorder-select-btn"
+          onClick={() => onSelect(key, extraAnswer, category)}
+          disabled={hasExtraQ && extraAnswer === null}
+        >
+          Select this
+        </button>
+      </div>
+    )
+  }
+
+  // Render a subtype dropdown (has subtypes)
+  const renderSubtypes = (mapping, depth = 0) => {
+    return (
+      <div className="disorder-subtypes" style={{ marginLeft: depth > 0 ? 'var(--space-md)' : 0 }}>
+        <div className="subtype-btns">
+          {mapping.subtypes.map(subtypeKey => {
+            const subtypeMapping = DISORDER_MAP[subtypeKey]
+            const currentSelected = depth === 0 ? selectedSubtype : selectedSubtype2
+            const isSelected = currentSelected === subtypeKey
+
+            return (
+              <div key={subtypeKey}>
+                <button
+                  className={`subtype-btn ${isSelected ? 'active' : ''}`}
+                  onClick={() => depth === 0 ? handleSubtypeSelect(subtypeKey) : handleSubtype2Select(subtypeKey)}
+                >
+                  <span>{subtypeMapping.fullName}</span>
+                  {subtypeMapping.hasSubtypes && <span className="subtype-arrow">▶</span>}
+                </button>
+
+                {/* Nested subtypes */}
+                {isSelected && subtypeMapping.hasSubtypes && (
+                  <div className="subtype-nested">
+                    {renderSubtypes(subtypeMapping, depth + 1)}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Show selected leaf item details */}
+        {selectedSubtype && depth === 0 && !DISORDER_MAP[selectedSubtype]?.hasSubtypes && (
+          renderItem(selectedSubtype, true)
+        )}
+        {selectedSubtype2 && depth === 1 && (
+          renderItem(selectedSubtype2, true)
+        )}
+      </div>
+    )
   }
 
   return (
     <div className="register-step">
-      <h2>{category === 'DSM' ? 'DSM-5 Conditions' : 'ICD-10/11 Conditions'}</h2>
+      <h2>{category === 'DSM' ? 'DSM-5 Conditions' : 'ICD-11 Conditions'}</h2>
       <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
         Select the condition that best describes your experience.
       </p>
@@ -73,7 +173,7 @@ function DisorderStep({ category, onSelect, onBack }) {
           const mapping = DISORDER_MAP[key]
           const definition = DISORDER_DEFINITIONS[key]
           const isExpanded = expandedKey === key
-          const hasExtraQ = mapping.extraQuestion
+          const hasSubtypes = mapping.hasSubtypes
 
           return (
             <div key={key} className={`disorder-card ${isExpanded ? 'expanded' : ''}`}>
@@ -82,40 +182,20 @@ function DisorderStep({ category, onSelect, onBack }) {
                 onClick={() => handleToggle(key)}
               >
                 <span className="disorder-name">{mapping.fullName}</span>
+                {hasSubtypes && <span className="disorder-parent-badge">{mapping.subtypes.length} types</span>}
                 <span className={`disorder-arrow ${isExpanded ? 'open' : ''}`}>▼</span>
               </button>
 
               {isExpanded && (
                 <div className="disorder-card-body">
-                  <p className="disorder-definition">{definition}</p>
-
-                  {hasExtraQ && (
-                    <div className="disorder-extra-question">
-                      <p>{mapping.extraQuestionText}</p>
-                      <div className="extra-question-btns">
-                        <button
-                          className={`extra-btn ${extraAnswer === true ? 'active' : ''}`}
-                          onClick={() => setExtraAnswer(true)}
-                        >
-                          Yes
-                        </button>
-                        <button
-                          className={`extra-btn ${extraAnswer === false ? 'active' : ''}`}
-                          onClick={() => setExtraAnswer(false)}
-                        >
-                          No
-                        </button>
-                      </div>
-                    </div>
+                  {hasSubtypes ? (
+                    renderSubtypes(mapping)
+                  ) : (
+                    <>
+                      <p className="disorder-definition">{definition}</p>
+                      {renderItem(key, false)}
+                    </>
                   )}
-
-                  <button
-                    className="btn-gradient btn-gradient-primary disorder-select-btn"
-                    onClick={() => handleSelect(key)}
-                    disabled={hasExtraQ && extraAnswer === null}
-                  >
-                    Select this
-                  </button>
                 </div>
               )}
             </div>
@@ -123,9 +203,14 @@ function DisorderStep({ category, onSelect, onBack }) {
         })}
       </div>
 
-      <button className="btn-ghost" onClick={onBack} style={{ marginTop: 'var(--space-md)', fontSize: '0.85rem' }}>
-        ← Back
-      </button>
+      <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
+        <button className="btn-ghost" onClick={onBack} style={{ flex: 1 }}>
+          ← Back
+        </button>
+        <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
+          Start Over
+        </button>
+      </div>
     </div>
   )
 }
@@ -135,18 +220,19 @@ function DisorderStep({ category, onSelect, onBack }) {
 // Step 3: Other — manual selection
 // ═══════════════════════════════════════════
 
-function OtherStep({ onResolve, onBack }) {
+function OtherStep({ onResolve, onBack, onStartOver }) {
   const [isSystem, setIsSystem] = useState(false)
   const [isFragmented, setIsFragmented] = useState(false)
-  const [customName, setCustomName] = useState('')
+  const [isDissociative, setIsDissociative] = useState(false)
+  const [conditionName, setConditionName] = useState('')
 
   const handleContinue = () => {
     onResolve({
-      name: customName.trim() || null,
+      name: conditionName.trim() || 'Custom',
       dd: {},
       isSystem,
       isFragmented,
-      isDissociative: false,
+      isDissociative,
       onboardingCompleted: true,
     })
   }
@@ -164,8 +250,8 @@ function OtherStep({ onResolve, onBack }) {
           <input
             className="text-input"
             type="text"
-            value={customName}
-            onChange={e => setCustomName(e.target.value)}
+            value={conditionName}
+            onChange={e => setConditionName(e.target.value)}
             placeholder="e.g. Complex Trauma Response"
             maxLength={100}
           />
@@ -179,7 +265,7 @@ function OtherStep({ onResolve, onBack }) {
               onChange={e => setIsSystem(e.target.checked)}
               style={{ width: '18px', height: '18px' }}
             />
-            We are a system
+            You also... are a system
           </label>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             You have distinct identity states (alters)
@@ -194,10 +280,25 @@ function OtherStep({ onResolve, onBack }) {
               onChange={e => setIsFragmented(e.target.checked)}
               style={{ width: '18px', height: '18px' }}
             />
-            We experience fragmented states
+            You also... experience fragmented states
           </label>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
             Altered states of mind without distinct alters
+          </p>
+        </div>
+
+        <div className="form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={isDissociative}
+              onChange={e => setIsDissociative(e.target.checked)}
+              style={{ width: '18px', height: '18px' }}
+            />
+            You also... dissociate
+          </label>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            Feel detached from yourself or the world around you
           </p>
         </div>
       </div>
@@ -205,6 +306,9 @@ function OtherStep({ onResolve, onBack }) {
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
         <button className="btn-ghost" onClick={onBack} style={{ flex: 1 }}>
           ← Back
+        </button>
+        <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
+          Start Over
         </button>
         <button
           className="btn-gradient btn-gradient-primary"
@@ -223,14 +327,18 @@ function OtherStep({ onResolve, onBack }) {
 // Step 4: Name entry + confirmation
 // ═══════════════════════════════════════════
 
-function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack }) {
-  const [customName, setCustomName] = useState('')
+function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStartOver, discordUser }) {
+  const [systemName, setSystemName] = useState('')
 
   const typeName = useMemo(() => {
     if (sysType?.name && sysType.name !== 'None') return sysType.name
     if (disorderKey && DISORDER_MAP[disorderKey]) return DISORDER_MAP[disorderKey].fullName
     return null
   }, [disorderKey, sysType])
+
+  const displayName = useMemo(() => {
+    return discordUser?.globalName || discordUser?.username || 'there'
+  }, [discordUser])
 
   const statusParts = []
   if (sysType?.isSystem) statusParts.push('System')
@@ -239,11 +347,13 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack }) {
   if (statusParts.length === 0) statusParts.push('Basic')
 
   const handleConfirm = () => {
+    // sys_type.name is always the disorder name (never changes)
     const finalSysType = {
       ...sysType,
-      name: customName.trim() || sysType?.name || typeName || 'None',
+      name: typeName || 'None',
     }
-    onConfirm(finalSysType)
+    // systemName is the profile/system name (separate from sys_type)
+    onConfirm(finalSysType, systemName.trim() || null)
   }
 
   return (
@@ -265,17 +375,17 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack }) {
 
       <div className="register-form">
         <div className="form-group">
-          <label>Profile name (optional)</label>
+          <label>System name (optional)</label>
           <input
             className="text-input"
             type="text"
-            value={customName}
-            onChange={e => setCustomName(e.target.value)}
-            placeholder={typeName || 'Your profile name'}
+            value={systemName}
+            onChange={e => setSystemName(e.target.value)}
+            placeholder={displayName}
             maxLength={100}
           />
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Leave blank to use "{typeName || 'None'}" as your profile name.
+            Leave blank to use your Discord display name.
           </p>
         </div>
       </div>
@@ -283,6 +393,9 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack }) {
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
         <button className="btn-ghost" onClick={onBack} style={{ flex: 1 }}>
           ← Back
+        </button>
+        <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
+          Start Over
         </button>
         <button
           className="btn-gradient btn-gradient-primary"
@@ -298,10 +411,175 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack }) {
 
 
 // ═══════════════════════════════════════════
+// Step 5: Import or New System (for isSystem conditions)
+// ═══════════════════════════════════════════
+
+function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
+  const [systemName, setSystemName] = useState('')
+
+  const handleNewSystem = () => {
+    onComplete({
+      systemName: systemName.trim() || null,
+      import: false,
+    })
+  }
+
+  const handleImport = () => {
+    if (onNavigate) onNavigate('import')
+  }
+
+  return (
+    <div className="register-step">
+      <h2>Set Up Your System</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
+        Since your condition involves a system, you can import from another tool or start fresh.
+      </p>
+
+      <div className="import-options">
+        <button
+          className="import-option-btn"
+          onClick={handleImport}
+        >
+          <span className="import-option-title">Import from Another Tool</span>
+          <span className="import-option-desc">Preview and import your existing alters and data</span>
+        </button>
+
+        <button
+          className="import-option-btn import-option-primary"
+          onClick={handleNewSystem}
+        >
+          <span className="import-option-title">Start a New System</span>
+          <span className="import-option-desc">Begin fresh and create your first alter</span>
+        </button>
+      </div>
+
+      <div className="form-group" style={{ marginTop: 'var(--space-lg)' }}>
+        <label>System name (optional)</label>
+        <input
+          className="text-input"
+          type="text"
+          value={systemName}
+          onChange={e => setSystemName(e.target.value)}
+          placeholder="e.g. Our System"
+          maxLength={100}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
+        <button className="btn-ghost" onClick={onBack} style={{ flex: 1 }}>
+          ← Back
+        </button>
+        <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
+          Start Over
+        </button>
+      </div>
+    </div>
+  )
+}
+
+
+// ═══════════════════════════════════════════
+// Step 6: Who's in Front? (for new isSystem)
+// ═══════════════════════════════════════════
+
+function FirstAlterStep({ systemName, onComplete, onBack }) {
+  const [alterNames, setAlterNames] = useState([''])
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  const handleNameChange = (index, value) => {
+    const updated = [...alterNames]
+    updated[index] = value
+    setAlterNames(updated)
+  }
+
+  const handleAddAlter = () => {
+    setAlterNames([...alterNames, ''])
+    setActiveIndex(alterNames.length)
+  }
+
+  const handleRemoveAlter = (index) => {
+    if (alterNames.length <= 1) return
+    const updated = alterNames.filter((_, i) => i !== index)
+    setAlterNames(updated)
+    if (activeIndex >= updated.length) {
+      setActiveIndex(updated.length - 1)
+    }
+  }
+
+  const handleComplete = () => {
+    // Filter out empty names
+    const validNames = alterNames.filter(n => n.trim())
+    console.log('[Register] Alters to create:', validNames)
+    // TODO: Create alters via API and set first one as front
+    // For now, just complete onboarding
+    onComplete(systemName)
+  }
+
+  const handleSkip = () => {
+    onComplete(systemName)
+  }
+
+  return (
+    <div className="register-step">
+      <h2>So...Who is in front?</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
+        Add the names of who's currently fronting. You can always add more later.
+      </p>
+
+      <div className="register-form">
+        <div className="alter-names-list">
+          {alterNames.map((name, index) => (
+            <div key={index} className="alter-name-row">
+              <input
+                className="text-input"
+                type="text"
+                value={name}
+                onChange={e => handleNameChange(index, e.target.value)}
+                placeholder={index === 0 ? "e.g. Host, Main, or a name" : "Another name"}
+                maxLength={100}
+                autoFocus={index === activeIndex}
+              />
+              {alterNames.length > 1 && (
+                <button
+                  className="alter-remove-btn"
+                  onClick={() => handleRemoveAlter(index)}
+                  title="Remove"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <button className="alter-add-btn" onClick={handleAddAlter}>
+          <span className="alter-add-icon">+</span>
+          <span>Add another</span>
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
+        <button className="btn-ghost" onClick={handleSkip} style={{ flex: 1 }}>
+          Skip for now
+        </button>
+        <button
+          className="btn-gradient btn-gradient-primary"
+          onClick={handleComplete}
+          style={{ flex: 2 }}
+        >
+          {alterNames.some(n => n.trim()) ? 'Create & Finish' : 'Finish Setup'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+
+// ═══════════════════════════════════════════
 // Main Register Page
 // ═══════════════════════════════════════════
 
-export function RegisterPage({ onNavigate, onRegistered }) {
+export function RegisterPage({ onNavigate, onRegistered, discordUser }) {
   const [step, setStep] = useState(1)
   const [category, setCategory] = useState(null)
   const [disorderKey, setDisorderKey] = useState(null)
@@ -309,12 +587,13 @@ export function RegisterPage({ onNavigate, onRegistered }) {
   const [resolvedSysType, setResolvedSysType] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [pendingSystemName, setPendingSystemName] = useState(null)
 
   // Step 1 → Step 2 or Step 3
   const handleCategorySelect = (cat) => {
     setCategory(cat)
     if (cat === 'OTHER') {
-      setStep(3) // Other manual step
+      setStep(3)
     } else if (cat === 'NONE') {
       setResolvedSysType({
         name: 'None',
@@ -324,41 +603,123 @@ export function RegisterPage({ onNavigate, onRegistered }) {
         isDissociative: false,
         onboardingCompleted: true,
       })
-      setStep(4) // Name step
+      setStep(4)
     } else {
-      setStep(2) // Disorder selection
+      setStep(2)
     }
   }
 
   // Step 2 → Step 4 (disorder selected)
-  const handleDisorderSelect = (key, extraAns) => {
+  const handleDisorderSelect = (key, extraAns, sourceCategory) => {
     setDisorderKey(key)
     setExtraAnswer(extraAns)
 
     const mapping = DISORDER_MAP[key]
+    const source = sourceCategory || category
+    let sysType
+
     if (mapping.extraQuestion && extraAns !== null) {
-      setResolvedSysType(resolveSysTypeFromExtraAnswer(key, extraAns))
+      const result = extraAns ? mapping.extraQuestionYes : mapping.extraQuestionNo
+      const finalKey = result.key || key
+      setDisorderKey(finalKey)
+      const finalMapping = DISORDER_MAP[finalKey] || mapping
+      sysType = {
+        name: finalMapping.fullName,
+        dd: source === 'DSM' ? { DSM: finalKey } : { ICD: finalKey },
+        isSystem: result.isSystem,
+        isFragmented: result.isFragmented,
+        isDissociative: finalMapping.isDissociative || false,
+        onboardingCompleted: true,
+      }
     } else {
-      setResolvedSysType(resolveSysTypeFromDisorder(key))
+      sysType = {
+        name: mapping.fullName,
+        dd: source === 'DSM' ? { DSM: key } : { ICD: key },
+        isSystem: mapping.isSystem || false,
+        isFragmented: mapping.isFragmented || false,
+        isDissociative: mapping.isDissociative || false,
+        onboardingCompleted: true,
+      }
     }
-    setStep(4)
+
+    setResolvedSysType(sysType)
+
+    // If isSystem, go to import step (step 5) instead of name step
+    if (sysType.isSystem) {
+      setStep(5)
+    } else {
+      setStep(4)
+    }
   }
 
   // Step 3 → Step 4 (other resolved)
   const handleOtherResolve = (sysType) => {
     setResolvedSysType(sysType)
-    setStep(4)
+    // If isSystem, go to import step (step 5)
+    if (sysType.isSystem) {
+      setStep(5)
+    } else {
+      setStep(4)
+    }
   }
 
-  // Step 4 → Create
-  const handleConfirm = async (finalSysType) => {
+  // Step 5 → Step 6 (import/new system choice made)
+  const handleImportChoice = (choice) => {
+    setPendingSystemName(choice.systemName)
+    if (choice.import) {
+      // TODO: Handle import
+      console.log('[Register] Import not yet implemented')
+    } else {
+      // New system → go to first alter step
+      setStep(6)
+    }
+  }
+
+  // Step 6 → Create (first alter done)
+  const handleFirstAlterComplete = (systemName) => {
+    // Now create the system with the name
+    handleConfirm(resolvedSysType, systemName || pendingSystemName)
+  }
+
+  // Preset layers based on sys_type
+  const createPresetLayers = async (sysType) => {
+    const layers = []
+
+    if (sysType.isDissociative && !sysType.isSystem && !sysType.isFragmented) {
+      layers.push({ name: 'Actively', color: '#8b5cf6' })
+    } else if (sysType.isFragmented && !sysType.isSystem) {
+      layers.push({ name: 'Primary States', color: '#8b5cf6' })
+      layers.push({ name: 'Secondary States', color: '#7c3aed' })
+      layers.push({ name: 'Tertiary States', color: '#6d28d9' })
+    } else if (sysType.isSystem && sysType.isFragmented) {
+      layers.push({ name: 'Primary Front', color: '#8b5cf6' })
+      layers.push({ name: 'Co-Front', color: '#7c3aed' })
+      layers.push({ name: 'Co-conscious', color: '#6d28d9' })
+      layers.push({ name: 'Back of Front', color: '#5b21b6' })
+    }
+
+    if (layers.length > 0) {
+      try {
+        await api.createSystemLayers({ layers })
+      } catch (layerErr) {
+        console.error('[Register] Failed to create preset layers:', layerErr)
+      }
+    }
+  }
+
+  // Create system
+  const handleConfirm = async (finalSysType, systemName) => {
     setSaving(true)
     setError(null)
 
     try {
       await api.createSystem({
+        name: systemName,
         sys_type: finalSysType,
       })
+
+      // Create preset layers based on condition type
+      await createPresetLayers(finalSysType)
 
       // If dissociative, auto-create the "Dissociated" state
       if (finalSysType.isDissociative) {
@@ -382,8 +743,18 @@ export function RegisterPage({ onNavigate, onRegistered }) {
 
   // Back navigation
   const handleBack = () => {
-    if (step === 4) {
+    if (step === 6) {
+      setStep(5)
+    } else if (step === 5) {
+      // Go back to step 4 (name step) - but need to check if we came from step 2 or 3
+      if (resolvedSysType?.dd?.DSM || resolvedSysType?.dd?.ICD) {
+        setStep(2)
+      } else {
+        setStep(3)
+      }
+    } else if (step === 4) {
       if (category === 'OTHER') setStep(3)
+      else if (category === 'NONE') setStep(1)
       else setStep(2)
     } else if (step === 3) {
       setStep(1)
@@ -393,30 +764,32 @@ export function RegisterPage({ onNavigate, onRegistered }) {
     }
   }
 
+  // Start over
+  const handleStartOver = () => {
+    setStep(1)
+    setCategory(null)
+    setDisorderKey(null)
+    setResolvedSysType(null)
+    setExtraAnswer(null)
+    setPendingSystemName(null)
+  }
+
   return (
     <div className="register-page">
-      {step > 1 && (
-        <button
-          className="btn-ghost"
-          onClick={() => { setStep(1); setCategory(null); setDisorderKey(null); setResolvedSysType(null) }}
-          style={{ fontSize: '0.75rem', marginBottom: 'var(--space-md)', alignSelf: 'flex-start' }}
-        >
-          ← Start over
-        </button>
-      )}
-
       {step === 1 && <CategoryStep onSelect={handleCategorySelect} />}
       {step === 2 && (
         <DisorderStep
           category={category}
           onSelect={handleDisorderSelect}
           onBack={handleBack}
+          onStartOver={handleStartOver}
         />
       )}
       {step === 3 && (
         <OtherStep
           onResolve={handleOtherResolve}
           onBack={handleBack}
+          onStartOver={handleStartOver}
         />
       )}
       {step === 4 && (
@@ -425,6 +798,24 @@ export function RegisterPage({ onNavigate, onRegistered }) {
           extraAnswer={extraAnswer}
           sysType={resolvedSysType}
           onConfirm={handleConfirm}
+          onBack={handleBack}
+          onStartOver={handleStartOver}
+          discordUser={discordUser}
+        />
+      )}
+      {step === 5 && (
+        <ImportStep
+          sysType={resolvedSysType}
+          onComplete={handleImportChoice}
+          onBack={handleBack}
+          onStartOver={handleStartOver}
+          onNavigate={onNavigate}
+        />
+      )}
+      {step === 6 && (
+        <FirstAlterStep
+          systemName={pendingSystemName}
+          onComplete={handleFirstAlterComplete}
           onBack={handleBack}
         />
       )}

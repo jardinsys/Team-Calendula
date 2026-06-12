@@ -880,6 +880,7 @@ async function handleButtonInteraction(interaction) {
                         value: '`off` - Only proxy when a pattern is matched\n' +
                             '`last` - Auto-proxy as most recent proxy used\n' +
                             '`front` - Auto-proxy as current fronter (if single)\n' +
+                            '`state` - Auto-proxy as fronting state entity (if single)\n' +
                             '`[entity name]` - Always proxy as specific entity',
                         inline: false
                     },
@@ -2182,7 +2183,7 @@ async function handleModalSubmit(interaction) {
             const onBreak = interaction.fields.getTextInputValue('proxy_break');
 
             // Validate proxy style
-            const validStyles = ['off', 'last', 'front'];
+            const validStyles = ['off', 'last', 'front', 'state'];
             if (validStyles.includes(style)) {
                 system.proxy.style = style;
             } else if (style) {
@@ -2199,7 +2200,7 @@ async function handleModalSubmit(interaction) {
             const proxyEmbed = utils.buildProxySettingsEmbed(system);
             const proxyComponents = utils.buildProxySettingsComponents(sessionId, 'system_edit');
                     return await interaction.update({
-                        content: `⚠️ Could not find an alter/state/group named "${style}". Proxy style was not changed.\n\nValid options: \`off\`, \`last\`, \`front\`, or an entity's indexable name.`,
+                        content: `⚠️ Could not find an alter/state/group named "${style}". Proxy style was not changed.\n\nValid options: \`off\`, \`last\`, \`front\`, \`state\`, or an entity's indexable name.`,
                         embeds: [proxyEmbed],
                         components: proxyComponents
                     });

@@ -215,13 +215,15 @@ async function handleColor(message, parsed, groupName) {
 }
 
 async function handleProxy(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
+    const { group, system } = await getGroup(message, groupName);
     if (!group) return;
     const action = parsed._positional[2]?.toLowerCase();
     if (parsed.clear || action === 'clear') { group.proxy = []; await group.save(); return utils.success(message, 'Proxy tags cleared.'); }
     if (action === 'add') {
         const tag = parsed._positional.slice(3).join(' ');
         if (!tag) return utils.error(message, 'Please provide a proxy tag.');
+        const { exists, entity, type } = await utils.checkProxyExists(tag, system, group._id.toString());
+        if (exists) return utils.error(message, `Proxy \`${tag}\` is already used by ${type} **${utils.getDisplayName(entity)}**.`);
         group.proxy = group.proxy || []; group.proxy.push(tag); await group.save();
         return utils.success(message, `Proxy tag \`${tag}\` added.`);
     }
@@ -229,17 +231,22 @@ async function handleProxy(message, parsed, groupName) {
         const tag = parsed._positional.slice(3).join(' ');
         group.proxy = group.proxy || [];
         const idx = group.proxy.findIndex(p => p.toLowerCase() === tag.toLowerCase());
-        if (idx === -1) return utils.error(message, 'Proxy tag not found.');
+        if (idx === -1) return utils.error(message, `Proxy tag not found.`);
         group.proxy.splice(idx, 1); await group.save();
-        return utils.success(message, 'Proxy tag removed.');
+        return utils.success(message, `Proxy tag removed.`);
     }
     const tag = parsed._positional.slice(2).join(' ');
     if (!tag) {
         const proxies = group.proxy || [];
         return proxies.length ? utils.info(message, `Proxy tags: ${utils.formatProxies(proxies)}`) : utils.info(message, 'No proxy tags set.');
     }
+    const { exists, entity, type } = await utils.checkProxyExists(tag, system, group._id.toString());
+    if (exists) return utils.error(message, `Proxy \`${tag}\` is already used by ${type} **${utils.getDisplayName(entity)}**.`);
+    const oldCount = group.proxy?.length || 0;
     group.proxy = [tag]; await group.save();
-    return utils.success(message, `Proxy tag set to \`${tag}\``);
+    return utils.success(message, oldCount > 0
+        ? `Proxy tag set to \`${tag}\` (replaced ${oldCount} previous proxy${oldCount > 1 ? 's' : ''}).`
+        : `Proxy tag set to \`${tag}\`.`);
 }
 
 async function handleSignoff(message, parsed, groupName) {
@@ -569,7 +576,7 @@ async function handleMask(message, parsed, groupName) {
         return utils.success(message, 'Mask avatar updated.');
     }
     if (field === 'banner') {
-        if (parsed.clear) { if (group.mask.discord) group.mask.discord.image = group.mask.discord.image || {}; group.mask.discord.image.banner = undefined; await group.save(); return utils.success(message, 'Mask banner cleared.'); }
+        if (parsed.clear) { group.mask.discord = group.mask.discord || {}; group.mask.discord.image = group.mask.discord.image || {}; group.mask.discord.image.banner = undefined; await group.save(); return utils.success(message, 'Mask banner cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         group.mask.discord = group.mask.discord || {};
@@ -579,7 +586,7 @@ async function handleMask(message, parsed, groupName) {
         return utils.success(message, 'Mask banner updated.');
     }
     if (field === 'proxyavatar' || field === 'pav') {
-        if (parsed.clear) { if (group.mask.discord) group.mask.discord.image = group.mask.discord.image || {}; group.mask.discord.image.proxyAvatar = undefined; await group.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        if (parsed.clear) { group.mask.discord = group.mask.discord || {}; group.mask.discord.image = group.mask.discord.image || {}; group.mask.discord.image.proxyAvatar = undefined; await group.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL.');
         group.mask.discord = group.mask.discord || {};

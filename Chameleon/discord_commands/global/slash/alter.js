@@ -167,27 +167,54 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
 
     const session = { mode: null, syncWithDiscord: alter.syncWithApps?.discord, serverId: guildId };
 
-    // Color priority: alter.color > system.color > none
-    const color = utils.getEntityEmbedColor(alter, system);
-    const description = utils.getDiscordOrDefault(alter, 'description');
-    const displayName = closedCharAllowed
-        ? (alter.name?.display || alter.name?.indexable)
-        : (alter.name?.closedNameDisplay || alter.name?.display || alter.name?.indexable);
+    // Resolve active states for display
+    let displayName, description, color, signoff, pronouns;
+    if (alter.activeStates?.all?.length > 0) {
+        const resolved = await utils.resolveAlterDisplay(alter, system);
+        displayName = closedCharAllowed
+            ? (resolved.name || alter.name?.display || alter.name?.indexable)
+            : (alter.name?.closedNameDisplay || resolved.name || alter.name?.display || alter.name?.indexable);
+        description = resolved.description || utils.getDiscordOrDefault(alter, 'description');
+        color = resolved.color || utils.getEntityEmbedColor(alter, system);
+        signoff = resolved.signoff || alter.signoff;
+        pronouns = resolved.pronouns || alter.pronouns;
+    } else {
+        displayName = closedCharAllowed
+            ? (alter.name?.display || alter.name?.indexable)
+            : (alter.name?.closedNameDisplay || alter.name?.display || alter.name?.indexable);
+        description = utils.getDiscordOrDefault(alter, 'description');
+        color = utils.getEntityEmbedColor(alter, system);
+        signoff = alter.signoff;
+        pronouns = alter.pronouns;
+    }
 
     // Header/Author — proxy avatar priority
     const proxyAvatar = utils.resolveProxyAvatarUrl(alter, session);
     const systemDisplayName = utils.getDisplayName(system, closedCharAllowed);
-    embed.setAuthor({
-        name: `${alter.name?.indexable || fallbackName || 'unknown'} (from ${systemDisplayName})`,
-        iconURL: proxyAvatar || undefined
-    });
+
+    // When active states exist, show priority state avatar + "Currently {state name}"
+    let authorName, authorIcon;
+    if (alter.activeStates?.all?.length > 0 && alter.activeStates?.priority) {
+        const priorityState = alter.states?.find(s => s.connected_id === alter.activeStates.priority);
+        const stateName = priorityState?.name?.display || priorityState?.name?.indexable;
+        if (stateName) {
+            authorName = `Currently ${stateName}`;
+            authorIcon = priorityState?.avatar?.url || proxyAvatar || undefined;
+        } else {
+            authorName = `${alter.name?.indexable || fallbackName || 'unknown'} (from ${systemDisplayName})`;
+            authorIcon = proxyAvatar || undefined;
+        }
+    } else {
+        authorName = `${alter.name?.indexable || fallbackName || 'unknown'} (from ${systemDisplayName})`;
+        authorIcon = proxyAvatar || undefined;
+    }
+    embed.setAuthor({ name: authorName, iconURL: authorIcon });
 
     embed.setTitle(displayName || fallbackName || '*No Name*');
     if (color) embed.setColor(color);
     if (description) embed.setDescription(description); 
 
-    const groups = await Group.find({ _id: { $in: alter.groupsIDs || [] } }); // Get groups for this alter
-    // Organize groups by type
+    const groups = await Group.find({ _id: { $in: alter.groupsIDs || [] } });
     const groupsByType = {};
     for (const group of groups) {
         const typeName = group.type?.name || 'Other';
@@ -197,7 +224,7 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
 
     // Personal Info field
     let personalInfo = '';
-    if (alter.pronouns?.length > 0) personalInfo += `**Pronouns:** ${alter.pronouns.join(', ')}\n`;
+    if (pronouns?.length > 0) personalInfo += `**Pronouns:** ${pronouns.join(', ')}\n`;
     if (alter.birthday) personalInfo += `**Birthday:** ${utils.formatDate(alter.birthday)}\n`;
     if (alter.name?.aliases?.length > 0) personalInfo += `**Aliases:** ${alter.name.aliases.join(', ')}\n`;
     if (personalInfo) {
@@ -208,10 +235,29 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
         });
     }
 
+    // Active States field
+    if (alter.activeStates?.all?.length > 0) {
+        const activeStateNames = [];
+        for (const stateId of alter.activeStates.all) {
+            const state = alter.states?.find(s => s.connected_id === stateId);
+            if (state) {
+                const name = state.name?.display || state.name?.indexable || 'Unknown';
+                const isPriority = stateId === alter.activeStates.priority;
+                activeStateNames.push(isPriority ? `> **${name}** (priority)` : `> ${name}`);
+            }
+        }
+        if (activeStateNames.length > 0) {
+            embed.addFields({
+                name: '🔄 Active States',
+                value: activeStateNames.join('\n'),
+                inline: false
+            });
+        }
+    }
+
     // Identification Info field
     let identificationInfo = '';
-    //identificationInfo += `**Display Name:** ${displayName}\n`;
-    if (alter.signoff) identificationInfo += `**Sign-off:** ${alter.signoff}\n`;
+    if (signoff) identificationInfo += `**Sign-off:** ${signoff}\n`;
     if (alter.proxy?.length > 0) identificationInfo += `**Proxies:** ${utils.formatProxies(alter.proxy)}\n`; 
     for (const [type, groupNames] of Object.entries(groupsByType)) {
         identificationInfo += `**${type}:** ${groupNames.join(', ')}\n`;
@@ -311,6 +357,84 @@ function buildEditInterface(alter, session, system = null) {
         );
 
     return { embed, components: [selectRow, modeRow, actionRow, uploadRow] };
+}
+
+function buildStatesView(alter, system, sessionId) {
+    const embed = new EmbedBuilder()
+        .setTitle(`🔄 States: ${utils.getDisplayName(alter)}`)
+        .setDescription('Manage active states and connections.');
+
+    const color = utils.getEntityEmbedColor(alter, system);
+    if (color) embed.setColor(color);
+
+    const connectedStates = alter.states || [];
+    const activeIds = alter.activeStates?.all || [];
+    const priorityId = alter.activeStates?.priority || null;
+
+    if (connectedStates.length === 0) {
+        embed.addFields({ name: 'Connected States', value: '*None connected yet. Use "Edit Connected" to add states.*', inline: false });
+    } else {
+        if (activeIds.length > 0) {
+            const activeLines = [];
+            for (const stateId of activeIds) {
+                const subdoc = connectedStates.find(s => s.connected_id === stateId);
+                const name = subdoc?.name?.display || subdoc?.name?.indexable || stateId;
+                const isPriority = stateId === priorityId;
+                activeLines.push(`${isPriority ? '**⭐ Priority:**' : '•'} ${name}`);
+            }
+            embed.addFields({ name: 'Active States', value: activeLines.join('\n'), inline: false });
+        } else {
+            embed.addFields({ name: 'Active States', value: '*No active states. Use the dropdown below to activate states.*', inline: false });
+        }
+
+        const connectedNames = connectedStates.map(s => s.name?.display || s.name?.indexable || '?').join(', ');
+        embed.addFields({ name: 'Connected States', value: connectedNames, inline: false });
+    }
+
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`alter_states_toggle_${sessionId}`)
+        .setPlaceholder('Toggle active states...')
+        .setMinValues(0)
+        .setMaxValues(Math.max(1, connectedStates.length));
+
+    if (connectedStates.length > 0) {
+        for (const subdoc of connectedStates) {
+            const name = subdoc.name?.display || subdoc.name?.indexable || 'Unknown';
+            const isActive = activeIds.includes(subdoc.connected_id);
+            selectMenu.addOptions(
+                new StringSelectMenuOptionBuilder()
+                    .setLabel(name)
+                    .setDescription(subdoc.connected_id === priorityId ? 'Priority state' : (isActive ? 'Active' : 'Inactive'))
+                    .setValue(subdoc.connected_id)
+                    .setDefault(isActive)
+            );
+        }
+    } else {
+        selectMenu.addOptions(
+            new StringSelectMenuOptionBuilder()
+                .setLabel('No connected states')
+                .setDescription('Edit connected states first')
+                .setValue('__none__')
+                .setDisabled(true)
+        );
+    }
+
+    const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+
+    const buttonRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`alter_edit_states_connected_${sessionId}`)
+            .setLabel('Edit Connected')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🔗'),
+        new ButtonBuilder()
+            .setCustomId(`alter_edit_states_back_${sessionId}`)
+            .setLabel('Back')
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji('◀️')
+    );
+
+    return { embed, components: [selectRow, buttonRow] };
 }
 
 // ==== COMMAND HANDLERS ====
@@ -1134,15 +1258,31 @@ async function handleButtonInteraction(interaction) {
         return await interaction.showModal(modal);
     }
 
-    // Edit → Edit States (modal to add/remove state connections)
-    if (customId.startsWith('alter_edit_states_')) {
+    // Edit → Edit States (embed view with active states + connected states)
+    if (customId.startsWith('alter_edit_states_') && !customId.startsWith('alter_edit_states_connected_') && !customId.startsWith('alter_edit_states_back_')) {
+        const alter = await Alter.findById(session.alterId);
+        const system = await System.findById(session.systemId);
+        const { embed, components } = buildStatesView(alter, system, sessionId);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    // Edit States → Back to edit interface
+    if (customId.startsWith('alter_edit_states_back_')) {
+        const alter = await Alter.findById(session.alterId);
+        const system = await System.findById(session.systemId);
+        const { embed, components } = buildEditInterface(alter, session, system);
+        return await interaction.update({ embeds: [embed], components });
+    }
+
+    // Edit States → Edit Connected States (modal to add/remove connections)
+    if (customId.startsWith('alter_edit_states_connected_')) {
         const alter = await Alter.findById(session.alterId);
         const connectedStates = await State.find({ _id: { $in: alter.states?.map(s => s.connected_id) || [] } });
         const stateNames = connectedStates.map(s => s.name?.indexable).filter(Boolean);
 
         const modal = new ModalBuilder()
-            .setCustomId(`alter_edit_states_modal_${sessionId}`)
-            .setTitle('Edit State Connections');
+            .setCustomId(`alter_edit_states_connected_modal_${sessionId}`)
+            .setTitle('Edit Connected States');
         modal.addComponents(new ActionRowBuilder().addComponents(
             new TextInputBuilder()
                 .setCustomId('state_names')
@@ -1248,6 +1388,23 @@ async function handleSelectMenu(interaction) {
         );
 
         return await interaction.update({ embeds: [embed], components: [buttons] });
+    }
+
+    // Active states toggle select
+    if (interaction.customId.startsWith('alter_states_toggle_')) {
+        const alter = await Alter.findById(session.alterId);
+        const system = await System.findById(session.systemId);
+        const selectedIds = interaction.values.filter(v => v !== '__none__');
+
+        // Set active states: first selected is priority
+        if (!alter.activeStates) alter.activeStates = {};
+        alter.activeStates.all = selectedIds;
+        alter.activeStates.priority = selectedIds[0] || null;
+
+        await alter.save();
+
+        const { embed, components } = buildStatesView(alter, system, sessionId);
+        return await interaction.update({ embeds: [embed], components });
     }
 
     const alter = await Alter.findById(session.alterId);
@@ -1484,15 +1641,14 @@ async function handleModalSubmit(interaction) {
         }
     }
 
-    // Edit states modal
-    if (interaction.customId.startsWith('alter_edit_states_modal_')) {
+    // Edit connected states modal
+    if (interaction.customId.startsWith('alter_edit_states_connected_modal_')) {
         const stateNamesInput = interaction.fields.getTextInputValue('state_names');
         const stateNames = utils.parseCommaSeparated(stateNamesInput);
 
         const system = await System.findById(session.systemId);
         const allStates = await State.find({ _id: { $in: system.states?.IDs || [] } });
 
-        // Build the states array with connected_id references
         const newStates = [];
         for (const name of stateNames) {
             const state = allStates.find(s => s.name?.indexable?.toLowerCase() === name.toLowerCase());
@@ -1506,25 +1662,36 @@ async function handleModalSubmit(interaction) {
             }
         }
 
-        // Calculate diff for reverse sync (state.alters)
         const oldStateIds = (alter.states || []).map(s => s.connected_id);
         const newStateIds = newStates.map(s => s.connected_id);
         const removedStateIds = oldStateIds.filter(id => !newStateIds.includes(id));
         const addedStateIds = newStateIds.filter(id => !oldStateIds.includes(id));
 
         alter.states = newStates;
+
+        // Clean up active states: remove any that are no longer connected
+        if (alter.activeStates?.all?.length > 0) {
+            alter.activeStates.all = alter.activeStates.all.filter(id => newStateIds.includes(id));
+            if (alter.activeStates.priority && !newStateIds.includes(alter.activeStates.priority)) {
+                alter.activeStates.priority = alter.activeStates.all[0] || null;
+            }
+        }
+
         await alter.save();
 
-        // Sync reverse: state.alters
         if (removedStateIds.length > 0) {
             await State.updateMany({ _id: { $in: removedStateIds } }, { $pull: { alters: alter._id.toString() } });
         }
         if (addedStateIds.length > 0) {
             await State.updateMany({ _id: { $in: addedStateIds } }, { $addToSet: { alters: alter._id.toString() } });
         }
+
+        // Return to states view
+        const { embed, components } = buildStatesView(alter, system, sessionId);
+        return await interaction.update({ embeds: [embed], components });
     }
 
-    // Return to edit interface for edit modals
+    // Return to edit interface for other edit modals
     session.id = sessionId;
     const { embed, components } = buildEditInterface(alter, session);
     await interaction.update({ embeds: [embed], components });

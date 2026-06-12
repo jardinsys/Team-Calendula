@@ -6,6 +6,7 @@ import TagInput from './TagInput.jsx'
 import ShareNoteModal from './ShareNoteModal.jsx'
 import AttributionEditor from './AttributionEditor.jsx'
 import EditHistoryPanel from './EditHistoryPanel.jsx'
+import { Icon } from '../icons.jsx'
 
 const DEFAULT_NOTE_COLOR = '#8b5cf6'
 const NOTE_COLORS = [
@@ -13,7 +14,7 @@ const NOTE_COLORS = [
     '#57F287', '#3498DB', '#9B59B6', '#EB459E', '#95A5A6'
 ]
 
-function NoteModal({ note, onClose, onUpdated, onDeleted }) {
+function NoteModal({ note, system, onClose, onUpdated, onDeleted }) {
     const [fullNote, setFullNote] = useState(null)
     const [contentText, setContentText] = useState('')
     const [loading, setLoading] = useState(true)
@@ -64,7 +65,8 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
                         setEditColor(data.color || DEFAULT_NOTE_COLOR)
                         const latestAttr = data.attribution?.length
                             ? data.attribution[data.attribution.length - 1].entities?.map(e => ({
-                                type: e.type, id: e.ID, name: e.name, avatar: e.avatar, color: e.color
+                                type: e.entity?.type, id: e.entity?.ID, name: e.entity?.name, avatar: e.entity?.avatar, color: e.entity?.color,
+                                entityStates: e.entityStates
                             })) || []
                             : []
                         setEditAttribution(latestAttr)
@@ -102,7 +104,10 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
                 content: editContent,
                 tags: editTags,
                 color: editColor === DEFAULT_NOTE_COLOR ? undefined : editColor,
-                attribution: editAttribution.map(e => ({ type: e.type, id: e.id }))
+                attribution: editAttribution.map(e => ({
+                    entity: { type: e.type, ID: e.id },
+                    entityStates: e.entityStates
+                }))
             })
             setEditMode(false)
             onUpdated?.()
@@ -243,14 +248,18 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
                         </div>
                     </div>
 
+                    {(system?.sys_type?.isSystem || system?.sys_type?.isFragmented || system?.sys_type?.isDissociative) && (
                     <div className="form-group">
                         <label>Attribution</label>
                         <AttributionEditor
-                            attribution={editAttribution}
+                            attributions={editAttribution}
                             onChange={setEditAttribution}
+                            sysType={system?.sys_type}
+                            isShared={!!(displayNote?.users?.rwAccess?.length || displayNote?.users?.rAccess?.length)}
                             compact
                         />
                     </div>
+                    )}
 
                     {error && (
                         <p style={{ color: 'var(--color-error)', fontSize: '0.8rem', marginBottom: '12px' }}>
@@ -283,9 +292,9 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
                 <div className="modal-header">
                     <button className="btn-ghost" onClick={handleClose}>← Back</button>
                     <div className="modal-actions">
-                        <button className="btn-icon" title="Share" onClick={() => setShowShare(true)}>👥</button>
-                        <button className="btn-icon" title="Edit" onClick={() => setEditMode(true)}>✏️</button>
-                        <button className="btn-icon" title="Delete" onClick={() => setShowDeleteConfirm(true)}>🗑️</button>
+                        <button className="btn-icon" title="Share" onClick={() => setShowShare(true)}><Icon name="users" size={18} /></button>
+                        <button className="btn-icon" title="Edit" onClick={() => setEditMode(true)}><Icon name="pencil" size={18} /></button>
+                        <button className="btn-icon" title="Delete" onClick={() => setShowDeleteConfirm(true)}><Icon name="trash" size={18} /></button>
                     </div>
                 </div>
 
@@ -301,19 +310,24 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
                     </div>
                 )}
 
-                {latestAttribution && latestAttribution.entities?.length > 0 && (
+                {latestAttribution && latestAttribution.entities?.length > 0 && (system?.sys_type?.isSystem || system?.sys_type?.isFragmented || system?.sys_type?.isDissociative) && (
                     <div className="note-attribution-display" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
                         {latestAttribution.entities.map((ent, i) => (
                             <span key={i} className="attribution-chip" style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '4px',
                                 padding: '2px 8px', borderRadius: '12px',
-                                border: `1px solid ${ent.color || 'var(--glass-border)'}`,
+                                border: `1px solid ${ent.entity?.color || 'var(--glass-border)'}`,
                                 fontSize: '0.75rem', color: 'var(--text)'
                             }}>
-                                {ent.avatar && (
-                                    <img src={ent.avatar} alt="" style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'cover' }} />
+                                {ent.entity?.avatar && (
+                                    <img src={ent.entity.avatar} alt="" style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'cover' }} />
                                 )}
-                                <span>{ent.name}</span>
+                                <span>{ent.entity?.name}</span>
+                                {ent.entityStates?.priority && (
+                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginLeft: '2px' }}>
+                                        ({ent.entityStates.priority.name})
+                                    </span>
+                                )}
                             </span>
                         ))}
                     </div>
@@ -349,7 +363,7 @@ function NoteModal({ note, onClose, onUpdated, onDeleted }) {
 
                 <div className="modal-actions">
                     <span className="note-card-meta">
-                        {displayNote.pinned && '📌 '}{new Date(displayNote.updatedAt).toLocaleDateString()}
+                        {displayNote.pinned && <><Icon name="pin" size={14} /> </>}{new Date(displayNote.updatedAt).toLocaleDateString()}
                     </span>
                 </div>
             </div>

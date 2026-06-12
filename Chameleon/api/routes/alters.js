@@ -10,6 +10,7 @@ const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const Alter = require('../../schemas/alter');
 const Group = require('../../schemas/group');
+const { checkProxyExists } = require('../../discord_commands/functions/bot_utils');
 
 // ===========================================
 // GET ALL ALTERS
@@ -25,7 +26,7 @@ router.get('/', authMiddleware, async (req, res) => {
         }
         
         const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } })
-            .select('_id name avatar color pronouns groupsIDs description proxy metadata');
+            .select('_id name avatar color pronouns groupsIDs description proxy metadata states activeStates');
         
         res.json(alters);
     } catch (err) {
@@ -272,6 +273,17 @@ router.post('/:id/proxy', authMiddleware, async (req, res) => {
         const { proxy } = req.body;
         if (!proxy || !proxy.includes('text')) {
             return res.status(400).json({ error: 'Proxy must contain "text" placeholder' });
+        }
+
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+
+        const { exists, entity, type } = await checkProxyExists(proxy, system, alter._id.toString());
+        if (exists) {
+            return res.status(409).json({ error: `Proxy is already used by ${type} "${entity.name?.display || entity.name?.indexable || 'Unknown'}"` });
         }
         
         alter.proxy = alter.proxy || [];

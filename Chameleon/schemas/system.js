@@ -32,11 +32,11 @@ const systemSchema = new mongoose.Schema({
     sys_type: {
         name: String,
         dd: {
-            DSM: { type: String, enum: ["DID", "Amnesia", "Dereal/Depers", "OSDD-1A", "OSDD-1B", "OSDD-2", "OSDD-3", "OSDD-4", "UDD"] },
-            ICD: { type: String, enum: ["P-DID", "Trance", "DNSD", "Possession Trance"] },
+            DSM: { type: String, enum: ["DID", "Amnesia", "Amnesia-Fugue", "Dereal/Depers", "OSDD-1A", "OSDD-1B", "OSDD-2", "OSDD-3", "OSDD-4", "UDD"] },
+            ICD: { type: String, enum: ["P-DID", "Amnesia", "Amnesia-Fugue", "Trance", "DNSD", "Possession Trance", "Depersonalization-Derealization"] },
         },
-        isSystem: Boolean, // Alters, States, Groups
-        isFragmented: Boolean, // States + Groups
+        isSystem: { type: Boolean, default: false }, // Alters, States, Groups
+        isFragmented: { type: Boolean, default: false }, // States + Groups
         isDissociative: { type: Boolean, default: false }, // Dereal/Depers — tracking dissociative states, no groups
         onboardingCompleted: { type: Boolean, default: false }
     },

@@ -281,6 +281,7 @@ async function handleRename(message, parsed) {
     if (!await utils.requireSystem(message, system)) return;
 
     if (parsed.clear) {
+        system.name = system.name || {};
         system.name.indexable = undefined;
         await system.save();
         return utils.success(message, 'System indexable name cleared.');
@@ -780,7 +781,7 @@ async function handlePrivacyBucketField(message, parsed, system, bucketName) {
 async function handleClosedName(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
-    if (parsed.clear) { system.name.closedNameDisplay = undefined; await system.save(); return utils.success(message, 'Closed name display cleared.'); }
+    if (parsed.clear) { system.name = system.name || {}; system.name.closedNameDisplay = undefined; await system.save(); return utils.success(message, 'Closed name display cleared.'); }
     const newName = parsed._positional.slice(1).join(' ');
     if (!newName) return utils.error(message, 'Please provide a closed name display.');
     system.name = system.name || {};
@@ -959,7 +960,7 @@ async function handleMask(message, parsed) {
         return utils.success(message, 'Mask avatar updated.');
     }
     if (field === 'banner') {
-        if (parsed.clear) { if (system.mask.discord) system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.banner = undefined; await system.save(); return utils.success(message, 'Mask banner cleared.'); }
+        if (parsed.clear) { system.mask.discord = system.mask.discord || {}; system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.banner = undefined; await system.save(); return utils.success(message, 'Mask banner cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[2];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         system.mask.discord = system.mask.discord || {};
@@ -969,7 +970,7 @@ async function handleMask(message, parsed) {
         return utils.success(message, 'Mask banner updated.');
     }
     if (field === 'proxyavatar' || field === 'pav') {
-        if (parsed.clear) { if (system.mask.discord) system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.proxyAvatar = undefined; await system.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        if (parsed.clear) { system.mask.discord = system.mask.discord || {}; system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.proxyAvatar = undefined; await system.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[2];
         if (!url) return utils.error(message, 'Please provide a URL.');
         system.mask.discord = system.mask.discord || {};

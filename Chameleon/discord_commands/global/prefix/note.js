@@ -139,9 +139,10 @@ async function handleShow(message, note, user) {
         .setTitle(`${note.pinned ? '📌 ' : '📝 '}${note.title || 'Untitled Note'}`);
 
     if (note.content) {
-        const content = note.content.length > 4000
-            ? note.content.substring(0, 4000) + '...\n*[Content truncated]*'
-            : note.content;
+        const raw = typeof note.content === 'string' ? note.content : note.contentPreview || '*No content*';
+        const content = raw.length > 4000
+            ? raw.substring(0, 4000) + '...\n*[Content truncated]*'
+            : raw;
         embed.setDescription(content);
     } else 
         embed.setDescription('*No content*');

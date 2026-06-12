@@ -8,6 +8,7 @@ import {
   Dices,
   TriangleAlert,
   Settings,
+  Shuffle,
 } from 'lucide-react'
 
 
@@ -34,6 +35,7 @@ function ReturningLanding({ onNavigate, system, discordUser }) {
 
   const FEATURES = useMemo(() => [
     { id: 'system', icon: PersonStanding, label: systemLabel },
+    { id: 'switch', icon: Shuffle, label: 'Switch' },
     { id: 'friends', icon: Users, label: 'Friends' },
     { id: 'notes', icon: NotepadText, label: 'Notes' },
     { id: 'activities', icon: Dices, label: 'Activities' },
@@ -71,7 +73,7 @@ function ReturningLanding({ onNavigate, system, discordUser }) {
               <div className="landing-feature-circle landing-feature-circle--sm">
                 <div className="landing-feature-circle-inner">
                   <Icon
-                    size={60}
+                    size={40}
                     strokeWidth={3}
                     //fill="rgba(0,0,0,0.8)"
                     stroke="white"

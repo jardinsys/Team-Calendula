@@ -9,7 +9,7 @@ const NOTE_COLORS = [
     '#57F287', '#3498DB', '#9B59B6', '#EB459E', '#95A5A6'
 ]
 
-function CreateNoteModal({ onClose, onCreated }) {
+function CreateNoteModal({ system, onClose, onCreated }) {
     const [title, setTitle] = useState('')
     const [content, setContent] = useState('')
     const [tags, setTags] = useState([])
@@ -55,7 +55,10 @@ function CreateNoteModal({ onClose, onCreated }) {
                 content,
                 tags,
                 color: selectedColor,
-                attribution: attribution.map(e => ({ type: e.type, id: e.id }))
+                attribution: attribution.map(e => ({
+                    entity: { type: e.type, ID: e.id },
+                    entityStates: e.entityStates
+                }))
             }
             if (entityOwner) {
                 payload.entityOwner = { type: entityOwner.type, id: entityOwner.id }
@@ -72,6 +75,8 @@ function CreateNoteModal({ onClose, onCreated }) {
     const handleBackdropClick = (e) => {
         if (e.target === e.currentTarget) onClose?.()
     }
+
+    const showAttribution = !!system?.sys_type?.isSystem || !!system?.sys_type?.isFragmented || !!system?.sys_type?.isDissociative
 
     return (
         <div className="modal-overlay" onClick={handleBackdropClick}>
@@ -116,6 +121,7 @@ function CreateNoteModal({ onClose, onCreated }) {
                         />
                     </div>
 
+                    {showAttribution && (
                     <div className="form-group">
                         <label>Owned by Entity (optional)</label>
                         <select
@@ -136,7 +142,7 @@ function CreateNoteModal({ onClose, onCreated }) {
                             })}
                         </select>
                         <div className="entity-tabs" style={{ marginTop: '8px' }}>
-                            {['alter', 'state', 'group'].map(tab => (
+                            {['alter', 'group'].map(tab => (
                                 <button
                                     key={tab}
                                     type="button"
@@ -148,15 +154,19 @@ function CreateNoteModal({ onClose, onCreated }) {
                             ))}
                         </div>
                     </div>
+                    )}
 
+                    {showAttribution && (
                     <div className="form-group">
                         <label>Attribution</label>
                         <AttributionEditor
-                            attribution={attribution}
+                            attributions={attribution}
                             onChange={setAttribution}
+                            sysType={system?.sys_type}
                             compact
                         />
                     </div>
+                    )}
 
                     <div className="form-group">
                         <label>Color</label>

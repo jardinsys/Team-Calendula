@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm, isFragmentedUser, isDissociativeUser } from '@chameleon/shared'
+import { api, EntityCardList, EntityFormModal, FrontDisplay, Icon, getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm, isFragmentedUser, isDissociativeUser } from '@chameleon/shared'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -8,7 +8,7 @@ function getDisplayName(entity, fallbackName) {
     return entity.name?.display || entity.name?.indexable || fallbackName || 'Unknown'
 }
 
-export function SystemPage({ system: systemProp }) {
+export function SystemPage({ system: systemProp, onNavigate }) {
     const { session } = useDiscordSdk()
     const [subPage, setSubPage] = useState(null)
     const [system, setSystem] = useState(systemProp)
@@ -19,11 +19,7 @@ export function SystemPage({ system: systemProp }) {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
-    const [selectedEntity, setSelectedEntity] = useState(null)
-    const [selectedEntityType, setSelectedEntityType] = useState(null)
     const [showCreateEntity, setShowCreateEntity] = useState(null)
-    const [editingEntity, setEditingEntity] = useState(null)
-    const [editingEntityType, setEditingEntityType] = useState(null)
 
     const fetchAll = useCallback(async () => {
         try {
@@ -51,18 +47,9 @@ export function SystemPage({ system: systemProp }) {
     useEffect(() => { fetchAll() }, [fetchAll])
 
     const handleEntityCreated = () => { fetchAll(); setShowCreateEntity(null) }
-    const handleEntityUpdated = () => { fetchAll(); setEditingEntity(null); setSelectedEntity(null) }
-    const handleEntityDeleted = () => { fetchAll(); setSelectedEntity(null) }
 
     const handleEntityClick = (entity, type) => {
-        setSelectedEntity(entity)
-        setSelectedEntityType(type)
-    }
-
-    const handleEditEntity = (entity, type) => {
-        setSelectedEntity(null)
-        setEditingEntity(entity)
-        setEditingEntityType(type)
+        onNavigate('entity', { entityType: type, entityId: entity._id })
     }
 
     const alterLabel = useMemo(() => getAlterTerm(system, { plural: false }), [system])
@@ -85,7 +72,7 @@ export function SystemPage({ system: systemProp }) {
     if (error) {
         return (
             <div className="empty-state">
-                <span className="empty-icon">⚠️</span>
+                <span className="empty-icon"><Icon name="alert" size={48} /></span>
                 <h3>Something went wrong</h3>
                 <p>{error}</p>
             </div>
@@ -95,7 +82,7 @@ export function SystemPage({ system: systemProp }) {
     if (!system) {
         return (
             <div className="empty-state">
-                <span className="empty-icon">🌐</span>
+                <span className="empty-icon"><Icon name="globe" size={48} /></span>
                 <h3>No system found</h3>
                 <p>Create a system to get started</p>
             </div>
@@ -127,32 +114,12 @@ export function SystemPage({ system: systemProp }) {
                     fallbackName={fallbackName}
                 />
                 <button className="fab" onClick={() => setShowCreateEntity('alter')}>+</button>
-                {selectedEntity && selectedEntityType === 'alter' && (
-                    <EntityDetailModal
-                        entity={selectedEntity}
-                        type="alter"
-                        typeLabel={alterLabel}
-                        onClose={() => setSelectedEntity(null)}
-                        onUpdated={handleEditEntity}
-                        onDeleted={handleEntityDeleted}
-                        fallbackName={fallbackName}
-                    />
-                )}
                 {showCreateEntity === 'alter' && (
                     <EntityFormModal
                         type="alter"
                         typeLabel={alterLabel}
                         onClose={() => setShowCreateEntity(null)}
                         onCreated={handleEntityCreated}
-                    />
-                )}
-                {editingEntity && editingEntityType === 'alter' && (
-                    <EntityFormModal
-                        entity={editingEntity}
-                        type="alter"
-                        typeLabel={alterLabel}
-                        onClose={() => setEditingEntity(null)}
-                        onUpdated={handleEntityUpdated}
                     />
                 )}
             </div>
@@ -183,32 +150,12 @@ export function SystemPage({ system: systemProp }) {
                     fallbackName={fallbackName}
                 />
                 <button className="fab" onClick={() => setShowCreateEntity('state')}>+</button>
-                {selectedEntity && selectedEntityType === 'state' && (
-                    <EntityDetailModal
-                        entity={selectedEntity}
-                        type="state"
-                        typeLabel={stateLabel}
-                        onClose={() => setSelectedEntity(null)}
-                        onUpdated={handleEditEntity}
-                        onDeleted={handleEntityDeleted}
-                        fallbackName={fallbackName}
-                    />
-                )}
                 {showCreateEntity === 'state' && (
                     <EntityFormModal
                         type="state"
                         typeLabel={stateLabel}
                         onClose={() => setShowCreateEntity(null)}
                         onCreated={handleEntityCreated}
-                    />
-                )}
-                {editingEntity && editingEntityType === 'state' && (
-                    <EntityFormModal
-                        entity={editingEntity}
-                        type="state"
-                        typeLabel={stateLabel}
-                        onClose={() => setEditingEntity(null)}
-                        onUpdated={handleEntityUpdated}
                     />
                 )}
             </div>
@@ -235,32 +182,12 @@ export function SystemPage({ system: systemProp }) {
                     fallbackName={fallbackName}
                 />
                 <button className="fab" onClick={() => setShowCreateEntity('group')}>+</button>
-                {selectedEntity && selectedEntityType === 'group' && (
-                    <EntityDetailModal
-                        entity={selectedEntity}
-                        type="group"
-                        typeLabel={groupLabel}
-                        onClose={() => setSelectedEntity(null)}
-                        onUpdated={handleEditEntity}
-                        onDeleted={handleEntityDeleted}
-                        fallbackName={fallbackName}
-                    />
-                )}
                 {showCreateEntity === 'group' && (
                     <EntityFormModal
                         type="group"
                         typeLabel={groupLabel}
                         onClose={() => setShowCreateEntity(null)}
                         onCreated={handleEntityCreated}
-                    />
-                )}
-                {editingEntity && editingEntityType === 'group' && (
-                    <EntityFormModal
-                        entity={editingEntity}
-                        type="group"
-                        typeLabel={groupLabel}
-                        onClose={() => setEditingEntity(null)}
-                        onUpdated={handleEntityUpdated}
                     />
                 )}
             </div>
@@ -275,6 +202,15 @@ export function SystemPage({ system: systemProp }) {
                 </button>
                 <h2 className="section-title" style={{ marginBottom: '16px' }}>Current Front</h2>
                 <FrontDisplay frontData={frontData} isOwner={true} />
+                {onNavigate && (
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => onNavigate('switch')}
+                        style={{ marginTop: '16px', width: '100%' }}
+                    >
+                        Open Switch
+                    </button>
+                )}
             </div>
         )
     }
@@ -318,7 +254,7 @@ export function SystemPage({ system: systemProp }) {
 
             <div className="subpage-nav">
                 <button className="subpage-btn" onClick={() => setSubPage('front')}>
-                    <span className="subpage-btn-icon">🌙</span>
+                    <span className="subpage-btn-icon"><Icon name="moon" size={24} /></span>
                     <div className="subpage-btn-info">
                         <div className="subpage-btn-label">Current Front</div>
                         <div className="subpage-btn-count">
@@ -328,7 +264,7 @@ export function SystemPage({ system: systemProp }) {
                     <span className="subpage-btn-arrow">›</span>
                 </button>
                 <button className="subpage-btn" onClick={() => setSubPage('alters')}>
-                    <span className="subpage-btn-icon">👤</span>
+                    <span className="subpage-btn-icon"><Icon name="user" size={24} /></span>
                     <div className="subpage-btn-info">
                         <div className="subpage-btn-label">{alterLabelPlural.charAt(0).toUpperCase() + alterLabelPlural.slice(1)}</div>
                         <div className="subpage-btn-count">{counts.alters} {alterLabel}{counts.alters !== 1 ? 's' : ''}</div>
@@ -337,7 +273,7 @@ export function SystemPage({ system: systemProp }) {
                 </button>
                 {(isFragmentedUser(system) || isDissociativeUser(system)) && (
                 <button className="subpage-btn" onClick={() => setSubPage('states')}>
-                    <span className="subpage-btn-icon">🌊</span>
+                    <span className="subpage-btn-icon"><Icon name="waves" size={24} /></span>
                     <div className="subpage-btn-info">
                         <div className="subpage-btn-label">{stateLabelPlural.charAt(0).toUpperCase() + stateLabelPlural.slice(1)}</div>
                         <div className="subpage-btn-count">{counts.states} {stateLabel}{counts.states !== 1 ? 's' : ''}</div>
@@ -347,7 +283,7 @@ export function SystemPage({ system: systemProp }) {
                 )}
                 {!isDissociativeUser(system) && (
                     <button className="subpage-btn" onClick={() => setSubPage('groups')}>
-                        <span className="subpage-btn-icon">📦</span>
+                        <span className="subpage-btn-icon"><Icon name="package" size={24} /></span>
                         <div className="subpage-btn-info">
                             <div className="subpage-btn-label">{groupLabelPlural.charAt(0).toUpperCase() + groupLabelPlural.slice(1)}</div>
                             <div className="subpage-btn-count">{counts.groups} {groupLabel}{counts.groups !== 1 ? 's' : ''}</div>
@@ -356,7 +292,7 @@ export function SystemPage({ system: systemProp }) {
                     </button>
                 )}
                 <button className="subpage-btn" onClick={() => setSubPage('edit')}>
-                    <span className="subpage-btn-icon">⚙️</span>
+                    <span className="subpage-btn-icon"><Icon name="settings" size={24} /></span>
                     <div className="subpage-btn-info">
                         <div className="subpage-btn-label">Edit {systemLabel}</div>
                         <div className="subpage-btn-count">Name, description, settings</div>

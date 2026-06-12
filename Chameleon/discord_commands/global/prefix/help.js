@@ -22,9 +22,9 @@ module.exports = {
             'st': stateHelp,
             'group': groupHelp,
             'g': groupHelp,
-            'switch': switchHelp,
-            'sw': switchHelp,
-            'front': switchHelp,
+            'switch': frontHelp,
+            'sw': frontHelp,
+            'front': frontHelp,
             'autoproxy': autoproxyHelp,
             'ap': autoproxyHelp,
             'proxy': proxyHelp,
@@ -71,8 +71,9 @@ module.exports = {
                 },
                 {
                     name: '🎭 Switching & Front', value:
-                        '`sys!switch` / `sys!sw` - Register switches\n' +
-                        '`sys!autoproxy` / `sys!ap` - Configure autoproxy', inline: false
+                        '`sys!front` - Manage front status\n' +
+                        '`sys!autoproxy` / `sys!ap` - Configure autoproxy\n' +
+                        '*Use `/front` slash command for guided switching*', inline: false
                 },
                 {
                     name: '💬 Message Utilities', value:
@@ -151,7 +152,7 @@ function systemHelp() {
                     '`sys!system cooldown <seconds>` - Set proxy cooldown\n' +
                     '`sys!system proxybreak <true|false>` - Toggle proxy break\n' +
                     '`sys!system proxylayout <type> <layout>` - Set proxy layout\n' +
-                    '`sys!system proxystyle <off|last|front|name>` - Set proxy style\n' +
+                    '`sys!system proxystyle <off|last|front|state|name>` - Set proxy style\n' +
                     '`sys!system replystyle <embed|native>` - Set reply style\n' +
                     '`sys!system casesensitive <true|false>` - Toggle case sensitivity\n' +
                     '`sys!system frontstatus <status>` - Set front status\n' +
@@ -315,29 +316,16 @@ function groupHelp() {
         );
 }
 
-function switchHelp() {
+function frontHelp() {
     return new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.success)
-        .setTitle('🔀 Switch Commands')
-        .setDescription('Manage front switching with layers.')
+        .setTitle('🔀 Front Commands')
+        .setDescription('View and manage front status.')
         .addFields(
             {
-                name: 'Basic', value:
-                    '`sys!switch <member>...` - Register a switch\n' +
-                    '`sys!switch <m1> | <m2> | <m3>` - Multi-layer (sequential)\n' +
-                    '`sys!switch layer:1 <m1> layer:3 <m2>` - Explicit layers\n' +
-                    '`sys!switch status:"..." battery:80` - With overrides\n' +
-                    '`sys!switch out` - Switch out (no fronters)', inline: false
-            },
-            {
-                name: 'Edit', value:
-                    '`sys!switch edit <member>...` - Edit latest switch\n' +
-                    '`sys!switch copy <member>...` - Toggle members in switch', inline: false
-            },
-            {
-                name: 'Delete', value:
-                    '`sys!switch delete` - Delete latest switch\n' +
-                    '`sys!switch delete all -confirm` - Delete all', inline: false
+                name: 'View', value:
+                    '`sys!front` - View current front\n' +
+                    '*(Use `/front` slash command for guided switching, quick mode, and layer management)*', inline: false
             }
         );
 }

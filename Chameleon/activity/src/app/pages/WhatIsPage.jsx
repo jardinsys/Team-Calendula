@@ -17,7 +17,7 @@ export function WhatIsPage({ onNavigate }) {
       </p>
 
       <p>
-        That's all for now, but if you have any questions, feel free to join the current makeshift <a href="https://discord.com/invite/DWNckqXxES" target="_blank" rel="noopener noreferrer">support and testing server</a>!
+        That's all for now, but if you have any questions, feel free to join the current makeshift <a href="https://discord.com/invite/DWNckqXxES" target="_blank" rel="noopener noreferrer">support and testing server!</a>
         - <span className="highlight">JardinSys</span>
       </p>
 

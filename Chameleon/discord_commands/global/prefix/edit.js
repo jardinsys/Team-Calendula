@@ -60,7 +60,7 @@ module.exports = {
         // Find the message record — Redis first
         let msgRecord = null;
         const cached = await redis.get(`msg:${targetMessageId}`);
-        if (cached) msgRecord = JSON.parse(cached);
+        if (cached) try { msgRecord = JSON.parse(cached); } catch { msgRecord = null; }
         if (!msgRecord) msgRecord = await Message.findOne({ discord_webhook_message_id: targetMessageId });
 
         if (!msgRecord) return utils.error(message, 'This doesn\'t appear to be a proxied message.');

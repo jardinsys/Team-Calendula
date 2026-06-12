@@ -93,6 +93,12 @@ const stateSchema = new mongoose.Schema({
     proxy: [String],
     metadata: {
         addedAt: { type: Date, default: Date.now },
+        convertedFrom: String,
+        convertedAt: Date,
+        originalId: String,
+        importedFrom: String,
+        pluralKitId: String,
+        pluralKitUuid: String,
     },
     setting: {
         allowPing: { type: Boolean, default: true },

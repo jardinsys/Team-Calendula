@@ -28,6 +28,7 @@ const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const { Shift } = require('../../../schemas/front');
+const { PrivacyBucket } = require('../../../schemas/settings');
 const utils = require('../../functions/bot_utils');
 
 const WEBAPP_URL = 'https://systemise.teamcalendula.net';
@@ -510,8 +511,9 @@ async function handleSettings(message, parsed, user, system) {
         embed.addFields({ name: 'Default Privacy Bucket', value: autoBucket, inline: false });
 
         if (system.privacyBuckets?.length > 0) {
-            const bucketList = system.privacyBuckets.map(b => `• ${b.name}`).join('\n');
-            embed.addFields({ name: 'Privacy Buckets', value: bucketList, inline: false });
+            const buckets = await PrivacyBucket.find({ _id: { $in: system.privacyBuckets } });
+            const bucketList = buckets.map(b => `• ${b.name}`).join('\n');
+            if (bucketList) embed.addFields({ name: 'Privacy Buckets', value: bucketList, inline: false });
         }
     }
 

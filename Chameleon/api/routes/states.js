@@ -10,6 +10,7 @@ const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
+const { checkProxyExists } = require('../../discord_commands/functions/bot_utils');
 
 // ===========================================
 // GET ALL STATES
@@ -298,6 +299,17 @@ router.post('/:id/proxy', authMiddleware, async (req, res) => {
         const { proxy } = req.body;
         if (!proxy || !proxy.includes('text')) {
             return res.status(400).json({ error: 'Proxy must contain "text" placeholder' });
+        }
+
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+
+        const { exists, entity, type } = await checkProxyExists(proxy, system, state._id.toString());
+        if (exists) {
+            return res.status(409).json({ error: `Proxy is already used by ${type} "${entity.name?.display || entity.name?.indexable || 'Unknown'}"` });
         }
         
         state.proxy = state.proxy || [];

@@ -4,7 +4,7 @@
     "type": "module",
     "exports": "./index.js",
     "dependencies": {
-        "lucide-react": "^0.562.0",
+        "lucide-react": "^1.17.0",
         "react-markdown": "^9.0.1"
     },
     "peerDependencies": {

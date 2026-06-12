@@ -8,6 +8,10 @@ const snowflake = new Snowflake({
 
 const userSchema = new mongoose.Schema({
     discordID: { type: String, unique: true },
+    username: { type: String },
+    globalName: { type: String },
+    avatar: { type: String },
+    type: { type: String, default: 'basic' },
     joinedAt: { type: Date, default: Date.now },
     connection: {
         email: String,

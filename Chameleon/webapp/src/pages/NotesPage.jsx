@@ -4,6 +4,7 @@
 import React, { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../api/client'
+import { Icon } from '@chameleon/shared'
 
 const NOTE_COLORS = [
     '#8b5cf6', '#ED4245', '#E67E22', '#F1C40F',
@@ -194,7 +195,7 @@ function NotesPage() {
                             }}
                             onClick={() => window.location.href = `/app/notes/${note._id}`}
                         >
-                            {note.pinned && <span style={{ fontSize: '0.75rem' }}>📌 </span>}
+                            {note.pinned && <span style={{ fontSize: '0.75rem' }}><Icon name="pin" size={12} /> </span>}
                             <h3 style={{ fontSize: '0.95rem', margin: '0 0 4px' }}>{note.title || 'Untitled'}</h3>
                             {note.contentPreview && (
                                 <p style={{
@@ -223,7 +224,7 @@ function NotesPage() {
                 </div>
             ) : (
                 <div style={{ textAlign: 'center', padding: 32, color: '#666' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: 12 }}>📝</div>
+                    <div style={{ fontSize: '3rem', marginBottom: 12 }}><Icon name="fileText" size={48} /></div>
                     <h3>No notes yet</h3>
                     <p>Create your first note to get started!</p>
                 </div>

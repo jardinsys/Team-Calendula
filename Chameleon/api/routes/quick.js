@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const { authMiddleware } = require('../middleware/auth');
 const System = require('../../schemas/system');
 const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
@@ -21,7 +22,7 @@ function getDisplayName(entity) {
 // Get entities for quick switch menu
 // ==========================================
 
-router.get('/switch', async (req, res) => {
+router.get('/switch', authMiddleware, async (req, res) => {
     try {
         const system = await System.findById(req.user.systemID);
         if (!system) {
@@ -108,7 +109,7 @@ router.get('/switch', async (req, res) => {
 // Perform a quick switch
 // ==========================================
 
-router.post('/switch', async (req, res) => {
+router.post('/switch', authMiddleware, async (req, res) => {
     try {
         const { entities, status, battery } = req.body;
         
@@ -220,7 +221,7 @@ router.post('/switch', async (req, res) => {
 // Switch out (clear front)
 // ==========================================
 
-router.post('/switch/out', async (req, res) => {
+router.post('/switch/out', authMiddleware, async (req, res) => {
     try {
         const system = await System.findById(req.user.systemID);
         if (!system) {
@@ -259,7 +260,7 @@ router.post('/switch/out', async (req, res) => {
 // Get recent notes
 // ==========================================
 
-router.get('/notes', async (req, res) => {
+router.get('/notes', authMiddleware, async (req, res) => {
     try {
         const notes = await Note.find({
             $or: [
@@ -284,7 +285,7 @@ router.get('/notes', async (req, res) => {
 // Create quick note
 // ==========================================
 
-router.post('/notes', async (req, res) => {
+router.post('/notes', authMiddleware, async (req, res) => {
     try {
         const { title, content, tags } = req.body;
         
@@ -318,7 +319,7 @@ router.post('/notes', async (req, res) => {
 // Append to note
 // ==========================================
 
-router.patch('/notes/:id/append', async (req, res) => {
+router.patch('/notes/:id/append', authMiddleware, async (req, res) => {
     try {
         const { content } = req.body;
         

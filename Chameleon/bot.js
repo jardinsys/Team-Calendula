@@ -367,6 +367,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
+			// Import command select menus (states selection)
+			if (customId.startsWith('import_')) {
+				const cmd = interaction.client.prefixCommands.get('import');
+				if (cmd?.handleSelectMenuInteraction) return await cmd.handleSelectMenuInteraction(interaction);
+			}
+
 			// Add more select menu handlers here as needed...
 
 		} catch (error) {

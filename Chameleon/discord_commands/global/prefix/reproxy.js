@@ -59,7 +59,7 @@ module.exports = {
         // Find the message record — Redis first
         let msgRecord = null;
         const cached = await redis.get(`msg:${targetMessageId}`);
-        if (cached) msgRecord = JSON.parse(cached);
+        if (cached) try { msgRecord = JSON.parse(cached); } catch { msgRecord = null; }
         if (!msgRecord) msgRecord = await Message.findOne({ discord_webhook_message_id: targetMessageId });
 
         if (!msgRecord) return utils.error(message, 'This doesn\'t appear to be a proxied message.');
@@ -97,7 +97,7 @@ module.exports = {
             if (!webhook) return utils.error(message, 'Could not find the proxy webhook.');
 
             // Build the new display name using proxy layout
-            const proxyLayout = system.proxy?.layout?.[newType] || '{name}';
+            const proxyLayout = system.discord?.proxylayout?.[newType] || '{name}';
             let displayName = proxyLayout
                 .replace(/{name}/gi, newEntity.name?.display || newEntity.name?.indexable || '(no name)')
                 .replace(/{sys-name}/gi, system.name?.display || system.name?.indexable || '')

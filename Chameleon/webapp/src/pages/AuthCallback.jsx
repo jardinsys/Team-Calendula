@@ -5,6 +5,7 @@ const { useEffect, useState } = require('react');
 
 const { useNavigate, useSearchParams } = require('react-router-dom');
 const { useAuth } = require('../context/AuthContext');
+const { Icon } = require('@chameleon/shared');
 
 function AuthCallback() {
     const [searchParams] = useSearchParams();
@@ -46,7 +47,7 @@ function AuthCallback() {
         return (
             <div className="auth-callback-page error">
                 <div className="callback-content">
-                    <span className="error-icon">❌</span>
+                    <span className="error-icon"><Icon name="x" size={32} /></span>
                     <h2>Login Failed</h2>
                     <p>{error}</p>
                     <p className="redirect-notice">Redirecting...</p>

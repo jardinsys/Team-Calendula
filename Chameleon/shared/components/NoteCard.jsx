@@ -1,4 +1,5 @@
 import React from 'react'
+import { Icon } from '../icons.jsx'
 
 const DEFAULT_NOTE_COLOR = '#8b5cf6'
 
@@ -14,7 +15,7 @@ function NoteCard({ note, onClick, variant = 'grid' }) {
             className={`note-card note-card-${variant}`}
             style={{
                 '--note-color': color,
-                '--note-gradient': `linear-gradient(135deg, ${color}14 0%, ${color}06 100%)`,
+                '--note-gradient': `linear-gradient(180deg, ${color}20 0%, ${color}08 30%, transparent 60%)`,
             }}
             onClick={() => onClick?.(note)}
             role="button"
@@ -29,7 +30,7 @@ function NoteCard({ note, onClick, variant = 'grid' }) {
                 />
             )}
             <div className="note-card-body">
-                {note.pinned && <span className="note-pin">📌</span>}
+                {note.pinned && <span className="note-pin"><Icon name="pin" size={14} /></span>}
                 <div className="note-card-title">{note.title || 'Untitled'}</div>
                 {note.contentPreview && (
                     <div className="note-card-preview">{stripHeaders(note.contentPreview)}</div>
@@ -56,7 +57,7 @@ function NoteCardGrid({ notes, onNoteClick, variant = 'grid' }) {
     if (!notes?.length) {
         return (
             <div className="empty-state">
-                <div className="empty-icon">📝</div>
+                <div className="empty-icon"><Icon name="fileText" size={48} /></div>
                 <h3>No notes yet</h3>
                 <p>Create your first note to get started!</p>
             </div>

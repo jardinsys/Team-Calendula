@@ -5,10 +5,10 @@ const PREVIEW_LENGTH = 500;
 
 const sysR2 = new S3Client({
     region: 'auto',
-    endpoint: config.r2.system.app.endpoint,
+    endpoint: config.r2?.system?.app?.endpoint || 'https://placeholder.r2.cloudflarestorage.com',
     credentials: {
-        accessKeyId: config.r2.system.app.accessKeyId,
-        secretAccessKey: config.r2.system.app.secretAccessKey,
+        accessKeyId: config.r2?.system?.app?.accessKeyId || '',
+        secretAccessKey: config.r2?.system?.app?.secretAccessKey || '',
     },
 });
 

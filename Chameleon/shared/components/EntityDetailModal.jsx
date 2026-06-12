@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import api from '../api/client.js'
+import { Icon } from '../icons.jsx'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -122,10 +123,10 @@ function EntityDetailModal({ entity, type = 'alter', typeLabel, onClose, onUpdat
                     <button className="btn-ghost" onClick={onClose}>← Back</button>
                     <div style={{ display: 'flex', gap: '8px' }}>
                         {onUpdated && (
-                            <button className="btn-icon" title="Edit" onClick={() => onUpdated(e, type)}>✏️</button>
+                            <button className="btn-icon" title="Edit" onClick={() => onUpdated(e, type)}><Icon name="pencil" size={18} /></button>
                         )}
                         {onDeleted && (
-                            <button className="btn-icon" title="Delete" onClick={() => setConfirmDelete(true)}>🗑️</button>
+                            <button className="btn-icon" title="Delete" onClick={() => setConfirmDelete(true)}><Icon name="trash" size={18} /></button>
                         )}
                     </div>
                 </div>
@@ -185,6 +186,28 @@ function EntityDetailModal({ entity, type = 'alter', typeLabel, onClose, onUpdat
                                 {e.states.map((s, i) => (
                                     <span key={i} className="tag-pill">{s.name?.display || s.name?.indexable || `State ${i + 1}`}</span>
                                 ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {type === 'alter' && e.activeStates?.all?.length > 0 && (
+                        <div className="entity-detail-section">
+                            <label className="entity-detail-label">Active States</label>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {e.activeStates.all.map((stateId) => {
+                                    const state = e.states?.find(s => s.connected_id === stateId)
+                                    const stateName = state?.name?.display || state?.name?.indexable || 'Unknown'
+                                    const isPriority = stateId === e.activeStates.priority
+                                    return (
+                                        <span
+                                            key={stateId}
+                                            className="tag-pill"
+                                            style={isPriority ? { backgroundColor: 'var(--accent-subtle)', border: '1px solid var(--accent)' } : {}}
+                                        >
+                                            {isPriority && <><Icon name="star" size={12} /> </>}{stateName}
+                                        </span>
+                                    )
+                                })}
                             </div>
                         </div>
                     )}

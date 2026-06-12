@@ -1,5 +1,5 @@
 // (/settings) - Unified Settings Command
-// Sections: Server, Proxy, Notifications, General
+// Sections: Server, Proxy, Notifications, General, Account
 
 const {
     SlashCommandBuilder,
@@ -37,7 +37,8 @@ module.exports = {
                     { name: 'Server Settings', value: 'server' },
                     { name: 'Proxy Settings', value: 'proxy' },
                     { name: 'Notification Settings', value: 'notifications' },
-                    { name: 'General Settings', value: 'general' }
+                    { name: 'General Settings', value: 'general' },
+                    { name: 'Account', value: 'account' }
                 )),
 
     async execute(interaction) {
@@ -64,6 +65,8 @@ module.exports = {
             case 'general':
                 if (!system) return await interaction.reply({ content: 'You need a system to configure general settings.', ephemeral: true });
                 return await handleGeneralSection(interaction, user, system, sessionId);
+            case 'account':
+                return await handleAccountSection(interaction, user, system, sessionId);
             default:
                 return await handleMainMenu(interaction, user, system, sessionId);
         }
@@ -82,7 +85,7 @@ async function handleMainMenu(interaction, user, system, sessionId) {
     const embed = new EmbedBuilder()
         .setColor(SETTINGS_COLOR)
         .setTitle('Settings')
-        .setDescription('Select a settings section below.\n\n**Server** — Guild configuration (admin only)\n**Proxy** — Proxy style, layout, cooldown\n**Notifications** — Delivery preferences\n**General** — Sync, tags, terminology, migration');
+        .setDescription('Select a settings section below.\n\n**Server** — Guild configuration (admin only)\n**Proxy** — Proxy style, layout, cooldown\n**Notifications** — Delivery preferences\n**General** — Sync, tags, terminology, migration\n**Account** — Wipe data, delete account');
 
     if (system) {
         embed.addFields(
@@ -99,7 +102,11 @@ async function handleMainMenu(interaction, user, system, sessionId) {
         new ButtonBuilder().setCustomId('settings_section_general_' + sessionId).setLabel('General').setStyle(ButtonStyle.Secondary).setEmoji('⚙️')
     );
 
-    return await interaction.reply({ embeds: [embed], components: [row1], ephemeral: true });
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('settings_section_account_' + sessionId).setLabel('Account').setStyle(ButtonStyle.Danger).setEmoji('⚠️')
+    );
+
+    return await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
 }
 
 // ============================================
@@ -360,6 +367,11 @@ async function handleButtonInteraction(interaction) {
         const system = await System.findById(session.systemId);
         return await handleGeneralSection(interaction, user, system, sessionId);
     }
+    if (customId.startsWith('settings_section_account_')) {
+        const user = await User.findById(session.userId);
+        const system = session.systemId ? await System.findById(session.systemId) : null;
+        return await handleAccountSection(interaction, user, system, sessionId);
+    }
 
     // Server settings sub-sections
     if (customId.startsWith('settings_server_admins_') && !customId.includes('addrole') && !customId.includes('removerole')) {
@@ -503,6 +515,25 @@ async function handleButtonInteraction(interaction) {
         const system = await System.findById(session.systemId);
         const user = await User.findById(session.userId);
         return await buildGeneralOverview(interaction, user, system, sessionId, true);
+    }
+
+    // Account section buttons
+    if (customId.startsWith('settings_account_wipe_') && !customId.includes('confirm')) {
+        return await handleAccountWipeConfirm(interaction, sessionId);
+    }
+    if (customId.startsWith('settings_account_wipe_confirm_')) {
+        return await handleAccountWipeExecute(interaction, sessionId);
+    }
+    if (customId.startsWith('settings_account_delete_') && !customId.includes('confirm') && !customId.includes('modal')) {
+        return await handleAccountDeleteConfirm(interaction, sessionId);
+    }
+    if (customId.startsWith('settings_account_delete_confirm_')) {
+        return await handleAccountDeleteModal(interaction, sessionId);
+    }
+    if (customId.startsWith('settings_account_back_')) {
+        const user = await User.findById(session.userId);
+        const system = session.systemId ? await System.findById(session.systemId) : null;
+        return await handleAccountSection(interaction, user, system, sessionId);
     }
 
     // Server log event toggles
@@ -682,6 +713,11 @@ async function handleModalSubmit(interaction) {
     // General tags modal
     if (customId.startsWith('settings_general_tags_modal_')) {
         return await handleGeneralTagsSave(interaction, sessionId);
+    }
+
+    // Account delete modal
+    if (customId.startsWith('settings_account_delete_modal_')) {
+        return await handleAccountDeleteExecute(interaction, sessionId);
     }
 }
 
@@ -965,7 +1001,7 @@ async function handleProxyStyleSelector(interaction, sessionId) {
         .setDescription('Choose how auto-proxy selects entities.')
         .addFields(
             { name: 'Current Style', value: '`' + (system.proxy?.style || 'off') + '`', inline: true },
-            { name: 'Options', value: '`off` — No auto-proxy\n`last` — Most recent entity\n`front` — Current fronter\n`<name>` — Specific entity', inline: false }
+            { name: 'Options', value: '`off` — No auto-proxy\n`last` — Most recent entity\n`front` — Current fronter\n`state` — Fronting state entity\n`<name>` — Specific entity', inline: false }
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -976,7 +1012,8 @@ async function handleProxyStyleSelector(interaction, sessionId) {
                 new StringSelectMenuOptionBuilder().setLabel('Off').setValue('off').setDefault(system.proxy?.style === 'off'),
                 new StringSelectMenuOptionBuilder().setLabel('Last').setValue('last').setDefault(system.proxy?.style === 'last'),
                 new StringSelectMenuOptionBuilder().setLabel('Front').setValue('front').setDefault(system.proxy?.style === 'front'),
-                new StringSelectMenuOptionBuilder().setLabel('Specify Entity').setValue('specify').setDefault(!['off', 'last', 'front'].includes(system.proxy?.style))
+                new StringSelectMenuOptionBuilder().setLabel('State').setValue('state').setDefault(system.proxy?.style === 'state'),
+                new StringSelectMenuOptionBuilder().setLabel('Specify Entity').setValue('specify').setDefault(!['off', 'last', 'front', 'state'].includes(system.proxy?.style))
             )
     );
 
@@ -1681,10 +1718,10 @@ async function handleProxyServerStyleSelect(interaction, sessionId) {
         new ActionRowBuilder().addComponents(
             new TextInputBuilder()
                 .setCustomId('server_style')
-                .setLabel('Proxy Style (off/last/front/entity name)')
+                .setLabel('Proxy Style (off/last/front/state/entity name)')
                 .setStyle(TextInputStyle.Short)
                 .setValue(serverEntry.proxyStyle || 'off')
-                .setPlaceholder('off, last, front, or entity name')
+                .setPlaceholder('off, last, front, state, or entity name')
                 .setRequired(false)
                 .setMaxLength(50)
         )
@@ -2027,4 +2064,308 @@ async function handleGeneralTagsSave(interaction, sessionId) {
 
     const user = await User.findById(session.userId);
     return await buildGeneralOverview(interaction, user, system, sessionId, true);
+}
+
+// ============================================
+// ACCOUNT SETTINGS
+// ============================================
+
+// TODO: Add 2FA verification before account destruction actions
+
+async function handleAccountSection(interaction, user, system, sessionId) {
+    const session = utils.getSession(sessionId);
+    if (session) {
+        session.userId = user._id.toString();
+        if (system) session.systemId = system._id.toString();
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor('#ef4444')
+        .setTitle('Account')
+        .setDescription('**Warning:** These actions are irreversible.')
+        .addFields(
+            { name: 'User ID', value: '`' + user._id + '`', inline: true },
+            { name: 'Friend ID', value: '`' + user.friendID + '`', inline: true },
+            { name: 'System', value: system ? (system.name?.display || 'Unnamed') : '*None*', inline: true },
+            { name: 'Wipe Data', value: 'Delete all notes and messages, but keep your ' + (system ? getSystemTerm(system, { context: 'ownership' }) : 'profile') + ' and entities.', inline: false },
+            { name: 'Delete Account', value: 'Permanently delete your account' + (system ? ' and ' + getSystemTerm(system, { context: 'ownership' }) + ' (if you are the only member)' : '') + '.', inline: false }
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('settings_account_wipe_' + sessionId).setLabel('Wipe Data').setStyle(ButtonStyle.Secondary).setEmoji('🗑️'),
+        new ButtonBuilder().setCustomId('settings_account_delete_' + sessionId).setLabel('Delete Account').setStyle(ButtonStyle.Danger).setEmoji('⛔')
+    );
+
+    const backRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('settings_main_' + sessionId).setLabel('Back').setStyle(ButtonStyle.Secondary)
+    );
+
+    return await interaction.update({ embeds: [embed], components: [row, backRow] });
+}
+
+async function handleAccountWipeConfirm(interaction, sessionId) {
+    const embed = new EmbedBuilder()
+        .setColor('#fbbf24')
+        .setTitle('Wipe Data')
+        .setDescription('This will permanently delete:\n\n• All your notes (and their content)\n• All your proxied messages\n\nThis will **keep**:\n• Your system and all entities\n• Front layers and shift history\n• All settings\n• Friends list')
+        .addFields({ name: 'Are you sure?', value: 'This action cannot be undone.' });
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('settings_account_wipe_confirm_' + sessionId).setLabel('Yes, wipe my data').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('settings_account_back_' + sessionId).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+    );
+
+    return await interaction.update({ embeds: [embed], components: [row] });
+}
+
+async function handleAccountWipeExecute(interaction, sessionId) {
+    await interaction.deferUpdate();
+
+    const session = utils.getSession(sessionId);
+    const user = await User.findById(session.userId);
+    if (!user) return await interaction.followUp({ content: 'User not found.', ephemeral: true });
+
+    try {
+        const Note = require('../../../schemas/note');
+        const Message = require('../../../schemas/message');
+        const redis = require('../../../redis');
+        const { deleteNoteContent } = require('../../../api/utils/r2');
+
+        // Delete notes + R2 content
+        const notes = await Note.find({
+            $or: [
+                { 'author.userID': user._id },
+                { 'users.owner.userID': user._id }
+            ]
+        });
+        for (const note of notes) {
+            if (note.content?.r2Key) {
+                try { await deleteNoteContent(note.content.r2Key); } catch (e) { /* ignore */ }
+            }
+            for (const m of (note.media || [])) {
+                if (m.media?.r2Key) {
+                    try { await deleteNoteContent(m.media.r2Key); } catch (e) { /* ignore */ }
+                }
+            }
+        }
+        await Note.deleteMany({
+            $or: [
+                { 'author.userID': user._id },
+                { 'users.owner.userID': user._id }
+            ]
+        });
+
+        // Delete messages
+        const messages = await Message.find({ discord_user_id: user.discordID });
+        if (messages.length > 0) {
+            const webhookIds = messages.map(m => m.discord_webhook_message_id).filter(Boolean);
+            if (webhookIds.length > 0) {
+                try { await redis.del(...webhookIds.map(id => `msg:${id}`)); } catch (e) { /* ignore */ }
+            }
+            await Message.deleteMany({ discord_user_id: user.discordID });
+        }
+
+        // Clear user note refs
+        user.notes = { tags: [], notes: [] };
+        await user.save();
+
+        const embed = new EmbedBuilder()
+            .setColor('#86efac')
+            .setTitle('Data Wiped')
+            .setDescription('Your notes and messages have been deleted. Your system and entities are intact.');
+
+        return await interaction.editReply({ embeds: [embed], components: [] });
+    } catch (err) {
+        console.error('[Settings] Wipe error:', err);
+        const embed = new EmbedBuilder()
+            .setColor('#fca5a5')
+            .setTitle('Wipe Failed')
+            .setDescription('An error occurred while wiping data. Please try again.');
+        return await interaction.editReply({ embeds: [embed], components: [] });
+    }
+}
+
+async function handleAccountDeleteConfirm(interaction, sessionId) {
+    const session = utils.getSession(sessionId);
+    const system = session.systemId ? await System.findById(session.systemId) : null;
+
+    const embed = new EmbedBuilder()
+        .setColor('#ef4444')
+        .setTitle('Delete Account')
+        .setDescription('**This action is permanent and cannot be undone.**');
+
+    if (system && system.users.length > 1) {
+        embed.addFields({ name: 'Shared System', value: 'Your account will be removed from this ' + getSystemTerm(system, { context: 'ownership' }) + ', but the ' + getSystemTerm(system, { context: 'ownership' }) + ' and its data will remain for other members.' });
+    } else if (system) {
+        embed.addFields({ name: 'This will delete:', value: '• Your ' + getSystemTerm(system, { context: 'ownership' }) + ' and all entities\n• All notes, messages, and media\n• Front layers, shifts, and history\n• All settings and privacy buckets\n• Your account' });
+        const confirmName = system.name?.display || interaction.user.username;
+        embed.addFields({ name: 'Type this name to confirm', value: '**' + confirmName + '**' });
+    } else {
+        embed.addFields({ name: 'This will delete:', value: '• All your notes and messages\n• Your account' });
+        embed.addFields({ name: 'Type this name to confirm', value: '**' + interaction.user.username + '**' });
+    }
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('settings_account_delete_confirm_' + sessionId).setLabel('I understand, continue').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('settings_account_back_' + sessionId).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+    );
+
+    return await interaction.update({ embeds: [embed], components: [row] });
+}
+
+async function handleAccountDeleteModal(interaction, sessionId) {
+    const session = utils.getSession(sessionId);
+    const system = session.systemId ? await System.findById(session.systemId) : null;
+
+    if (!system) {
+        // No system — can't verify name, just ask for confirmation
+        return await handleAccountDeleteExecute(interaction, sessionId);
+    }
+
+    const modal = new ModalBuilder()
+        .setCustomId('settings_account_delete_modal_' + sessionId)
+        .setTitle('Delete Account — Type Name to Confirm');
+
+    const confirmName = system.name?.display || interaction.user.username;
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('system_name')
+                .setLabel(getSystemTerm(system, { context: 'ownership' }) + ' name')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('Type: ' + confirmName)
+                .setRequired(true)
+                .setMaxLength(100)
+        )
+    );
+
+    return await interaction.showModal(modal);
+}
+
+async function handleAccountDeleteExecute(interaction, sessionId) {
+    const session = utils.getSession(sessionId);
+    const user = await User.findById(session.userId);
+    if (!user) return await interaction.reply({ content: 'User not found.', ephemeral: true });
+
+    const system = session.systemId ? await System.findById(session.systemId) : null;
+
+    // Verify system name if user has a system
+    if (system) {
+        const inputName = interaction.fields?.getTextInputValue('system_name')?.toLowerCase()?.trim();
+        if (!inputName) {
+            return await interaction.reply({ content: 'Name is required for confirmation.', ephemeral: true });
+        }
+        const systemDisplayName = system.name?.display?.toLowerCase() || '';
+        const systemIndexable = system.name?.indexable?.toLowerCase() || '';
+        const discordUsername = interaction.user.username.toLowerCase();
+        if (inputName !== systemDisplayName && inputName !== systemIndexable && inputName !== discordUsername) {
+            return await interaction.reply({ content: 'The name you entered does not match. Deletion cancelled.', ephemeral: true });
+        }
+    } else {
+        // No system — verify Discord username
+        const inputName = interaction.fields?.getTextInputValue('system_name')?.toLowerCase()?.trim();
+        const discordUsername = interaction.user.username.toLowerCase();
+        if (inputName !== discordUsername) {
+            return await interaction.reply({ content: 'The name you entered does not match your username. Deletion cancelled.', ephemeral: true });
+        }
+    }
+
+    await interaction.deferUpdate();
+
+    try {
+        const Note = require('../../../schemas/note');
+        const Message = require('../../../schemas/message');
+        const Guild = require('../../../schemas/guild');
+        const { Shift } = require('../../../schemas/front');
+        const { PrivacyBucket } = require('../../../schemas/settings');
+        const redis = require('../../../redis');
+        const { deleteNoteContent } = require('../../../api/utils/r2');
+
+        // Delete notes + R2
+        const notes = await Note.find({
+            $or: [
+                { 'author.userID': user._id },
+                { 'users.owner.userID': user._id }
+            ]
+        });
+        for (const note of notes) {
+            if (note.content?.r2Key) {
+                try { await deleteNoteContent(note.content.r2Key); } catch (e) { /* ignore */ }
+            }
+            for (const m of (note.media || [])) {
+                if (m.media?.r2Key) {
+                    try { await deleteNoteContent(m.media.r2Key); } catch (e) { /* ignore */ }
+                }
+            }
+        }
+        await Note.deleteMany({
+            $or: [
+                { 'author.userID': user._id },
+                { 'users.owner.userID': user._id }
+            ]
+        });
+
+        // Delete messages
+        await Message.deleteMany({ discord_user_id: user.discordID });
+
+        // Clean up references in other users
+        await User.updateMany({ 'friends.discordID': user.discordID }, { $pull: { friends: { discordID: user.discordID } } });
+        await User.updateMany({ 'friendRequests.fromDiscordID': user.discordID }, { $pull: { friendRequests: { fromDiscordID: user.discordID } } });
+        await User.updateMany({ 'blocked.discordID': user.discordID }, { $pull: { blocked: { discordID: user.discordID } } });
+        await User.updateMany({ 'blocked.friendID': user.friendID }, { $pull: { blocked: { friendID: user.friendID } } });
+        await Note.updateMany({ 'users.rwAccess.userID': user._id }, { $pull: { 'users.rwAccess': { userID: user._id } } });
+        await Note.updateMany({ 'users.rAccess.userID': user._id }, { $pull: { 'users.rAccess': { userID: user._id } } });
+
+        // Clean up guild references
+        await Guild.updateMany({ userIDs: user.discordID }, { $pull: { userIDs: user.discordID } });
+        await Guild.updateMany({ 'admins.memberIDs': user.discordID }, { $pull: { 'admins.memberIDs': user.discordID } });
+
+        if (system) {
+            const otherUsers = system.users.filter(uid => uid.toString() !== user._id.toString());
+
+            if (otherUsers.length === 0) {
+                // Single-user: delete everything
+                const alterIds = system.alters?.IDs || [];
+                const stateIds = system.states?.IDs || [];
+                const groupIds = system.groups?.IDs || [];
+
+                await Alter.deleteMany({ _id: { $in: alterIds } });
+                await State.deleteMany({ _id: { $in: stateIds } });
+                await Group.deleteMany({ _id: { $in: groupIds } });
+
+                const layerShiftIds = (system.front?.layers || []).flatMap(l => l.shifts || []);
+                if (layerShiftIds.length > 0) await Shift.deleteMany({ _id: { $in: layerShiftIds } });
+
+                const bucketIds = system.privacyBuckets || [];
+                if (bucketIds.length > 0) await PrivacyBucket.deleteMany({ _id: { $in: bucketIds } });
+
+                try {
+                    await redis.del(`system:${system._id}:recentProxies`, `system:${system._id}:break`, `system:${system._id}:lastProxyTime`);
+                } catch (e) { /* ignore */ }
+
+                await System.findByIdAndDelete(system._id);
+            } else {
+                // Multi-user: just remove this user
+                system.users = otherUsers;
+                await system.save();
+            }
+        }
+
+        await User.findByIdAndDelete(user._id);
+
+        const embed = new EmbedBuilder()
+            .setColor('#86efac')
+            .setTitle('Account Deleted')
+            .setDescription('Your account has been permanently deleted. You may close this window.');
+
+        return await interaction.editReply({ embeds: [embed], components: [] });
+    } catch (err) {
+        console.error('[Settings] Account deletion error:', err);
+        const embed = new EmbedBuilder()
+            .setColor('#fca5a5')
+            .setTitle('Deletion Failed')
+            .setDescription('An error occurred while deleting your account. Please try again.');
+        return await interaction.editReply({ embeds: [embed], components: [] });
+    }
 }

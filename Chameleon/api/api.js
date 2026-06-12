@@ -33,6 +33,9 @@ const notesRoutes = require('./routes/notes');
 const frontRoutes = require('./routes/front');
 const friendsRoutes = require('./routes/friends');
 const quickRoutes = require('./routes/quick');
+const importRoutes = require('./routes/import');
+const userRoutes = require('./routes/user');
+const publicRoutes = require('./routes/public');
 
 const app = express();
 
@@ -124,6 +127,9 @@ app.use('/api/notes', notesRoutes);
 app.use('/api/front', frontRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/quick', quickRoutes);
+app.use('/api/import', importRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/public', publicRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -8,6 +8,8 @@ const shiftSchema = new mongoose.Schema({
     type_name: String,
     startTime: { type: Date, default: Date.now },
     endTime: Date,
+    parentShift: { type: mongoose.Schema.Types.ObjectId, ref: 'Shift', default: null },
+    childShifts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Shift' }],
     statuses: [{
         status: String,
         battery: Number,

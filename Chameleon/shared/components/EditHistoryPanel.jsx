@@ -90,7 +90,9 @@ function EditHistoryPanel({ noteId, attributionStyle = 'entityAndUser' }) {
                     {history.map((entry, i) => (
                         <div key={i} className="edit-history-entry" style={{ display: 'flex', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--glass-border)' }}>
                             <div className="edit-history-avatars" style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
-                                {(entry.entities || []).map((ent, j) => (
+                                {(entry.entities || []).map((ent, j) => {
+                                    const e = ent.entity || ent
+                                    return (
                                     <span
                                         key={j}
                                         className="edit-history-avatar"
@@ -98,7 +100,7 @@ function EditHistoryPanel({ noteId, attributionStyle = 'entityAndUser' }) {
                                             width: '24px',
                                             height: '24px',
                                             borderRadius: '50%',
-                                            backgroundColor: ent.color || 'var(--bg-surface)',
+                                            backgroundColor: e.color || 'var(--bg-surface)',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
@@ -108,19 +110,20 @@ function EditHistoryPanel({ noteId, attributionStyle = 'entityAndUser' }) {
                                             overflow: 'hidden'
                                         }}
                                     >
-                                        {ent.avatar ? (
-                                            <img src={ent.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        {e.avatar ? (
+                                            <img src={e.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                         ) : (
-                                            (ent.name || '?')[0]
+                                            (e.name || '?')[0]
                                         )}
                                     </span>
-                                ))}
+                                    )
+                                })}
                             </div>
 
                             <div className="edit-history-details" style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: '0.8rem' }}>
                                     <span style={{ color: 'var(--text)' }}>
-                                        {(entry.entities || []).map(e => e.name).join(', ') || 'Unknown'}
+                                        {(entry.entities || []).map(e => (e.entity || e).name).join(', ') || 'Unknown'}
                                     </span>
                                     <span style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>
                                         {actionLabel(entry.action)}

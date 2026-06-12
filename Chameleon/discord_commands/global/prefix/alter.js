@@ -67,6 +67,8 @@ module.exports = {
             'signoff': handleSignoff, 'sign': handleSignoff,
             'aliases': handleAliases, 'alias': handleAliases,
             'groups': handleGroups, 'group': handleGroups,
+            'states': handleStates,
+            'activestates': handleActiveStates, 'as': handleActiveStates,
             'condition': handleCondition, 'cond': handleCondition,
             'caution': handleCaution,
             'triggers': handleTriggers, 'trigger': handleTriggers,
@@ -271,13 +273,15 @@ async function handlePronouns(message, parsed, alterName) {
 }
 
 async function handleProxy(message, parsed, alterName) {
-    const { alter } = await getAlter(message, alterName);
+    const { alter, system } = await getAlter(message, alterName);
     if (!alter) return;
     const action = parsed._positional[2]?.toLowerCase();
     if (parsed.clear || action === 'clear') { alter.proxy = []; await alter.save(); return utils.success(message, 'Proxy tags cleared.'); }
     if (action === 'add') {
         const tag = parsed._positional.slice(3).join(' ');
         if (!tag) return utils.error(message, 'Please provide a proxy tag.');
+        const { exists, entity, type } = await utils.checkProxyExists(tag, system, alter._id.toString());
+        if (exists) return utils.error(message, `Proxy \`${tag}\` is already used by ${type} **${utils.getDisplayName(entity)}**.`);
         alter.proxy = alter.proxy || []; alter.proxy.push(tag); await alter.save();
         return utils.success(message, `Proxy tag \`${tag}\` added.`);
     }
@@ -295,8 +299,13 @@ async function handleProxy(message, parsed, alterName) {
         const proxies = alter.proxy || [];
         return proxies.length ? utils.info(message, `Proxy tags: ${utils.formatProxies(proxies)}`) : utils.info(message, 'No proxy tags set.');
     }
+    const { exists, entity, type } = await utils.checkProxyExists(tag, system, alter._id.toString());
+    if (exists) return utils.error(message, `Proxy \`${tag}\` is already used by ${type} **${utils.getDisplayName(entity)}**.`);
+    const oldCount = alter.proxy?.length || 0;
     alter.proxy = [tag]; await alter.save();
-    return utils.success(message, `Proxy tag set to \`${tag}\``);
+    return utils.success(message, oldCount > 0
+        ? `Proxy tag set to \`${tag}\` (replaced ${oldCount} previous proxy${oldCount > 1 ? 's' : ''}).`
+        : `Proxy tag set to \`${tag}\`.`);
 }
 
 async function handleSignoff(message, parsed, alterName) {
@@ -351,8 +360,8 @@ async function handleGroups(message, parsed, alterName) {
         alter.groupsIDs = alter.groupsIDs || [];
         if (alter.groupsIDs.includes(gr.entity._id)) return utils.error(message, 'Already in that group.');
         alter.groupsIDs.push(gr.entity._id); await alter.save();
-        gr.entity.memberIDs = gr.entity.memberIDs || [];
-        if (!gr.entity.memberIDs.includes(alter._id)) { gr.entity.memberIDs.push(alter._id); await gr.entity.save(); }
+        gr.entity.alterIDs = gr.entity.alterIDs || [];
+        if (!gr.entity.alterIDs.includes(alter._id.toString())) { gr.entity.alterIDs.push(alter._id.toString()); await gr.entity.save(); }
         return utils.success(message, `Added to group **${gr.entity.name?.display || groupName}**`);
     }
     if (action === 'remove') {
@@ -363,7 +372,7 @@ async function handleGroups(message, parsed, alterName) {
         const idx = alter.groupsIDs.indexOf(gr.entity._id);
         if (idx === -1) return utils.error(message, 'Not in that group.');
         alter.groupsIDs.splice(idx, 1); await alter.save();
-        gr.entity.memberIDs = gr.entity.memberIDs?.filter(id => id !== alter._id) || [];
+        gr.entity.alterIDs = gr.entity.alterIDs?.filter(id => id !== alter._id.toString()) || [];
         await gr.entity.save();
         return utils.success(message, `Removed from group.`);
     }
@@ -530,7 +539,7 @@ async function handleMask(message, parsed, alterName) {
         return utils.success(message, 'Mask avatar updated.');
     }
     if (field === 'banner') {
-        if (parsed.clear) { if (alter.mask.discord) alter.mask.discord.image = alter.mask.discord.image || {}; alter.mask.discord.image.banner = undefined; await alter.save(); return utils.success(message, 'Mask banner cleared.'); }
+        if (parsed.clear) { alter.mask.discord = alter.mask.discord || {}; alter.mask.discord.image = alter.mask.discord.image || {}; alter.mask.discord.image.banner = undefined; await alter.save(); return utils.success(message, 'Mask banner cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         alter.mask.discord = alter.mask.discord || {};
@@ -540,7 +549,7 @@ async function handleMask(message, parsed, alterName) {
         return utils.success(message, 'Mask banner updated.');
     }
     if (field === 'proxyavatar' || field === 'pav') {
-        if (parsed.clear) { if (alter.mask.discord) alter.mask.discord.image = alter.mask.discord.image || {}; alter.mask.discord.image.proxyAvatar = undefined; await alter.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        if (parsed.clear) { alter.mask.discord = alter.mask.discord || {}; alter.mask.discord.image = alter.mask.discord.image || {}; alter.mask.discord.image.proxyAvatar = undefined; await alter.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL.');
         alter.mask.discord = alter.mask.discord || {};
@@ -653,16 +662,34 @@ async function handleHelp(message) {
 }
 
 async function buildAlterEmbed(alter, system, showFull = false, fallbackName = null) {
-    const embed = new EmbedBuilder().setColor(alter.color || utils.ENTITY_COLORS.alter);
-    const displayName = alter.name?.display || alter.name?.indexable || fallbackName || '(no name)';
-    if (alter.name?.indexable) embed.setAuthor({ name: alter.name.indexable, iconURL: alter.avatar?.url });
+    // Resolve active states for display
+    let displayName, description, color, avatarUrl, signoff, pronouns;
+    if (alter.activeStates?.all?.length > 0) {
+        const resolved = await utils.resolveAlterDisplay(alter, system);
+        displayName = resolved.name || alter.name?.display || alter.name?.indexable || fallbackName || '(no name)';
+        description = resolved.description || alter.description;
+        color = resolved.color || alter.color || utils.ENTITY_COLORS.alter;
+        avatarUrl = resolved.avatar || alter.avatar?.url;
+        signoff = resolved.signoff || alter.signoff;
+        pronouns = resolved.pronouns || alter.pronouns;
+    } else {
+        displayName = alter.name?.display || alter.name?.indexable || fallbackName || '(no name)';
+        description = alter.description;
+        color = alter.color || utils.ENTITY_COLORS.alter;
+        avatarUrl = alter.avatar?.url;
+        signoff = alter.signoff;
+        pronouns = alter.pronouns;
+    }
+
+    const embed = new EmbedBuilder().setColor(color);
+    if (alter.name?.indexable) embed.setAuthor({ name: alter.name.indexable, iconURL: avatarUrl });
     embed.setTitle(displayName);
-    if (alter.description) embed.setDescription(alter.description);
-    if (alter.avatar?.url) embed.setThumbnail(alter.avatar.url);
+    if (description) embed.setDescription(description);
+    if (avatarUrl) embed.setThumbnail(avatarUrl);
     if (alter.discord?.image?.banner?.url) embed.setImage(alter.discord.image.banner.url);
     
     let info = '';
-    if (alter.pronouns?.length) info += `**Pronouns:** ${alter.pronouns.join(', ')}\n`;
+    if (pronouns?.length) info += `**Pronouns:** ${pronouns.join(', ')}\n`;
     if (alter.birthday) info += `**Birthday:** ${utils.formatDate(alter.birthday)}\n`;
     if (alter.condition) info += `**Condition:** ${alter.condition}\n`;
     if (info) embed.addFields({ name: '👤 Info', value: info.trim(), inline: true });
@@ -679,6 +706,152 @@ async function buildAlterEmbed(alter, system, showFull = false, fallbackName = n
         if (alter.caution.detail) ct += `\n${alter.caution.detail}`;
         embed.addFields({ name: '⚠️ Caution', value: ct, inline: false });
     }
-    //embed.setFooter({ text: `ID: ${alter._id}` });
     return embed;
+}
+
+// ==== STATES HANDLERS ====
+
+async function handleStates(message, parsed, alterName) {
+    const { alter, system } = await getAlter(message, alterName);
+    if (!alter) return;
+    const action = parsed._positional[2]?.toLowerCase();
+    const stateName = parsed._positional.slice(3).join(' ');
+
+    if (action === 'add') {
+        if (!stateName) return utils.error(message, 'Please provide a state name.');
+        const st = await utils.findEntity(stateName, system, 'state');
+        if (!st) return utils.error(message, `State **${stateName}** not found.`);
+        alter.states = alter.states || [];
+        const stateIdStr = st.entity._id.toString();
+        if (alter.states.some(s => s.connected_id === stateIdStr)) return utils.error(message, 'Already connected.');
+        alter.states.push({
+            connected_id: stateIdStr,
+            name: { indexable: st.entity.name?.indexable, display: st.entity.name?.display }
+        });
+        await alter.save();
+        // Bidirectional: add alter to state.alters
+        st.entity.alters = st.entity.alters || [];
+        if (!st.entity.alters.includes(alter._id.toString())) {
+            st.entity.alters.push(alter._id.toString());
+            await st.entity.save();
+        }
+        return utils.success(message, `Connected to state **${st.entity.name?.display || stateName}**`);
+    }
+
+    if (action === 'remove') {
+        if (!stateName) return utils.error(message, 'Please provide a state name.');
+        const st = await utils.findEntity(stateName, system, 'state');
+        if (!st) return utils.error(message, `State **${stateName}** not found.`);
+        alter.states = alter.states || [];
+        const stateIdStr = st.entity._id.toString();
+        const idx = alter.states.findIndex(s => s.connected_id === stateIdStr);
+        if (idx === -1) return utils.error(message, 'Not connected.');
+        alter.states.splice(idx, 1);
+        // Clean up active states if removing connected state
+        if (alter.activeStates?.all?.length > 0) {
+            alter.activeStates.all = alter.activeStates.all.filter(id => id !== stateIdStr);
+            if (alter.activeStates.priority === stateIdStr) {
+                alter.activeStates.priority = alter.activeStates.all[0] || null;
+            }
+        }
+        await alter.save();
+        // Bidirectional: remove alter from state.alters
+        st.entity.alters = st.entity.alters || [];
+        const alterIdx = st.entity.alters.indexOf(alter._id.toString());
+        if (alterIdx !== -1) {
+            st.entity.alters.splice(alterIdx, 1);
+            await st.entity.save();
+        }
+        return utils.success(message, `Disconnected from state.`);
+    }
+
+    // List connected states
+    alter.states = alter.states || [];
+    if (alter.states.length === 0) return utils.info(message, 'No connected states.');
+    const states = await State.find({ _id: { $in: alter.states.map(s => s.connected_id) } });
+    const lines = states.map(s => {
+        const name = s.name?.display || s.name?.indexable || '?';
+        const isActive = alter.activeStates?.all?.includes(s._id.toString());
+        const isPriority = alter.activeStates?.priority === s._id.toString();
+        return `${isPriority ? '⭐' : (isActive ? '🟢' : '⚪')} **${name}**`;
+    });
+    return utils.info(message, `Connected states:\n${lines.join('\n')}`);
+}
+
+async function handleActiveStates(message, parsed, alterName) {
+    const { alter, system } = await getAlter(message, alterName);
+    if (!alter) return;
+    const action = parsed._positional[2]?.toLowerCase();
+    const stateName = parsed._positional.slice(3).join(' ');
+
+    if (action === 'priority') {
+        if (!stateName) return utils.error(message, 'Please provide a state name.');
+        const st = await utils.findEntity(stateName, system, 'state');
+        if (!st) return utils.error(message, `State **${stateName}** not found.`);
+        const stateIdStr = st.entity._id.toString();
+        if (!alter.states?.some(s => s.connected_id === stateIdStr)) {
+            return utils.error(message, `**${st.entity.name?.display || stateName}** is not connected. Use \`sys!alter states ${alterName} add ${stateName}\` first.`);
+        }
+        if (!alter.activeStates) alter.activeStates = {};
+        if (!alter.activeStates.all) alter.activeStates.all = [];
+        // Ensure it's in the active list
+        if (!alter.activeStates.all.includes(stateIdStr)) {
+            alter.activeStates.all.unshift(stateIdStr);
+        }
+        // Move to front (priority = all[0])
+        alter.activeStates.all = alter.activeStates.all.filter(id => id !== stateIdStr);
+        alter.activeStates.all.unshift(stateIdStr);
+        alter.activeStates.priority = stateIdStr;
+        await alter.save();
+        return utils.success(message, `Set **${st.entity.name?.display || stateName}** as priority state.`);
+    }
+
+    if (action === 'add') {
+        if (!stateName) return utils.error(message, 'Please provide a state name.');
+        const st = await utils.findEntity(stateName, system, 'state');
+        if (!st) return utils.error(message, `State **${stateName}** not found.`);
+        const stateIdStr = st.entity._id.toString();
+        if (!alter.states?.some(s => s.connected_id === stateIdStr)) {
+            return utils.error(message, `**${st.entity.name?.display || stateName}** is not connected. Use \`sys!alter states ${alterName} add ${stateName}\` first.`);
+        }
+        if (!alter.activeStates) alter.activeStates = {};
+        if (!alter.activeStates.all) alter.activeStates.all = [];
+        if (alter.activeStates.all.includes(stateIdStr)) return utils.error(message, 'Already active.');
+        alter.activeStates.all.push(stateIdStr);
+        if (!alter.activeStates.priority) alter.activeStates.priority = stateIdStr;
+        await alter.save();
+        return utils.success(message, `Activated **${st.entity.name?.display || stateName}**.`);
+    }
+
+    if (action === 'remove') {
+        if (!stateName) return utils.error(message, 'Please provide a state name.');
+        const st = await utils.findEntity(stateName, system, 'state');
+        if (!st) return utils.error(message, `State **${stateName}** not found.`);
+        const stateIdStr = st.entity._id.toString();
+        if (!alter.activeStates?.all?.includes(stateIdStr)) return utils.error(message, 'Not active.');
+        alter.activeStates.all = alter.activeStates.all.filter(id => id !== stateIdStr);
+        if (alter.activeStates.priority === stateIdStr) {
+            alter.activeStates.priority = alter.activeStates.all[0] || null;
+        }
+        await alter.save();
+        return utils.success(message, `Deactivated **${st.entity.name?.display || stateName}**.`);
+    }
+
+    if (action === 'clear') {
+        alter.activeStates = { priority: null, all: [] };
+        await alter.save();
+        return utils.success(message, 'Cleared all active states.');
+    }
+
+    // List active states
+    alter.activeStates = alter.activeStates || { priority: null, all: [] };
+    if (alter.activeStates.all.length === 0) return utils.info(message, 'No active states. Use `sys!alter activestates <name> add <state>` to activate one.');
+    const states = await State.find({ _id: { $in: alter.activeStates.all } });
+    const lines = alter.activeStates.all.map(id => {
+        const s = states.find(st => st._id.toString() === id);
+        const name = s?.name?.display || s?.name?.indexable || id;
+        const isPriority = id === alter.activeStates.priority;
+        return `${isPriority ? '⭐' : '🟢'} **${name}**`;
+    });
+    return utils.info(message, `Active states (priority first):\n${lines.join('\n')}`);
 }

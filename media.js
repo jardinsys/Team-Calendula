@@ -1,10 +1,9 @@
 const mongoose = require("mongoose");
 
 const mediaSchema = new mongoose.Schema({
-  //R2 object key/path
+  //R2 object key/path (optional for imported external URLs)
   r2Key: {
     type: String,
-    required: true
   },
   // Which R2 bucket this media is stored in ('app' or 'discord')
   bucket: {

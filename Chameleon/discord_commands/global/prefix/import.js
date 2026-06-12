@@ -29,7 +29,8 @@
 
 const {
     EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
-    ModalBuilder, TextInputBuilder, TextInputStyle
+    ModalBuilder, TextInputBuilder, TextInputStyle,
+    StringSelectMenuBuilder, StringSelectMenuOptionBuilder
 } = require('discord.js');
 const mongoose = require('mongoose');
 const System = require('../../../schemas/system');
@@ -51,6 +52,10 @@ const {
     importOctoconFile,
     importAutoDetect,
     createBackup,
+    getSourceEntityTerm,
+    fetchPKMembers,
+    fetchSPMembers,
+    fetchOctoconAlters,
 } = importFunctions;
 
 module.exports = {
@@ -61,11 +66,9 @@ module.exports = {
         const parsed = utils.parseArgs(args);
         const source = parsed._positional[0]?.toLowerCase();
 
-        // Show help if no args
         if (!source && message.attachments.size === 0)
             return handleHelp(message);
 
-        // Get or create user and system
         let { user, system } = await utils.getOrCreateUserAndSystem(message);
 
         if (!system) {
@@ -82,7 +85,6 @@ module.exports = {
             await user.save();
         }
 
-        // Parse target mode
         let targetMode = TARGET_APP;
         if (parsed.target) {
             const t = parsed.target.toLowerCase();
@@ -91,7 +93,6 @@ module.exports = {
             else return utils.error(message, `Invalid target: \`${parsed.target}\`\nUse \`-target:app\` or \`-target:discord\``);
         }
 
-        // Parse flags
         const options = {
             replace: parsed.replace || false,
             skipExisting: parsed.skipexisting || false,
@@ -101,19 +102,17 @@ module.exports = {
             target: targetMode
         };
 
-        // Build session ID for button/modal routing
         const sessionId = utils.generateSessionId(message.author.id);
 
-        // Store session data for button/modal handlers
         utils.setSession(sessionId, {
             type: 'import',
             userId: message.author.id,
             systemId: system._id,
+            sysType: system.sys_type || {},
             options,
             source
         });
 
-        // Route based on source
         try {
             if (source === 'pluralkit' || source === 'pk') {
                 if (message.attachments.size > 0) return await handlePKFile(message, system, user, options);
@@ -134,7 +133,6 @@ module.exports = {
                 return await showTokenButton(message, 'octocon', sessionId);
             }
 
-            // Auto-detect from attached file
             if (message.attachments.size > 0) return await handleAutoDetect(message, system, user, options);
 
             return utils.error(message, `Unknown import source: \`${source}\`\nSupported: \`pluralkit\`, \`tupperbox\`, \`simplyplural\`, \`octocon\`\n\nUse \`sys!import\` for help.`);
@@ -145,13 +143,14 @@ module.exports = {
         }
     },
 
-    // Handle button interactions (token entry buttons)
+    // Handle button interactions
     async handleButtonInteraction(interaction) {
         const customId = interaction.customId;
 
+        // Token entry button → show modal
         if (customId.startsWith('import_token_')) {
             const parts = customId.split('_');
-            const source = parts[2]; // pluralkit, simplyplural, octocon
+            const source = parts[2];
             const sessionId = parts.slice(3).join('_');
 
             const session = utils.getSession(sessionId);
@@ -163,22 +162,94 @@ module.exports = {
             return await interaction.showModal(modal);
         }
 
-        if (customId.startsWith('import_pronouns_')) {
-            const parts = customId.split('_');
-            const answer = parts[2]; // yes or no
-            const sessionId = parts.slice(3).join('_');
-
+        // Fragmented/dissociative warning → proceed with forceAsStates
+        if (customId.startsWith('import_states_proceed_')) {
+            const sessionId = customId.replace('import_states_proceed_', '');
             const session = utils.getSession(sessionId);
             if (!session || session.userId !== interaction.user.id) {
                 return interaction.reply({ content: 'Session expired. Run the import command again.', ephemeral: true });
             }
 
-            session.options.applyPronouns = answer === 'yes';
+            session.options.forceAsStates = true;
             utils.setSession(sessionId, session);
 
-            // Re-trigger the modal for token entry
-            const modal = buildTokenModal(session.source, sessionId);
-            return await interaction.showModal(modal);
+            await interaction.deferUpdate();
+            return await runImport(interaction, session, sessionId);
+        }
+
+        // Confirmation after states select menu → run import with selected states
+        if (customId.startsWith('import_states_confirm_')) {
+            const sessionId = customId.replace('import_states_confirm_', '');
+            const session = utils.getSession(sessionId);
+            if (!session || session.userId !== interaction.user.id) {
+                return interaction.reply({ content: 'Session expired. Run the import command again.', ephemeral: true });
+            }
+
+            await interaction.deferUpdate();
+            return await runImport(interaction, session, sessionId);
+        }
+
+        // Cancel import
+        if (customId.startsWith('import_states_cancel_')) {
+            const sessionId = customId.replace('import_states_cancel_', '');
+            utils.deleteSession(sessionId);
+            return await interaction.update({
+                embeds: [new EmbedBuilder()
+                    .setColor(IMPORT_COLOR)
+                    .setDescription('❌ Import cancelled.')],
+                components: []
+            });
+        }
+    },
+
+    // Handle select menu submissions (states selection)
+    async handleSelectMenuInteraction(interaction) {
+        const customId = interaction.customId;
+
+        if (customId.startsWith('import_states_select_')) {
+            const sessionId = customId.replace('import_states_select_', '');
+            const session = utils.getSession(sessionId);
+            if (!session || session.userId !== interaction.user.id) {
+                return interaction.reply({ content: 'Session expired. Run the import command again.', ephemeral: true });
+            }
+
+            const selected = interaction.values;
+            const skipped = selected.includes('_skip_');
+
+            if (!skipped && selected.length > 0) {
+                session.options.stateNames = selected.map(s => s.toLowerCase());
+                utils.setSession(sessionId, session);
+            }
+
+            // Show confirmation embed
+            const sourceTerm = getSourceEntityTerm(session.source);
+            const totalMembers = session.fetchedMembers?.length || 0;
+            const stateCount = skipped ? 0 : selected.length;
+            const alterCount = totalMembers - stateCount;
+
+            const confirmEmbed = new EmbedBuilder()
+                .setColor(IMPORT_COLOR)
+                .setTitle('Confirm Import')
+                .setDescription(
+                    `**Source:** ${getSourceLabel(session.source)}\n` +
+                    `**${sourceTerm.charAt(0).toUpperCase() + sourceTerm.slice(1)} found:** ${totalMembers}\n\n` +
+                    (stateCount > 0
+                        ? `Will import **${alterCount}** as alters and **${stateCount}** as states.`
+                        : `Will import all **${totalMembers}** as alters.`)
+                );
+
+            const confirmRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`import_states_confirm_${sessionId}`)
+                    .setLabel('Confirm')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId(`import_states_cancel_${sessionId}`)
+                    .setLabel('Cancel')
+                    .setStyle(ButtonStyle.Danger)
+            );
+
+            return await interaction.update({ embeds: [confirmEmbed], components: [confirmRow] });
         }
     },
 
@@ -188,7 +259,7 @@ module.exports = {
 
         if (customId.startsWith('import_modal_')) {
             const parts = customId.split('_');
-            const source = parts[2]; // pluralkit, simplyplural, octocon
+            const source = parts[2];
             const sessionId = parts.slice(3).join('_');
 
             const session = utils.getSession(sessionId);
@@ -197,42 +268,114 @@ module.exports = {
             }
 
             const tokenOrId = interaction.fields.getTextInputValue('token_input');
-
             if (!tokenOrId || tokenOrId.trim().length === 0) {
                 return interaction.reply({ content: 'No token/ID provided. Run the import command again.', ephemeral: true });
             }
 
-            // Fetch system and user
             const system = await System.findById(session.systemId);
             const user = await User.findOne({ systemID: session.systemId });
             if (!system) {
                 return interaction.reply({ content: 'System not found. Run the import command again.', ephemeral: true });
             }
 
-            // Defer reply since import may take a while
             await interaction.deferReply();
 
             try {
-                await createBackup(system, source);
-
-                let result;
+                // Fetch members from API
+                let fetchedMembers = [];
                 if (source === 'pluralkit') {
-                    result = await importPluralKitAPI(system, user, tokenOrId.trim(), session.options);
+                    fetchedMembers = await fetchPKMembers(tokenOrId.trim());
                 } else if (source === 'simplyplural') {
-                    result = await importSimplyPluralAPI(system, user, tokenOrId.trim(), session.options);
+                    fetchedMembers = await fetchSPMembers(tokenOrId.trim());
                 } else if (source === 'octocon') {
                     const systemId = parseOctoconId(tokenOrId.trim());
                     if (!systemId) {
                         return interaction.editReply('Invalid Octocon system ID. Expected 7 characters (e.g. `abcdefg`) or a URL like `octocon.app/u/abcdefg`.');
                     }
-                    result = await importOctoconAPI(system, user, systemId, session.options);
+                    fetchedMembers = await fetchOctoconAlters(systemId);
+                    session.octoconSystemId = systemId;
                 }
 
-                utils.deleteSession(sessionId);
+                session.fetchedMembers = fetchedMembers;
+                session.tokenOrId = tokenOrId.trim();
+                session.sysType = system.sys_type || {};
+                utils.setSession(sessionId, session);
 
-                await interaction.editReply({
-                    embeds: [buildImportResultEmbed(getSourceLabel(source), result, session.options.target)]
-                });
+                const isSystem = session.sysType.isSystem === true;
+                const isFragmented = session.sysType.isFragmented === true;
+                const isDissociative = session.sysType.isDissociative === true;
+                const sourceTerm = getSourceEntityTerm(source);
+                const memberCount = fetchedMembers.length;
+
+                // Fragmented/dissociative → warning + proceed as states
+                if (!isSystem && (isFragmented || isDissociative)) {
+                    const typeLabel = isFragmented ? 'Fragmented' : 'Dissociative';
+                    const warningEmbed = new EmbedBuilder()
+                        .setColor('#FFA500')
+                        .setTitle('⚠️ Import as States')
+                        .setDescription(
+                            `Your profile type is **${typeLabel}**, which means you don't have alters — ` +
+                            `all **${memberCount}** ${sourceTerm} will be imported as **states**.\n\n` +
+                            `**Source:** ${getSourceLabel(source)}\n` +
+                            `**${sourceTerm.charAt(0).toUpperCase() + sourceTerm.slice(1)} found:** ${memberCount}`
+                        );
+
+                    const warningRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`import_states_proceed_${sessionId}`)
+                            .setLabel(`Proceed as States`)
+                            .setStyle(ButtonStyle.Primary),
+                        new ButtonBuilder()
+                            .setCustomId(`import_states_cancel_${sessionId}`)
+                            .setLabel('Cancel')
+                            .setStyle(ButtonStyle.Danger)
+                    );
+
+                    return await interaction.editReply({ embeds: [warningEmbed], components: [warningRow] });
+                }
+
+                // isSystem with ≤25 members → show states select menu
+                if (isSystem && memberCount <= 25 && memberCount > 0) {
+                    const selectMenu = new StringSelectMenuBuilder()
+                        .setCustomId(`import_states_select_${sessionId}`)
+                        .setPlaceholder(`Select ${sourceTerm} to import as states (optional)`)
+                        .setMinValues(0)
+                        .setMaxValues(memberCount);
+
+                    selectMenu.addOptions(
+                        new StringSelectMenuOptionBuilder()
+                            .setLabel('Skip — all as alters')
+                            .setValue('_skip_')
+                            .setDescription('Import everything as alters (default)')
+                    );
+
+                    for (const member of fetchedMembers) {
+                        const name = member.name || member.display_name || 'Unknown';
+                        selectMenu.addOptions(
+                            new StringSelectMenuOptionBuilder()
+                                .setLabel(name.substring(0, 100))
+                                .setValue(name)
+                        );
+                    }
+
+                    const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+
+                    const infoEmbed = new EmbedBuilder()
+                        .setColor(IMPORT_COLOR)
+                        .setTitle(`Import from ${getSourceLabel(source)}`)
+                        .setDescription(
+                            `Found **${memberCount}** ${sourceTerm}.\n\n` +
+                            `Select which ones should be imported as **states** instead of alters, ` +
+                            `or skip to import all as alters.`
+                        );
+
+                    return await interaction.editReply({ embeds: [infoEmbed], components: [selectRow] });
+                }
+
+                // >25 members or 0 members → run import directly
+                await createBackup(system, source);
+                return await runImportDirect(interaction, session, sessionId);
+
             } catch (error) {
                 console.error('Import modal error:', error);
                 await interaction.editReply({
@@ -244,6 +387,93 @@ module.exports = {
         }
     }
 };
+
+// ============================================
+// IMPORT EXECUTION
+// ============================================
+
+async function runImport(interaction, session, sessionId) {
+    const system = await System.findById(session.systemId);
+    const user = await User.findOne({ systemID: session.systemId });
+    if (!system) {
+        return interaction.editReply({ embeds: [new EmbedBuilder()
+            .setColor(utils.ENTITY_COLORS.error)
+            .setDescription('❌ System not found. Run the import command again.')] });
+    }
+
+    try {
+        await createBackup(system, session.source);
+
+        let result;
+        if (session.source === 'pluralkit') {
+            result = await importPluralKitAPI(system, user, session.tokenOrId, session.options);
+        } else if (session.source === 'simplyplural') {
+            result = await importSimplyPluralAPI(system, user, session.tokenOrId, session.options);
+        } else if (session.source === 'octocon') {
+            result = await importOctoconAPI(system, user, session.octoconSystemId, session.options);
+        }
+
+        utils.deleteSession(sessionId);
+
+        await interaction.editReply({
+            embeds: [buildImportResultEmbed(getSourceLabel(session.source), result, session.options.target)],
+            components: []
+        });
+    } catch (error) {
+        console.error('Import execution error:', error);
+        await interaction.editReply({
+            embeds: [new EmbedBuilder()
+                .setColor(utils.ENTITY_COLORS.error)
+                .setDescription(`❌ ${error.message}`)],
+            components: []
+        });
+    }
+}
+
+async function runImportDirect(interaction, session, sessionId) {
+    const system = await System.findById(session.systemId);
+    const user = await User.findOne({ systemID: session.systemId });
+    if (!system) {
+        return interaction.editReply({ embeds: [new EmbedBuilder()
+            .setColor(utils.ENTITY_COLORS.error)
+            .setDescription('❌ System not found. Run the import command again.')] });
+    }
+
+    try {
+        await createBackup(system, session.source);
+
+        let result;
+        if (session.source === 'pluralkit') {
+            result = await importPluralKitAPI(system, user, session.tokenOrId, session.options);
+        } else if (session.source === 'simplyplural') {
+            result = await importSimplyPluralAPI(system, user, session.tokenOrId, session.options);
+        } else if (session.source === 'octocon') {
+            result = await importOctoconAPI(system, user, session.octoconSystemId, session.options);
+        }
+
+        const memberCount = session.fetchedMembers?.length || 0;
+        const largeImportNote = memberCount > 25
+            ? `\n\n📝 *${memberCount} ${getSourceEntityTerm(session.source)} found — too many for interactive states selection. Use \`-states:Name1,Name2\` flag to reclassify specific ${getSourceEntityTerm(session.source)} as states.*`
+            : '';
+
+        utils.deleteSession(sessionId);
+
+        const resultEmbed = buildImportResultEmbed(getSourceLabel(session.source), result, session.options.target);
+        if (largeImportNote) {
+            resultEmbed.setDescription(resultEmbed.data.description + largeImportNote);
+        }
+
+        await interaction.editReply({ embeds: [resultEmbed], components: [] });
+    } catch (error) {
+        console.error('Import execution error:', error);
+        await interaction.editReply({
+            embeds: [new EmbedBuilder()
+                .setColor(utils.ENTITY_COLORS.error)
+                .setDescription(`❌ ${error.message}`)],
+            components: []
+        });
+    }
+}
 
 // ============================================
 // UI HELPERS — Token Button + Modal
@@ -444,7 +674,6 @@ async function handleAutoDetect(message, system, user, options) {
 
         await createBackup(system, 'auto');
 
-        // Detect source for backup label
         let source = 'Unknown';
         if (fileData.tuppers) source = 'Tupperbox';
         else if (fileData.user && fileData.alters && fileData.tags) source = 'Octocon';
@@ -591,7 +820,6 @@ function buildImportResultEmbed(source, result, targetMode = TARGET_APP) {
 
     let description = '';
 
-    // Show target mode
     if (targetMode === TARGET_DISCORD) description += '🎯 **Target:** Discord-specific fields\n';
     else description += '🎯 **Target:** Main/App fields\n';
 
@@ -630,7 +858,6 @@ function buildImportResultEmbed(source, result, targetMode = TARGET_APP) {
         });
     }
 
-    // Add helpful tips based on what happened
     if (targetMode === TARGET_DISCORD && result.membersUpdated > 0) {
         embed.addFields({
             name: '✨ Multi-Source Import',

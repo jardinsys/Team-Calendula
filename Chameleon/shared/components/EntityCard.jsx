@@ -1,4 +1,5 @@
 import React from 'react'
+import { Icon } from '../icons.jsx'
 
 const DEFAULT_COLOR = '#c4b5fd'
 
@@ -58,7 +59,9 @@ function EntityCardList({ entities, type = 'alter', typeLabel, onEntityClick, em
     if (!entities?.length) {
         return (
             <div className="empty-state">
-                <span className="empty-icon">{type === 'alter' ? '👤' : type === 'state' ? '🌊' : '📦'}</span>
+                <span className="empty-icon">
+                    <Icon name={type === 'alter' ? 'user' : type === 'state' ? 'waves' : 'package'} size={48} />
+                </span>
                 <h3>{emptyMessage || `No ${label}s yet`}</h3>
                 <p>Create your first {label} to get started</p>
             </div>

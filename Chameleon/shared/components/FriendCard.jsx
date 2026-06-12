@@ -1,4 +1,5 @@
 import React from 'react'
+import { Icon, getBatteryIcon } from '../icons.jsx'
 
 function FriendCard({ friend, onClick, fallbackName }) {
     const displayName = friend.customName || friend.system?.name || fallbackName || 'Unknown'
@@ -49,7 +50,7 @@ function FriendCard({ friend, onClick, fallbackName }) {
                 )}
                 {battery != null && (
                     <span className="friend-card-battery">
-                        {battery >= 70 ? '🔋' : battery >= 30 ? '🪫' : '⚠️'}
+                        {(() => { const b = getBatteryIcon(battery); return b ? <Icon name={b.name} size={14} color={b.color} /> : null })()}
                     </span>
                 )}
             </div>
@@ -61,7 +62,7 @@ function FriendCardList({ friends, onFriendClick, emptyMessage, fallbackName }) 
     if (!friends?.length) {
         return (
             <div className="empty-state">
-                <span className="empty-icon">👥</span>
+                <span className="empty-icon"><Icon name="users" size={48} /></span>
                 <h3>{emptyMessage || 'No friends yet'}</h3>
                 <p>Add friends to see their front status</p>
             </div>

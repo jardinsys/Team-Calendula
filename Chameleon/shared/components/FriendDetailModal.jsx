@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import api from '../api/client.js'
 import FrontDisplay from './FrontDisplay.jsx'
 
-function FriendDetailModal({ friend, onClose, onRemoved, onBlocked, fallbackName }) {
+function FriendDetailModal({ friend, onClose, onRemoved, onBlocked, onEntityClick, fallbackName }) {
     const [frontData, setFrontData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -134,7 +134,11 @@ function FriendDetailModal({ friend, onClose, onRemoved, onBlocked, fallbackName
                 )}
 
                 {!loading && frontData && (
-                    <FrontDisplay frontData={frontData} isOwner={false} />
+                    <FrontDisplay
+                        frontData={frontData}
+                        isOwner={false}
+                        onFronterClick={onEntityClick}
+                    />
                 )}
 
                 {!loading && !frontData && !error && (

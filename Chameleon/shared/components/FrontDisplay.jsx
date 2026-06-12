@@ -1,4 +1,5 @@
 import React from 'react'
+import { Icon, getBatteryIcon } from '../icons.jsx'
 
 function formatDuration(ms) {
     if (!ms || ms < 0) return ''
@@ -9,20 +10,17 @@ function formatDuration(ms) {
     return 'just now'
 }
 
-function getBatteryEmoji(battery) {
-    if (battery == null) return null
-    if (battery >= 70) return '🔋'
-    if (battery >= 30) return '🪫'
-    return '⚠️'
-}
-
-function FronterAvatar({ fronter, size = 40 }) {
+function FronterAvatar({ fronter, size = 40, onClick }) {
     const color = fronter.color || '#c4b5fd'
     const name = fronter.name || '?'
     const avatar = fronter.avatar
 
     return (
-        <div className="fronter-avatar" style={{ width: size, height: size }}>
+        <div
+            className={`fronter-avatar${onClick ? ' fronter-avatar--clickable' : ''}`}
+            style={{ width: size, height: size, cursor: onClick ? 'pointer' : undefined }}
+            onClick={onClick}
+        >
             {avatar ? (
                 <img src={avatar} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />
             ) : (
@@ -42,11 +40,11 @@ function FronterAvatar({ fronter, size = 40 }) {
     )
 }
 
-function FrontDisplay({ frontData, compact = false, isOwner = true }) {
+function FrontDisplay({ frontData, compact = false, isOwner = true, onFronterClick }) {
     if (!frontData) {
         return (
             <div className="front-display empty-state">
-                <span className="empty-icon">🌙</span>
+                <span className="empty-icon"><Icon name="moon" size={48} /></span>
                 <h3>No one is fronting</h3>
             </div>
         )
@@ -58,7 +56,7 @@ function FrontDisplay({ frontData, compact = false, isOwner = true }) {
     if (activeLayers.length === 0 && !status) {
         return (
             <div className="front-display empty-state">
-                <span className="empty-icon">🌙</span>
+                <span className="empty-icon"><Icon name="moon" size={48} /></span>
                 <h3>No one is fronting</h3>
             </div>
         )
@@ -70,7 +68,7 @@ function FrontDisplay({ frontData, compact = false, isOwner = true }) {
             <div className="front-display front-display--compact">
                 <div className="front-display-fronters">
                     {allFronters.slice(0, 6).map((f, i) => (
-                        <FronterAvatar key={f._id || i} fronter={f} size={32} />
+                        <FronterAvatar key={f._id || i} fronter={f} size={32} onClick={onFronterClick ? () => onFronterClick(f) : undefined} />
                     ))}
                     {allFronters.length > 6 && (
                         <span className="front-display-overflow">+{allFronters.length - 6}</span>
@@ -80,7 +78,10 @@ function FrontDisplay({ frontData, compact = false, isOwner = true }) {
                     <div className="front-display-status">{status}</div>
                 )}
                 {isOwner && battery != null && (
-                    <span className="front-display-battery">{getBatteryEmoji(battery)} {battery}%</span>
+                    <span className="front-display-battery">
+                        {(() => { const b = getBatteryIcon(battery); return b ? <Icon name={b.name} size={14} color={b.color} /> : null })()}
+                        {' '}{battery}%
+                    </span>
                 )}
             </div>
         )
@@ -92,7 +93,10 @@ function FrontDisplay({ frontData, compact = false, isOwner = true }) {
                 <div className="front-display-header">
                     {status && <div className="front-display-status">{status}</div>}
                     {isOwner && battery != null && (
-                        <div className="front-display-battery">{getBatteryEmoji(battery)} {battery}%</div>
+                        <div className="front-display-battery">
+                            {(() => { const b = getBatteryIcon(battery); return b ? <Icon name={b.name} size={14} color={b.color} /> : null })()}
+                            {' '}{battery}%
+                        </div>
                     )}
                 </div>
             )}
@@ -107,9 +111,13 @@ function FrontDisplay({ frontData, compact = false, isOwner = true }) {
                     <div className="front-layer-fronters">
                         {layer.fronters?.map((fronter, j) => (
                             <div key={fronter._id || j} className="fronter-row">
-                                <FronterAvatar fronter={fronter} size={40} />
+                                <FronterAvatar fronter={fronter} size={40} onClick={onFronterClick ? () => onFronterClick(fronter) : undefined} />
                                 <div className="fronter-info">
-                                    <span className="fronter-name" style={{ color: fronter.color || 'var(--text)' }}>
+                                    <span
+                                        className={`fronter-name${onFronterClick ? ' fronter-name--clickable' : ''}`}
+                                        style={{ color: fronter.color || 'var(--text)', cursor: onFronterClick ? 'pointer' : undefined }}
+                                        onClick={onFronterClick ? () => onFronterClick(fronter) : undefined}
+                                    >
                                         {fronter.name}
                                     </span>
                                     {fronter.status && (

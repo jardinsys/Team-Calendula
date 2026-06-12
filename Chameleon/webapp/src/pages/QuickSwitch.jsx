@@ -5,6 +5,7 @@ const { useState, useEffect } = require('react');
 const { useQuery, useMutation, useQueryClient } = require('@tanstack/react-query');
 const { useAuth } = require('../context/AuthContext');
 const api = require('../api/client');
+const { Icon } = require('@chameleon/shared');
 
 function QuickSwitch() {
     const { system } = useAuth();
@@ -99,20 +100,20 @@ function QuickSwitch() {
         <div className="quick-switch-page">
             {/* Header */}
             <header className="page-header">
-                <h1>⚡ Quick Switch</h1>
+                <h1><Icon name="zap" size={24} /> Quick Switch</h1>
                 <p>Tap entities to toggle selection, then register your switch.</p>
             </header>
 
             {/* Success Toast */}
             {showSuccess && (
                 <div className="success-toast">
-                    ✅ Switch registered successfully!
+                    <Icon name="check" size={16} /> Switch registered successfully!
                 </div>
             )}
 
             {/* Current Front */}
             <section className="switch-section current-front">
-                <h2>🎭 Current Front</h2>
+                <h2><Icon name="drama" size={20} /> Current Front</h2>
 
                 {data?.currentFront?.length > 0 ? (
                     <div className="fronters-grid">
@@ -164,7 +165,7 @@ function QuickSwitch() {
                 </div>
 
                 <div className="input-group battery-group">
-                    <label htmlFor="battery">🔋 Social Battery: {battery}%</label>
+                    <label htmlFor="battery"><Icon name="batteryFull" size={14} /> Social Battery: {battery}%</label>
                     <input
                         id="battery"
                         type="range"
@@ -183,7 +184,7 @@ function QuickSwitch() {
 
             {/* Quick Select Grid */}
             <section className="switch-section quick-select">
-                <h2>🚀 Quick Select</h2>
+                <h2><Icon name="rocket" size={20} /> Quick Select</h2>
                 <p className="hint">Tap to toggle. Selected entities will be switched in.</p>
 
                 {data?.quickEntities?.length > 0 ? (
@@ -229,7 +230,7 @@ function QuickSwitch() {
                     onClick={handleSwitch}
                     disabled={switchMutation.isPending}
                 >
-                    {switchMutation.isPending ? 'Switching...' : '🔄 Register Switch'}
+                    {switchMutation.isPending ? 'Switching...' : <><Icon name="refresh" size={14} /> Register Switch</>}
                 </button>
 
                 <button
@@ -237,7 +238,7 @@ function QuickSwitch() {
                     onClick={handleSwitchOut}
                     disabled={switchOutMutation.isPending}
                 >
-                    {switchOutMutation.isPending ? '...' : '📭 Switch Out (No Front)'}
+                    {switchOutMutation.isPending ? '...' : <><Icon name="inbox" size={14} /> Switch Out (No Front)</>}
                 </button>
             </section>
 

@@ -25,6 +25,8 @@ module.exports = {
                 return handleOff(message, system);
             case 'front':
                 return handleFront(message, system);
+            case 'state':
+                return handleState(message, system);
             case 'latch':
             case 'last':
                 return handleLatch(message, system);
@@ -47,6 +49,13 @@ async function handleFront(message, system) {
     system.proxy.style = 'front';
     await system.save();
     return utils.success(message, 'Autoproxy set to **front**. Messages will be proxied as the current fronter (if single).');
+}
+
+async function handleState(message, system) {
+    system.proxy = system.proxy || {};
+    system.proxy.style = 'state';
+    await system.save();
+    return utils.success(message, 'Autoproxy set to **state**. Messages will be proxied as the fronting state entity (if single).');
 }
 
 async function handleLatch(message, system) {
@@ -77,7 +86,7 @@ async function handleHelp(message, system) {
     let currentDisplay = currentStyle;
     
     // If it's a member name, try to find and display it nicely
-    if (!['off', 'last', 'front'].includes(currentStyle)) {
+    if (!['off', 'last', 'front', 'state'].includes(currentStyle)) {
         const result = await utils.findEntity(currentStyle, system);
         if (result)
             currentDisplay = result.entity.name?.display || currentStyle;
@@ -91,6 +100,7 @@ async function handleHelp(message, system) {
             { name: 'Usage', value: 
                 '`sys!ap off` - Disable autoproxy\n' +
                 '`sys!ap front` - Proxy as current fronter\n' +
+                '`sys!ap state` - Proxy as fronting state entity\n' +
                 '`sys!ap latch` - Proxy as last manually proxied\n' +
                 '`sys!ap <member>` - Always proxy as specific member', inline: false },
             { name: 'Notes', value:

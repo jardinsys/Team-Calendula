@@ -11,7 +11,7 @@ import {
     noteKeys,
 } from '@chameleon/shared'
 
-export function NotesPage() {
+export function NotesPage({ system }) {
     const { session } = useDiscordSdk()
     const queryClient = useQueryClient()
     const [selectedNote, setSelectedNote] = useState(null)
@@ -134,6 +134,7 @@ export function NotesPage() {
             {selectedNote && (
                 <NoteModal
                     note={selectedNote}
+                    system={system}
                     onClose={() => setSelectedNote(null)}
                     onUpdated={handleNoteUpdated}
                     onDeleted={handleNoteDeleted}
@@ -142,6 +143,7 @@ export function NotesPage() {
 
             {showCreate && (
                 <CreateNoteModal
+                    system={system}
                     onClose={() => setShowCreate(false)}
                     onCreated={handleNoteCreated}
                 />

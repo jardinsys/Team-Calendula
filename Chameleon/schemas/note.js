@@ -48,13 +48,16 @@ const noteSchema = new mongoose.Schema({
     }],
     color: String,
     entityOwner: {
-        type: { type: String, enum: ['alter', 'state', 'group'] },
+        type: { type: String, enum: ['alter', 'group'] },
         ID: String
     },
     attribution: [{
         entities: [{
-            type: { type: String, enum: ['alter', 'state', 'group'] },
-            ID: String
+            entity: {
+                type: { type: String, enum: ['alter', 'group', 'user'] },
+                ID: String
+            },
+            entityStates: { priorityID: String, allIDs: [String] }
         }],
         userID: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         timestamp: { type: Date, default: Date.now },

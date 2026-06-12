@@ -6,6 +6,7 @@ const { useNavigate } = require('react-router-dom');
 const { useMutation } = require('@tanstack/react-query');
 const { useAuth } = require('../context/AuthContext');
 const api = require('../api/client');
+const { Icon } = require('@chameleon/shared');
 
 // ═══════════════════════════════════════════
 // DISORDER MAP (inline for CommonJS)
@@ -98,17 +99,17 @@ function CategoryStep({ onSelect }) {
 
             <div className="user-type-options" style={{ gridTemplateColumns: '1fr 1fr' }}>
                 <button className="type-option" onClick={() => onSelect('DSM')}>
-                    <span className="type-icon">📋</span>
+                    <span className="type-icon"><Icon name="fileText" size={24} /></span>
                     <h3>DSM-5</h3>
                     <p>Diagnostic and Statistical Manual</p>
                 </button>
                 <button className="type-option" onClick={() => onSelect('ICD')}>
-                    <span className="type-icon">🌍</span>
+                    <span className="type-icon"><Icon name="globe" size={24} /></span>
                     <h3>ICD-10/11</h3>
                     <p>International Classification</p>
                 </button>
                 <button className="type-option" onClick={() => onSelect('OTHER')}>
-                    <span className="type-icon">✏️</span>
+                    <span className="type-icon"><Icon name="pencil" size={24} /></span>
                     <h3>Other</h3>
                     <p>Custom or self-identified</p>
                 </button>

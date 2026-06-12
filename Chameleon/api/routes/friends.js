@@ -210,89 +210,6 @@ router.patch('/:friendId', authMiddleware, async (req, res) => {
 });
 
 // ===========================================
-// GET FRIEND'S FRONT
-// ===========================================
-
-router.get('/:friendId/front', authMiddleware, async (req, res) => {
-    try {
-        const user = await User.findById(req.user._id);
-        const { friendId } = req.params;
-        
-        const isFriend = user.friends?.some(
-            f => f.friendID === friendId || f.discordID === friendId
-        );
-        
-        if (!isFriend) {
-            return res.status(403).json({ error: 'Not friends' });
-        }
-        
-        let friendUser = await User.findOne({ friendID: friendId });
-        if (!friendUser) {
-            friendUser = await User.findOne({ discordID: friendId });
-        }
-        
-        if (!friendUser || !friendUser.systemID) {
-            return res.status(404).json({ error: 'Not registered' });
-        }
-        
-        const system = await System.findById(friendUser.systemID);
-        if (!system) {
-            return res.status(404).json({ error: 'Not registered' });
-        }
-        
-        const frontData = {
-            systemName: system.name?.closedNameDisplay || system.name?.display || system.name?.indexable,
-            avatar: system.avatar?.url,
-            status: system.front?.status,
-            battery: system.battery,
-            caution: system.front?.caution,
-            layers: []
-        };
-        
-        for (const layer of system.front?.layers || []) {
-            const layerData = { name: layer.name, fronters: [] };
-            
-            for (const shiftId of layer.shifts || []) {
-                const shift = await Shift.findById(shiftId);
-                if (!shift || shift.endTime) continue;
-                
-                let entity = null;
-                if (shift.s_type === 'alter') {
-                    entity = await Alter.findById(shift.ID);
-                } else if (shift.s_type === 'state') {
-                    entity = await State.findById(shift.ID);
-                } else if (shift.s_type === 'group') {
-                    entity = await Group.findById(shift.ID);
-                }
-                
-                if (!entity) continue;
-                
-                const currentStatus = shift.statuses?.[shift.statuses.length - 1];
-                
-                layerData.fronters.push({
-                    _id: entity._id,
-                    type: shift.s_type,
-                    name: entity.name?.closedNameDisplay || entity.name?.display || entity.name?.indexable,
-                    avatar: entity.avatar?.url,
-                    color: entity.color,
-                    status: currentStatus?.status,
-                    startTime: shift.startTime
-                });
-            }
-            
-            if (layerData.fronters.length > 0) {
-                frontData.layers.push(layerData);
-            }
-        }
-        
-        res.json(frontData);
-    } catch (err) {
-        console.error('[Friends] Get front error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ===========================================
 // BLOCK/UNBLOCK
 // ===========================================
 
@@ -373,6 +290,89 @@ router.get('/my-id', authMiddleware, async (req, res) => {
             discordID: user.discordID
         });
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
+// GET FRIEND'S FRONT
+// ===========================================
+
+router.get('/:friendId/front', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { friendId } = req.params;
+        
+        const isFriend = user.friends?.some(
+            f => f.friendID === friendId || f.discordID === friendId
+        );
+        
+        if (!isFriend) {
+            return res.status(403).json({ error: 'Not friends' });
+        }
+        
+        let friendUser = await User.findOne({ friendID: friendId });
+        if (!friendUser) {
+            friendUser = await User.findOne({ discordID: friendId });
+        }
+        
+        if (!friendUser || !friendUser.systemID) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+        
+        const system = await System.findById(friendUser.systemID);
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+        
+        const frontData = {
+            systemName: system.name?.closedNameDisplay || system.name?.display || system.name?.indexable,
+            avatar: system.avatar?.url,
+            status: system.front?.status,
+            battery: system.battery,
+            caution: system.front?.caution,
+            layers: []
+        };
+        
+        for (const layer of system.front?.layers || []) {
+            const layerData = { name: layer.name, fronters: [] };
+            
+            for (const shiftId of layer.shifts || []) {
+                const shift = await Shift.findById(shiftId);
+                if (!shift || shift.endTime) continue;
+                
+                let entity = null;
+                if (shift.s_type === 'alter') {
+                    entity = await Alter.findById(shift.ID);
+                } else if (shift.s_type === 'state') {
+                    entity = await State.findById(shift.ID);
+                } else if (shift.s_type === 'group') {
+                    entity = await Group.findById(shift.ID);
+                }
+                
+                if (!entity) continue;
+                
+                const currentStatus = shift.statuses?.[shift.statuses.length - 1];
+                
+                layerData.fronters.push({
+                    _id: entity._id,
+                    type: shift.s_type,
+                    name: entity.name?.closedNameDisplay || entity.name?.display || entity.name?.indexable,
+                    avatar: entity.avatar?.url,
+                    color: entity.color,
+                    status: currentStatus?.status,
+                    startTime: shift.startTime
+                });
+            }
+            
+            if (layerData.fronters.length > 0) {
+                frontData.layers.push(layerData);
+            }
+        }
+        
+        res.json(frontData);
+    } catch (err) {
+        console.error('[Friends] Get front error:', err);
         res.status(500).json({ error: err.message });
     }
 });

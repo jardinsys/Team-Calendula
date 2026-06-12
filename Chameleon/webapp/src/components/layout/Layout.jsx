@@ -3,19 +3,7 @@
 
 const { Outlet, Link, useLocation } = require('react-router-dom');
 const { useAuth } = require('../../context/AuthContext');
-
-// Icons (you can use lucide-react or similar)
-const Icons = {
-    Home: () => <span>🏠</span>,
-    Zap: () => <span>⚡</span>,
-    Users: () => <span>👥</span>,
-    Layers: () => <span>📚</span>,
-    Folder: () => <span>📁</span>,
-    FileText: () => <span>📝</span>,
-    Heart: () => <span>💜</span>,
-    Settings: () => <span>⚙️</span>,
-    LogOut: () => <span>🚪</span>
-};
+const { Icon } = require('@chameleon/shared');
 
 function Layout() {
     const { user, system, userType, logout } = useAuth();
@@ -24,44 +12,44 @@ function Layout() {
     const navItems = [
         { 
             path: '/app', 
-            icon: Icons.Home, 
+            icon: 'home', 
             label: 'Dashboard', 
             show: true,
             exact: true
         },
         { 
             path: '/app/quick-switch', 
-            icon: Icons.Zap, 
+            icon: 'zap', 
             label: 'Quick Switch', 
             show: !!system 
         },
         { 
             path: '/app/alters', 
-            icon: Icons.Users, 
+            icon: 'users', 
             label: system?.alterSynonym?.plural || 'Alters', 
             show: userType === 'system' 
         },
         { 
             path: '/app/states', 
-            icon: Icons.Layers, 
+            icon: 'layers', 
             label: 'States', 
             show: userType === 'system' || userType === 'fractured' 
         },
         { 
             path: '/app/groups', 
-            icon: Icons.Folder, 
+            icon: 'folder', 
             label: 'Groups', 
             show: userType === 'system' || userType === 'fractured' 
         },
         { 
             path: '/app/notes', 
-            icon: Icons.FileText, 
+            icon: 'fileText', 
             label: 'Notes', 
             show: true 
         },
         { 
             path: '/app/friends', 
-            icon: Icons.Heart, 
+            icon: 'heart', 
             label: 'Friends', 
             show: true 
         }
@@ -91,8 +79,8 @@ function Layout() {
                         <h2>{system?.name?.display || 'My System'}</h2>
                         {userType && (
                             <span className={`user-type-badge ${userType}`}>
-                                {userType === 'system' ? '🎭 System' : 
-                                 userType === 'fractured' ? '🔀 Fractured' : '📝 Basic'}
+                                {userType === 'system' ? <><Icon name="drama" size={14} /> System</> : 
+                                 userType === 'fractured' ? <><Icon name="shuffle" size={14} /> Fractured</> : <><Icon name="fileText" size={14} /> Basic</>}
                             </span>
                         )}
                     </div>
@@ -105,7 +93,7 @@ function Layout() {
                             to={item.path}
                             className={`nav-item ${isActive(item.path, item.exact) ? 'active' : ''}`}
                         >
-                            <item.icon />
+                            <Icon name={item.icon} size={20} />
                             <span>{item.label}</span>
                         </Link>
                     ))}
@@ -113,11 +101,11 @@ function Layout() {
 
                 <div className="sidebar-footer">
                     <Link to="/app/settings" className="nav-item">
-                        <Icons.Settings />
+                        <Icon name="settings" size={20} />
                         <span>Settings</span>
                     </Link>
                     <button onClick={logout} className="nav-item logout-btn">
-                        <Icons.LogOut />
+                        <Icon name="logOut" size={20} />
                         <span>Logout</span>
                     </button>
                 </div>

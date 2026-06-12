@@ -55,7 +55,7 @@ async function handleLookup(message, parsed, messageId) {
     const cached = await redis.get(`msg:${messageId}`);
     let msgRecord = null;
 
-    if (cached) msgRecord = JSON.parse(cached);
+    if (cached) try { msgRecord = JSON.parse(cached); } catch { msgRecord = null; }
     else {
         msgRecord = await Message.findOne({ discord_webhook_message_id: messageId });
         if (msgRecord) {
@@ -119,7 +119,7 @@ async function handleDelete(message, parsed, messageId) {
     const cached = await redis.get(`msg:${messageId}`);
     let msgRecord = null;
 
-    if (cached) msgRecord = JSON.parse(cached);
+    if (cached) try { msgRecord = JSON.parse(cached); } catch { msgRecord = null; }
     else msgRecord = await Message.findOne({ discord_webhook_message_id: messageId });
 
     if (!msgRecord) return utils.error(message, 'This doesn\'t appear to be a proxied message, or it\'s not in our records.');

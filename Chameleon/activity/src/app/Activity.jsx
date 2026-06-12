@@ -11,13 +11,29 @@ import { NotesPage } from './pages/NotesPage'
 import { CrisisPage } from './pages/CrisisPage'
 import { WhatIsPage } from './pages/WhatIsPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { ImportPage } from './pages/ImportPage'
 import { ActivitiesPage } from './pages/ActivitiesPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { SwitchPage } from './pages/SwitchPage'
+import { EntityViewPage } from './pages/EntityViewPage'
 
 function getInitialPage() {
     const params = new URLSearchParams(window.location.search)
     const page = params.get('page')
-    if (page && ['system', 'friends', 'notes', 'crisis', 'what-is', 'settings', 'activities', 'register'].includes(page)) return page
+    if (page && ['system', 'friends', 'notes', 'crisis', 'what-is', 'settings', 'import', 'activities', 'register', 'switch', 'entity'].includes(page)) return page
+    return null
+}
+
+function getInitialPageParams() {
+    const params = new URLSearchParams(window.location.search)
+    const page = params.get('page')
+    if (page === 'entity') {
+        const entityId = params.get('id')
+        const entityType = params.get('type')
+        if (entityId && entityType && ['alter', 'state', 'group'].includes(entityType)) {
+            return { entityId, entityType }
+        }
+    }
     return null
 }
 
@@ -25,6 +41,7 @@ export function Activity() {
   const { status, error } = useDiscordSdk()
   const { authStatus, authError, hasSystem: authHasSystem, discordUser } = useApiAuth()
   const [activePage, setActivePage] = useState(getInitialPage)
+  const [pageParams, setPageParams] = useState(getInitialPageParams)
   const [system, setSystem] = useState(null)
   const [hasSystem, setHasSystem] = useState(false)
 
@@ -70,6 +87,7 @@ export function Activity() {
       friends: FriendsPage,
       notes: NotesPage,
       crisis: CrisisPage,
+      switch: SwitchPage,
   }), [isSys])
 
   const handleRegistered = useCallback(async () => {
@@ -83,8 +101,9 @@ export function Activity() {
     }
   }, [])
 
-  const handleNavigate = useCallback((page) => {
+  const handleNavigate = useCallback((page, params) => {
     setActivePage(page)
+    setPageParams(params || null)
   }, [])
 
   if (status === 'INITIALIZING') {
@@ -127,13 +146,20 @@ export function Activity() {
 
   const showBackButton = activePage && activePage !== 'what-is' && activePage !== 'register'
 
+  const isStaticPage = !activePage || activePage === 'what-is' || activePage === 'register'
+
+  const handleBack = () => {
+    setActivePage(null)
+    setPageParams(null)
+  }
+
   return (
     <div className="app-container">
-      <main className="app-content" style={{ position: 'relative', paddingTop: showBackButton ? '52px' : undefined }}>
+      <main className={`app-content${isStaticPage ? ' app-content--no-scroll' : ''}`} style={{ position: 'relative', paddingTop: showBackButton ? '52px' : undefined }}>
         {showBackButton && (
           <button
             className="gradient-border-sm"
-            onClick={() => setActivePage(null)}
+            onClick={handleBack}
             title="Home"
             style={{ position: 'absolute', top: 0, left: 0, zIndex: 10 }}
           >
@@ -143,15 +169,24 @@ export function Activity() {
           </button>
         )}
         {PageComponent ? (
-          <PageComponent system={system} />
+          <PageComponent system={system} onNavigate={handleNavigate} />
+        ) : activePage === 'entity' ? (
+          <EntityViewPage
+            system={system}
+            onNavigate={handleNavigate}
+            entityId={pageParams?.entityId}
+            entityType={pageParams?.entityType}
+          />
         ) : activePage === 'what-is' ? (
           <WhatIsPage onNavigate={handleNavigate} />
         ) : activePage === 'settings' ? (
-          <SettingsPage system={system} />
+          <SettingsPage system={system} onNavigate={handleNavigate} discordUser={discordUser} />
+        ) : activePage === 'import' ? (
+          <ImportPage system={system} onNavigate={handleNavigate} />
         ) : activePage === 'activities' ? (
           <ActivitiesPage />
         ) : activePage === 'register' ? (
-          <RegisterPage onNavigate={handleNavigate} onRegistered={handleRegistered} />
+          <RegisterPage onNavigate={handleNavigate} onRegistered={handleRegistered} discordUser={discordUser} />
         ) : (
           <LandingPage
             onNavigate={handleNavigate}

@@ -194,10 +194,10 @@ async function handleProxyStyle(message, parsed, system) {
     const value = parsed._positional[2]?.toLowerCase();
 
     if (!value) {
-        return utils.info(message, `Current proxy style: \`${system.proxy?.style || 'off'}\`\nUse \`sys!config proxy style <off|last|front|name>\` to change.`);
+        return utils.info(message, `Current proxy style: \`${system.proxy?.style || 'off'}\`\nUse \`sys!config proxy style <off|last|front|state|name>\` to change.`);
     }
 
-    const validStyles = ['off', 'last', 'front'];
+    const validStyles = ['off', 'last', 'front', 'state'];
     if (!validStyles.includes(value)) {
         system.proxy = system.proxy || {};
         system.proxy.style = value;
@@ -212,6 +212,7 @@ async function handleProxyStyle(message, parsed, system) {
     if (value === 'off') return utils.success(message, 'Auto-proxy is now **disabled**. Use proxy tags to proxy.');
     if (value === 'last') return utils.success(message, 'Proxy style set to **last**. Will auto-proxy your most recent entity.');
     if (value === 'front') return utils.success(message, 'Proxy style set to **front**. Will auto-proxy your current fronter.');
+    if (value === 'state') return utils.success(message, 'Proxy style set to **state**. Will auto-proxy as the fronting state entity.');
 }
 
 async function handleProxyCase(message, parsed, system) {
@@ -665,7 +666,7 @@ async function handleHelp(message) {
             {
                 name: '🎭 Proxy',
                 value: [
-                    '`sys!config proxy style <off|last|front|name>`',
+                    '`sys!config proxy style <off|last|front|state|name>`',
                     '`sys!config proxy replystyle <embed|native>`',
                     '`sys!config proxy case <on|off>`',
                     '`sys!config proxy cooldown <seconds|off|reset>`',

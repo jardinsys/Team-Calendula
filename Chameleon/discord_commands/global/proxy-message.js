@@ -128,7 +128,8 @@ async function checkAndUpdateBreakStatus(system) {
         return { isBreak: currentBreak, shouldUpdate: false };
     }
     
-    const elapsedSeconds = (Date.now() - parseInt(lastProxyTimeStr)) / 1000;
+    const lastProxyTime = parseInt(lastProxyTimeStr);
+    const elapsedSeconds = isNaN(lastProxyTime) ? Infinity : (Date.now() - lastProxyTime) / 1000;
     
     // If elapsed time > cooldown, set break to true (Redis TTL key)
     if (elapsedSeconds > cooldownSeconds && !currentBreak) {
@@ -403,10 +404,36 @@ async function getAutoProxy(system, guildId) {
         }
     }
 
+    if (effectiveStyle === 'state') {
+        // Proxy only when a state entity is the single fronter in top layer
+        const frontLayers = system.front?.layers || [];
+        if (frontLayers.length === 0) return null;
+
+        const topLayer = frontLayers[0];
+
+        const activeFronters = [];
+        for (const shiftId of topLayer.shifts || []) {
+            const shift = await Shift.findById(shiftId);
+            if (shift && !shift.endTime) {
+                activeFronters.push(shift);
+            }
+        }
+
+        // Only proxy if exactly one fronter AND it's a state entity
+        if (activeFronters.length === 1 && activeFronters[0].s_type === 'state') {
+            const stateShift = activeFronters[0];
+            let entity = await getEntityById('state', stateShift.ID);
+            if (entity) return { entity, type: 'state' };
+        }
+
+        // Otherwise fall back to 'off' (no auto-proxy)
+        return null;
+    }
+
     // Check if it's a specific entity name (specify mode)
-    if (effectiveStyle && effectiveStyle !== 'off' && effectiveStyle !== 'last' && effectiveStyle !== 'front') {
+    if (effectiveStyle && effectiveStyle !== 'off' && effectiveStyle !== 'last' && effectiveStyle !== 'front' && effectiveStyle !== 'state') {
         // It's an entity indexable name
-        const { entity, type } = await utils.findEntityByName(effectiveStyle, system);
+        const { entity, type } = await utils.findEntityByNameForSystem(effectiveStyle, system);
         if (entity) {
             return { entity, type };
         }
@@ -593,10 +620,14 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
 async function getProxyDisplayInfoCached(entity, type, system, guild, closedCharAllowed = true) {
     const maskMode = shouldMask(entity, system, guild.id);
     const serverSettings = entity.discord?.server?.find(s => s.id === guild.id);
+    const hasActiveStates = type === 'alter' && entity.activeStates?.all?.length > 0;
     
     // Determine cache key based on priority
     let cacheKey;
-    if (serverSettings) {
+    if (hasActiveStates) {
+        const stateHash = [...entity.activeStates.all].sort().join(',');
+        cacheKey = `display:${entity._id}:states:${stateHash}`;
+    } else if (serverSettings) {
         cacheKey = `display:${entity._id}:server:${guild.id}`;
     } else if (maskMode) {
         cacheKey = `display:${entity._id}:mask:${guild.id}`;
@@ -614,8 +645,14 @@ async function getProxyDisplayInfoCached(entity, type, system, guild, closedChar
         }
     }
 
+    // Resolve active states for alters
+    let activeDisplay = null;
+    if (hasActiveStates) {
+        activeDisplay = await utils.resolveAlterDisplay(entity, system);
+    }
+
     // Resolve display info via priority chain
-    const result = getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed);
+    const result = getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed, activeDisplay);
     
     // Cache for 30 days
     redis.set(cacheKey, JSON.stringify(result), 'EX', 30 * 24 * 60 * 60).catch(() => {});
@@ -668,17 +705,18 @@ async function getOrCreateWebhook(channel) {
 /**
  * Get display info for the proxy
  */
-function getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed = true) {
+function getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed = true, activeDisplay = null) {
     let avatarUrl = null;
     let displayName = 'Unknown';
 
     // Priority order for avatar:
     // 1. Server-specific avatar
     // 2. Mask avatar (if masking in this server)
-    // 3. Proxy avatar
-    // 4. Regular avatar
-    // 5. System avatar
-    // 6. No avatar
+    // 3. Active state avatar (if alter with active states)
+    // 4. Proxy avatar
+    // 5. Regular avatar
+    // 6. System avatar
+    // 7. No avatar
 
     // Check for server-specific settings
     const serverSettings = entity.discord?.server?.find(s => s.id === guild.id);
@@ -690,6 +728,10 @@ function getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed = tr
         avatarUrl = entity.mask?.avatar?.url || 
                    entity.mask?.discord?.image?.avatar?.url ||
                    entity.mask?.discord?.image?.proxyAvatar?.url;
+    }
+    // Use active state avatar (if available)
+    else if (activeDisplay?.avatar) {
+        avatarUrl = activeDisplay.avatar;
     }
     // Use proxy avatar
     else if (entity.discord?.image?.proxyAvatar?.url) {
@@ -704,7 +746,15 @@ function getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed = tr
         avatarUrl = system.avatar.url;
     }
 
-    // Get the display name
+    // Priority order for display name:
+    // 1. Closed name (if server restricts closed chars)
+    // 2. Server-specific name
+    // 3. Mask name (if masking in this server)
+    // 4. Active state name (if alter with active states)
+    // 5. Alter's display name
+    // 6. Alter's indexable name
+    // 7. Entity ID fallback
+
     if (!closedCharAllowed && entity.name?.closedNameDisplay) {
         displayName = entity.name.closedNameDisplay;
     } else if (serverSettings?.name) {
@@ -714,8 +764,10 @@ function getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed = tr
                      entity.mask?.discord?.name?.display ||
                      entity.name?.display || 
                      entity.name?.indexable;
+    } else if (activeDisplay?.name) {
+        displayName = activeDisplay.name;
     } else {
-        displayName = entity.name?.display || entity.name?.indexable || entity._id;
+        displayName = entity.name?.display || entity.name?.indexable || entity._id?.toString() || 'Unknown';
     }
 
     // Apply proxy layout if configured (entity-type-specific)
@@ -1112,16 +1164,8 @@ async function flushToMongoDB() {
         const batch = pendingMessageWrites.splice(0, pendingMessageWrites.length);
         try {
             const results = await Message.insertMany(batch, { ordered: false });
-            // Update Redis cache with real _ids
-            for (let i = 0; i < results.length; i++) {
-                const msgId = batch[i].discord_webhook_message_id;
-                const cached = await redis.get(`msg:${msgId}`);
-                if (cached) {
-                    const data = JSON.parse(cached);
-                    data._id = results[i]._id.toString();
-                    await redis.set(`msg:${msgId}`, JSON.stringify(data), 'KEEPTTL');
-                }
-            }
+            // Note: with ordered:false, results may not align with batch indices if some inserts failed.
+            // Redis cache _ids will be updated on next read from MongoDB instead.
             console.log(`[MongoDB] Flushed ${results.length} messages`);
         } catch (err) {
             console.error('[MongoDB] Message flush error:', err);

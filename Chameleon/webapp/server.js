@@ -88,9 +88,16 @@ app.use('/api/front', authenticateToken, frontRoutes);
 const quickRoutes = require('../api/routes/quick');
 app.use('/api/quick', authenticateToken, quickRoutes);
 
+const importRoutes = require('../api/routes/import');
+app.use('/api/import', authenticateToken, importRoutes);
+
 // Friends routes
 const friendsRoutes = require('../api/routes/friends');
 app.use('/api/friends', authenticateToken, friendsRoutes);
+
+// User account routes (wipe data, delete account)
+const userRoutes = require('../api/routes/user');
+app.use('/api/user', authenticateToken, userRoutes);
 
 // ==========================================
 // STATIC FILES

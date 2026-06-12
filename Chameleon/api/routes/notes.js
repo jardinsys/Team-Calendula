@@ -24,25 +24,41 @@ const ATTRIBUTION_CAP = 50;
 async function getTopLayerEntities(system) {
     const topLayer = system.front?.layers?.[0];
     if (!topLayer) return [];
-    const fronters = [];
+    const entities = [];
+    const stateIds = [];
     for (const shiftId of topLayer.shifts || []) {
         const shift = await Shift.findById(shiftId);
         if (!shift || shift.endTime) continue;
-        fronters.push({ type: shift.s_type, ID: shift.ID });
+        if (shift.s_type === 'state') {
+            stateIds.push(shift.ID);
+            continue;
+        }
+        entities.push({
+            entity: { type: shift.s_type, ID: shift.ID },
+            entityStates: stateIds.length ? { priorityID: stateIds[0], allIDs: stateIds } : undefined
+        });
     }
-    return fronters;
+    return entities;
 }
 
 async function getFrontingEntities(system) {
-    const fronters = [];
+    const entities = [];
+    const stateIds = [];
     for (const layer of system.front?.layers || []) {
         for (const shiftId of layer.shifts || []) {
             const shift = await Shift.findById(shiftId);
             if (!shift || shift.endTime) continue;
-            fronters.push({ type: shift.s_type, ID: shift.ID });
+            if (shift.s_type === 'state') {
+                stateIds.push(shift.ID);
+                continue;
+            }
+            entities.push({
+                entity: { type: shift.s_type, ID: shift.ID },
+                entityStates: stateIds.length ? { priorityID: stateIds[0], allIDs: stateIds } : undefined
+            });
         }
     }
-    return fronters;
+    return entities;
 }
 
 async function resolveEntityData(type, id) {
@@ -50,6 +66,18 @@ async function resolveEntityData(type, id) {
     if (type === 'alter') entity = await Alter.findById(id).select('name avatar color');
     else if (type === 'state') entity = await State.findById(id).select('name avatar color');
     else if (type === 'group') entity = await Group.findById(id).select('name avatar color');
+    else if (type === 'user') {
+        const user = await User.findById(id).select('discordID systemID');
+        if (!user) return null;
+        const sys = await System.findById(user.systemID).select('name systemSynonym avatar color');
+        return {
+            type: 'user',
+            ID: id,
+            name: sys?.systemSynonym || sys?.name || 'User',
+            avatar: sys?.avatar?.url,
+            color: sys?.color
+        };
+    }
 
     if (!entity) return null;
     return {
@@ -67,7 +95,7 @@ async function resolveSystemFallback(userId) {
     const system = await System.findById(user.systemID).select('name systemSynonym avatar color');
     if (!system) return null;
     return {
-        type: 'system',
+        type: 'user',
         name: system.systemSynonym || system.name || 'System',
         avatar: system.avatar?.url,
         color: system.color
@@ -77,16 +105,39 @@ async function resolveSystemFallback(userId) {
 async function resolveAttributionEntities(entities, userId) {
     if (!entities?.length) {
         const fallback = await resolveSystemFallback(userId);
-        return fallback ? [fallback] : [];
+        return fallback ? [{ entity: fallback }] : [];
     }
     const resolved = [];
     for (const ent of entities) {
-        const data = await resolveEntityData(ent.type, ent.ID);
-        if (data) resolved.push(data);
+        const entityData = ent.entity || ent;
+        const data = await resolveEntityData(entityData.type, entityData.ID);
+        if (data) {
+            const entry = { entity: data };
+            if (ent.entityStates?.allIDs?.length) {
+                const resolvedStates = [];
+                for (const stateId of ent.entityStates.allIDs) {
+                    const stateData = await State.findById(stateId).select('name avatar color');
+                    if (stateData) {
+                        resolvedStates.push({
+                            type: 'state',
+                            ID: stateId,
+                            name: stateData.name?.display || stateData.name?.indexable || 'Unknown',
+                            avatar: stateData.avatar?.url,
+                            color: stateData.color
+                        });
+                    }
+                }
+                if (resolvedStates.length) {
+                    const priorityState = resolvedStates.find(s => s.ID === ent.entityStates.priorityID) || resolvedStates[0];
+                    entry.entityStates = { priority: priorityState, all: resolvedStates };
+                }
+            }
+            resolved.push(entry);
+        }
     }
     if (!resolved.length) {
         const fallback = await resolveSystemFallback(userId);
-        if (fallback) resolved.push(fallback);
+        if (fallback) resolved.push({ entity: fallback });
     }
     return resolved;
 }
@@ -102,12 +153,34 @@ async function buildAttributionResponse(note) {
     for (const entry of (note.attribution || [])) {
         const entities = [];
         for (const ent of (entry.entities || [])) {
-            const data = await resolveEntityData(ent.type, ent.ID);
-            if (data) entities.push(data);
+            const entityData = ent.entity || ent;
+            const data = await resolveEntityData(entityData.type, entityData.ID);
+            if (!data) continue;
+            const resolved = { entity: data };
+            if (ent.entityStates?.allIDs?.length) {
+                const resolvedStates = [];
+                for (const stateId of ent.entityStates.allIDs) {
+                    const stateData = await State.findById(stateId).select('name avatar color');
+                    if (stateData) {
+                        resolvedStates.push({
+                            type: 'state',
+                            ID: stateId,
+                            name: stateData.name?.display || stateData.name?.indexable || 'Unknown',
+                            avatar: stateData.avatar?.url,
+                            color: stateData.color
+                        });
+                    }
+                }
+                if (resolvedStates.length) {
+                    const priorityState = resolvedStates.find(s => s.ID === ent.entityStates.priorityID) || resolvedStates[0];
+                    resolved.entityStates = { priority: priorityState, all: resolvedStates };
+                }
+            }
+            entities.push(resolved);
         }
         if (!entities.length && entry.userID) {
             const fallback = await resolveSystemFallback(entry.userID);
-            if (fallback) entities.push(fallback);
+            if (fallback) entities.push({ entity: fallback });
         }
         enriched.push({
             entities,
@@ -363,12 +436,34 @@ router.get('/:id/history', authMiddleware, async (req, res) => {
         for (const entry of sliced) {
             const entities = [];
             for (const ent of (entry.entities || [])) {
-                const data = await resolveEntityData(ent.type, ent.ID);
-                if (data) entities.push(data);
+                const entityData = ent.entity || ent;
+                const data = await resolveEntityData(entityData.type, entityData.ID);
+                if (!data) continue;
+                const resolved = { entity: data };
+                if (ent.entityStates?.allIDs?.length) {
+                    const resolvedStates = [];
+                    for (const stateId of ent.entityStates.allIDs) {
+                        const stateData = await State.findById(stateId).select('name avatar color');
+                        if (stateData) {
+                            resolvedStates.push({
+                                type: 'state',
+                                ID: stateId,
+                                name: stateData.name?.display || stateData.name?.indexable || 'Unknown',
+                                avatar: stateData.avatar?.url,
+                                color: stateData.color
+                            });
+                        }
+                    }
+                    if (resolvedStates.length) {
+                        const priorityState = resolvedStates.find(s => s.ID === ent.entityStates.priorityID) || resolvedStates[0];
+                        resolved.entityStates = { priority: priorityState, all: resolvedStates };
+                    }
+                }
+                entities.push(resolved);
             }
             if (!entities.length && entry.userID) {
                 const fallback = await resolveSystemFallback(entry.userID);
-                if (fallback) entities.push(fallback);
+                if (fallback) entities.push({ entity: fallback });
             }
             enriched.push({
                 entities,
@@ -428,7 +523,13 @@ router.post('/', authMiddleware, async (req, res) => {
             },
             entityOwner: entityOwner ? { type: entityOwner.type, ID: entityOwner.id } : undefined,
             attribution: [{
-                entities: initialAttribution.map(e => ({ type: e.type, ID: e.id || e.ID })),
+                entities: initialAttribution.map(e => {
+                    if (e.entity) return e;
+                    return {
+                        entity: { type: e.type === 'system' ? 'user' : (e.type || 'user'), ID: e.id || e.ID },
+                        entityStates: e.entityStates || undefined
+                    };
+                }),
                 userID: user._id,
                 timestamp: new Date(),
                 action: 'create'
@@ -553,7 +654,13 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         if (attributionEntities.length || updates.attribution !== undefined) {
             note.attribution = note.attribution || [];
             note.attribution.push({
-                entities: attributionEntities.map(e => ({ type: e.type, ID: e.id || e.ID })),
+                entities: attributionEntities.map(e => {
+                    if (e.entity) return e;
+                    return {
+                        entity: { type: e.type === 'system' ? 'user' : (e.type || 'user'), ID: e.id || e.ID },
+                        entityStates: e.entityStates || undefined
+                    };
+                }),
                 userID: user._id,
                 timestamp: new Date(),
                 action: 'edit'
@@ -602,7 +709,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         }
 
         if (note.content?.r2Key) {
-            await deleteNoteContent(note.content.r2Key);
+            try { await deleteNoteContent(note.content.r2Key); } catch (r2Err) { console.error('[Notes] R2 delete failed (proceeding with DB delete):', r2Err); }
         }
 
         await Note.findByIdAndDelete(note._id);
@@ -702,7 +809,13 @@ router.patch('/:id/append', authMiddleware, async (req, res) => {
 
         note.attribution = note.attribution || [];
         note.attribution.push({
-            entities: attributionEntities.map(e => ({ type: e.type, ID: e.id || e.ID })),
+            entities: attributionEntities.map(e => {
+                if (e.entity) return e;
+                return {
+                    entity: { type: e.type === 'system' ? 'user' : (e.type || 'user'), ID: e.id || e.ID },
+                    entityStates: e.entityStates || undefined
+                };
+            }),
             userID: user._id,
             timestamp: new Date(),
             action: 'append'

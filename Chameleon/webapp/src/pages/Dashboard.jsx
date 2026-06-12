@@ -6,6 +6,7 @@ const { useAuth } = require('../context/AuthContext');
 const { useQuery } = require('@tanstack/react-query');
 const { Link } = require('react-router-dom');
 const api = require('../api/client');
+const { Icon } = require('@chameleon/shared');
 
 function Dashboard() {
     const { user, system, userType } = useAuth();
@@ -29,7 +30,7 @@ function Dashboard() {
         return (
             <div className="dashboard-page">
                 <div className="welcome-card">
-                    <h1>Welcome to Systemiser! 👋</h1>
+                    <h1>Welcome to Systemiser! <Icon name="rocket" size={24} /></h1>
                     <p>Let's set up your profile to get started.</p>
                     <Link to="/app/setup" className="btn btn-primary">
                         Set Up Your System
@@ -50,9 +51,9 @@ function Dashboard() {
             {/* Front Status Card */}
             <section className="dashboard-card front-status-card">
                 <div className="card-header">
-                    <h2>🎭 Current Front</h2>
+                    <h2><Icon name="drama" size={20} /> Current Front</h2>
                     <Link to="/app/quick-switch" className="btn btn-small">
-                        ⚡ Quick Switch
+                        <Icon name="zap" size={14} /> Quick Switch
                     </Link>
                 </div>
 
@@ -102,7 +103,7 @@ function Dashboard() {
                             )}
                             {frontData?.battery !== undefined && (
                                 <div className="battery-display">
-                                    <span className="label">🔋 Social Battery:</span>
+                                    <span className="label"><Icon name="batteryFull" size={14} /> Social Battery:</span>
                                     <div className="battery-bar">
                                         <div
                                             className="battery-fill"
@@ -119,34 +120,34 @@ function Dashboard() {
 
             {/* Quick Actions */}
             <section className="dashboard-card quick-actions-card">
-                <h2>⚡ Quick Actions</h2>
+                <h2><Icon name="zap" size={20} /> Quick Actions</h2>
                 <div className="quick-actions-grid">
                     <Link to="/app/quick-switch" className="quick-action">
-                        <span className="icon">🔄</span>
+                        <span className="icon"><Icon name="refresh" size={24} /></span>
                         <span>Switch</span>
                     </Link>
 
                     <Link to="/app/notes" className="quick-action">
-                        <span className="icon">📝</span>
+                        <span className="icon"><Icon name="fileText" size={24} /></span>
                         <span>New Note</span>
                     </Link>
 
                     {userType === 'system' && (
                         <Link to="/app/alters" className="quick-action">
-                            <span className="icon">➕</span>
+                            <span className="icon"><Icon name="plus" size={24} /></span>
                             <span>Add {system.alterSynonym?.singular || 'Alter'}</span>
                         </Link>
                     )}
 
                     {(userType === 'system' || userType === 'fractured') && (
                         <Link to="/app/states" className="quick-action">
-                            <span className="icon">🔀</span>
+                            <span className="icon"><Icon name="shuffle" size={24} /></span>
                             <span>Add State</span>
                         </Link>
                     )}
 
                     <Link to="/app/friends" className="quick-action">
-                        <span className="icon">💜</span>
+                        <span className="icon"><Icon name="heart" size={24} /></span>
                         <span>Friends</span>
                     </Link>
                 </div>
@@ -155,7 +156,7 @@ function Dashboard() {
             {/* Recent Notes */}
             <section className="dashboard-card notes-card">
                 <div className="card-header">
-                    <h2>📝 Recent Notes</h2>
+                    <h2><Icon name="fileText" size={20} /> Recent Notes</h2>
                     <Link to="/app/notes" className="btn btn-small">View All</Link>
                 </div>
 
@@ -164,7 +165,7 @@ function Dashboard() {
                         {notesData.notes.slice(0, 5).map(note => (
                             <div key={note._id} className="note-item">
                                 <span className="note-icon">
-                                    {note.pinned ? '📌' : '📝'}
+                                    {note.pinned ? <Icon name="pin" size={14} /> : <Icon name="fileText" size={14} />}
                                 </span>
                                 <span className="note-title">{note.title}</span>
                                 {note.tags?.length > 0 && (
@@ -185,7 +186,7 @@ function Dashboard() {
             {/* System Stats */}
             {(userType === 'system' || userType === 'fractured') && (
                 <section className="dashboard-card stats-card">
-                    <h2>📊 System Stats</h2>
+                    <h2><Icon name="barChart" size={20} /> System Stats</h2>
                     <div className="stats-grid">
                         {userType === 'system' && (
                             <div className="stat">

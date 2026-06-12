@@ -515,7 +515,7 @@ async function handleSelectMenu(interaction) {
         case 'proxy_info':
             modal = new ModalBuilder().setCustomId(`profile_edit_proxy_modal_${sessionId}`).setTitle('Edit Proxy Settings');
             modal.addComponents(
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('proxy_style').setLabel('Auto-proxy Style (off/last/front/[name])').setStyle(TextInputStyle.Short).setValue(system?.proxy?.style || 'off').setPlaceholder('off, last, front, or entity name').setRequired(false).setMaxLength(50)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('proxy_style').setLabel('Auto-proxy Style (off/last/front/state/[name])').setStyle(TextInputStyle.Short).setValue(system?.proxy?.style || 'off').setPlaceholder('off, last, front, state, or entity name').setRequired(false).setMaxLength(50)),
                 new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('proxy_break').setLabel('On Proxy Break? (yes/no)').setStyle(TextInputStyle.Short).setValue(system?.proxy?.break ? 'yes' : 'no').setPlaceholder('yes or no').setRequired(false).setMaxLength(3))
             );
             break;
@@ -592,7 +592,7 @@ async function handleModalSubmit(interaction) {
         if (system) {
             if (!system.proxy) system.proxy = {};
 
-            const validStyles = ['off', 'last', 'front'];
+            const validStyles = ['off', 'last', 'front', 'state'];
             if (validStyles.includes(proxyStyle?.toLowerCase())) {
                 system.proxy.style = proxyStyle.toLowerCase();
             } else if (proxyStyle) {

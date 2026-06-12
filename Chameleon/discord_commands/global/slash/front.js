@@ -1635,15 +1635,27 @@ async function getEntityInfo(entityId, type, system, closedCharAllowed = true, f
         }
         if (!entity) return null;
 
-        let displayName;
-        if (!closedCharAllowed && entity.name?.closedNameDisplay) displayName = entity.name.closedNameDisplay;
-        else displayName = entity.name?.display || entity.name?.indexable || fallbackName || 'Unknown';
+        // Resolve active states for alters
+        let displayName, avatar, color, pronouns;
+        if (type === 'alter' && entity.activeStates?.all?.length > 0) {
+            const resolved = await utils.resolveAlterDisplay(entity, system);
+            displayName = resolved.name || fallbackName || 'Unknown';
+            avatar = resolved.avatar || entity.discord?.image?.avatar?.url;
+            color = resolved.color;
+            pronouns = resolved.pronouns || [];
+        } else {
+            if (!closedCharAllowed && entity.name?.closedNameDisplay) displayName = entity.name.closedNameDisplay;
+            else displayName = entity.name?.display || entity.name?.indexable || fallbackName || 'Unknown';
+            avatar = entity.avatar?.url || entity.discord?.image?.avatar?.url;
+            color = entity.color;
+            pronouns = entity.pronouns || entity.identity?.pronouns || [];
+        }
 
         return {
             name: displayName,
-            pronouns: entity.pronouns || entity.identity?.pronouns || [],
-            avatar: entity.avatar?.url || entity.discord?.image?.avatar?.url,
-            color: entity.color
+            pronouns,
+            avatar,
+            color
         };
     } catch (error) { return null; }
 }
