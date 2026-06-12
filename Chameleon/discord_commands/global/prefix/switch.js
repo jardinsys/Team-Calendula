@@ -243,10 +243,12 @@ async function handleEdit(message, parsed) {
     // Create new shifts
     targetLayer.shifts = [];
     targetLayer.fronters = [];
+    const idToName = {};
 
     for (const name of memberNames) {
         const result = await utils.findEntity(name, system);
         if (!result) continue;
+        idToName[result.entity._id.toString()] = result.entity.name?.display || result.entity.name?.indexable || name;
 
         const initialStatus = {
             status: result.entity.setting?.default_status || null,
@@ -279,15 +281,12 @@ async function handleEdit(message, parsed) {
 
     await system.save();
     const names = targetLayer.fronters.map(f => {
-        const id = f.alterID || f.stateID || f.groupID;
-        return resolvedNameCache[id] || '(no name)';
+        const id = (f.alterID || f.stateID || f.groupID)?.toString();
+        return idToName[id] || '(no name)';
     }).filter(Boolean);
 
     return utils.success(message, `Switch edited. Now fronting: **${names.join(', ') || 'nobody'}**`);
 }
-
-// Simple name cache for edit response
-const resolvedNameCache = {};
 
 async function handleCopy(message, parsed) {
     const { system } = await utils.getOrCreateUserAndSystem(message);
@@ -329,10 +328,12 @@ async function handleCopy(message, parsed) {
     // Create new shifts for current set
     targetLayer.shifts = [];
     targetLayer.fronters = [];
+    const idToName = {};
 
     for (const id of currentIds) {
         const entity = await Alter.findById(id) || await State.findById(id) || await Group.findById(id);
         if (!entity) continue;
+        idToName[id] = entity.name?.display || entity.name?.indexable || '(no name)';
         
         const type = await Alter.findById(id) ? 'alter' : (await State.findById(id) ? 'state' : 'group');
         
@@ -368,8 +369,8 @@ async function handleCopy(message, parsed) {
     await system.save();
 
     const names = targetLayer.fronters.map(f => {
-        const id = f.alterID || f.stateID || f.groupID;
-        return resolvedNameCache[id] || '(no name)';
+        const id = (f.alterID || f.stateID || f.groupID)?.toString();
+        return idToName[id] || '(no name)';
     }).filter(Boolean);
 
     if (!targetLayer.fronters.length) return utils.success(message, 'Switch-out registered.');

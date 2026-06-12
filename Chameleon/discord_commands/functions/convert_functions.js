@@ -7,6 +7,7 @@ const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const { Shift } = require('../../schemas/front');
+const utils = require('./bot_utils');
 
 const CONVERT_COLOR = '#007bd8';
 
@@ -67,10 +68,7 @@ module.exports = {
                     }
                 });
 
-                await newState.save();
-
-                if (!system.states) system.states = { IDs: [], conditions: [] };
-                system.states.IDs.push(newState._id);
+                await utils.createAndLinkEntity(newState, system, 'state');
 
                 if (alter.groupsIDs?.length > 0) {
                     await Group.updateMany(
@@ -183,10 +181,7 @@ module.exports = {
                     }
                 });
 
-                await newAlter.save();
-
-                if (!system.alters) system.alters = { IDs: [], conditions: [] };
-                system.alters.IDs.push(newAlter._id);
+                await utils.createAndLinkEntity(newAlter, system, 'alter');
 
                 if (state.groupIDs?.length > 0) {
                     await Group.updateMany(

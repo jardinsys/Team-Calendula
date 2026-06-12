@@ -5,12 +5,15 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 
-const { authMiddleware } = require('../middleware/auth');
+
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
-const { checkProxyExists } = require('../../discord_commands/functions/bot_utils');
+const Alter = require('../../schemas/alter');
+const { checkProxyExists, createAndLinkEntity } = require('../../discord_commands/functions/bot_utils');
+const { uploadMiddleware } = require('../middleware/upload');
+const { handleEntityImageUpload, handleEntityImageDelete } = require('./avatar');
 
 // ===========================================
 // GET ALL STATES
@@ -20,7 +23,7 @@ const { checkProxyExists } = require('../../discord_commands/functions/bot_utils
  * GET /api/states
  * Get all states for the current user's system
  */
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -43,7 +46,7 @@ router.get('/', authMiddleware, async (req, res) => {
  * GET /api/states/summary
  * Get states with minimal data for dropdowns/selects
  */
-router.get('/summary', authMiddleware, async (req, res) => {
+router.get('/summary', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -75,7 +78,7 @@ router.get('/summary', authMiddleware, async (req, res) => {
  * GET /api/states/:id
  * Get a single state by ID
  */
-router.get('/:id', authMiddleware, async (req, res) => {
+router.get('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -110,7 +113,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
  * Create a new state
  * Body: { name, description?, color?, avatar?, alters? }
  */
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -119,7 +122,7 @@ router.post('/', authMiddleware, async (req, res) => {
             return res.status(404).json({ error: 'Not registered' });
         }
         
-        const { name, description, color, avatar, alters, signoff } = req.body;
+        const { name, description, color, avatar, alters, groupIDs, signoff } = req.body;
         
         if (!name) {
             return res.status(400).json({ error: 'Name is required' });
@@ -135,7 +138,6 @@ router.post('/', authMiddleware, async (req, res) => {
         }
         
         const state = new State({
-            systemID: system._id,
             name: {
                 display: name,
                 ...(stIdx && { indexable: stIdx })
@@ -144,18 +146,23 @@ router.post('/', authMiddleware, async (req, res) => {
             color,
             avatar,
             alters: alters || [],
+            groupIDs: groupIDs || [],
             signoff,
+            syncWithApps: { discord: true },
             genesisDate: new Date(),
             addedAt: new Date(),
             metadata: { addedAt: new Date() }
         });
         
-        await state.save();
+        await createAndLinkEntity(state, system, 'state');
         
-        // Add to system
-        system.states = system.states || { IDs: [] };
-        system.states.IDs.push(state._id);
-        await system.save();
+        // Bidirectional alter linking
+        if (alters?.length) {
+            await Alter.updateMany(
+                { _id: { $in: alters } },
+                { $addToSet: { states: state._id.toString() } }
+            );
+        }
         
         console.log(`[States] Created state ${state._id} for system ${system._id}`);
         
@@ -175,7 +182,7 @@ router.post('/', authMiddleware, async (req, res) => {
  * Update a state
  * Body: { name?, description?, color?, avatar?, alters?, ... }
  */
-router.patch('/:id', authMiddleware, async (req, res) => {
+router.patch('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -218,12 +225,31 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         // Allowed fields for direct update
         const allowedFields = [
             'description', 'color', 'avatar', 'signoff', 'alters',
-            'groupIDs', 'proxy', 'discord', 'mask', 'caution'
+            'groupIDs', 'proxy', 'discord', 'mask', 'caution',
+            'condition'
         ];
         
         for (const field of allowedFields) {
             if (updates[field] !== undefined) {
                 state[field] = updates[field];
+            }
+        }
+
+        if (updates.name?.aliases !== undefined) {
+            state.name = state.name || {};
+            state.name.aliases = updates.name.aliases;
+        }
+        if (updates.name?.closedNameDisplay !== undefined) {
+            state.name = state.name || {};
+            state.name.closedNameDisplay = updates.name.closedNameDisplay;
+        }
+        if (updates.setting && typeof updates.setting === 'object') {
+            state.setting = state.setting || {};
+            const allowedSettings = ['default_status', 'default_battery', 'allowPing'];
+            for (const key of allowedSettings) {
+                if (updates.setting[key] !== undefined) {
+                    state.setting[key] = updates.setting[key];
+                }
             }
         }
         
@@ -237,6 +263,17 @@ router.patch('/:id', authMiddleware, async (req, res) => {
 });
 
 // ===========================================
+// STATE IMAGE UPLOADS
+// ===========================================
+
+router.post('/:id/avatar', uploadMiddleware('file'), async (req, res, next) => { try { await handleEntityImageUpload(req, res, 'state', 'avatar'); } catch (err) { next(err); } });
+router.post('/:id/banner', uploadMiddleware('file'), async (req, res, next) => { try { await handleEntityImageUpload(req, res, 'state', 'discord.image.banner'); } catch (err) { next(err); } });
+router.post('/:id/proxyAvatar', uploadMiddleware('file'), async (req, res, next) => { try { await handleEntityImageUpload(req, res, 'state', 'discord.image.proxyAvatar'); } catch (err) { next(err); } });
+router.delete('/:id/avatar', async (req, res, next) => { try { await handleEntityImageDelete(req, res, 'state', 'avatar'); } catch (err) { next(err); } });
+router.delete('/:id/banner', async (req, res, next) => { try { await handleEntityImageDelete(req, res, 'state', 'discord.image.banner'); } catch (err) { next(err); } });
+router.delete('/:id/proxyAvatar', async (req, res, next) => { try { await handleEntityImageDelete(req, res, 'state', 'discord.image.proxyAvatar'); } catch (err) { next(err); } });
+
+// ===========================================
 // DELETE STATE
 // ===========================================
 
@@ -244,7 +281,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
  * DELETE /api/states/:id
  * Delete a state
  */
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -289,7 +326,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
  * Add a proxy tag to a state
  * Body: { proxy: "text" }
  */
-router.post('/:id/proxy', authMiddleware, async (req, res) => {
+router.post('/:id/proxy', async (req, res) => {
     try {
         const state = await State.findById(req.params.id);
         if (!state) {
@@ -331,7 +368,7 @@ router.post('/:id/proxy', authMiddleware, async (req, res) => {
  * Remove a proxy tag from a state
  * Body: { proxy: "text" }
  */
-router.delete('/:id/proxy', authMiddleware, async (req, res) => {
+router.delete('/:id/proxy', async (req, res) => {
     try {
         const state = await State.findById(req.params.id);
         if (!state) {
@@ -359,7 +396,7 @@ router.delete('/:id/proxy', authMiddleware, async (req, res) => {
  * Link alters to a state
  * Body: { alterIds: ["id1", "id2"] }
  */
-router.post('/:id/alters', authMiddleware, async (req, res) => {
+router.post('/:id/alters', async (req, res) => {
     try {
         const state = await State.findById(req.params.id);
         if (!state) {
@@ -391,7 +428,7 @@ router.post('/:id/alters', authMiddleware, async (req, res) => {
  * DELETE /api/states/:id/alters/:alterId
  * Unlink an alter from a state
  */
-router.delete('/:id/alters/:alterId', authMiddleware, async (req, res) => {
+router.delete('/:id/alters/:alterId', async (req, res) => {
     try {
         const state = await State.findById(req.params.id);
         if (!state) {

@@ -1147,12 +1147,9 @@ async function handleQuickSwitchModal(interaction, session, system) {
     const now = new Date();
     const successes = [], errors = [];
 
-    // Ensure top layer exists
     if (!system.front) system.front = {};
-    if (!system.front.layers?.length) {
-        system.front.layers = [{ _id: new mongoose.Types.ObjectId(), name: 'Main', shifts: [] }];
-    }
-    system.front.layers[0].shifts = [];
+    const topLayer = { _id: new mongoose.Types.ObjectId(), name: 'Main', shifts: [] };
+    system.front.layers = [topLayer];
 
     for (const name of entityNames) {
         const { entity, type } = await findEntityByName(name, system);
@@ -1171,13 +1168,13 @@ async function handleQuickSwitchModal(interaction, session, system) {
                 caution: entity.caution ? { c_type: entity.caution.c_type, detail: entity.caution.detail } : null,
                 startTime: now,
                 endTime: null,
-                layerID: system.front.layers[0]._id,
+                layerID: topLayer._id,
                 hidden: 'n'
             }]
         });
 
         await shift.save();
-        system.front.layers[0].shifts.push(shift._id);
+        topLayer.shifts.push(shift._id);
         successes.push({ name: utils.getDisplayName(entity), type, color: entity.color });
         utils.updateRecentProxies(system, entity, type);
     }
@@ -1301,6 +1298,13 @@ async function handleRemoveModal(interaction, session, system) {
     shift.endTime = new Date();
     if (shift.statuses?.length > 0) shift.statuses[shift.statuses.length - 1].endTime = new Date();
     await shift.save();
+
+    const layer = system.front.layers.find(l => l.shifts.some(s => s.toString() === shift._id.toString()));
+    if (layer) {
+        layer.shifts = layer.shifts.filter(s => s.toString() !== shift._id.toString());
+    }
+    await system.save();
+
     utils.deleteSession(session.id);
 
     const emoji = type === 'alter' ? '🎭' : type === 'state' ? '🔀' : '📁';

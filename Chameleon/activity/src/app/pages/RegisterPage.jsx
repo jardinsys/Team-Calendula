@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react'
-import { api, DISORDER_MAP, DISORDER_DEFINITIONS, DSM_OPTIONS, ICD_OPTIONS, Icon, resolveSysTypeFromDisorder, resolveSysTypeFromExtraAnswer } from '@chameleon/shared'
+import { api, DISORDER_MAP, DISORDER_DEFINITIONS, DSM_OPTIONS, ICD_OPTIONS, Icon, resolveSysTypeFromDisorder, resolveSysTypeFromExtraAnswer, resolveSysTypeFromMultiAnswer } from '@chameleon/shared'
 
 // ═══════════════════════════════════════════
 // Step 1: Category Selection
@@ -51,29 +51,40 @@ function DisorderStep({ category, onSelect, onBack, onStartOver }) {
   const [selectedSubtype, setSelectedSubtype] = useState(null)
   const [selectedSubtype2, setSelectedSubtype2] = useState(null)
   const [extraAnswer, setExtraAnswer] = useState(null)
+  const [multiSelections, setMultiSelections] = useState([])
 
   const handleToggle = (key) => {
     setExpandedKey(expandedKey === key ? null : key)
     setSelectedSubtype(null)
     setSelectedSubtype2(null)
     setExtraAnswer(null)
+    setMultiSelections([])
   }
 
   const handleSubtypeSelect = (subtypeKey) => {
     setSelectedSubtype(subtypeKey)
     setSelectedSubtype2(null)
     setExtraAnswer(null)
+    setMultiSelections([])
   }
 
   const handleSubtype2Select = (subtypeKey) => {
     setSelectedSubtype2(subtypeKey)
     setExtraAnswer(null)
+    setMultiSelections([])
+  }
+
+  const handleMultiToggle = (index) => {
+    setMultiSelections(prev =>
+      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+    )
   }
 
   const handleSelect = (key) => {
     const mapping = DISORDER_MAP[key]
     if (mapping?.extraQuestion && extraAnswer === null) return
-    onSelect(key, extraAnswer, category)
+    if (mapping?.extraQuestionMulti && multiSelections.length < (mapping.extraQuestionMin || 1)) return
+    onSelect(key, mapping?.extraQuestionMulti ? multiSelections : extraAnswer, category)
   }
 
   // Render a selectable item (leaf node with possible extra question)
@@ -81,6 +92,7 @@ function DisorderStep({ category, onSelect, onBack, onStartOver }) {
     const mapping = DISORDER_MAP[key]
     const definition = DISORDER_DEFINITIONS[key]
     const hasExtraQ = mapping.extraQuestion
+    const hasMultiQ = mapping.extraQuestionMulti
 
     return (
       <div className="subtype-details">
@@ -108,10 +120,45 @@ function DisorderStep({ category, onSelect, onBack, onStartOver }) {
           </div>
         )}
 
+        {hasMultiQ && (
+          <div className="disorder-extra-question">
+            <p style={{ whiteSpace: 'pre-line' }}>{mapping.extraQuestionText}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+              {mapping.extraQuestionOptions.map((opt, i) => (
+                <label
+                  key={i}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer',
+                    padding: '10px 12px', borderRadius: '8px',
+                    background: multiSelections.includes(i) ? 'var(--accent-subtle, rgba(196,181,253,0.12))' : 'var(--bg-card, rgba(26,26,40,0.55))',
+                    border: `1px solid ${multiSelections.includes(i) ? 'var(--accent, #c4b5fd)' : 'var(--glass-border, rgba(255,255,255,0.07))'}`,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={multiSelections.includes(i)}
+                    onChange={() => handleMultiToggle(i)}
+                    style={{ marginTop: '2px', width: '16px', height: '16px', accentColor: 'var(--accent, #c4b5fd)' }}
+                  />
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-accent, Quicksand)', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text, #ffffff)' }}>
+                      {opt.label}
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body, Nunito)', fontSize: '0.78rem', color: 'var(--text-secondary, #9898a8)', marginTop: '2px' }}>
+                      {opt.description}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         <button
           className="btn-gradient btn-gradient-primary disorder-select-btn"
-          onClick={() => onSelect(key, extraAnswer, category)}
-          disabled={hasExtraQ && extraAnswer === null}
+          onClick={() => onSelect(key, mapping?.extraQuestionMulti ? multiSelections : extraAnswer, category)}
+          disabled={(hasExtraQ && extraAnswer === null) || (hasMultiQ && multiSelections.length < (mapping.extraQuestionMin || 1))}
         >
           Select this
         </button>
@@ -482,7 +529,7 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
 // Step 6: Who's in Front? (for new isSystem)
 // ═══════════════════════════════════════════
 
-function FirstAlterStep({ systemName, onComplete, onBack }) {
+function FirstAlterStep({ systemName, onComplete, onBack, saving }) {
   const [alterNames, setAlterNames] = useState([''])
   const [activeIndex, setActiveIndex] = useState(0)
 
@@ -507,16 +554,12 @@ function FirstAlterStep({ systemName, onComplete, onBack }) {
   }
 
   const handleComplete = () => {
-    // Filter out empty names
     const validNames = alterNames.filter(n => n.trim())
-    console.log('[Register] Alters to create:', validNames)
-    // TODO: Create alters via API and set first one as front
-    // For now, just complete onboarding
-    onComplete(systemName)
+    onComplete(systemName, validNames)
   }
 
   const handleSkip = () => {
-    onComplete(systemName)
+    onComplete(systemName, [])
   }
 
   return (
@@ -559,13 +602,14 @@ function FirstAlterStep({ systemName, onComplete, onBack }) {
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn-ghost" onClick={handleSkip} style={{ flex: 1 }}>
+        <button className="btn-ghost" onClick={handleSkip} style={{ flex: 1 }} disabled={saving}>
           Skip for now
         </button>
         <button
           className="btn-gradient btn-gradient-primary"
           onClick={handleComplete}
           style={{ flex: 2 }}
+          disabled={saving}
         >
           {alterNames.some(n => n.trim()) ? 'Create & Finish' : 'Finish Setup'}
         </button>
@@ -618,7 +662,10 @@ export function RegisterPage({ onNavigate, onRegistered, discordUser }) {
     const source = sourceCategory || category
     let sysType
 
-    if (mapping.extraQuestion && extraAns !== null) {
+    if (mapping.extraQuestionMulti && Array.isArray(extraAns)) {
+      // Multi-select (UDD)
+      sysType = resolveSysTypeFromMultiAnswer(key, extraAns)
+    } else if (mapping.extraQuestion && extraAns !== null) {
       const result = extraAns ? mapping.extraQuestionYes : mapping.extraQuestionNo
       const finalKey = result.key || key
       setDisorderKey(finalKey)
@@ -628,7 +675,8 @@ export function RegisterPage({ onNavigate, onRegistered, discordUser }) {
         dd: source === 'DSM' ? { DSM: finalKey } : { ICD: finalKey },
         isSystem: result.isSystem,
         isFragmented: result.isFragmented,
-        isDissociative: finalMapping.isDissociative || false,
+        isDissociative: result.isDissociative || finalMapping.isDissociative || false,
+        dissociativeStateName: finalMapping.dissociativeStateName || 'Dissociated',
         onboardingCompleted: true,
       }
     } else {
@@ -638,6 +686,7 @@ export function RegisterPage({ onNavigate, onRegistered, discordUser }) {
         isSystem: mapping.isSystem || false,
         isFragmented: mapping.isFragmented || false,
         isDissociative: mapping.isDissociative || false,
+        dissociativeStateName: mapping.dissociativeStateName || 'Dissociated',
         onboardingCompleted: true,
       }
     }
@@ -675,10 +724,59 @@ export function RegisterPage({ onNavigate, onRegistered, discordUser }) {
     }
   }
 
-  // Step 6 → Create (first alter done)
-  const handleFirstAlterComplete = (systemName) => {
-    // Now create the system with the name
-    handleConfirm(resolvedSysType, systemName || pendingSystemName)
+  // Step 6 → Create system, then alters and front switch
+  const handleFirstAlterComplete = async (systemName, alterNames) => {
+    setSaving(true)
+    setError(null)
+
+    try {
+      await api.createSystem({
+        name: systemName || pendingSystemName,
+        sys_type: resolvedSysType,
+      })
+
+      await createPresetLayers(resolvedSysType)
+
+      if (resolvedSysType?.isDissociative) {
+        const stateName = resolvedSysType.dissociativeStateName || 'Dissociated'
+        try {
+          await api.createState({
+            name: stateName,
+            description: `A ${stateName.toLowerCase()} state`,
+          })
+        } catch (stateErr) {
+          console.error(`[Register] Failed to create ${stateName} state:`, stateErr)
+        }
+      }
+
+      if (alterNames && alterNames.length > 0) {
+        const createdAlters = []
+        for (const name of alterNames) {
+          try {
+            const alter = await api.createAlter({ name: name.trim() })
+            if (alter?._id) createdAlters.push(alter)
+          } catch (err) {
+            console.error('[Register] Failed to create alter:', name, err)
+            setError(prev => prev ? prev + `\nFailed to create "${name.trim()}"` : `Failed to create "${name.trim()}"`)
+          }
+        }
+
+        if (createdAlters.length > 0) {
+          try {
+            await api.quickSwitch([{ id: createdAlters[0]._id, type: 'alter' }])
+          } catch (err) {
+            console.error('[Register] Failed to set front:', err)
+          }
+        }
+      }
+
+      setSaving(false)
+      onRegistered?.()
+    } catch (err) {
+      console.error('[Register] Error:', err)
+      setError(err.message || 'Failed to create profile')
+      setSaving(false)
+    }
   }
 
   // Preset layers based on sys_type
@@ -721,15 +819,16 @@ export function RegisterPage({ onNavigate, onRegistered, discordUser }) {
       // Create preset layers based on condition type
       await createPresetLayers(finalSysType)
 
-      // If dissociative, auto-create the "Dissociated" state
+      // If dissociative, auto-create the dissociative state
       if (finalSysType.isDissociative) {
+        const stateName = finalSysType.dissociativeStateName || 'Dissociated'
         try {
           await api.createState({
-            name: 'Dissociated',
-            description: 'A dissociative state',
+            name: stateName,
+            description: `A ${stateName.toLowerCase()} state`,
           })
         } catch (stateErr) {
-          console.error('[Register] Failed to create Dissociated state:', stateErr)
+          console.error(`[Register] Failed to create ${stateName} state:`, stateErr)
         }
       }
 
@@ -817,6 +916,7 @@ export function RegisterPage({ onNavigate, onRegistered, discordUser }) {
           systemName={pendingSystemName}
           onComplete={handleFirstAlterComplete}
           onBack={handleBack}
+          saving={saving}
         />
       )}
 

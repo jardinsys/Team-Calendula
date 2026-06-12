@@ -79,8 +79,8 @@ module.exports = {
 
         // Route to appropriate handler (switch pattern for consistency with alter/state/group)
         switch (subcommand) {
-            case 'show': return await handleShow(interaction, user, system); break;
-            case 'manage': return await handleManage(interaction, user, system); break;
+            case 'show': return await handleShow(interaction, user, system);
+            case 'manage': return await handleManage(interaction, user, system);
         }
     },
 
@@ -1097,7 +1097,7 @@ async function handleButtonInteraction(interaction) {
         let privacyInfo = '';
         if (currentPrivacy.length > 0) {
             for (const p of currentPrivacy) {
-                privacyInfo += `**${p.bucket}:** ${p.settings?.hidden === false ? 'Hidden' : 'Visible'}\n`;
+                privacyInfo += `**${p.bucket}:** ${p.settings?.hidden === true ? 'Hidden' : 'Visible'}\n`;
             }
         } else {
             privacyInfo = '*No custom privacy settings configured. All entities are visible by default.*';
@@ -1119,7 +1119,7 @@ async function handleButtonInteraction(interaction) {
         if (!system.setting) system.setting = {};
         if (!system.setting.privacy) system.setting.privacy = [];
 
-        // Set all buckets to visible (hidden !== false)
+        // Set all buckets to visible (hidden = false means NOT hidden = visible)
         if (system.privacyBuckets?.length > 0) {
             for (const bucket of system.privacyBuckets) {
                 let privacy = system.setting.privacy.find(p => p.bucket === bucket.name);
@@ -1127,7 +1127,7 @@ async function handleButtonInteraction(interaction) {
                     privacy = { bucket: bucket.name, settings: {} };
                     system.setting.privacy.push(privacy);
                 }
-                privacy.settings.hidden = true;
+                privacy.settings.hidden = false;
             }
         }
         await system.save();
@@ -1148,7 +1148,7 @@ async function handleButtonInteraction(interaction) {
                     privacy = { bucket: bucket.name, settings: {} };
                     system.setting.privacy.push(privacy);
                 }
-                privacy.settings.hidden = false;
+                privacy.settings.hidden = true;
             }
         }
         await system.save();

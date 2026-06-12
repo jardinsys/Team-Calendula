@@ -57,7 +57,7 @@ router.get('/discord/callback', async (req, res) => {
     // Verify state (CSRF protection)
     if (state !== req.session.oauthState) {
         console.error('State mismatch:', state, req.session.oauthState);
-        // Continue anyway for now, but log it
+        return res.redirect(`${WEBAPP_ORIGIN}/login?error=csrf_failed`);
     }
 
     try {
@@ -96,11 +96,16 @@ router.get('/discord/callback', async (req, res) => {
             // Create new user
             user = new User({
                 discordID: discordUser.id,
+                joinedAt: new Date(),
                 username: discordUser.username,
                 globalName: discordUser.global_name,
                 avatar: discordUser.avatar,
-                type: 'basic', // Default type, can be upgraded later
-                createdAt: new Date()
+                discord: {
+                    name: {
+                        display: discordUser.username,
+                        indexable: discordUser.username.toLowerCase()
+                    }
+                }
             });
             await user.save();
             console.log(`New user registered: ${discordUser.username} (${discordUser.id})`);
@@ -109,7 +114,11 @@ router.get('/discord/callback', async (req, res) => {
             user.username = discordUser.username;
             user.globalName = discordUser.global_name;
             user.avatar = discordUser.avatar;
-            user.lastLogin = new Date();
+            user.discord = user.discord || {};
+            user.discord.name = {
+                display: discordUser.username,
+                indexable: discordUser.username.toLowerCase()
+            };
             await user.save();
         }
 
@@ -224,11 +233,16 @@ router.post('/activity/token', async (req, res) => {
         if (!user) {
             user = new User({
                 discordID: discordId,
+                joinedAt: new Date(),
                 username: discordUser.username,
                 globalName: discordUser.global_name,
                 avatar: discordUser.avatar,
-                type: 'basic',
-                createdAt: new Date()
+                discord: {
+                    name: {
+                        display: discordUser.username,
+                        indexable: discordUser.username.toLowerCase()
+                    }
+                }
             });
             await user.save();
             console.log(`[Activity Auth] New user registered: ${discordUser.username} (${discordId})`);
@@ -236,7 +250,11 @@ router.post('/activity/token', async (req, res) => {
             user.username = discordUser.username;
             user.globalName = discordUser.global_name;
             user.avatar = discordUser.avatar;
-            user.lastLogin = new Date();
+            user.discord = user.discord || {};
+            user.discord.name = {
+                display: discordUser.username,
+                indexable: discordUser.username.toLowerCase()
+            };
             await user.save();
         }
 

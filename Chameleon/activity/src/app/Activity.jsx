@@ -16,6 +16,7 @@ import { ActivitiesPage } from './pages/ActivitiesPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { SwitchPage } from './pages/SwitchPage'
 import { EntityViewPage } from './pages/EntityViewPage'
+import { SettingsPanel } from '@chameleon/shared/components/SettingsPanel.jsx'
 
 function getInitialPage() {
     const params = new URLSearchParams(window.location.search)
@@ -44,6 +45,7 @@ export function Activity() {
   const [pageParams, setPageParams] = useState(getInitialPageParams)
   const [system, setSystem] = useState(null)
   const [hasSystem, setHasSystem] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     if (authStatus !== 'READY') return
@@ -104,6 +106,14 @@ export function Activity() {
   const handleNavigate = useCallback((page, params) => {
     setActivePage(page)
     setPageParams(params || null)
+  }, [])
+
+  const handleOpenSettings = useCallback(() => {
+    setShowSettings(true)
+  }, [])
+
+  const handleCloseSettings = useCallback(() => {
+    setShowSettings(false)
   }, [])
 
   if (status === 'INITIALIZING') {
@@ -169,7 +179,7 @@ export function Activity() {
           </button>
         )}
         {PageComponent ? (
-          <PageComponent system={system} onNavigate={handleNavigate} />
+          <PageComponent system={system} onNavigate={handleNavigate} onOpenSettings={handleOpenSettings} />
         ) : activePage === 'entity' ? (
           <EntityViewPage
             system={system}
@@ -196,6 +206,16 @@ export function Activity() {
           />
         )}
       </main>
+
+      {/* Settings Panel Overlay */}
+      {showSettings && (
+        <SettingsPanel
+          system={system}
+          discordUser={discordUser}
+          onClose={handleCloseSettings}
+          onNavigate={handleNavigate}
+        />
+      )}
     </div>
   )
 }

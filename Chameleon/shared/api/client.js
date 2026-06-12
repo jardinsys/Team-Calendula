@@ -226,6 +226,20 @@ class ApiClient {
         })
     }
 
+    async addAlterProxy(id, proxy) {
+        return this.request(`/alters/${id}/proxy`, {
+            method: 'POST',
+            body: JSON.stringify({ proxy })
+        })
+    }
+
+    async removeAlterProxy(id, proxy) {
+        return this.request(`/alters/${id}/proxy`, {
+            method: 'DELETE',
+            body: JSON.stringify({ proxy })
+        })
+    }
+
     // ═══════════════════════════════════════════
     // STATES
     // ═══════════════════════════════════════════
@@ -262,6 +276,20 @@ class ApiClient {
         })
     }
 
+    async addStateProxy(id, proxy) {
+        return this.request(`/states/${id}/proxy`, {
+            method: 'POST',
+            body: JSON.stringify({ proxy })
+        })
+    }
+
+    async removeStateProxy(id, proxy) {
+        return this.request(`/states/${id}/proxy`, {
+            method: 'DELETE',
+            body: JSON.stringify({ proxy })
+        })
+    }
+
     // ═══════════════════════════════════════════
     // GROUPS
     // ═══════════════════════════════════════════
@@ -295,6 +323,20 @@ class ApiClient {
     async deleteGroup(id) {
         return this.request(`/groups/${id}`, {
             method: 'DELETE'
+        })
+    }
+
+    async addGroupProxy(id, proxy) {
+        return this.request(`/groups/${id}/proxy`, {
+            method: 'POST',
+            body: JSON.stringify({ proxy })
+        })
+    }
+
+    async removeGroupProxy(id, proxy) {
+        return this.request(`/groups/${id}/proxy`, {
+            method: 'DELETE',
+            body: JSON.stringify({ proxy })
         })
     }
 
@@ -383,10 +425,10 @@ class ApiClient {
         })
     }
 
-    async updateShiftStatus(shiftId, status) {
+    async updateShiftStatus(shiftId, data) {
         return this.request(`/front/shift/${shiftId}/status`, {
             method: 'PATCH',
-            body: JSON.stringify({ status })
+            body: JSON.stringify(data)
         })
     }
 
@@ -464,6 +506,22 @@ class ApiClient {
         return this.request('/friends/blocked')
     }
 
+    async getFriendRequests() {
+        return this.request('/friends/requests')
+    }
+
+    async acceptFriendRequest(index) {
+        return this.request(`/friends/requests/${index}/accept`, {
+            method: 'POST'
+        })
+    }
+
+    async declineFriendRequest(index) {
+        return this.request(`/friends/requests/${index}/decline`, {
+            method: 'POST'
+        })
+    }
+
     // ═══════════════════════════════════════════
     // USER ACCOUNT
     // ═══════════════════════════════════════════
@@ -480,6 +538,90 @@ class ApiClient {
             method: 'DELETE',
             body: JSON.stringify({ confirm: true, systemName })
         })
+    }
+
+    async updateUserSettings(data) {
+        return this.request('/user/settings', {
+            method: 'PATCH',
+            body: JSON.stringify(data)
+        })
+    }
+
+    // ═══════════════════════════════════════════
+    // IMAGE UPLOADS
+    // ═══════════════════════════════════════════
+
+    async uploadImage(endpoint, formData) {
+        const headers = {}
+        if (this.token) {
+            headers['Authorization'] = `Bearer ${this.token}`
+        }
+        const response = await fetch(`${this.baseUrl}${endpoint}`, {
+            method: 'POST',
+            headers,
+            body: formData
+        })
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Upload failed' }))
+            throw new Error(error.error || 'Upload failed')
+        }
+        return response.json()
+    }
+
+    async removeImage(endpoint) {
+        return this.request(endpoint, {
+            method: 'DELETE'
+        })
+    }
+
+    async uploadAvatar(type, id, file) {
+        const formData = new FormData()
+        formData.append('file', file)
+        return this.uploadImage(`/${type}s/${id}/avatar`, formData)
+    }
+
+    async uploadBanner(type, id, file) {
+        const formData = new FormData()
+        formData.append('file', file)
+        return this.uploadImage(`/${type}s/${id}/banner`, formData)
+    }
+
+    async uploadProxyAvatar(type, id, file) {
+        const formData = new FormData()
+        formData.append('file', file)
+        return this.uploadImage(`/${type}s/${id}/proxyAvatar`, formData)
+    }
+
+    async removeAvatar(type, id) {
+        return this.request(`/${type}s/${id}/avatar`, { method: 'DELETE' })
+    }
+
+    async removeBanner(type, id) {
+        return this.request(`/${type}s/${id}/banner`, { method: 'DELETE' })
+    }
+
+    async removeProxyAvatar(type, id) {
+        return this.request(`/${type}s/${id}/proxyAvatar`, { method: 'DELETE' })
+    }
+
+    async uploadSystemAvatar(file) {
+        const formData = new FormData()
+        formData.append('file', file)
+        return this.uploadImage('/system/avatar', formData)
+    }
+
+    async uploadSystemBanner(file) {
+        const formData = new FormData()
+        formData.append('file', file)
+        return this.uploadImage('/system/banner', formData)
+    }
+
+    async removeSystemAvatar() {
+        return this.request('/system/avatar', { method: 'DELETE' })
+    }
+
+    async removeSystemBanner() {
+        return this.request('/system/banner', { method: 'DELETE' })
     }
 
     // ═══════════════════════════════════════════

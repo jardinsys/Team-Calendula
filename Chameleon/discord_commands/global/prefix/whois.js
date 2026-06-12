@@ -14,6 +14,7 @@ const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const redis = require('../../../redis');
+const proxyMessageHandler = require('../proxy-message');
 const utils = require('../../functions/bot_utils');
 
 const { getSystemTerm, getAlterTerm } = utils;
@@ -80,6 +81,17 @@ module.exports = {
             entityType = 'group';
         }
 
+        // Privacy checks
+        if (senderUser && utils.isBlocked(senderUser, message.author.id, null)) {
+            return utils.error(message, 'This user\'s information is not available to you.');
+        }
+
+        const isOwner = msgRecord.discord_user_id === message.author.id;
+        const privacyBucket = utils.getPrivacyBucket(system, message.author.id, null);
+        const isMasked = entity && system ? proxyMessageHandler.shouldMask(entity, system, message.guildId) : false;
+        const closedCharAllowed = await utils.checkClosedCharAllowed(message.guild);
+        const showEntity = entity ? utils.shouldShowEntity(entity, privacyBucket, isOwner) : true;
+
         // Build the response embed
         const embed = new EmbedBuilder()
             .setColor(entity?.color || system?.color || utils.ENTITY_COLORS.info)
@@ -92,31 +104,61 @@ module.exports = {
             inline: true
         });
 
-        // System info (if available and public)
+        // System info
         if (system) {
-            const systemName = system.name?.display || system.name?.indexable || message.author?.displayName || 'Unknown';
-            embed.addFields({
-                name: `🎡 ${getSystemTerm(system)}`,
-                value: systemName,
-                inline: true
-            });
+            if (showEntity || isOwner) {
+                const systemName = utils.getDisplayName(system, closedCharAllowed);
+                embed.addFields({
+                    name: `🎡 ${getSystemTerm(system)}`,
+                    value: systemName,
+                    inline: true
+                });
+            }
         }
 
         // Entity info
         if (entity) {
-            const entityName = entity.name?.display || entity.name?.indexable || message.author?.displayName || 'Unknown';
-            const synonym = entityType === 'alter' && system
-                ? getAlterTerm(system).charAt(0).toUpperCase() + getAlterTerm(system).slice(1)
-                : entityType.charAt(0).toUpperCase() + entityType.slice(1);
-            
-            embed.addFields({
-                name: `🎭 ${synonym}`,
-                value: entityName,
-                inline: true
-            });
+            if (showEntity) {
+                const entityName = utils.getDisplayName(entity, closedCharAllowed);
+                const entityIndexable = entity.name?.indexable || '';
+                const synonym = entityType === 'alter' && system
+                    ? getAlterTerm(system).charAt(0).toUpperCase() + getAlterTerm(system).slice(1)
+                    : entityType.charAt(0).toUpperCase() + entityType.slice(1);
 
-            // Add avatar if available
-            if (entity.avatar?.url) embed.setThumbnail(entity.avatar.url);
+                let entityValue = isMasked || !entityIndexable
+                    ? `**${entityName}**`
+                    : `**${entityName}**\n(${entityIndexable})`;
+
+                embed.addFields({
+                    name: `🎭 ${synonym}`,
+                    value: entityValue,
+                    inline: true
+                });
+
+                // Proxy tag only shown when entity is visible
+                if (msgRecord.proxy_matched) {
+                    embed.addFields({
+                        name: '💬 Proxy Tag',
+                        value: `\`${msgRecord.proxy_matched}\``,
+                        inline: true
+                    });
+                }
+
+                // Avatar resolution
+                const session = { mode: null, syncWithDiscord: entity.syncWithApps?.discord, serverId: message.guildId };
+                const avatarUrl = utils.resolveProxyAvatarUrl(entity, session);
+                if (avatarUrl) embed.setThumbnail(avatarUrl);
+            } else {
+                // Stranger — show entity type only, no name
+                const synonym = entityType === 'alter' && system
+                    ? getAlterTerm(system).charAt(0).toUpperCase() + getAlterTerm(system).slice(1)
+                    : entityType.charAt(0).toUpperCase() + entityType.slice(1);
+                embed.addFields({
+                    name: `🎭 ${synonym}`,
+                    value: '*Hidden by privacy settings*',
+                    inline: true
+                });
+            }
         }
 
         // Message details
@@ -130,16 +172,7 @@ module.exports = {
             inline: false
         });
 
-        // Proxy tag used (if recorded)
-        if (msgRecord.proxy_matched) {
-            embed.addFields({
-                name: '💬 Proxy Tag',
-                value: `\`${msgRecord.proxy_matched}\``,
-                inline: true
-            });
-        }
-
-        embed.setFooter({ text: 'Systemiser Proxy Lookup' });
+        embed.setFooter({ text: `Proxy type: ${entityType}${isMasked ? ' • Masked: Yes' : ''}` });
 
         return message.reply({ embeds: [embed] });
     }

@@ -54,4 +54,44 @@ function generatePreview(content, length = PREVIEW_LENGTH) {
     return content.slice(0, length) + '...';
 }
 
-module.exports = { uploadNoteContent, deleteNoteContent, generatePreview };
+async function uploadMediaToR2(buffer, filename, mimeType, userId, entityType, field) {
+    const ext = filename.split('.').pop() || 'bin';
+    const timestamp = Date.now();
+    const r2Key = `media/${entityType}/${userId}/${field}_${timestamp}.${ext}`;
+
+    const command = new PutObjectCommand({
+        Bucket: config.r2.system.app.bucketName,
+        Key: r2Key,
+        Body: buffer,
+        ContentType: mimeType,
+    });
+
+    await sysR2.send(command);
+
+    const publicUrl = `${config.r2.system.app.publicURL}/${r2Key}`;
+
+    return {
+        r2Key,
+        bucket: 'app',
+        url: publicUrl,
+        filename,
+        mimeType,
+        size: buffer.length,
+        uploadedAt: new Date()
+    };
+}
+
+async function deleteMediaFromR2(r2Key) {
+    if (!r2Key) return;
+    try {
+        const command = new DeleteObjectCommand({
+            Bucket: config.r2.system.app.bucketName,
+            Key: r2Key,
+        });
+        await sysR2.send(command);
+    } catch (err) {
+        console.error('[R2] Error deleting media:', err);
+    }
+}
+
+module.exports = { uploadNoteContent, deleteNoteContent, generatePreview, uploadMediaToR2, deleteMediaFromR2 };

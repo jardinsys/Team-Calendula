@@ -59,8 +59,8 @@ module.exports = {
         if (isNew) return await utils.handleNewUserFlow(interaction, 'profile');
 
         switch (subcommand) {
-            case 'show': return await handleShow(interaction, user, system); break;
-            case 'manage': return await handleManage(interaction, user, system); break;
+            case 'show': return await handleShow(interaction, user, system);
+            case 'manage': return await handleManage(interaction, user, system);
         }
     },
 
@@ -253,8 +253,8 @@ async function handleManage(interaction, user, system) {
     const action = interaction.options.getString('action');
 
     switch (action) {
-        case 'edit': return await handleEdit(interaction, user, system); break;
-        case 'settings': return await handleSettings(interaction, user, system); break;
+        case 'edit': return await handleEdit(interaction, user, system);
+        case 'settings': return await handleSettings(interaction, user, system);
     }
 }
 
@@ -336,8 +336,8 @@ async function handleButtonInteraction(interaction) {
         for (const bucket of system.privacyBuckets) {
             const privacy = system.setting?.privacy?.find(p => p.bucket === bucket.name);
             let status = 'Default (visible)';
-            if (privacy?.settings?.hidden === false) status = '❌ Hidden';
-            else if (privacy?.settings?.hidden === true) status = '✅ Visible';
+            if (privacy?.settings?.hidden === true) status = '❌ Hidden';
+            else if (privacy?.settings?.hidden === false) status = '✅ Visible';
             embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
         }
 
@@ -357,7 +357,7 @@ async function handleButtonInteraction(interaction) {
 
         const bucketOptions = system.privacyBuckets.map(b => {
             const privacy = system.setting?.privacy?.find(p => p.bucket === b.name);
-            const isHidden = privacy?.settings?.hidden === false;
+            const isHidden = privacy?.settings?.hidden === true;
             return new StringSelectMenuOptionBuilder()
                 .setLabel(`${b.name} (${isHidden ? 'Hidden' : 'Visible'})`)
                 .setValue(b.name)

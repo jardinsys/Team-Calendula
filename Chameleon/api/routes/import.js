@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware } = require('../middleware/auth');
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 
@@ -24,7 +23,7 @@ const {
 } = importFunctions;
 
 // POST /api/import — Import from external source
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const { source, tokenOrId, options = {}, fileData } = req.body;
 
@@ -121,7 +120,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // POST /api/import/preview — Preview import data without writing
-router.post('/preview', authMiddleware, async (req, res) => {
+router.post('/preview', async (req, res) => {
     try {
         const { source, tokenOrId, fileData } = req.body;
 
@@ -189,7 +188,7 @@ router.post('/preview', authMiddleware, async (req, res) => {
 });
 
 // POST /api/import/stream — Import with SSE progress streaming
-router.post('/stream', authMiddleware, async (req, res) => {
+router.post('/stream', async (req, res) => {
     try {
         const { source, tokenOrId, options = {}, fileData } = req.body;
 

@@ -95,15 +95,20 @@ async function handleProxyMessage(message, client) {
     } catch (error) {
         console.error('Proxy message error:', error);
         
-        // Try to notify user of error in ephemeral-like way
+        // Try to notify user of error via DM, fall back to public auto-delete
         try {
-            const errorMsg = await message.channel.send({
-                content: `❌ <@${message.author.id}> Proxy error: ${getErrorMessage(error)}`
-            });
-            // Delete error message after 10 seconds
-            setTimeout(() => errorMsg.delete().catch(() => {}), 10000);
-        } catch (e) {
-            // Couldn't send error message
+            const errorText = `❌ Proxy error: ${getErrorMessage(error)}`;
+            await message.author.send({ content: errorText });
+        } catch (dmError) {
+            // DM failed (DMs closed), send public message that auto-deletes
+            try {
+                const errorMsg = await message.channel.send({
+                    content: `❌ <@${message.author.id}> Proxy error: ${getErrorMessage(error)}`
+                });
+                setTimeout(() => errorMsg.delete().catch(() => {}), 10000);
+            } catch (e) {
+                // Couldn't send error message at all
+            }
         }
     }
 }
@@ -598,7 +603,7 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
     await redis.set(`msg:${webhookMessage.id}`, JSON.stringify(cacheData), 'EX', 7 * 24 * 60 * 60);
 
     // Track user's last message per channel for auto-detect in /message commands
-    await redis.set(`user_msgs:${originalMessage.author.id}:${originalMessage.channelId}`, webhookMessage.id);
+    await redis.set(`user_msgs:${originalMessage.author.id}:${originalMessage.channelId}`, webhookMessage.id, 'EX', 30 * 24 * 60 * 60);
 
     // Queue for batch MongoDB write
     queueMessageWrite(cacheData);
@@ -655,7 +660,9 @@ async function getProxyDisplayInfoCached(entity, type, system, guild, closedChar
     const result = getProxyDisplayInfo(entity, type, system, guild, closedCharAllowed, activeDisplay);
     
     // Cache for 30 days
-    redis.set(cacheKey, JSON.stringify(result), 'EX', 30 * 24 * 60 * 60).catch(() => {});
+    redis.set(cacheKey, JSON.stringify(result), 'EX', 30 * 24 * 60 * 60).catch(err => {
+        console.error('[Redis] Display cache write error:', err.message);
+    });
     
     return result;
 }
@@ -666,12 +673,19 @@ async function getProxyDisplayInfoCached(entity, type, system, guild, closedChar
  */
 async function invalidateDisplayCache(entityId) {
     try {
-        const keys = await redis.keys(`display:${entityId}:*`);
-        for (const key of keys) {
-            await redis.del(key);
-        }
-        if (keys.length > 0) {
-            console.log(`[Redis] Invalidated ${keys.length} display cache keys for entity ${entityId}`);
+        const pattern = `display:${entityId}:*`;
+        let cursor = '0';
+        let totalDeleted = 0;
+        do {
+            const [newCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+            cursor = newCursor;
+            for (const key of keys) {
+                await redis.del(key);
+            }
+            totalDeleted += keys.length;
+        } while (cursor !== '0');
+        if (totalDeleted > 0) {
+            console.log(`[Redis] Invalidated ${totalDeleted} display cache keys for entity ${entityId}`);
         }
     } catch (err) {
         console.error('[Redis] Cache invalidation error:', err.message);
@@ -1209,6 +1223,7 @@ async function reconcileOnStartup() {
     try {
         console.log('[Redis] Checking for unflushed messages...');
         let reconciled = 0;
+        const pendingMessages = [];
         
         // Use SCAN instead of KEYS for production safety
         let cursor = '0';
@@ -1225,20 +1240,48 @@ async function reconcileOnStartup() {
                 
                 // If no _id, it was never flushed to MongoDB
                 if (!data._id) {
+                    pendingMessages.push({ key, data });
+                }
+            }
+        } while (cursor !== '0');
+        
+        if (pendingMessages.length === 0) {
+            console.log('[Redis] No unflushed messages found');
+            return;
+        }
+        
+        // Batch insert for efficiency
+        try {
+            const docs = pendingMessages.map(m => m.data);
+            const inserted = await Message.insertMany(docs, { ordered: false });
+            reconciled = inserted.length;
+            // Update Redis cache with _id
+            for (let i = 0; i < pendingMessages.length; i++) {
+                const { key, data } = pendingMessages[i];
+                if (inserted[i]?._id) {
+                    data._id = inserted[i]._id.toString();
+                    await redis.set(key, JSON.stringify(data), 'KEEPTTL');
+                }
+            }
+        } catch (err) {
+            // Bulk write may partially fail (duplicates) — fall back to individual creates
+            if (err.code === 11000 || err.name === 'BulkWriteError') {
+                for (const { key, data } of pendingMessages) {
                     try {
                         const result = await Message.create(data);
                         data._id = result._id.toString();
                         await redis.set(key, JSON.stringify(data), 'KEEPTTL');
                         reconciled++;
-                    } catch (err) {
-                        // Skip duplicates (already in MongoDB)
-                        if (err.code !== 11000) {
-                            console.error(`[Redis] Reconciliation error for ${key}:`, err.message);
+                    } catch (innerErr) {
+                        if (innerErr.code !== 11000) {
+                            console.error(`[Redis] Reconciliation error for ${key}:`, innerErr.message);
                         }
                     }
                 }
+            } else {
+                console.error('[Redis] Batch reconciliation error:', err.message);
             }
-        } while (cursor !== '0');
+        }
         
         if (reconciled > 0) {
             console.log(`[Redis] Reconciled ${reconciled} unflushed messages to MongoDB`);

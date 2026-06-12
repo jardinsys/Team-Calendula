@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import api from '../api/client.js'
 import { Icon } from '../icons.jsx'
+import ImageUpload from './ImageUpload.jsx'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -14,6 +15,21 @@ function EntityDetailModal({ entity, type = 'alter', typeLabel, onClose, onUpdat
     const [error, setError] = useState(null)
     const [confirmDelete, setConfirmDelete] = useState(false)
     const [deleting, setDeleting] = useState(false)
+    const [newProxy, setNewProxy] = useState('')
+    const [proxyError, setProxyError] = useState(null)
+    const [proxySaving, setProxySaving] = useState(false)
+
+    const refreshEntity = async () => {
+        try {
+            let data
+            if (type === 'alter') data = await api.getAlter(entity._id, true)
+            else if (type === 'group') data = await api.getGroup(entity._id, true)
+            else data = await api.getState(entity._id)
+            setFullEntity(data)
+        } catch (err) {
+            // keep current data
+        }
+    }
 
     useEffect(() => {
         let cancelled = false
@@ -60,6 +76,39 @@ function EntityDetailModal({ entity, type = 'alter', typeLabel, onClose, onUpdat
         }
     }
 
+    const handleAddProxy = async () => {
+        const pattern = newProxy.trim()
+        if (!pattern) return
+        setProxySaving(true)
+        setProxyError(null)
+        try {
+            if (type === 'alter') await api.addAlterProxy(entity._id, pattern)
+            else if (type === 'state') await api.addStateProxy(entity._id, pattern)
+            else if (type === 'group') await api.addGroupProxy(entity._id, pattern)
+            setNewProxy('')
+            await refreshEntity()
+        } catch (err) {
+            setProxyError(err.message)
+        } finally {
+            setProxySaving(false)
+        }
+    }
+
+    const handleRemoveProxy = async (pattern) => {
+        setProxySaving(true)
+        setProxyError(null)
+        try {
+            if (type === 'alter') await api.removeAlterProxy(entity._id, pattern)
+            else if (type === 'state') await api.removeStateProxy(entity._id, pattern)
+            else if (type === 'group') await api.removeGroupProxy(entity._id, pattern)
+            await refreshEntity()
+        } catch (err) {
+            setProxyError(err.message)
+        } finally {
+            setProxySaving(false)
+        }
+    }
+
     if (loading) {
         return (
             <div className="modal-overlay" onClick={handleBackdropClick}>
@@ -83,6 +132,30 @@ function EntityDetailModal({ entity, type = 'alter', typeLabel, onClose, onUpdat
                 </div>
             </div>
         )
+    }
+
+    const handleAvatarUpload = async (result) => {
+        if (result && typeof result === 'object' && result._id) {
+            setFullEntity(result)
+            onUpdated?.(result, type)
+        } else {
+            await refreshEntity()
+            onUpdated?.(null, type)
+        }
+    }
+
+    const handleAvatarRemove = async () => {
+        try {
+            const result = await api.removeAvatar(type, fullEntity._id)
+            if (result?._id) {
+                setFullEntity(result)
+            } else {
+                await refreshEntity()
+            }
+            onUpdated?.(null, type)
+        } catch (err) {
+            setError(err.message)
+        }
     }
 
     const e = fullEntity || entity
@@ -132,13 +205,16 @@ function EntityDetailModal({ entity, type = 'alter', typeLabel, onClose, onUpdat
                 </div>
 
                 <div className="entity-detail-header">
-                    {avatar ? (
-                        <img src={avatar} alt="" className="entity-detail-avatar" />
-                    ) : (
-                        <div className="entity-detail-avatar entity-detail-avatar--fallback" style={{ backgroundColor: color }}>
-                            {name.charAt(0).toUpperCase()}
-                        </div>
-                    )}
+                    <ImageUpload
+                        currentImage={avatar}
+                        onUpload={handleAvatarUpload}
+                        onRemove={handleAvatarRemove}
+                        label="Avatar"
+                        size="lg"
+                        type={type}
+                        entityId={fullEntity?._id}
+                        field="avatar"
+                    />
                     <div>
                         <h2 className="modal-title" style={{ color }}>{name}</h2>
                         {pronouns && <div className="entity-detail-pronouns">{pronouns}</div>}
@@ -168,16 +244,88 @@ function EntityDetailModal({ entity, type = 'alter', typeLabel, onClose, onUpdat
                         </div>
                     )}
 
-                    {e.proxy?.length > 0 && (
+                    {e.name?.aliases?.length > 0 && (
                         <div className="entity-detail-section">
-                            <label className="entity-detail-label">Proxy patterns</label>
+                            <label className="entity-detail-label">Aliases</label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                {e.proxy.map(p => (
-                                    <span key={p} className="tag-pill">{p}</span>
+                                {e.name.aliases.map(a => (
+                                    <span key={a} className="tag-pill">{a}</span>
                                 ))}
                             </div>
                         </div>
                     )}
+
+                    {e.caution && (e.caution.c_type || e.caution.detail) && (
+                        <div className="entity-detail-section">
+                            <label className="entity-detail-label" style={{ color: 'var(--color-warning)' }}>Caution</label>
+                            {e.caution.c_type && <p style={{ fontWeight: 600 }}>{e.caution.c_type}</p>}
+                            {e.caution.detail && <p>{e.caution.detail}</p>}
+                        </div>
+                    )}
+
+                    {e.condition && (
+                        <div className="entity-detail-section">
+                            <label className="entity-detail-label">Condition</label>
+                            <p style={{ textTransform: 'capitalize' }}>{e.condition}</p>
+                        </div>
+                    )}
+
+                    {e.setting?.default_status && (
+                        <div className="entity-detail-section">
+                            <label className="entity-detail-label">Default status</label>
+                            <p>{e.setting.default_status}</p>
+                        </div>
+                    )}
+
+                    {e.setting?.default_battery != null && (
+                        <div className="entity-detail-section">
+                            <label className="entity-detail-label">Default battery</label>
+                            <p>{e.setting.default_battery}%</p>
+                        </div>
+                    )}
+
+                    <div className="entity-detail-section">
+                        <label className="entity-detail-label">Proxy patterns</label>
+                        {(e.proxy?.length > 0 || true) && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {e.proxy?.length > 0 ? e.proxy.map(p => (
+                                    <div key={p} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span className="tag-pill" style={{ flex: 1 }}>{p}</span>
+                                        <button
+                                            className="btn-icon"
+                                            style={{ color: 'var(--color-error)', minWidth: 'auto', padding: '2px 6px' }}
+                                            onClick={() => handleRemoveProxy(p)}
+                                            disabled={proxySaving}
+                                            title="Remove pattern"
+                                        >×</button>
+                                    </div>
+                                )) : (
+                                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No proxy patterns set</p>
+                                )}
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                                    <input
+                                        className="text-input"
+                                        type="text"
+                                        value={newProxy}
+                                        onChange={e => { setNewProxy(e.target.value); setProxyError(null) }}
+                                        placeholder='e.g. a:text'
+                                        disabled={proxySaving}
+                                        style={{ flex: 1 }}
+                                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddProxy() } }}
+                                    />
+                                    <button
+                                        className="btn btn-secondary"
+                                        onClick={handleAddProxy}
+                                        disabled={proxySaving || !newProxy.trim()}
+                                        style={{ whiteSpace: 'nowrap' }}
+                                    >Add</button>
+                                </div>
+                                {proxyError && (
+                                    <p style={{ fontSize: '0.7rem', color: 'var(--color-error)', marginTop: '2px' }}>{proxyError}</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
 
                     {type === 'alter' && e.states?.length > 0 && (
                         <div className="entity-detail-section">

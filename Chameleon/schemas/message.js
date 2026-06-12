@@ -20,5 +20,7 @@ const messageSchema = new mongoose.Schema({
     }]
 }, { timestamps: true });
 
+messageSchema.index({ discord_user_id: 1, discord_channel_id: 1 });
+
 const Message = sysDB.model('Message', messageSchema);
 module.exports = Message;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, EntityCardList, EntityFormModal, FrontDisplay, Icon, getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm, isFragmentedUser, isDissociativeUser } from '@chameleon/shared'
+import { api, EntityCardList, EntityFormModal, FrontDisplay, Icon, getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm, isFragmentedUser, isDissociativeUser, ImageUpload } from '@chameleon/shared'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -8,7 +8,7 @@ function getDisplayName(entity, fallbackName) {
     return entity.name?.display || entity.name?.indexable || fallbackName || 'Unknown'
 }
 
-export function SystemPage({ system: systemProp, onNavigate }) {
+export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
     const { session } = useDiscordSdk()
     const [subPage, setSubPage] = useState(null)
     const [system, setSystem] = useState(systemProp)
@@ -47,6 +47,11 @@ export function SystemPage({ system: systemProp, onNavigate }) {
     useEffect(() => { fetchAll() }, [fetchAll])
 
     const handleEntityCreated = () => { fetchAll(); setShowCreateEntity(null) }
+
+    const handleFronterEdit = useCallback(async (shiftId, data) => {
+        await api.updateShiftStatus(shiftId, data)
+        await fetchAll()
+    }, [fetchAll])
 
     const handleEntityClick = (entity, type) => {
         onNavigate('entity', { entityType: type, entityId: entity._id })
@@ -201,7 +206,7 @@ export function SystemPage({ system: systemProp, onNavigate }) {
                     ← Back
                 </button>
                 <h2 className="section-title" style={{ marginBottom: '16px' }}>Current Front</h2>
-                <FrontDisplay frontData={frontData} isOwner={true} />
+                <FrontDisplay frontData={frontData} isOwner={true} onFronterEdit={handleFronterEdit} />
                 {onNavigate && (
                     <button
                         className="btn btn-primary"
@@ -228,8 +233,16 @@ export function SystemPage({ system: systemProp, onNavigate }) {
 
     return (
         <div>
-            <header className="page-header">
+            <header className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <h1>{systemLabel}</h1>
+                <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={onOpenSettings}
+                    title="Settings"
+                    style={{ padding: '6px', minWidth: 'auto' }}
+                >
+                    <Icon name="settings" size={16} />
+                </button>
             </header>
 
             <div className="system-overview">
@@ -250,7 +263,7 @@ export function SystemPage({ system: systemProp, onNavigate }) {
                 </div>
             </div>
 
-            <FrontDisplay frontData={frontData} compact={true} isOwner={true} />
+            <FrontDisplay frontData={frontData} compact={true} isOwner={true} onFronterEdit={handleFronterEdit} />
 
             <div className="subpage-nav">
                 <button className="subpage-btn" onClick={() => setSubPage('front')}>
@@ -333,11 +346,67 @@ function EditSystemSubPage({ system, onSaved }) {
         }
     }
 
+    const handleAvatarChange = async (file) => {
+        try {
+            await api.uploadSystemAvatar(file)
+            onSaved?.()
+        } catch (err) {
+            setError(err.message)
+        }
+    }
+
+    const handleBannerChange = async (file) => {
+        try {
+            await api.uploadSystemBanner(file)
+            onSaved?.()
+        } catch (err) {
+            setError(err.message)
+        }
+    }
+
+    const handleAvatarRemove = async () => {
+        try {
+            await api.removeSystemAvatar()
+            onSaved?.()
+        } catch (err) {
+            setError(err.message)
+        }
+    }
+
+    const handleBannerRemove = async () => {
+        try {
+            await api.removeSystemBanner()
+            onSaved?.()
+        } catch (err) {
+            setError(err.message)
+        }
+    }
+
     const systemLabel = getSystemTerm(system, { context: 'activity' })
+    const currentAvatar = system?.avatar?.url || system?.avatar
+    const currentBanner = system?.theme?.background?.media?.url
 
     return (
         <div>
             <h2 className="section-title" style={{ marginBottom: '16px' }}>Edit {systemLabel}</h2>
+
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '16px' }}>
+                <ImageUpload
+                    currentImage={currentAvatar}
+                    onUpload={handleAvatarChange}
+                    onRemove={handleAvatarRemove}
+                    label="Avatar"
+                    size="lg"
+                />
+                <ImageUpload
+                    currentImage={currentBanner}
+                    onUpload={handleBannerChange}
+                    onRemove={handleBannerRemove}
+                    label="Banner"
+                    size="lg"
+                />
+            </div>
+
             <form onSubmit={handleSave}>
                 <div className="form-group">
                     <label>{systemLabel} name</label>

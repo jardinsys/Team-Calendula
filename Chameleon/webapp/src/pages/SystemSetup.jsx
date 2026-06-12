@@ -13,26 +13,48 @@ const { Icon } = require('@chameleon/shared');
 // ═══════════════════════════════════════════
 
 const DISORDER_MAP = {
-    'DID':           { fullName: 'Dissociative Identity Disorder', source: 'DSM', isSystem: true, isFragmented: false },
+    // DSM-5
+    'DID':           { fullName: 'Dissociative Identity Disorder', source: 'DSM', isSystem: true, isFragmented: true, isDissociative: true },
     'OSDD-1A':       { fullName: 'Other Specified Dissociative Disorder, Type 1A', source: 'DSM', extraQuestion: true,
-                       extraQuestionText: 'Do you experience distinct identity states (alters)?',
-                       extraQuestionYes: { isSystem: true, isFragmented: false },
-                       extraQuestionNo:  { isSystem: false, isFragmented: true } },
-    'OSDD-1B':       { fullName: 'Other Specified Dissociative Disorder, Type 1B', source: 'DSM', isSystem: true, isFragmented: false },
-    'OSDD-2':        { fullName: 'Other Specified Dissociative Disorder, Type 2', source: 'DSM', isSystem: false, isFragmented: true },
-    'OSDD-3':        { fullName: 'Other Specified Dissociative Disorder, Type 3', source: 'DSM', isSystem: false, isFragmented: true },
+                       extraQuestionText: 'How do you experience your identity states or parts?',
+                       extraQuestionYesLabel: 'They are distinct alters',
+                       extraQuestionNoLabel: 'They are just fragmented states',
+                       extraQuestionYes: { isSystem: true, isFragmented: true, isDissociative: true },
+                       extraQuestionNo:  { isSystem: false, isFragmented: true, isDissociative: true } },
+    'OSDD-1B':       { fullName: 'Other Specified Dissociative Disorder, Type 1B', source: 'DSM', isSystem: true, isFragmented: true, isDissociative: true },
+    'OSDD-2':        { fullName: 'Other Specified Dissociative Disorder, Type 2', source: 'DSM', isSystem: false, isFragmented: true, isDissociative: true },
+    'OSDD-3':        { fullName: 'Other Specified Dissociative Disorder, Type 3', source: 'DSM', isSystem: false, isFragmented: true, isDissociative: true },
     'OSDD-4':        { fullName: 'Other Specified Dissociative Disorder, Type 4', source: 'DSM', isSystem: false, isFragmented: true },
-    'Amnesia':        { fullName: 'Dissociative Amnesia', source: 'DSM', isSystem: false, isFragmented: false },
-    'Dereal/Depers': { fullName: 'Derealization/Depersonalization Disorder', source: 'DSM', isSystem: false, isFragmented: false, isDissociative: true },
-    'UDD':           { fullName: 'Unspecified Dissociative Disorder', source: 'DSM', isSystem: false, isFragmented: false },
-    'P-DID':         { fullName: 'Partial Dissociative Identity Disorder', source: 'ICD', isSystem: true, isFragmented: false },
+    'Amnesia':        { fullName: 'Dissociative Amnesia', source: 'DSM', extraQuestion: true,
+                       extraQuestionText: 'Do you have "with Fugue" subtype?\nDoes your memory loss include episodes of wandering or traveling to unfamiliar places?',
+                       extraQuestionYesLabel: 'Yes (Fugue)',
+                       extraQuestionNoLabel: 'No',
+                       extraQuestionYes: { key: 'Amnesia-Fugue', isSystem: false, isFragmented: true },
+                       extraQuestionNo:  { key: 'Amnesia', isSystem: false, isFragmented: false } },
+    'Amnesia-Fugue':  { fullName: 'Dissociative Amnesia with Fugue', source: 'DSM', isSystem: false, isFragmented: true, isDissociative: true, dissociativeStateName: 'Fugue' },
+    'Dereal/Depers': { fullName: 'Depersonalization-Derealization Disorder', source: 'DSM', isSystem: false, isFragmented: false, isDissociative: true },
+    'UDD':           { fullName: 'Unspecified Dissociative Disorder', source: 'DSM', isSystem: false, isFragmented: false,
+                       extraQuestionMulti: true,
+                       extraQuestionText: 'Which of the following apply to you?\nSelect all that apply.',
+                       extraQuestionOptions: [
+                           { label: 'I have distinct identity states (alters)', description: 'Distinct personality states that take control of your behavior', flags: { isSystem: true } },
+                           { label: 'I have fragmented or non-identity parts', description: 'Emotional states, memory fragments, or parts without full identity', flags: { isFragmented: true } },
+                           { label: 'I experience dissociative states', description: 'Feeling detached from yourself, your body, or feeling the world is unreal', flags: { isDissociative: true } },
+                       ],
+                       extraQuestionMin: 1 },
+    // ICD-11
+    'P-DID':         { fullName: 'Partial Dissociative Identity Disorder', source: 'ICD', isSystem: true, isFragmented: true, isDissociative: true },
     'Possession Trance': { fullName: 'Possession Trance Disorder', source: 'ICD', extraQuestion: true,
-                       extraQuestionText: 'Do you experience distinct entities or spirits taking control of your body?',
-                       extraQuestionYes: { isSystem: true, isFragmented: false },
+                       extraQuestionText: 'Do you want to track the entities/spirits themselves?',
+                       extraQuestionYesLabel: 'Yes',
+                       extraQuestionNoLabel: 'No, just the trance states',
+                       extraQuestionYes: { isSystem: true, isFragmented: true },
                        extraQuestionNo:  { isSystem: false, isFragmented: true } },
-    'Trance':        { fullName: 'Dissociative Trance Disorder', source: 'ICD', isSystem: false, isFragmented: true },
+    'Trance':        { fullName: 'Dissociative Trance Disorder', source: 'ICD', isSystem: false, isFragmented: true, isDissociative: true, dissociativeStateName: 'Trance' },
     'DNSD':          { fullName: 'Dissociative Neurological Symptom Disorder', source: 'ICD', extraQuestion: true,
-                       extraQuestionText: 'Would you describe it as states you\'d want to track?',
+                       extraQuestionText: 'Do you want to track your neurological symptoms and situations using states?',
+                       extraQuestionYesLabel: 'Yes',
+                       extraQuestionNoLabel: 'No',
                        extraQuestionYes: { isSystem: false, isFragmented: true },
                        extraQuestionNo:  { isSystem: false, isFragmented: false } },
 };
@@ -45,8 +67,9 @@ const DISORDER_DEFINITIONS = {
     'OSDD-3': 'Acute dissociative reactions to stressful events, usually transient.',
     'OSDD-4': 'Distress from unresolved grief, chronic conflict, or practices involving dissociation.',
     'Amnesia': 'Inability to recall important personal information, usually of a traumatic nature.',
+    'Amnesia-Fugue': 'Dissociative amnesia with sudden travel or purposeful movement away from home or work.',
     'Dereal/Depers': 'Persistent feeling of being detached from your mind, body, or that the world is unreal.',
-    'UDD': 'Dissociative symptoms that don\'t fit neatly into other categories.',
+    'UDD': 'Dissociative symptoms that don\'t fit neatly into other categories — choose what applies to you.',
     'P-DID': 'Similar to DID but with less distinct identity states.',
     'Trance': 'Altered consciousness with narrowed awareness of the immediate surroundings.',
     'Possession Trance': 'Belief that an external entity has taken control of your body.',
@@ -65,6 +88,7 @@ function resolveSysTypeFromDisorder(key) {
         isSystem: m.isSystem || false,
         isFragmented: m.isFragmented || false,
         isDissociative: m.isDissociative || false,
+        dissociativeStateName: m.dissociativeStateName || 'Dissociated',
         onboardingCompleted: true,
     };
 }
@@ -73,12 +97,39 @@ function resolveSysTypeFromExtraAnswer(key, answer) {
     const m = DISORDER_MAP[key];
     if (!m || !m.extraQuestion) return null;
     const r = answer ? m.extraQuestionYes : m.extraQuestionNo;
+    // Handle key override (e.g., Amnesia -> Amnesia-Fugue)
+    const resolvedKey = r.key || key;
+    const resolvedMapping = r.key ? DISORDER_MAP[r.key] : m;
+    return {
+        name: resolvedMapping.fullName,
+        dd: resolvedMapping.source === 'DSM' ? { DSM: resolvedKey } : { ICD: resolvedKey },
+        isSystem: r.isSystem,
+        isFragmented: r.isFragmented,
+        isDissociative: r.isDissociative || resolvedMapping.isDissociative || false,
+        dissociativeStateName: resolvedMapping.dissociativeStateName || 'Dissociated',
+        onboardingCompleted: true,
+    };
+}
+
+function resolveSysTypeFromMultiAnswer(key, selectedIndices) {
+    const m = DISORDER_MAP[key];
+    if (!m || !m.extraQuestionMulti) return null;
+    const combined = { isSystem: false, isFragmented: false, isDissociative: false };
+    for (const index of selectedIndices) {
+        const option = m.extraQuestionOptions[index];
+        if (option) {
+            if (option.flags.isSystem) combined.isSystem = true;
+            if (option.flags.isFragmented) combined.isFragmented = true;
+            if (option.flags.isDissociative) combined.isDissociative = true;
+        }
+    }
     return {
         name: m.fullName,
         dd: m.source === 'DSM' ? { DSM: key } : { ICD: key },
-        isSystem: r.isSystem,
-        isFragmented: r.isFragmented,
-        isDissociative: m.isDissociative || false,
+        isSystem: combined.isSystem,
+        isFragmented: combined.isFragmented,
+        isDissociative: combined.isDissociative,
+        dissociativeStateName: m.dissociativeStateName || 'Dissociated',
         onboardingCompleted: true,
     };
 }
@@ -127,16 +178,25 @@ function DisorderStep({ category, onSelect, onBack }) {
     const options = category === 'DSM' ? DSM_OPTIONS : ICD_OPTIONS;
     const [expandedKey, setExpandedKey] = useState(null);
     const [extraAnswer, setExtraAnswer] = useState(null);
+    const [multiSelections, setMultiSelections] = useState([]);
 
     const handleToggle = (key) => {
         setExpandedKey(expandedKey === key ? null : key);
         setExtraAnswer(null);
+        setMultiSelections([]);
+    };
+
+    const handleMultiToggle = (index) => {
+        setMultiSelections(prev =>
+            prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+        );
     };
 
     const handleSelect = (key) => {
         const mapping = DISORDER_MAP[key];
         if (mapping?.extraQuestion && extraAnswer === null) return;
-        onSelect(key, extraAnswer);
+        if (mapping?.extraQuestionMulti && multiSelections.length < (mapping.extraQuestionMin || 1)) return;
+        onSelect(key, mapping?.extraQuestionMulti ? multiSelections : extraAnswer);
     };
 
     return (
@@ -152,6 +212,7 @@ function DisorderStep({ category, onSelect, onBack }) {
                     const definition = DISORDER_DEFINITIONS[key];
                     const isExpanded = expandedKey === key;
                     const hasExtraQ = mapping.extraQuestion;
+                    const hasMultiQ = mapping.extraQuestionMulti;
 
                     return (
                         <div key={key} style={{
@@ -205,7 +266,7 @@ function DisorderStep({ category, onSelect, onBack }) {
                                                         color: extraAnswer === true ? 'var(--accent, #c4b5fd)' : 'var(--text-secondary, #9898a8)',
                                                         cursor: 'pointer', fontFamily: 'var(--font-accent, Quicksand)', fontSize: '0.85rem',
                                                     }}
-                                                >Yes</button>
+                                                >{mapping.extraQuestionYesLabel || 'Yes'}</button>
                                                 <button
                                                     onClick={() => setExtraAnswer(false)}
                                                     style={{
@@ -216,7 +277,41 @@ function DisorderStep({ category, onSelect, onBack }) {
                                                         color: extraAnswer === false ? 'var(--accent, #c4b5fd)' : 'var(--text-secondary, #9898a8)',
                                                         cursor: 'pointer', fontFamily: 'var(--font-accent, Quicksand)', fontSize: '0.85rem',
                                                     }}
-                                                >No</button>
+                                                >{mapping.extraQuestionNoLabel || 'No'}</button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {hasMultiQ && (
+                                        <div style={{ background: 'var(--bg-surface, rgba(38,38,58,0.5))', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                                            <p style={{ fontFamily: 'var(--font-body, Nunito)', fontSize: '0.9rem', color: 'var(--text, #ffffff)', marginBottom: '10px', whiteSpace: 'pre-line' }}>
+                                                {mapping.extraQuestionText}
+                                            </p>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {mapping.extraQuestionOptions.map((opt, i) => (
+                                                    <label key={i} style={{
+                                                        display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer',
+                                                        padding: '10px 12px', borderRadius: '8px',
+                                                        background: multiSelections.includes(i) ? 'var(--accent-subtle, rgba(196,181,253,0.12))' : 'var(--bg-card, rgba(26,26,40,0.55))',
+                                                        border: `1px solid ${multiSelections.includes(i) ? 'var(--accent, #c4b5fd)' : 'var(--glass-border, rgba(255,255,255,0.07))'}`,
+                                                        transition: 'all 0.15s',
+                                                    }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={multiSelections.includes(i)}
+                                                            onChange={() => handleMultiToggle(i)}
+                                                            style={{ marginTop: '2px', width: '16px', height: '16px', accentColor: 'var(--accent, #c4b5fd)' }}
+                                                        />
+                                                        <div>
+                                                            <div style={{ fontFamily: 'var(--font-accent, Quicksand)', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text, #ffffff)' }}>
+                                                                {opt.label}
+                                                            </div>
+                                                            <div style={{ fontFamily: 'var(--font-body, Nunito)', fontSize: '0.78rem', color: 'var(--text-secondary, #9898a8)', marginTop: '2px' }}>
+                                                                {opt.description}
+                                                            </div>
+                                                        </div>
+                                                    </label>
+                                                ))}
                                             </div>
                                         </div>
                                     )}
@@ -224,7 +319,7 @@ function DisorderStep({ category, onSelect, onBack }) {
                                     <button
                                         className="btn btn-primary"
                                         onClick={() => handleSelect(key)}
-                                        disabled={hasExtraQ && extraAnswer === null}
+                                        disabled={(hasExtraQ && extraAnswer === null) || (hasMultiQ && multiSelections.length < (mapping.extraQuestionMin || 1))}
                                         style={{ width: '100%' }}
                                     >
                                         Select this
@@ -246,6 +341,7 @@ function DisorderStep({ category, onSelect, onBack }) {
 function OtherStep({ onResolve, onBack }) {
     const [isSystem, setIsSystem] = useState(false);
     const [isFragmented, setIsFragmented] = useState(false);
+    const [isDissociative, setIsDissociative] = useState(false);
     const [customName, setCustomName] = useState('');
 
     const handleContinue = () => {
@@ -254,7 +350,7 @@ function OtherStep({ onResolve, onBack }) {
             dd: {},
             isSystem,
             isFragmented,
-            isDissociative: false,
+            isDissociative,
             onboardingCompleted: true,
         });
     };
@@ -304,6 +400,21 @@ function OtherStep({ onResolve, onBack }) {
                 </label>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted, #6b6b80)', marginTop: '4px' }}>
                     Altered states of mind without distinct alters
+                </p>
+            </div>
+
+            <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                        type="checkbox"
+                        checked={isDissociative}
+                        onChange={(e) => setIsDissociative(e.target.checked)}
+                        style={{ width: '18px', height: '18px' }}
+                    />
+                    We experience dissociative states
+                </label>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted, #6b6b80)', marginTop: '4px' }}>
+                    Feeling detached from yourself, your body, or feeling the world is unreal
                 </p>
             </div>
 
@@ -398,15 +509,16 @@ function SystemSetup() {
                 sys_type: sysType,
             });
 
-            // Auto-create "Dissociated" state for Dereal/Depers users
+            // Auto-create dissociative state for dissociative users
             if (sysType.isDissociative) {
+                const stateName = sysType.dissociativeStateName || 'Dissociated';
                 try {
                     await api.createState({
-                        name: 'Dissociated',
-                        description: 'A dissociative state',
+                        name: stateName,
+                        description: `A ${stateName.toLowerCase()} state`,
                     });
                 } catch (err) {
-                    console.error('[Setup] Failed to create Dissociated state:', err);
+                    console.error('[Setup] Failed to create dissociative state:', err);
                 }
             }
 
@@ -440,7 +552,9 @@ function SystemSetup() {
     const handleDisorderSelect = (key, extraAnswer) => {
         setDisorderKey(key);
         const mapping = DISORDER_MAP[key];
-        if (mapping.extraQuestion && extraAnswer !== null) {
+        if (mapping.extraQuestionMulti && Array.isArray(extraAnswer)) {
+            setResolvedSysType(resolveSysTypeFromMultiAnswer(key, extraAnswer));
+        } else if (mapping.extraQuestion && extraAnswer !== null) {
             setResolvedSysType(resolveSysTypeFromExtraAnswer(key, extraAnswer));
         } else {
             setResolvedSysType(resolveSysTypeFromDisorder(key));

@@ -5,18 +5,20 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 
-const { authMiddleware } = require('../middleware/auth');
+
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const Alter = require('../../schemas/alter');
 const Group = require('../../schemas/group');
-const { checkProxyExists } = require('../../discord_commands/functions/bot_utils');
+const { checkProxyExists, createAndLinkEntity } = require('../../discord_commands/functions/bot_utils');
+const { uploadMiddleware } = require('../middleware/upload');
+const { handleEntityImageUpload, handleEntityImageDelete } = require('./avatar');
 
 // ===========================================
 // GET ALL ALTERS
 // ===========================================
 
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -35,7 +37,7 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 });
 
-router.get('/summary', authMiddleware, async (req, res) => {
+router.get('/summary', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -63,7 +65,7 @@ router.get('/summary', authMiddleware, async (req, res) => {
 // GET SINGLE ALTER
 // ===========================================
 
-router.get('/:id', authMiddleware, async (req, res) => {
+router.get('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -108,7 +110,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 // CREATE ALTER
 // ===========================================
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -133,7 +135,6 @@ router.post('/', authMiddleware, async (req, res) => {
         }
         
         const alter = new Alter({
-            systemID: system._id,
             name: {
                 display: name,
                 ...(idx && { indexable: idx })
@@ -145,15 +146,12 @@ router.post('/', authMiddleware, async (req, res) => {
             birthday,
             signoff,
             groupsIDs: groupsIDs || [],
+            syncWithApps: { discord: true },
             genesisDate: new Date(),
             metadata: { addedAt: new Date() }
         });
-        
-        await alter.save();
-        
-        system.alters = system.alters || { IDs: [] };
-        system.alters.IDs.push(alter._id);
-        await system.save();
+
+        await createAndLinkEntity(alter, system, 'alter');
         
         // Add to groups if specified
         if (groupsIDs?.length) {
@@ -176,7 +174,7 @@ router.post('/', authMiddleware, async (req, res) => {
 // UPDATE ALTER
 // ===========================================
 
-router.patch('/:id', authMiddleware, async (req, res) => {
+router.patch('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -208,13 +206,32 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         }
         
         const allowedFields = [
-            'pronouns', 'description', 'color', 'avatar', 'birthday', 
-            'signoff', 'proxy', 'discord', 'mask', 'caution', 'states'
+            'pronouns', 'description', 'color', 'avatar', 'birthday',
+            'signoff', 'proxy', 'discord', 'mask', 'caution', 'states',
+            'condition'
         ];
         
         for (const field of allowedFields) {
             if (updates[field] !== undefined) {
                 alter[field] = updates[field];
+            }
+        }
+
+        if (updates.name?.aliases !== undefined) {
+            alter.name = alter.name || {};
+            alter.name.aliases = updates.name.aliases;
+        }
+        if (updates.name?.closedNameDisplay !== undefined) {
+            alter.name = alter.name || {};
+            alter.name.closedNameDisplay = updates.name.closedNameDisplay;
+        }
+        if (updates.setting && typeof updates.setting === 'object') {
+            alter.setting = alter.setting || {};
+            const allowedSettings = ['default_status', 'default_battery', 'allowPing'];
+            for (const key of allowedSettings) {
+                if (updates.setting[key] !== undefined) {
+                    alter.setting[key] = updates.setting[key];
+                }
             }
         }
         
@@ -227,10 +244,21 @@ router.patch('/:id', authMiddleware, async (req, res) => {
 });
 
 // ===========================================
+// ALTER IMAGE UPLOADS
+// ===========================================
+
+router.post('/:id/avatar', uploadMiddleware('file'), async (req, res, next) => { try { await handleEntityImageUpload(req, res, 'alter', 'avatar'); } catch (err) { next(err); } });
+router.post('/:id/banner', uploadMiddleware('file'), async (req, res, next) => { try { await handleEntityImageUpload(req, res, 'alter', 'discord.image.banner'); } catch (err) { next(err); } });
+router.post('/:id/proxyAvatar', uploadMiddleware('file'), async (req, res, next) => { try { await handleEntityImageUpload(req, res, 'alter', 'discord.image.proxyAvatar'); } catch (err) { next(err); } });
+router.delete('/:id/avatar', async (req, res, next) => { try { await handleEntityImageDelete(req, res, 'alter', 'avatar'); } catch (err) { next(err); } });
+router.delete('/:id/banner', async (req, res, next) => { try { await handleEntityImageDelete(req, res, 'alter', 'discord.image.banner'); } catch (err) { next(err); } });
+router.delete('/:id/proxyAvatar', async (req, res, next) => { try { await handleEntityImageDelete(req, res, 'alter', 'discord.image.proxyAvatar'); } catch (err) { next(err); } });
+
+// ===========================================
 // DELETE ALTER
 // ===========================================
 
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -263,7 +291,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 // PROXY MANAGEMENT
 // ===========================================
 
-router.post('/:id/proxy', authMiddleware, async (req, res) => {
+router.post('/:id/proxy', async (req, res) => {
     try {
         const alter = await Alter.findById(req.params.id);
         if (!alter) {
@@ -298,7 +326,7 @@ router.post('/:id/proxy', authMiddleware, async (req, res) => {
     }
 });
 
-router.delete('/:id/proxy', authMiddleware, async (req, res) => {
+router.delete('/:id/proxy', async (req, res) => {
     try {
         const alter = await Alter.findById(req.params.id);
         if (!alter) {
@@ -319,7 +347,7 @@ router.delete('/:id/proxy', authMiddleware, async (req, res) => {
 // GROUP MEMBERSHIP
 // ===========================================
 
-router.post('/:id/groups', authMiddleware, async (req, res) => {
+router.post('/:id/groups', async (req, res) => {
     try {
         const alter = await Alter.findById(req.params.id);
         if (!alter) {
@@ -352,7 +380,7 @@ router.post('/:id/groups', authMiddleware, async (req, res) => {
     }
 });
 
-router.delete('/:id/groups/:groupId', authMiddleware, async (req, res) => {
+router.delete('/:id/groups/:groupId', async (req, res) => {
     try {
         const alter = await Alter.findById(req.params.id);
         if (!alter) {

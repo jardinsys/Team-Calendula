@@ -18,7 +18,7 @@ const alterSchema = new mongoose.Schema({
     systemID: String,
         genesisDate: Date,
     syncWithApps: {
-        discord: Boolean
+        discord: { type: Boolean, default: true }
     },
     name: {
         indexable: String,
@@ -141,6 +141,9 @@ const alterSchema = new mongoose.Schema({
         }]
     }
 });
+
+alterSchema.index({ systemID: 1 });
+alterSchema.index({ systemID: 1, 'name.indexable': 1 });
 
 const Alter = sysDB.model('Alter', alterSchema);
 module.exports = Alter;

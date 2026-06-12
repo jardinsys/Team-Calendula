@@ -88,5 +88,7 @@ const userSchema = new mongoose.Schema({
 
 });
 
+userSchema.index({ systemID: 1 });
+
 const User = sysDB.model('User', userSchema);
 module.exports = User;

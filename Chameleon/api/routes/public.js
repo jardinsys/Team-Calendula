@@ -9,12 +9,14 @@ const System = require('../../schemas/system');
 const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
+const { PrivacyBucket } = require('../../schemas/settings');
 
 const VALID_TYPES = ['alter', 'state', 'group'];
 
-function getPrivacyBucket(system, viewerDiscordId, viewerFriendId) {
-    if (!system?.privacyBuckets) return null;
-    for (const bucket of system.privacyBuckets) {
+async function getPrivacyBucket(system, viewerDiscordId, viewerFriendId) {
+    if (!system?.privacyBuckets?.length) return null;
+    const buckets = await PrivacyBucket.find({ _id: { $in: system.privacyBuckets } });
+    for (const bucket of buckets) {
         const inBucket = bucket.friends?.some(f =>
             f.discordUserID === viewerDiscordId || f.friendID === viewerFriendId
         );
@@ -102,7 +104,7 @@ router.get('/entity/:type/:id', optionalAuthMiddleware, async (req, res) => {
         }
 
         const viewerDiscordId = req.user?.discordID;
-        const bucket = getPrivacyBucket(system, viewerDiscordId, null);
+        const bucket = await getPrivacyBucket(system, viewerDiscordId, null);
 
         if (!bucket) {
             return res.json({

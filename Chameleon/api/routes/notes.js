@@ -5,7 +5,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 
-const { authMiddleware, optionalAuthMiddleware } = require('../middleware/auth');
+const { optionalAuthMiddleware } = require('../middleware/auth');
 const Note = require('../../schemas/note');
 const User = require('../../schemas/user');
 const System = require('../../schemas/system');
@@ -200,7 +200,7 @@ async function buildAttributionResponse(note) {
  * Get all notes for the current user (owned + shared)
  * Query params: ?filter=owned|shared|all&tag=tagname&pinned=true&entityId=&entityType=
  */
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { filter = 'all', tag, pinned, limit = 50, skip = 0, sort = 'pinned', entityId, entityType } = req.query;
@@ -290,7 +290,7 @@ router.get('/', authMiddleware, async (req, res) => {
  * GET /api/notes/tags
  * Get all unique tags used by the user
  */
-router.get('/tags', authMiddleware, async (req, res) => {
+router.get('/tags', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         res.json(user?.notes?.tags || []);
@@ -303,7 +303,7 @@ router.get('/tags', authMiddleware, async (req, res) => {
  * DELETE /api/notes/tags/:tag
  * Delete a tag from the user's tag collection and all their notes
  */
-router.delete('/tags/:tag', authMiddleware, async (req, res) => {
+router.delete('/tags/:tag', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { tag } = req.params;
@@ -328,75 +328,7 @@ router.delete('/tags/:tag', authMiddleware, async (req, res) => {
 });
 
 // ===========================================
-// GET SINGLE NOTE
-// ===========================================
-
-/**
- * GET /api/notes/:id
- * Get a single note by ID or snowflake
- */
-router.get('/:id', authMiddleware, async (req, res) => {
-    try {
-        const user = await User.findById(req.user._id);
-        const { id } = req.params;
-
-        let note = await Note.findOne({ id: id });
-        if (!note && mongoose.Types.ObjectId.isValid(id)) {
-            note = await Note.findById(id);
-        }
-
-        if (!note) {
-            return res.status(404).json({ error: 'Note not found' });
-        }
-
-        const userId = user._id.toString();
-        const isOwner = note.users?.owner?.userID?.toString() === userId ||
-                       note.author?.userID?.toString() === userId;
-        const hasRead = note.users?.rAccess?.some(a => a.userID?.toString() === userId);
-        const hasWrite = note.users?.rwAccess?.some(a => a.userID?.toString() === userId);
-        const inUserNotes = user.notes?.notes?.some(n => n.toString() === note._id.toString());
-
-        if (!isOwner && !hasRead && !hasWrite && !inUserNotes) {
-            return res.status(403).json({ error: 'You do not have access to this note' });
-        }
-
-        const linkedEntities = { alters: [], states: [], groups: [] };
-
-        if (note.author?.subs?.length) {
-            for (const sub of note.author.subs) {
-                const data = await resolveEntityData(sub.s_type, sub.ID);
-                if (!data) continue;
-                if (sub.s_type === 'alter') linkedEntities.alters.push(data);
-                else if (sub.s_type === 'state') linkedEntities.states.push(data);
-                else if (sub.s_type === 'group') linkedEntities.groups.push(data);
-            }
-        }
-
-        const entityOwnerData = note.entityOwner
-            ? await resolveEntityData(note.entityOwner.type, note.entityOwner.ID)
-            : null;
-
-        const enrichedAttribution = await buildAttributionResponse(note);
-
-        res.json({
-            ...note.toObject(),
-            linkedEntities,
-            entityOwner: entityOwnerData,
-            attribution: enrichedAttribution,
-            access: {
-                isOwner,
-                canEdit: isOwner || hasWrite,
-                canRead: true
-            }
-        });
-    } catch (err) {
-        console.error('[Notes] Get error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ===========================================
-// GET NOTE HISTORY
+// GET NOTE HISTORY (must be before /:id to avoid shadowing)
 // ===========================================
 
 /**
@@ -404,7 +336,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
  * Get edit history for a note
  * Query: ?skip=0&limit=20
  */
-router.get('/:id/history', authMiddleware, async (req, res) => {
+router.get('/:id/history', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
@@ -484,6 +416,74 @@ router.get('/:id/history', authMiddleware, async (req, res) => {
 });
 
 // ===========================================
+// GET SINGLE NOTE
+// ===========================================
+
+/**
+ * GET /api/notes/:id
+ * Get a single note by ID or snowflake
+ */
+router.get('/:id', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { id } = req.params;
+
+        let note = await Note.findOne({ id: id });
+        if (!note && mongoose.Types.ObjectId.isValid(id)) {
+            note = await Note.findById(id);
+        }
+
+        if (!note) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+
+        const userId = user._id.toString();
+        const isOwner = note.users?.owner?.userID?.toString() === userId ||
+                       note.author?.userID?.toString() === userId;
+        const hasRead = note.users?.rAccess?.some(a => a.userID?.toString() === userId);
+        const hasWrite = note.users?.rwAccess?.some(a => a.userID?.toString() === userId);
+        const inUserNotes = user.notes?.notes?.some(n => n.toString() === note._id.toString());
+
+        if (!isOwner && !hasRead && !hasWrite && !inUserNotes) {
+            return res.status(403).json({ error: 'You do not have access to this note' });
+        }
+
+        const linkedEntities = { alters: [], states: [], groups: [] };
+
+        if (note.author?.subs?.length) {
+            for (const sub of note.author.subs) {
+                const data = await resolveEntityData(sub.s_type, sub.ID);
+                if (!data) continue;
+                if (sub.s_type === 'alter') linkedEntities.alters.push(data);
+                else if (sub.s_type === 'state') linkedEntities.states.push(data);
+                else if (sub.s_type === 'group') linkedEntities.groups.push(data);
+            }
+        }
+
+        const entityOwnerData = note.entityOwner
+            ? await resolveEntityData(note.entityOwner.type, note.entityOwner.ID)
+            : null;
+
+        const enrichedAttribution = await buildAttributionResponse(note);
+
+        res.json({
+            ...note.toObject(),
+            linkedEntities,
+            entityOwner: entityOwnerData,
+            attribution: enrichedAttribution,
+            access: {
+                isOwner,
+                canEdit: isOwner || hasWrite,
+                canRead: true
+            }
+        });
+    } catch (err) {
+        console.error('[Notes] Get error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
 // CREATE NOTE
 // ===========================================
 
@@ -492,7 +492,7 @@ router.get('/:id/history', authMiddleware, async (req, res) => {
  * Create a new note
  * Body: { title, content?, tags?, entityOwner?: {type, id}, attribution?: [{type, id}] }
  */
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { title, content, tags, entityOwner, attribution, pinned, color } = req.body;
@@ -579,7 +579,7 @@ router.post('/', authMiddleware, async (req, res) => {
  * Update a note
  * Body: { title?, content?, tags?, pinned?, color?, entityOwner?, attribution?: [{type, id}] }
  */
-router.patch('/:id', authMiddleware, async (req, res) => {
+router.patch('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
@@ -686,7 +686,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
  * DELETE /api/notes/:id
  * Delete a note (owner only)
  */
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
@@ -733,7 +733,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
  * Append content to a note with timestamp
  * Body: { content, attribution?: [{type, id}] }
  */
-router.patch('/:id/append', authMiddleware, async (req, res) => {
+router.patch('/:id/append', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
@@ -841,7 +841,7 @@ router.patch('/:id/append', authMiddleware, async (req, res) => {
  * Share a note with another user
  * Body: { discordId?: "123", friendId?: "123", access: "r" | "rw", subs?: [{ID, s_type}] }
  */
-router.post('/:id/share', authMiddleware, async (req, res) => {
+router.post('/:id/share', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
@@ -907,7 +907,7 @@ router.post('/:id/share', authMiddleware, async (req, res) => {
  * Remove someone's access to a note
  * Body: { discordId: "123" } or { friendId: "123" }
  */
-router.delete('/:id/share', authMiddleware, async (req, res) => {
+router.delete('/:id/share', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { id } = req.params;
@@ -966,7 +966,7 @@ router.delete('/:id/share', authMiddleware, async (req, res) => {
  * Link an entity to a note's author subs
  * Body: { type: "alter"|"state"|"group", entityId: "123" }
  */
-router.post('/:id/link', authMiddleware, async (req, res) => {
+router.post('/:id/link', async (req, res) => {
     try {
         const { id } = req.params;
         const { type, entityId } = req.body;
@@ -1006,7 +1006,7 @@ router.post('/:id/link', authMiddleware, async (req, res) => {
  * Unlink an entity from a note's author subs
  * Body: { type: "alter"|"state"|"group", entityId: "123" }
  */
-router.delete('/:id/link', authMiddleware, async (req, res) => {
+router.delete('/:id/link', async (req, res) => {
     try {
         const { id } = req.params;
         const { type, entityId } = req.body;

@@ -252,9 +252,7 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                     result.groupsUpdated++;
                 } else {
                     const newGroup = createGroupFromPK(pkGroup);
-                    await newGroup.save();
-                    if (!system.groups.IDs.includes(newGroup._id))
-                        system.groups.IDs.push(newGroup._id);
+                    await utils.createAndLinkEntity(newGroup, system, 'group');
                     groupMembershipMap.set(newGroup._id.toString(), (pkGroup.members || []).map(m => typeof m === 'string' ? m : m.id));
                     result.groupsImported++;
                 }
@@ -308,9 +306,7 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                         ? createStateFromPKDiscord(pkMember)
                         : createStateFromPK(pkMember);
                     await filterConflictingProxies(newState, system);
-                    await newState.save();
-                    if (!system.states.IDs.includes(newState._id))
-                        system.states.IDs.push(newState._id);
+                    await utils.createAndLinkEntity(newState, system, 'state');
                     memberIdMap.set(pkMember.id, { id: newState._id, type: 'state' });
                     entity = newState;
                     result.statesImported++;
@@ -341,9 +337,7 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                         ? createAlterFromPKDiscord(pkMember)
                         : createAlterFromPK(pkMember);
                     await filterConflictingProxies(newAlter, system);
-                    await newAlter.save();
-                    if (!system.alters.IDs.includes(newAlter._id))
-                        system.alters.IDs.push(newAlter._id);
+                    await utils.createAndLinkEntity(newAlter, system, 'alter');
                     memberIdMap.set(pkMember.id, { id: newAlter._id, type: 'alter' });
                     entity = newAlter;
                     result.membersImported++;
@@ -354,7 +348,7 @@ async function processPluralKitData(system, user, data, options, onProgress) {
             if (entity) {
                 for (const [groupId, sourceMemberIds] of groupMembershipMap) {
                     if (sourceMemberIds.includes(pkMember.id)) {
-                        await addEntityToGroup(entity._id, groupId, entityType);
+                        await utils.linkEntityToGroup(entity._id, groupId, entityType);
                     }
                 }
             }
@@ -449,11 +443,7 @@ async function processTupperboxData(system, data, options, onProgress) {
                             importedAt: new Date()
                         }
                     });
-                    await newGroup.save();
-
-                    if (!system.groups.IDs.includes(newGroup._id)) {
-                        system.groups.IDs.push(newGroup._id);
-                    }
+                    await utils.createAndLinkEntity(newGroup, system, 'group');
 
                     groupIdMap.set(tbGroup.id, newGroup._id);
                     result.groupsImported++;
@@ -501,7 +491,7 @@ async function processTupperboxData(system, data, options, onProgress) {
                 await existingAlter.save();
 
                 if (tupper.group_id && groupIdMap.has(tupper.group_id)) {
-                    await addEntityToGroup(existingAlter._id, groupIdMap.get(tupper.group_id), 'alter');
+                    await utils.linkEntityToGroup(existingAlter._id, groupIdMap.get(tupper.group_id), 'alter');
                 }
 
                 result.membersUpdated++;
@@ -528,14 +518,10 @@ async function processTupperboxData(system, data, options, onProgress) {
                         importedAt: new Date()
                     }
                 });
-                await newAlter.save();
-
-                if (!system.alters.IDs.includes(newAlter._id)) {
-                    system.alters.IDs.push(newAlter._id);
-                }
+                await utils.createAndLinkEntity(newAlter, system, 'alter');
 
                 if (tupper.group_id && groupIdMap.has(tupper.group_id)) {
-                    await addEntityToGroup(newAlter._id, groupIdMap.get(tupper.group_id), 'alter');
+                    await utils.linkEntityToGroup(newAlter._id, groupIdMap.get(tupper.group_id), 'alter');
                 }
 
                 result.membersImported++;
@@ -661,8 +647,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             importedAt: new Date()
                         }
                     });
-                    await newGroup.save();
-                    if (!system.groups.IDs.includes(newGroup._id)) system.groups.IDs.push(newGroup._id);
+                    await utils.createAndLinkEntity(newGroup, system, 'group');
                     result.groupsImported++;
                 }
             } catch (err) {
@@ -727,9 +712,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             pluralKitId: spMember.pkId || undefined
                         }
                     });
-                    await newState.save();
-                    if (!system.states.IDs.includes(newState._id))
-                        system.states.IDs.push(newState._id);
+                    await utils.createAndLinkEntity(newState, system, 'state');
                     entity = newState;
                     result.statesImported++;
                 }
@@ -775,9 +758,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             pluralKitId: spMember.pkId || undefined
                         }
                     });
-                    await newAlter.save();
-                    if (!system.alters.IDs.includes(newAlter._id))
-                        system.alters.IDs.push(newAlter._id);
+                    await utils.createAndLinkEntity(newAlter, system, 'alter');
                     entity = newAlter;
                     result.membersImported++;
                 }
@@ -787,7 +768,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
             if (entity) {
                 for (const [groupId, sourceMemberIds] of groupMembershipMap) {
                     if (sourceMemberIds.includes(spMember.uid)) {
-                        await addEntityToGroup(entity._id, groupId, entityType);
+                        await utils.linkEntityToGroup(entity._id, groupId, entityType);
                     }
                 }
             }
@@ -956,9 +937,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
                     result.groupsUpdated++;
                 } else {
                     const newGroup = createGroupFromOctocon(tag);
-                    await newGroup.save();
-                    if (!system.groups.IDs.includes(newGroup._id))
-                        system.groups.IDs.push(newGroup._id);
+                    await utils.createAndLinkEntity(newGroup, system, 'group');
                     groupMembershipMap.set(newGroup._id.toString(), tag.alters || []);
                     result.groupsImported++;
                 }
@@ -1003,9 +982,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
                         ? createStateFromOctoconDiscord(octoAlter)
                         : createStateFromOctocon(octoAlter);
                     await filterConflictingProxies(newState, system);
-                    await newState.save();
-                    if (!system.states.IDs.includes(newState._id))
-                        system.states.IDs.push(newState._id);
+                    await utils.createAndLinkEntity(newState, system, 'state');
                     alterIdMap.set(octoAlter.id, { id: newState._id, type: 'state' });
                     entity = newState;
                     result.statesImported++;
@@ -1030,9 +1007,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
                         ? createAlterFromOctoconDiscord(octoAlter)
                         : createAlterFromOctocon(octoAlter);
                     await filterConflictingProxies(newAlter, system);
-                    await newAlter.save();
-                    if (!system.alters.IDs.includes(newAlter._id))
-                        system.alters.IDs.push(newAlter._id);
+                    await utils.createAndLinkEntity(newAlter, system, 'alter');
                     alterIdMap.set(octoAlter.id, { id: newAlter._id, type: 'alter' });
                     entity = newAlter;
                     result.membersImported++;
@@ -1043,7 +1018,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
             if (entity) {
                 for (const [groupId, sourceAlterIds] of groupMembershipMap) {
                     if (sourceAlterIds.includes(octoAlter.id)) {
-                        await addEntityToGroup(entity._id, groupId, entityType);
+                        await utils.linkEntityToGroup(entity._id, groupId, entityType);
                     }
                 }
             }

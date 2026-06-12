@@ -34,8 +34,9 @@ console.log('');
 
 // Load Commands 
 console.log(`💙---LOADING COMMANDS---💙`);
-client.commands = new Collection();
-client.prefixCommands = new Collection();
+	client.commands = new Collection();
+	client.prefixCommands = new Collection();
+	client.contextMenus = new Collection();
 
 const foldersPath = path.join(__dirname, 'discord_commands');
 
@@ -81,6 +82,13 @@ function loadCommandsFromDirectory(directory) {
 			}
 			if (hasSlashCommand) {
 				client.commands.set(command.data.name, command);
+				// Register context menu commands for O(1) lookup
+				if (command.contextMenuData) {
+					client.contextMenus.set(command.contextMenuData.name, command);
+				}
+				if (command.userContextMenuData) {
+					client.contextMenus.set(command.userContextMenuData.name, command);
+				}
 				console.log(`Loaded Slash command: ${command.data.name}`);
 				loadedSlashCommands.push(command.data.name);
 			}
@@ -197,7 +205,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 		try {
 			const customId = interaction.customId;
 
-			// new_user_ buttons rom any systemiser command
+			// new_user_ buttons from any systemiser command
 			if (customId.startsWith('new_user_')) return await utils.handleNewUserButton(interaction);
 
 			// System command buttons
@@ -221,12 +229,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 			// Group command buttons
 			if (customId.startsWith('group_')) {
 				const cmd = interaction.client.commands.get('group');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Switch command buttons
-			if (customId.startsWith('switch_')) {
-				const cmd = interaction.client.commands.get('switch');
 				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
 			}
 
@@ -329,12 +331,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
 			}
 
-			// Switch command select menus
-			if (customId.startsWith('switch_')) {
-				const cmd = interaction.client.commands.get('switch');
-				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
-			}
-
 			// Front command select menus
 			if (customId.startsWith('front_')) {
 				const cmd = interaction.client.commands.get('front');
@@ -425,12 +421,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
 			}
 
-			// Switch command modals
-			if (customId.startsWith('switch_')) {
-				const cmd = interaction.client.commands.get('switch');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
 			// Front command modals
 			if (customId.startsWith('front_')) {
 				const cmd = interaction.client.commands.get('front');
@@ -509,11 +499,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 	// ---- CONTEXT MENU HANDLING (Right-click commands) ----
 	if (interaction.isMessageContextMenuCommand()) {
 		try {
-			// Look for command by context menu name
-			const command = interaction.client.commands.find(cmd => 
-				cmd.contextMenuData?.name === interaction.commandName
-			);
-			
+			const command = interaction.client.contextMenus.get(interaction.commandName);
 			if (command?.executeContextMenu) await command.executeContextMenu(interaction);
 		} catch (error) {
 			console.error('Context menu error:', error);
@@ -534,9 +520,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 	if (interaction.isUserContextMenuCommand()) {
 		try {
-			const command = interaction.client.commands.find(cmd => 
-				cmd.userContextMenuData?.name === interaction.commandName
-			);
+			const command = interaction.client.contextMenus.get(interaction.commandName);
 			if (command?.executeUserContextMenu) await command.executeUserContextMenu(interaction);
 		} catch (error) {
 			console.error('User context menu error:', error);

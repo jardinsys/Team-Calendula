@@ -8,29 +8,43 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
   const [saved, setSaved] = useState(false)
 
   const [proxyStyle, setProxyStyle] = useState(systemProp?.proxy?.style || 'off')
+  const [replyStyle, setReplyStyle] = useState(systemProp?.proxy?.replyStyle || 'embed')
   const [proxyCooldown, setProxyCooldown] = useState(systemProp?.setting?.proxyCoolDown || 0)
+  const [proxyCaseSensitive, setProxyCaseSensitive] = useState(systemProp?.proxy?.caseSensitive || false)
+  const [proxyBreak, setProxyBreak] = useState(systemProp?.proxy?.break || false)
   const [timezone, setTimezone] = useState(systemProp?.timezone || '')
-  const [closedChar, setClosedChar] = useState(systemProp?.setting?.closedCharAllowed || false)
+  const [closedChar, setClosedChar] = useState(systemProp?.setting?.closedCharAllowed ?? true)
   const [autoshare, setAutoshare] = useState(systemProp?.setting?.autoshareNotestoUsers || false)
+  const [syncDiscord, setSyncDiscord] = useState(systemProp?.syncWithApps?.discord ?? true)
+  const [friendRequests, setFriendRequests] = useState(systemProp?._user?.settings?.notificationPreferences?.friendRequests ?? true)
+  const [friendSwitches, setFriendSwitches] = useState(systemProp?._user?.settings?.notificationPreferences?.friendSwitches ?? true)
+  const [appMessages, setAppMessages] = useState(systemProp?._user?.settings?.notificationPreferences?.appMessages ?? true)
 
-  // Danger zone state
-  const [dangerView, setDangerView] = useState(null) // null | 'wipe' | 'delete'
+  const [dangerView, setDangerView] = useState(null)
   const [wipeKeepFriends, setWipeKeepFriends] = useState(true)
   const [wipeLoading, setWipeLoading] = useState(false)
   const [wipeResult, setWipeResult] = useState(null)
-  const [deleteStep, setDeleteStep] = useState(0) // 0=warning, 1=type name
+  const [deleteStep, setDeleteStep] = useState(0)
   const [deleteNameInput, setDeleteNameInput] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteResult, setDeleteResult] = useState(null)
 
+  const syncStateFromData = useCallback((data) => {
+    setProxyStyle(data?.proxy?.style || 'off')
+    setReplyStyle(data?.proxy?.replyStyle || 'embed')
+    setProxyCooldown(data?.setting?.proxyCoolDown || 0)
+    setProxyCaseSensitive(data?.proxy?.caseSensitive || false)
+    setProxyBreak(data?.proxy?.break || false)
+    setTimezone(data?.timezone || '')
+    setClosedChar(data?.setting?.closedCharAllowed ?? true)
+    setAutoshare(data?.setting?.autoshareNotestoUsers || false)
+    setSyncDiscord(data?.syncWithApps?.discord ?? true)
+  }, [])
+
   useEffect(() => {
     if (systemProp) {
       setSystem(systemProp)
-      setProxyStyle(systemProp?.proxy?.style || 'off')
-      setProxyCooldown(systemProp?.setting?.proxyCoolDown || 0)
-      setTimezone(systemProp?.timezone || '')
-      setClosedChar(systemProp?.setting?.closedCharAllowed || false)
-      setAutoshare(systemProp?.setting?.autoshareNotestoUsers || false)
+      syncStateFromData(systemProp)
       setLoading(false)
       return
     }
@@ -40,31 +54,41 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
       .then(data => {
         if (!cancelled) {
           setSystem(data)
-          setProxyStyle(data?.proxy?.style || 'off')
-          setProxyCooldown(data?.setting?.proxyCoolDown || 0)
-          setTimezone(data?.timezone || '')
-          setClosedChar(data?.setting?.closedCharAllowed || false)
-          setAutoshare(data?.setting?.autoshareNotestoUsers || false)
+          syncStateFromData(data)
           setLoading(false)
         }
       })
       .catch(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
-  }, [systemProp])
+  }, [systemProp, syncStateFromData])
 
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
       await api.updateSystem({
-        proxy: { style: proxyStyle },
+        proxy: {
+          style: proxyStyle,
+          replyStyle,
+          caseSensitive: proxyCaseSensitive,
+          break: proxyBreak,
+          cooldown: proxyCooldown,
+        },
         setting: {
           proxyCoolDown: proxyCooldown,
           closedCharAllowed: closedChar,
           autoshareNotestoUsers: autoshare,
         },
+        syncWithApps: { discord: syncDiscord },
         timezone: timezone || undefined,
       })
+      await api.updateUserSettings({
+        notificationPreferences: {
+          friendRequests,
+          friendSwitches,
+          appMessages,
+        },
+      }).catch(() => {})
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (err) {
@@ -72,7 +96,7 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
     } finally {
       setSaving(false)
     }
-  }, [proxyStyle, proxyCooldown, timezone, closedChar, autoshare])
+  }, [proxyStyle, replyStyle, proxyCooldown, proxyCaseSensitive, proxyBreak, timezone, closedChar, autoshare, syncDiscord, friendRequests, friendSwitches, appMessages])
 
   const handleWipe = useCallback(async () => {
     setWipeLoading(true)
@@ -96,7 +120,6 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
     try {
       await api.deleteAccount(deleteNameInput)
       setDeleteResult({ success: true, message: 'Account deleted. You may close this window.' })
-      // Clear token so next load requires re-auth
       api.setToken(null)
       if (typeof window !== 'undefined') localStorage.removeItem('systemiser_discord_token')
     } catch (err) {
@@ -159,6 +182,18 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
         </div>
 
         <div className="form-group">
+          <label>Reply style</label>
+          <select
+            className="text-input"
+            value={replyStyle}
+            onChange={e => setReplyStyle(e.target.value)}
+          >
+            <option value="embed">Embed</option>
+            <option value="native">Native Discord reply</option>
+          </select>
+        </div>
+
+        <div className="form-group">
           <label>Cooldown (seconds)</label>
           <input
             className="text-input"
@@ -168,6 +203,30 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
             value={proxyCooldown}
             onChange={e => setProxyCooldown(parseInt(e.target.value) || 0)}
           />
+        </div>
+
+        <div className="form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={proxyCaseSensitive}
+              onChange={e => setProxyCaseSensitive(e.target.checked)}
+              style={{ width: '18px', height: '18px' }}
+            />
+            Case-sensitive proxy matching
+          </label>
+        </div>
+
+        <div className="form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={proxyBreak}
+              onChange={e => setProxyBreak(e.target.checked)}
+              style={{ width: '18px', height: '18px' }}
+            />
+            Proxy break enabled
+          </label>
         </div>
       </div>
 
@@ -208,6 +267,58 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
             Auto-share notes with friends
           </label>
         </div>
+
+        <div className="form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={syncDiscord}
+              onChange={e => setSyncDiscord(e.target.checked)}
+              style={{ width: '18px', height: '18px' }}
+            />
+            Sync with Discord
+          </label>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-title">Notifications</div>
+
+        <div className="form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={friendRequests}
+              onChange={e => setFriendRequests(e.target.checked)}
+              style={{ width: '18px', height: '18px' }}
+            />
+            Friend requests
+          </label>
+        </div>
+
+        <div className="form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={friendSwitches}
+              onChange={e => setFriendSwitches(e.target.checked)}
+              style={{ width: '18px', height: '18px' }}
+            />
+            Friend front switches
+          </label>
+        </div>
+
+        <div className="form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={appMessages}
+              onChange={e => setAppMessages(e.target.checked)}
+              style={{ width: '18px', height: '18px' }}
+            />
+            App messages
+          </label>
+        </div>
       </div>
 
       <div className="settings-section">
@@ -224,7 +335,6 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
         </button>
       </div>
 
-      {/* TODO: Add 2FA verification step before destructive actions */}
       <div className="settings-section" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
         <div className="settings-section-title" style={{ color: '#ef4444' }}>Danger Zone</div>
         <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-md)', fontSize: '0.9rem' }}>

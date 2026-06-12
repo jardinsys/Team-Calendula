@@ -18,7 +18,7 @@ const groupSchema = new mongoose.Schema({
     systemID: String,
     createdAt: { type: Date, default: Date.now },
     syncWithApps: {
-        discord: Boolean
+        discord: { type: Boolean, default: true }
     },
     name: {
         indexable: String,
@@ -119,6 +119,9 @@ const groupSchema = new mongoose.Schema({
         }]
     }
 });
+
+groupSchema.index({ systemID: 1 });
+groupSchema.index({ systemID: 1, 'name.indexable': 1 });
 
 const Group = sysDB.model('Group', groupSchema);
 module.exports = Group;

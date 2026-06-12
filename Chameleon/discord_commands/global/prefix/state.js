@@ -29,6 +29,7 @@ const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
+const proxyMessageHandler = require('../proxy-message');
 
 const { getSystemTerm } = utils;
 
@@ -121,15 +122,10 @@ async function handleNew(message, parsed) {
     }
 
     const state = new State({
-        systemID: system._id,
         name: { ...(indexable && { indexable }), display: name },
         addedAt: new Date()
     });
-    await state.save();
-
-    system.states = system.states || { IDs: [] };
-    system.states.IDs.push(state._id);
-    await system.save();
+    await utils.createAndLinkEntity(state, system, 'state');
 
     const embed = new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.success)
@@ -147,17 +143,19 @@ async function handleRename(message, parsed, stateName) {
     if (!utils.isValidIndexableName(newName)) return utils.error(message, 'Invalid indexable name format.');
     state.name.indexable = newName;
     await state.save();
+    await proxyMessageHandler.invalidateDisplayCache(state._id);
     return utils.success(message, `Indexable name changed to **${newName}**`);
 }
 
 async function handleDisplayName(message, parsed, stateName) {
     const { state } = await getState(message, stateName);
     if (!state) return;
-    if (parsed.clear) { state.name.display = undefined; await state.save(); return utils.success(message, 'Display name cleared.'); }
+    if (parsed.clear) { state.name.display = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Display name cleared.'); }
     const newName = parsed._positional.slice(2).join(' ');
     if (!newName) return utils.error(message, 'Please provide a display name.');
     state.name.display = newName;
     await state.save();
+    await proxyMessageHandler.invalidateDisplayCache(state._id);
     return utils.success(message, `Display name set to **${newName}**`);
 }
 
@@ -175,7 +173,7 @@ async function handleDescription(message, parsed, stateName) {
 async function handleAvatar(message, parsed, stateName) {
     const { state } = await getState(message, stateName);
     if (!state) return;
-    if (parsed.clear) { if (state.avatar?.r2Key) await utils.deleteFromR2(state.avatar.r2Key, state.avatar.bucket || 'app'); state.avatar = undefined; await state.save(); return utils.success(message, 'Avatar cleared.'); }
+    if (parsed.clear) { if (state.avatar?.r2Key) await utils.deleteFromR2(state.avatar.r2Key, state.avatar.bucket || 'app'); state.avatar = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Avatar cleared.'); }
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[2];
     const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'State', message.author.id, 'app');
@@ -183,6 +181,7 @@ async function handleAvatar(message, parsed, stateName) {
     if (state.avatar?.r2Key) await utils.deleteFromR2(state.avatar.r2Key, state.avatar.bucket || 'app');
     state.avatar = result.media;
     await state.save();
+    await proxyMessageHandler.invalidateDisplayCache(state._id);
     return utils.success(message, 'Avatar uploaded and updated.');
 }
 
@@ -191,7 +190,7 @@ async function handleBanner(message, parsed, stateName) {
     if (!state) return;
     const syncWithDiscord = state.syncWithApps?.discord;
     const bucket = utils.resolveUploadBucket(syncWithDiscord, 'discord');
-    if (parsed.clear) { if (state.discord?.image?.banner?.r2Key) await utils.deleteFromR2(state.discord.image.banner.r2Key, state.discord.image.banner.bucket || 'app'); if (state.discord?.image) state.discord.image.banner = undefined; await state.save(); return utils.success(message, 'Banner cleared.'); }
+    if (parsed.clear) { if (state.discord?.image?.banner?.r2Key) await utils.deleteFromR2(state.discord.image.banner.r2Key, state.discord.image.banner.bucket || 'app'); if (state.discord?.image) state.discord.image.banner = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Banner cleared.'); }
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[2];
     const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'State', message.author.id, bucket);
@@ -200,6 +199,7 @@ async function handleBanner(message, parsed, stateName) {
     state.discord = state.discord || {}; state.discord.image = state.discord.image || {};
     state.discord.image.banner = result.media;
     await state.save();
+    await proxyMessageHandler.invalidateDisplayCache(state._id);
     return utils.success(message, 'Banner uploaded and updated.');
 }
 
@@ -394,11 +394,12 @@ async function handleCaution(message, parsed, stateName) {
 async function handleClosedName(message, parsed, stateName) {
     const { state } = await getState(message, stateName);
     if (!state) return;
-    if (parsed.clear) { state.name.closedNameDisplay = undefined; await state.save(); return utils.success(message, 'Closed name display cleared.'); }
+    if (parsed.clear) { state.name.closedNameDisplay = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Closed name display cleared.'); }
     const newName = parsed._positional.slice(2).join(' ');
     if (!newName) return utils.error(message, 'Please provide a closed name display.');
     state.name.closedNameDisplay = newName;
     await state.save();
+    await proxyMessageHandler.invalidateDisplayCache(state._id);
     return utils.success(message, `Closed name display set to **${newName}**`);
 }
 
@@ -492,15 +493,17 @@ async function handleMask(message, parsed, stateName) {
         state.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
         state.mask.name.display = val;
         await state.save();
+        await proxyMessageHandler.invalidateDisplayCache(state._id);
         return utils.success(message, `Mask name set to **${val}**`);
     }
     if (field === 'displayname' || field === 'dn') {
-        if (parsed.clear) { state.mask.name = state.mask.name || {}; state.mask.name.display = undefined; await state.save(); return utils.success(message, 'Mask display name cleared.'); }
+        if (parsed.clear) { state.mask.name = state.mask.name || {}; state.mask.name.display = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Mask display name cleared.'); }
         const val = parsed._positional.slice(3).join(' ');
         if (!val) return utils.error(message, 'Please provide a mask display name.');
         state.mask.name = state.mask.name || {};
         state.mask.name.display = val;
         await state.save();
+        await proxyMessageHandler.invalidateDisplayCache(state._id);
         return utils.success(message, `Mask display name set to **${val}**`);
     }
     if (field === 'description' || field === 'desc') {
@@ -520,31 +523,34 @@ async function handleMask(message, parsed, stateName) {
         return utils.success(message, `Mask color set to **${val}**`);
     }
     if (field === 'avatar' || field === 'icon' || field === 'av') {
-        if (parsed.clear) { state.mask.avatar = undefined; await state.save(); return utils.success(message, 'Mask avatar cleared.'); }
+        if (parsed.clear) { state.mask.avatar = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Mask avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         state.mask.avatar = { url };
         await state.save();
+        await proxyMessageHandler.invalidateDisplayCache(state._id);
         return utils.success(message, 'Mask avatar updated.');
     }
     if (field === 'banner') {
-        if (parsed.clear) { state.mask.discord = state.mask.discord || {}; state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.banner = undefined; await state.save(); return utils.success(message, 'Mask banner cleared.'); }
+        if (parsed.clear) { state.mask.discord = state.mask.discord || {}; state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.banner = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Mask banner cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         state.mask.discord = state.mask.discord || {};
         state.mask.discord.image = state.mask.discord.image || {};
         state.mask.discord.image.banner = { url };
         await state.save();
+        await proxyMessageHandler.invalidateDisplayCache(state._id);
         return utils.success(message, 'Mask banner updated.');
     }
     if (field === 'proxyavatar' || field === 'pav') {
-        if (parsed.clear) { state.mask.discord = state.mask.discord || {}; state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.proxyAvatar = undefined; await state.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        if (parsed.clear) { state.mask.discord = state.mask.discord || {}; state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.proxyAvatar = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Mask proxy avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL.');
         state.mask.discord = state.mask.discord || {};
         state.mask.discord.image = state.mask.discord.image || {};
         state.mask.discord.image.proxyAvatar = { url };
         await state.save();
+        await proxyMessageHandler.invalidateDisplayCache(state._id);
         return utils.success(message, 'Mask proxy avatar updated.');
     }
     return utils.error(message, `Unknown mask field: ${field}. Use: name, displayname, description, color, avatar, banner, proxyavatar`);

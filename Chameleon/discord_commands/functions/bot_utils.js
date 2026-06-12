@@ -78,26 +78,40 @@ const ICD_TYPES = ['P-DID', 'Trance', 'DNSD', 'Possession Trance'];
 // ═══════════════════════════════════════════
 
 const DISORDER_MAP = {
-    'DID':           { fullName: 'Dissociative Identity Disorder', source: 'DSM', isSystem: true, isFragmented: false },
+    // DSM-5
+    'DID':           { fullName: 'Dissociative Identity Disorder', source: 'DSM', isSystem: true, isFragmented: true, isDissociative: true },
     'OSDD-1A':       { fullName: 'Other Specified Dissociative Disorder, Type 1A', source: 'DSM', extraQuestion: true,
-                       extraQuestionText: 'Do you experience distinct identity states (alters)?',
-                       extraQuestionYes: { isSystem: true, isFragmented: false },
-                       extraQuestionNo:  { isSystem: false, isFragmented: true } },
-    'OSDD-1B':       { fullName: 'Other Specified Dissociative Disorder, Type 1B', source: 'DSM', isSystem: true, isFragmented: false },
-    'OSDD-2':        { fullName: 'Other Specified Dissociative Disorder, Type 2', source: 'DSM', isSystem: false, isFragmented: true },
-    'OSDD-3':        { fullName: 'Other Specified Dissociative Disorder, Type 3', source: 'DSM', isSystem: false, isFragmented: true },
+                       extraQuestionText: 'How do you experience your identity states or parts?',
+                       extraQuestionYesLabel: 'They are distinct alters',
+                       extraQuestionNoLabel: 'They are just fragmented states',
+                       extraQuestionYes: { isSystem: true, isFragmented: true, isDissociative: true },
+                       extraQuestionNo:  { isSystem: false, isFragmented: true, isDissociative: true } },
+    'OSDD-1B':       { fullName: 'Other Specified Dissociative Disorder, Type 1B', source: 'DSM', isSystem: true, isFragmented: true, isDissociative: true },
+    'OSDD-2':        { fullName: 'Other Specified Dissociative Disorder, Type 2', source: 'DSM', isSystem: false, isFragmented: true, isDissociative: true },
+    'OSDD-3':        { fullName: 'Other Specified Dissociative Disorder, Type 3', source: 'DSM', isSystem: false, isFragmented: true, isDissociative: true },
     'OSDD-4':        { fullName: 'Other Specified Dissociative Disorder, Type 4', source: 'DSM', isSystem: false, isFragmented: true },
-    'Amnesia':        { fullName: 'Dissociative Amnesia', source: 'DSM', isSystem: false, isFragmented: false },
-    'Dereal/Depers': { fullName: 'Derealization/Depersonalization Disorder', source: 'DSM', isSystem: false, isFragmented: false, isDissociative: true },
+    'Amnesia':        { fullName: 'Dissociative Amnesia', source: 'DSM', extraQuestion: true,
+                       extraQuestionText: 'Do you have "with Fugue" subtype?\nDoes your memory loss include episodes of wandering or traveling to unfamiliar places?',
+                       extraQuestionYesLabel: 'Yes (Fugue)',
+                       extraQuestionNoLabel: 'No',
+                       extraQuestionYes: { key: 'Amnesia-Fugue', isSystem: false, isFragmented: true },
+                       extraQuestionNo:  { key: 'Amnesia', isSystem: false, isFragmented: false } },
+    'Amnesia-Fugue':  { fullName: 'Dissociative Amnesia with Fugue', source: 'DSM', isSystem: false, isFragmented: true, isDissociative: true, dissociativeStateName: 'Fugue' },
+    'Dereal/Depers': { fullName: 'Depersonalization-Derealization Disorder', source: 'DSM', isSystem: false, isFragmented: false, isDissociative: true },
     'UDD':           { fullName: 'Unspecified Dissociative Disorder', source: 'DSM', isSystem: false, isFragmented: false },
-    'P-DID':         { fullName: 'Partial Dissociative Identity Disorder', source: 'ICD', isSystem: true, isFragmented: false },
+    // ICD-11
+    'P-DID':         { fullName: 'Partial Dissociative Identity Disorder', source: 'ICD', isSystem: true, isFragmented: true, isDissociative: true },
     'Possession Trance': { fullName: 'Possession Trance Disorder', source: 'ICD', extraQuestion: true,
-                       extraQuestionText: 'Do you experience distinct entities or spirits taking control of your body?',
-                       extraQuestionYes: { isSystem: true, isFragmented: false },
+                       extraQuestionText: 'Do you want to track the entities/spirits themselves?',
+                       extraQuestionYesLabel: 'Yes',
+                       extraQuestionNoLabel: 'No, just the trance states',
+                       extraQuestionYes: { isSystem: true, isFragmented: true },
                        extraQuestionNo:  { isSystem: false, isFragmented: true } },
-    'Trance':        { fullName: 'Dissociative Trance Disorder', source: 'ICD', isSystem: false, isFragmented: true },
+    'Trance':        { fullName: 'Dissociative Trance Disorder', source: 'ICD', isSystem: false, isFragmented: true, isDissociative: true, dissociativeStateName: 'Trance' },
     'DNSD':          { fullName: 'Dissociative Neurological Symptom Disorder', source: 'ICD', extraQuestion: true,
-                       extraQuestionText: 'Would you describe it as states you\'d want to track?',
+                       extraQuestionText: 'Do you want to track your neurological symptoms and situations using states?',
+                       extraQuestionYesLabel: 'Yes',
+                       extraQuestionNoLabel: 'No',
                        extraQuestionYes: { isSystem: false, isFragmented: true },
                        extraQuestionNo:  { isSystem: false, isFragmented: false } },
 };
@@ -163,9 +177,21 @@ function setSession(sessionId, data) {
 }
 
 // Delete a session
-function deleteSession(sessionId) { activeSessions.delete(sessionId); }
+function deleteSession(sessionId) {
+    activeSessions.delete(sessionId);
+    if (sessionTimeouts.has(sessionId)) {
+        clearTimeout(sessionTimeouts.get(sessionId));
+        sessionTimeouts.delete(sessionId);
+    }
+}
 
-// Extract session ID from a custom ID string
+/**
+ * Extract session ID from a customId string.
+ * Convention: customId format is {command}_{action}_{userId}_{timestamp}
+ * Session ID format is {userId}_{timestamp} (last two underscore-separated segments).
+ * @param {string} customId - The Discord interaction customId
+ * @returns {string} The session ID (userId_timestamp)
+ */
 function extractSessionId(customId) {
     const parts = customId.split('_');
     return parts.slice(-2).join('_');
@@ -661,6 +687,7 @@ async function handleNewUserButton(interaction) {
         session.resolvedIsSystem = mapping.isSystem || false;
         session.resolvedIsFragmented = mapping.isFragmented || false;
         session.isDissociative = mapping.isDissociative || false;
+        session.dissociativeStateName = mapping.dissociativeStateName || 'Dissociated';
         session.step = 'name';
         setSession(sessionId, session);
 
@@ -682,9 +709,15 @@ async function handleNewUserButton(interaction) {
         const mapping = DISORDER_MAP[session.selectedDisorder];
         const result = answer ? mapping.extraQuestionYes : mapping.extraQuestionNo;
 
+        // Handle key override (e.g., Amnesia → Amnesia-Fugue)
+        if (result.key) {
+            session.selectedDisorder = result.key;
+        }
+
         session.resolvedIsSystem = result.isSystem;
         session.resolvedIsFragmented = result.isFragmented;
-        session.isDissociative = mapping.isDissociative || false;
+        session.isDissociative = result.isDissociative || mapping.isDissociative || false;
+        session.dissociativeStateName = (result.key ? DISORDER_MAP[result.key] : mapping).dissociativeStateName || 'Dissociated';
         session.step = 'name';
         setSession(sessionId, session);
 
@@ -984,6 +1017,7 @@ async function finalizeOnboarding(interaction, sessionId, session, customName) {
             isSystem: session.resolvedIsSystem || false,
             isFragmented: session.resolvedIsFragmented || false,
             isDissociative: session.isDissociative || false,
+            dissociativeStateName: session.dissociativeStateName || 'Dissociated',
             onboardingCompleted: true,
         };
 
@@ -1023,16 +1057,19 @@ async function finalizeOnboarding(interaction, sessionId, session, customName) {
         user.systemID = system._id;
         await user.save();
 
-        // Auto-create "Dissociated" state for Dereal/Depers users
+        // Auto-create dissociative state for dissociative users
         if (session.isDissociative) {
+            const stateName = session.dissociativeStateName || 'Dissociated';
+            const stateIndexable = stateName.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
             const dissociatedState = new State({
-                systemID: system._id,
-                name: { display: 'Dissociated', indexable: 'dissociated' },
-                description: 'A dissociative state',
-                proxy: ['dissociated'],
+                name: {
+                    display: stateName,
+                    ...(stateIndexable && { indexable: stateIndexable }),
+                },
+                description: `A ${stateName.toLowerCase()} state`,
+                proxy: [stateIndexable || stateName.toLowerCase()],
             });
-            await dissociatedState.save();
-            system.states.IDs.push(dissociatedState._id);
+            await createAndLinkEntity(dissociatedState, system, 'state');
             await system.save();
         }
 
@@ -1058,7 +1095,7 @@ async function finalizeOnboarding(interaction, sessionId, session, customName) {
                     ? `**Condition:** ${sysType.name}\n`
                     : '') +
                 (session.isDissociative
-                    ? '**Note:** A "Dissociated" state has been created for you.\n'
+                    ? `**Note:** A "${session.dissociativeStateName || 'Dissociated'}" state has been created for you.\n`
                     : '') +
                 importLine +
                 '\n\nUse `/system edit` to customize your profile further, ' +
@@ -2531,6 +2568,97 @@ function buildLogEmbed(eventType, data) {
     return embed;
 }
 
+// ============================================
+// ENTITY-SYSTEM BIDIRECTIONAL LINKING HELPERS
+// ============================================
+
+/**
+ * Create an entity, set systemID, save, and push to system's IDs array.
+ * Replaces the inline entity.save() + system.X.IDs.push() pattern.
+ * @param {Object} entity - Unsaved Mongoose entity document (Alter, State, or Group)
+ * @param {Object} system - Loaded System document
+ * @param {string} entityType - 'alter', 'state', or 'group'
+ * @returns {Object} The saved entity
+ */
+async function createAndLinkEntity(entity, system, entityType) {
+    entity.systemID = system._id.toString();
+    await entity.save();
+    const key = entityType + 's'; // 'alters', 'states', 'groups'
+    system[key] = system[key] || { IDs: [] };
+    if (!system[key].IDs.includes(entity._id)) {
+        system[key].IDs.push(entity._id);
+    }
+    return entity;
+}
+
+/**
+ * Remove an entity from its system's IDs array (for deletion workflows).
+ * Caller must still handle entity-level cleanup (groups, shifts, etc.) and system.save().
+ * @param {string|ObjectId} entityId - The entity's _id
+ * @param {Object} system - Loaded System document
+ * @param {string} entityType - 'alter', 'state', or 'group'
+ */
+function unlinkEntityFromSystem(entityId, system, entityType) {
+    const key = entityType + 's';
+    if (system[key]?.IDs) {
+        system[key].IDs = system[key].IDs.filter(id => id.toString() !== entityId.toString());
+    }
+}
+
+/**
+ * Bidirectional group membership link.
+ * Links entity → group AND group → entity.
+ * @param {string|ObjectId} entityId - The alter or state _id
+ * @param {string|ObjectId} groupId - The group _id
+ * @param {string} entityType - 'alter' or 'state' (default: 'alter')
+ */
+async function linkEntityToGroup(entityId, groupId, entityType = 'alter') {
+    const group = await Group.findById(groupId);
+    if (!group) return;
+
+    const idArray = entityType === 'state' ? 'stateIDs' : 'alterIDs';
+    group[idArray] = group[idArray] || [];
+    if (!group[idArray].includes(entityId)) {
+        group[idArray].push(entityId);
+        await group.save();
+    }
+
+    const Model = entityType === 'state' ? State : Alter;
+    const entity = await Model.findById(entityId);
+    if (entity) {
+        entity.groupsIDs = entity.groupsIDs || [];
+        if (!entity.groupsIDs.includes(groupId)) {
+            entity.groupsIDs.push(groupId);
+            await entity.save();
+        }
+    }
+}
+
+/**
+ * Bidirectional group membership unlink.
+ * Unlinks entity ↔ group on both sides.
+ * @param {string|ObjectId} entityId - The alter or state _id
+ * @param {string|ObjectId} groupId - The group _id
+ * @param {string} entityType - 'alter' or 'state' (default: 'alter')
+ */
+async function unlinkEntityFromGroup(entityId, groupId, entityType = 'alter') {
+    const group = await Group.findById(groupId);
+    if (group) {
+        const idArray = entityType === 'state' ? 'stateIDs' : 'alterIDs';
+        if (group[idArray]) {
+            group[idArray] = group[idArray].filter(id => id.toString() !== entityId.toString());
+            await group.save();
+        }
+    }
+
+    const Model = entityType === 'state' ? State : Alter;
+    const entity = await Model.findById(entityId);
+    if (entity?.groupsIDs) {
+        entity.groupsIDs = entity.groupsIDs.filter(id => id.toString() !== groupId.toString());
+        await entity.save();
+    }
+}
+
 // ==== EXPORTS ====
 module.exports = {
     // Constants
@@ -2617,6 +2745,12 @@ module.exports = {
     // Sync helpers
     buildSyncConfirmation,
 
+    // Entity-system bidirectional linking
+    createAndLinkEntity,
+    unlinkEntityFromSystem,
+    linkEntityToGroup,
+    unlinkEntityFromGroup,
+
     // Edit helpers
     getEditTarget,
     updateEntityProperty,
@@ -2631,6 +2765,7 @@ module.exports = {
     getProxyStyleOptions,
 
     // R2 media utilities
+    sysR2,
     uploadMediaToR2,
     deleteFromR2,
     downloadFromUrl,

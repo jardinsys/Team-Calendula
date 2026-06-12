@@ -4,13 +4,15 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-const { authMiddleware } = require('../middleware/auth');
+
 const System = require('../../schemas/system');
 const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const Note = require('../../schemas/note');
+const User = require('../../schemas/user');
 const { Shift } = require('../../schemas/front');
+const { uploadNoteContent, deleteNoteContent, generatePreview } = require('../utils/r2');
 
 // Helper to get display name
 function getDisplayName(entity) {
@@ -22,7 +24,7 @@ function getDisplayName(entity) {
 // Get entities for quick switch menu
 // ==========================================
 
-router.get('/switch', authMiddleware, async (req, res) => {
+router.get('/switch', async (req, res) => {
     try {
         const system = await System.findById(req.user.systemID);
         if (!system) {
@@ -35,7 +37,13 @@ router.get('/switch', authMiddleware, async (req, res) => {
         
         // Add from recent proxies
         for (const proxy of recentProxies.slice(0, 15)) {
-            const [type, id] = proxy.split(':');
+            let type, id;
+            if (typeof proxy === 'string') {
+                [type, id] = proxy.split(':');
+            } else {
+                type = proxy.type;
+                id = proxy.id;
+            }
             let entity = null;
             
             if (type === 'alter') {
@@ -109,7 +117,7 @@ router.get('/switch', authMiddleware, async (req, res) => {
 // Perform a quick switch
 // ==========================================
 
-router.post('/switch', authMiddleware, async (req, res) => {
+router.post('/switch', async (req, res) => {
     try {
         const { entities, status, battery } = req.body;
         
@@ -185,7 +193,10 @@ router.post('/switch', authMiddleware, async (req, res) => {
             const proxyKey = `${type}:${id}`;
             if (!system.proxy) system.proxy = {};
             if (!system.proxy.recentProxies) system.proxy.recentProxies = [];
-            system.proxy.recentProxies = system.proxy.recentProxies.filter(p => p !== proxyKey);
+            system.proxy.recentProxies = system.proxy.recentProxies.filter(p => {
+                if (typeof p === 'string') return p !== proxyKey;
+                return `${p.type}:${p.id}` !== proxyKey;
+            });
             system.proxy.recentProxies.unshift(proxyKey);
             system.proxy.recentProxies = system.proxy.recentProxies.slice(0, 15);
             
@@ -221,7 +232,7 @@ router.post('/switch', authMiddleware, async (req, res) => {
 // Switch out (clear front)
 // ==========================================
 
-router.post('/switch/out', authMiddleware, async (req, res) => {
+router.post('/switch/out', async (req, res) => {
     try {
         const system = await System.findById(req.user.systemID);
         if (!system) {
@@ -260,7 +271,7 @@ router.post('/switch/out', authMiddleware, async (req, res) => {
 // Get recent notes
 // ==========================================
 
-router.get('/notes', authMiddleware, async (req, res) => {
+router.get('/notes', async (req, res) => {
     try {
         const notes = await Note.find({
             $or: [
@@ -285,7 +296,7 @@ router.get('/notes', authMiddleware, async (req, res) => {
 // Create quick note
 // ==========================================
 
-router.post('/notes', authMiddleware, async (req, res) => {
+router.post('/notes', async (req, res) => {
     try {
         const { title, content, tags } = req.body;
         
@@ -296,7 +307,7 @@ router.post('/notes', authMiddleware, async (req, res) => {
         const note = new Note({
             _id: new mongoose.Types.ObjectId(),
             title: title || `Quick Note - ${new Date().toLocaleDateString()}`,
-            content,
+            contentPreview: generatePreview(content),
             tags: tags || [],
             author: { userID: req.user._id },
             users: { owner: { userID: req.user._id } },
@@ -305,6 +316,30 @@ router.post('/notes', authMiddleware, async (req, res) => {
         });
         
         await note.save();
+        
+        if (typeof content === 'string' && content.length > 0) {
+            try {
+                const contentMedia = await uploadNoteContent(req.user._id.toString(), note.id, content);
+                note.content = contentMedia;
+                await note.save();
+            } catch (uploadErr) {
+                console.error('[Quick Notes] R2 upload failed:', uploadErr);
+            }
+        }
+        
+        const user = await User.findById(req.user._id);
+        if (user) {
+            user.notes = user.notes || { tags: [], notes: [] };
+            user.notes.notes.push(note._id);
+            if (tags?.length) {
+                for (const tag of tags) {
+                    if (!user.notes.tags.includes(tag)) {
+                        user.notes.tags.push(tag);
+                    }
+                }
+            }
+            await user.save();
+        }
         
         res.status(201).json(note);
         
@@ -319,7 +354,7 @@ router.post('/notes', authMiddleware, async (req, res) => {
 // Append to note
 // ==========================================
 
-router.patch('/notes/:id/append', authMiddleware, async (req, res) => {
+router.patch('/notes/:id/append', async (req, res) => {
     try {
         const { content } = req.body;
         
@@ -342,11 +377,42 @@ router.patch('/notes/:id/append', authMiddleware, async (req, res) => {
             return res.status(403).json({ error: 'No permission to edit' });
         }
         
-        // Append with timestamp
-        const timestamp = `\n\n---\n**${new Date().toLocaleString()}**\n`;
-        note.content = (note.content || '') + timestamp + content;
-        note.updatedAt = new Date();
+        let existingContent = '';
+        if (typeof note.content === 'string') {
+            existingContent = note.content;
+        } else if (note.content?.url) {
+            try {
+                const https = require('https');
+                const fetchContent = (url) => new Promise((resolve, reject) => {
+                    https.get(url, (response) => {
+                        let data = '';
+                        response.on('data', (chunk) => { data += chunk; });
+                        response.on('end', () => resolve(data));
+                    }).on('error', reject);
+                });
+                existingContent = await fetchContent(note.content.url);
+            } catch {
+                existingContent = note.contentPreview || '';
+            }
+        }
         
+        const timestamp = `\n\n---\n**${new Date().toLocaleString()}**\n`;
+        const newContent = existingContent + timestamp + content;
+        
+        try {
+            const contentMedia = await uploadNoteContent(req.user._id.toString(), note.id, newContent);
+            const oldR2Key = note.content?.r2Key;
+            note.content = contentMedia;
+            note.contentPreview = generatePreview(newContent);
+            if (oldR2Key && oldR2Key !== contentMedia.r2Key) {
+                await deleteNoteContent(oldR2Key);
+            }
+        } catch (uploadErr) {
+            console.error('[Quick Notes] R2 upload failed on append:', uploadErr);
+            note.contentPreview = generatePreview(newContent);
+        }
+        
+        note.updatedAt = new Date();
         await note.save();
         
         res.json(note);

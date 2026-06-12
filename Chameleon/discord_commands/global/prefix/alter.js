@@ -33,6 +33,7 @@ const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
+const proxyMessageHandler = require('../proxy-message');
 
 const { getSystemTerm, getAlterTerm } = utils;
 
@@ -130,15 +131,10 @@ async function handleNew(message, parsed) {
     }
 
     const alter = new Alter({
-        systemID: system._id,
         name: { ...(indexable && { indexable }), display: name },
         metadata: { addedAt: new Date() }
     });
-    await alter.save();
-
-    system.alters = system.alters || { IDs: [] };
-    system.alters.IDs.push(alter._id);
-    await system.save();
+    await utils.createAndLinkEntity(alter, system, 'alter');
 
     const embed = new EmbedBuilder()
         .setColor(utils.ENTITY_COLORS.success)
@@ -164,17 +160,19 @@ async function handleRename(message, parsed, alterName) {
     }
     alter.name.indexable = newName;
     await alter.save();
+    await proxyMessageHandler.invalidateDisplayCache(alter._id);
     return utils.success(message, `Indexable name changed to **${newName}**`);
 }
 
 async function handleDisplayName(message, parsed, alterName) {
     const { alter } = await getAlter(message, alterName);
     if (!alter) return;
-    if (parsed.clear) { alter.name.display = undefined; await alter.save(); return utils.success(message, 'Display name cleared.'); }
+    if (parsed.clear) { alter.name.display = undefined; await alter.save(); await proxyMessageHandler.invalidateDisplayCache(alter._id); return utils.success(message, 'Display name cleared.'); }
     const newName = parsed._positional.slice(2).join(' ');
     if (!newName) return utils.error(message, 'Please provide a display name.');
     alter.name.display = newName;
     await alter.save();
+    await proxyMessageHandler.invalidateDisplayCache(alter._id);
     return utils.success(message, `Display name set to **${newName}**`);
 }
 
@@ -192,7 +190,7 @@ async function handleDescription(message, parsed, alterName) {
 async function handleAvatar(message, parsed, alterName) {
     const { alter } = await getAlter(message, alterName);
     if (!alter) return;
-    if (parsed.clear) { if (alter.avatar?.r2Key) await utils.deleteFromR2(alter.avatar.r2Key, alter.avatar.bucket || 'app'); alter.avatar = undefined; await alter.save(); return utils.success(message, 'Avatar cleared.'); }
+    if (parsed.clear) { if (alter.avatar?.r2Key) await utils.deleteFromR2(alter.avatar.r2Key, alter.avatar.bucket || 'app'); alter.avatar = undefined; await alter.save(); await proxyMessageHandler.invalidateDisplayCache(alter._id); return utils.success(message, 'Avatar cleared.'); }
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[2];
     const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'Alter', message.author.id, 'app');
@@ -200,6 +198,7 @@ async function handleAvatar(message, parsed, alterName) {
     if (alter.avatar?.r2Key) await utils.deleteFromR2(alter.avatar.r2Key, alter.avatar.bucket || 'app');
     alter.avatar = result.media;
     await alter.save();
+    await proxyMessageHandler.invalidateDisplayCache(alter._id);
     return utils.success(message, 'Avatar uploaded and updated.');
 }
 
@@ -208,7 +207,7 @@ async function handleBanner(message, parsed, alterName) {
     if (!alter) return;
     const syncWithDiscord = alter.syncWithApps?.discord;
     const bucket = utils.resolveUploadBucket(syncWithDiscord, 'discord');
-    if (parsed.clear) { if (alter.discord?.image?.banner?.r2Key) await utils.deleteFromR2(alter.discord.image.banner.r2Key, alter.discord.image.banner.bucket || 'app'); if (alter.discord?.image) alter.discord.image.banner = undefined; await alter.save(); return utils.success(message, 'Banner cleared.'); }
+    if (parsed.clear) { if (alter.discord?.image?.banner?.r2Key) await utils.deleteFromR2(alter.discord.image.banner.r2Key, alter.discord.image.banner.bucket || 'app'); if (alter.discord?.image) alter.discord.image.banner = undefined; await alter.save(); await proxyMessageHandler.invalidateDisplayCache(alter._id); return utils.success(message, 'Banner cleared.'); }
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[2];
     const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'Alter', message.author.id, bucket);
@@ -217,6 +216,7 @@ async function handleBanner(message, parsed, alterName) {
     alter.discord = alter.discord || {}; alter.discord.image = alter.discord.image || {};
     alter.discord.image.banner = result.media;
     await alter.save();
+    await proxyMessageHandler.invalidateDisplayCache(alter._id);
     return utils.success(message, 'Banner uploaded and updated.');
 }
 
@@ -225,7 +225,7 @@ async function handleProxyAvatar(message, parsed, alterName) {
     if (!alter) return;
     const syncWithDiscord = alter.syncWithApps?.discord;
     const bucket = utils.resolveUploadBucket(syncWithDiscord, 'discord');
-    if (parsed.clear) { if (alter.discord?.image?.proxyAvatar?.r2Key) await utils.deleteFromR2(alter.discord.image.proxyAvatar.r2Key, alter.discord.image.proxyAvatar.bucket || 'app'); if (alter.discord?.image) alter.discord.image.proxyAvatar = undefined; await alter.save(); return utils.success(message, 'Proxy avatar cleared.'); }
+    if (parsed.clear) { if (alter.discord?.image?.proxyAvatar?.r2Key) await utils.deleteFromR2(alter.discord.image.proxyAvatar.r2Key, alter.discord.image.proxyAvatar.bucket || 'app'); if (alter.discord?.image) alter.discord.image.proxyAvatar = undefined; await alter.save(); await proxyMessageHandler.invalidateDisplayCache(alter._id); return utils.success(message, 'Proxy avatar cleared.'); }
     const attachment = message.attachments.first();
     const urlArg = parsed._positional[2];
     const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'proxyAvatar', 'Alter', message.author.id, bucket);
@@ -234,6 +234,7 @@ async function handleProxyAvatar(message, parsed, alterName) {
     alter.discord = alter.discord || {}; alter.discord.image = alter.discord.image || {};
     alter.discord.image.proxyAvatar = result.media;
     await alter.save();
+    await proxyMessageHandler.invalidateDisplayCache(alter._id);
     return utils.success(message, 'Proxy avatar uploaded and updated.');
 }
 
@@ -405,11 +406,12 @@ async function handleCaution(message, parsed, alterName) {
 async function handleClosedName(message, parsed, alterName) {
     const { alter } = await getAlter(message, alterName);
     if (!alter) return;
-    if (parsed.clear) { alter.name.closedNameDisplay = undefined; await alter.save(); return utils.success(message, 'Closed name display cleared.'); }
+    if (parsed.clear) { alter.name.closedNameDisplay = undefined; await alter.save(); await proxyMessageHandler.invalidateDisplayCache(alter._id); return utils.success(message, 'Closed name display cleared.'); }
     const newName = parsed._positional.slice(2).join(' ');
     if (!newName) return utils.error(message, 'Please provide a closed name display.');
     alter.name.closedNameDisplay = newName;
     await alter.save();
+    await proxyMessageHandler.invalidateDisplayCache(alter._id);
     return utils.success(message, `Closed name display set to **${newName}**`);
 }
 
@@ -503,15 +505,17 @@ async function handleMask(message, parsed, alterName) {
         alter.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
         alter.mask.name.display = val;
         await alter.save();
+        await proxyMessageHandler.invalidateDisplayCache(alter._id);
         return utils.success(message, `Mask name set to **${val}**`);
     }
     if (field === 'displayname' || field === 'dn') {
-        if (parsed.clear) { alter.mask.name = alter.mask.name || {}; alter.mask.name.display = undefined; await alter.save(); return utils.success(message, 'Mask display name cleared.'); }
+        if (parsed.clear) { alter.mask.name = alter.mask.name || {}; alter.mask.name.display = undefined; await alter.save(); await proxyMessageHandler.invalidateDisplayCache(alter._id); return utils.success(message, 'Mask display name cleared.'); }
         const val = parsed._positional.slice(3).join(' ');
         if (!val) return utils.error(message, 'Please provide a mask display name.');
         alter.mask.name = alter.mask.name || {};
         alter.mask.name.display = val;
         await alter.save();
+        await proxyMessageHandler.invalidateDisplayCache(alter._id);
         return utils.success(message, `Mask display name set to **${val}**`);
     }
     if (field === 'description' || field === 'desc') {
@@ -531,31 +535,34 @@ async function handleMask(message, parsed, alterName) {
         return utils.success(message, `Mask color set to **${val}**`);
     }
     if (field === 'avatar' || field === 'icon' || field === 'av' || field === 'pfp') {
-        if (parsed.clear) { alter.mask.avatar = undefined; await alter.save(); return utils.success(message, 'Mask avatar cleared.'); }
+        if (parsed.clear) { alter.mask.avatar = undefined; await alter.save(); await proxyMessageHandler.invalidateDisplayCache(alter._id); return utils.success(message, 'Mask avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         alter.mask.avatar = { url };
         await alter.save();
+        await proxyMessageHandler.invalidateDisplayCache(alter._id);
         return utils.success(message, 'Mask avatar updated.');
     }
     if (field === 'banner') {
-        if (parsed.clear) { alter.mask.discord = alter.mask.discord || {}; alter.mask.discord.image = alter.mask.discord.image || {}; alter.mask.discord.image.banner = undefined; await alter.save(); return utils.success(message, 'Mask banner cleared.'); }
+        if (parsed.clear) { alter.mask.discord = alter.mask.discord || {}; alter.mask.discord.image = alter.mask.discord.image || {}; alter.mask.discord.image.banner = undefined; await alter.save(); await proxyMessageHandler.invalidateDisplayCache(alter._id); return utils.success(message, 'Mask banner cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         alter.mask.discord = alter.mask.discord || {};
         alter.mask.discord.image = alter.mask.discord.image || {};
         alter.mask.discord.image.banner = { url };
         await alter.save();
+        await proxyMessageHandler.invalidateDisplayCache(alter._id);
         return utils.success(message, 'Mask banner updated.');
     }
     if (field === 'proxyavatar' || field === 'pav') {
-        if (parsed.clear) { alter.mask.discord = alter.mask.discord || {}; alter.mask.discord.image = alter.mask.discord.image || {}; alter.mask.discord.image.proxyAvatar = undefined; await alter.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        if (parsed.clear) { alter.mask.discord = alter.mask.discord || {}; alter.mask.discord.image = alter.mask.discord.image || {}; alter.mask.discord.image.proxyAvatar = undefined; await alter.save(); await proxyMessageHandler.invalidateDisplayCache(alter._id); return utils.success(message, 'Mask proxy avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[3];
         if (!url) return utils.error(message, 'Please provide a URL.');
         alter.mask.discord = alter.mask.discord || {};
         alter.mask.discord.image = alter.mask.discord.image || {};
         alter.mask.discord.image.proxyAvatar = { url };
         await alter.save();
+        await proxyMessageHandler.invalidateDisplayCache(alter._id);
         return utils.success(message, 'Mask proxy avatar updated.');
     }
     return utils.error(message, `Unknown mask field: ${field}. Use: name, displayname, description, color, avatar, banner, proxyavatar`);
@@ -591,7 +598,7 @@ async function handleDelete(message, parsed, alterName) {
     if (!parsed.confirm) return utils.error(message, `⚠️ This will permanently delete **${alter.name?.display || alterName}**.\nConfirm: \`sys!alter ${alterName} delete -confirm\``);
     for (const gid of alter.groupsIDs || []) {
         const g = await Group.findById(gid);
-        if (g) { g.memberIDs = g.memberIDs?.filter(id => id !== alter._id) || []; await g.save(); }
+        if (g) { g.alterIDs = g.alterIDs?.filter(id => id !== alter._id) || []; await g.save(); }
     }
     system.alters.IDs = system.alters.IDs?.filter(id => id !== alter._id) || [];
     await system.save(); await Alter.deleteOne({ _id: alter._id });

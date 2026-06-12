@@ -5,7 +5,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 
-const { authMiddleware } = require('../middleware/auth');
+
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const Alter = require('../../schemas/alter');
@@ -17,7 +17,7 @@ const { Shift } = require('../../schemas/front');
 // GET FRIENDS LIST
 // ===========================================
 
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const friends = user?.friends || [];
@@ -99,10 +99,11 @@ router.get('/', authMiddleware, async (req, res) => {
 // ADD FRIEND
 // ===========================================
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
-        const { friendId, discordId, customName } = req.body;
+        const system = user.systemID ? await System.findById(user.systemID) : null;
+        const { friendId, discordId } = req.body;
         
         if (!friendId && !discordId) {
             return res.status(400).json({ error: 'friendId or discordId is required' });
@@ -119,34 +120,126 @@ router.post('/', authMiddleware, async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
         
-        const alreadyFriend = user.friends?.some(
-            f => f.friendID === targetUser.friendID || f.discordID === targetUser.discordID
-        );
-        
-        if (alreadyFriend) {
-            return res.status(400).json({ error: 'Already friends' });
-        }
-        
         if (targetUser._id.toString() === user._id.toString()) {
             return res.status(400).json({ error: 'Cannot add yourself' });
         }
         
-        user.friends = user.friends || [];
-        user.friends.push({
-            friendID: targetUser.friendID,
-            discordID: targetUser.discordID,
-            customName: customName ? (() => {
-                const frIdx = customName.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
-                return { display: customName, ...(frIdx && { indexable: frIdx }) };
-            })() : undefined,
-            addedAt: new Date()
+        const alreadyFriend = user.friends?.some(
+            f => f.friendID === targetUser.friendID || f.discordID === targetUser.discordID
+        );
+        if (alreadyFriend) {
+            return res.status(400).json({ error: 'Already friends' });
+        }
+        
+        const alreadyRequested = targetUser.friendRequests?.some(
+            r => r.fromDiscordID === user.discordID
+        );
+        if (alreadyRequested) {
+            return res.status(400).json({ error: 'Friend request already sent' });
+        }
+        
+        const alreadyBlocked = targetUser.blocked?.some(
+            b => b.discordID === user.discordID || b.friendID === user.friendID
+        );
+        if (alreadyBlocked) {
+            return res.status(403).json({ error: 'Cannot send friend request' });
+        }
+        
+        targetUser.friendRequests = targetUser.friendRequests || [];
+        targetUser.friendRequests.push({
+            fromDiscordID: user.discordID,
+            fromFriendID: user.friendID,
+            fromName: user.discord?.name?.display || user.username,
+            fromSystemName: system?.name?.display,
+            sentAt: new Date()
         });
         
-        await user.save();
+        await targetUser.save();
         
-        res.status(201).json({ success: true });
+        res.status(201).json({ success: true, message: 'Friend request sent' });
     } catch (err) {
         console.error('[Friends] Add error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/requests', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        res.json(user?.friendRequests || []);
+    } catch (err) {
+        console.error('[Friends] Get requests error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/requests/:index/accept', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const idx = parseInt(req.params.index, 10);
+        
+        if (isNaN(idx) || idx < 0 || idx >= (user.friendRequests?.length || 0)) {
+            return res.status(400).json({ error: 'Invalid request index' });
+        }
+        
+        const request = user.friendRequests[idx];
+        const requesterUser = await User.findOne({ discordID: request.fromDiscordID });
+        
+        if (!requesterUser) {
+            user.friendRequests.splice(idx, 1);
+            await user.save();
+            return res.status(404).json({ error: 'Requester not found' });
+        }
+        
+        const requesterSystem = requesterUser.systemID ? await System.findById(requesterUser.systemID) : null;
+        const accepterSystem = user.systemID ? await System.findById(user.systemID) : null;
+        
+        user.friends = user.friends || [];
+        if (!user.friends.some(f => f.friendID === requesterUser.friendID)) {
+            user.friends.push({
+                friendID: requesterUser.friendID,
+                discordID: requesterUser.discordID,
+                privacyBucket: requesterSystem?.setting?.friendAutoBucket || undefined,
+                addedAt: new Date()
+            });
+        }
+        
+        requesterUser.friends = requesterUser.friends || [];
+        if (!requesterUser.friends.some(f => f.friendID === user.friendID)) {
+            requesterUser.friends.push({
+                friendID: user.friendID,
+                discordID: user.discordID,
+                privacyBucket: accepterSystem?.setting?.friendAutoBucket || undefined,
+                addedAt: new Date()
+            });
+        }
+        
+        user.friendRequests.splice(idx, 1);
+        
+        await Promise.all([user.save(), requesterUser.save()]);
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[Friends] Accept request error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/requests/:index/decline', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const idx = parseInt(req.params.index, 10);
+        
+        if (isNaN(idx) || idx < 0 || idx >= (user.friendRequests?.length || 0)) {
+            return res.status(400).json({ error: 'Invalid request index' });
+        }
+        
+        user.friendRequests.splice(idx, 1);
+        await user.save();
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[Friends] Decline request error:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -155,7 +248,7 @@ router.post('/', authMiddleware, async (req, res) => {
 // REMOVE FRIEND
 // ===========================================
 
-router.delete('/:friendId', authMiddleware, async (req, res) => {
+router.delete('/:friendId', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { friendId } = req.params;
@@ -176,7 +269,7 @@ router.delete('/:friendId', authMiddleware, async (req, res) => {
 // UPDATE FRIEND
 // ===========================================
 
-router.patch('/:friendId', authMiddleware, async (req, res) => {
+router.patch('/:friendId', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { friendId } = req.params;
@@ -213,7 +306,7 @@ router.patch('/:friendId', authMiddleware, async (req, res) => {
 // BLOCK/UNBLOCK
 // ===========================================
 
-router.post('/block', authMiddleware, async (req, res) => {
+router.post('/block', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { friendId, discordId } = req.body;
@@ -256,7 +349,7 @@ router.post('/block', authMiddleware, async (req, res) => {
     }
 });
 
-router.delete('/block/:id', authMiddleware, async (req, res) => {
+router.delete('/block/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         user.blocked = (user.blocked || []).filter(
@@ -269,7 +362,7 @@ router.delete('/block/:id', authMiddleware, async (req, res) => {
     }
 });
 
-router.get('/blocked', authMiddleware, async (req, res) => {
+router.get('/blocked', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         res.json(user?.blocked || []);
@@ -282,7 +375,7 @@ router.get('/blocked', authMiddleware, async (req, res) => {
 // GET MY FRIEND ID
 // ===========================================
 
-router.get('/my-id', authMiddleware, async (req, res) => {
+router.get('/my-id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         res.json({ 
@@ -298,7 +391,7 @@ router.get('/my-id', authMiddleware, async (req, res) => {
 // GET FRIEND'S FRONT
 // ===========================================
 
-router.get('/:friendId/front', authMiddleware, async (req, res) => {
+router.get('/:friendId/front', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { friendId } = req.params;

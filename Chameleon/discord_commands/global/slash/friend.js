@@ -64,15 +64,15 @@ module.exports = {
         if (isNew) return await utils.handleNewUserFlow(interaction, 'friend');
 
         switch (action) {
-            case 'list': return await handleList(interaction, user, system); break;
-            case 'view': return await handleView(interaction, user, system); break;
-            case 'add': return await handleAdd(interaction, user, system); break;
-            case 'remove': return await handleRemove(interaction, user, system); break;
-            case 'requests': return await handleRequests(interaction, user, system); break;
-            case 'block': return await handleBlock(interaction, user, system); break;
-            case 'unblock': return await handleUnblock(interaction, user, system); break;
-            case 'settings': return await handleSettings(interaction, user, system); break;
-            default: return await handleList(interaction, user, system); break;
+            case 'list': return await handleList(interaction, user, system);
+            case 'view': return await handleView(interaction, user, system);
+            case 'add': return await handleAdd(interaction, user, system);
+            case 'remove': return await handleRemove(interaction, user, system);
+            case 'requests': return await handleRequests(interaction, user, system);
+            case 'block': return await handleBlock(interaction, user, system);
+            case 'unblock': return await handleUnblock(interaction, user, system);
+            case 'settings': return await handleSettings(interaction, user, system);
+            default: return await handleList(interaction, user, system);
         }
     },
 
@@ -252,7 +252,7 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
                 }
 
                 const entityPrivacy = entity.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
-                if (entityPrivacy?.settings?.hidden === false) continue;
+                if (entityPrivacy?.settings?.hidden === true) continue;
 
                 const emoji = shift.s_type === 'alter' ? '🎭' : (shift.s_type === 'state' ? '🔄' : '👥');
                 const displayName = utils.getDisplayName(entity, closedCharAllowed);

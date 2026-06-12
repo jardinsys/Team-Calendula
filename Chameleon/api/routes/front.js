@@ -5,7 +5,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 
-const { authMiddleware, optionalAuthMiddleware } = require('../middleware/auth');
+const { optionalAuthMiddleware } = require('../middleware/auth');
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const Alter = require('../../schemas/alter');
@@ -22,7 +22,7 @@ const { resolveAlterDisplay } = require('../../discord_commands/functions/bot_ut
  * GET /api/front
  * Get current front status for the authenticated user
  */
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -48,7 +48,7 @@ router.get('/', authMiddleware, async (req, res) => {
  * Get switch history
  * Query: ?limit=10&before=timestamp
  */
-router.get('/history', authMiddleware, async (req, res) => {
+router.get('/history', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -126,7 +126,7 @@ router.get('/history', authMiddleware, async (req, res) => {
  * GET /api/front/layers
  * Get all front layers
  */
-router.get('/layers', authMiddleware, async (req, res) => {
+router.get('/layers', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -158,7 +158,7 @@ router.get('/layers', authMiddleware, async (req, res) => {
  * Update front status and/or social battery
  * Body: { status?, battery?, caution? }
  */
-router.patch('/status', authMiddleware, async (req, res) => {
+router.patch('/status', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -227,7 +227,7 @@ router.get('/:systemId', optionalAuthMiddleware, async (req, res) => {
  * Create a new front layer
  * Body: { name, color? }
  */
-router.post('/layers', authMiddleware, async (req, res) => {
+router.post('/layers', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -266,7 +266,7 @@ router.post('/layers', authMiddleware, async (req, res) => {
  * DELETE /api/front/layers/:layerId
  * Delete a front layer (ends all shifts in it)
  */
-router.delete('/layers/:layerId', authMiddleware, async (req, res) => {
+router.delete('/layers/:layerId', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -316,41 +316,77 @@ router.delete('/layers/:layerId', authMiddleware, async (req, res) => {
 
 /**
  * PATCH /api/front/shift/:shiftId/status
- * Update the status of an active shift
- * Body: { status }
+ * Update the status/battery/caution of an active shift
+ * Body: { status?, battery?, caution?, applyTo? }
+ * applyTo: 'shift' | 'preset' | 'both' (default: 'shift')
  */
-router.patch('/shift/:shiftId/status', authMiddleware, async (req, res) => {
+router.patch('/shift/:shiftId/status', async (req, res) => {
     try {
-        const { status } = req.body;
-        
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+
+        const { status, battery, caution, applyTo = 'shift' } = req.body;
         const shift = await Shift.findById(req.params.shiftId);
         if (!shift) {
             return res.status(404).json({ error: 'Shift not found' });
         }
-        
+
         if (shift.endTime) {
             return res.status(400).json({ error: 'Cannot update ended shift' });
         }
-        
-        // End previous status
-        if (shift.statuses?.length > 0) {
-            const lastStatus = shift.statuses[shift.statuses.length - 1];
-            if (!lastStatus.endTime) {
-                lastStatus.endTime = new Date();
+
+        const hasStatusChange = status !== undefined;
+        const hasBatteryChange = battery !== undefined;
+        const hasCautionChange = caution !== undefined;
+
+        if (hasStatusChange || hasBatteryChange || hasCautionChange) {
+            if (shift.statuses?.length > 0) {
+                const lastStatus = shift.statuses[shift.statuses.length - 1];
+                if (!lastStatus.endTime) {
+                    lastStatus.endTime = new Date();
+                }
+            }
+
+            shift.statuses = shift.statuses || [];
+            const newEntry = {
+                startTime: new Date(),
+                hidden: 'n'
+            };
+            if (hasStatusChange) newEntry.status = status;
+            if (hasBatteryChange) newEntry.battery = battery !== null && battery !== '' ? Number(battery) : null;
+            if (hasCautionChange) newEntry.caution = caution || null;
+            shift.statuses.push(newEntry);
+        }
+
+        await shift.save();
+
+        if (applyTo === 'preset' || applyTo === 'both') {
+            let entity = null;
+            if (shift.s_type === 'alter') entity = await Alter.findById(shift.ID);
+            else if (shift.s_type === 'state') entity = await State.findById(shift.ID);
+            else if (shift.s_type === 'group') entity = await Group.findById(shift.ID);
+
+            if (entity) {
+                if (hasStatusChange && (applyTo === 'preset' || applyTo === 'both')) {
+                    entity.setting = entity.setting || {};
+                    entity.setting.default_status = status;
+                }
+                if (hasBatteryChange && (applyTo === 'preset' || applyTo === 'both')) {
+                    entity.setting = entity.setting || {};
+                    entity.setting.default_battery = battery !== null && battery !== '' ? Number(battery) : null;
+                }
+                if (hasCautionChange && (applyTo === 'preset' || applyTo === 'both')) {
+                    entity.caution = caution || null;
+                }
+                await entity.save();
             }
         }
-        
-        // Add new status
-        shift.statuses = shift.statuses || [];
-        shift.statuses.push({
-            status,
-            startTime: new Date(),
-            hidden: 'n'
-        });
-        
-        await shift.save();
-        
-        res.json({ success: true, status });
+
+        const frontData = await buildFrontData(system);
+        res.json(frontData);
     } catch (err) {
         console.error('[Front] Update shift status error:', err);
         res.status(500).json({ error: err.message });
@@ -370,7 +406,7 @@ router.patch('/shift/:shiftId/status', authMiddleware, async (req, res) => {
  *   battery?: number
  * }
  */
-router.post('/switch', authMiddleware, async (req, res) => {
+router.post('/switch', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -465,7 +501,7 @@ router.post('/switch', authMiddleware, async (req, res) => {
  * Add a single entity to front
  * Body: { entityId, entityType, layerId?, parentShiftId? }
  */
-router.post('/shift', authMiddleware, async (req, res) => {
+router.post('/shift', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -560,7 +596,7 @@ router.post('/shift', authMiddleware, async (req, res) => {
  * DELETE /api/front/shift/:shiftId
  * Remove a single entity from front (ends the shift)
  */
-router.delete('/shift/:shiftId', authMiddleware, async (req, res) => {
+router.delete('/shift/:shiftId', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -618,7 +654,7 @@ router.delete('/shift/:shiftId', authMiddleware, async (req, res) => {
  * Reorder layers
  * Body: { layerIds: string[] }
  */
-router.patch('/layers/reorder', authMiddleware, async (req, res) => {
+router.patch('/layers/reorder', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -663,7 +699,7 @@ router.patch('/layers/reorder', authMiddleware, async (req, res) => {
  * Rename a layer
  * Body: { name, color? }
  */
-router.patch('/layers/:layerId', authMiddleware, async (req, res) => {
+router.patch('/layers/:layerId', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -705,7 +741,7 @@ router.patch('/layers/:layerId', authMiddleware, async (req, res) => {
  * Add a child shift to a group shift
  * Body: { entityId, entityType }
  */
-router.post('/shift/:shiftId/children', authMiddleware, async (req, res) => {
+router.post('/shift/:shiftId/children', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -786,7 +822,7 @@ router.post('/shift/:shiftId/children', authMiddleware, async (req, res) => {
  * DELETE /api/front/shift/:shiftId/children/:childId
  * Remove a child shift from a group shift
  */
-router.delete('/shift/:shiftId/children/:childId', authMiddleware, async (req, res) => {
+router.delete('/shift/:shiftId/children/:childId', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -949,6 +985,8 @@ async function buildFrontData(system, limited = false) {
                 color: entityColor,
                 pronouns,
                 status: currentStatus?.status,
+                battery: currentStatus?.battery,
+                caution: currentStatus?.caution,
                 startTime: shift.startTime,
                 duration: Date.now() - new Date(shift.startTime).getTime()
             };
@@ -978,6 +1016,8 @@ async function buildFrontData(system, limited = false) {
                         color: childDisplay.entityColor,
                         pronouns: childDisplay.pronouns,
                         status: childStatus?.status,
+                        battery: childStatus?.battery,
+                        caution: childStatus?.caution,
                         startTime: childShift.startTime,
                         duration: Date.now() - new Date(childShift.startTime).getTime()
                     });

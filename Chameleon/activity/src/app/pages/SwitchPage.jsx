@@ -1,12 +1,24 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
 import {
-    api, Icon, FrontDisplay,
+    api, Icon,
     isSystemUser, isFragmentedUser, isDissociativeUser,
     getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm
 } from '@chameleon/shared'
-import { SwitchEntityGrid } from '@chameleon/shared/components/SwitchEntityGrid.jsx'
-import { SwitchLayerPanel } from '@chameleon/shared/components/SwitchLayerPanel.jsx'
+import { LayerCard } from '@chameleon/shared/components/LayerCard.jsx'
+import {
+    DndContext,
+    closestCenter,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragOverlay,
+} from '@dnd-kit/core'
+import {
+    arrayMove,
+    SortableContext,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -29,7 +41,7 @@ function buildEntityTypeList(system) {
     return types
 }
 
-export function SwitchPage({ system: systemProp, onNavigate }) {
+export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
     const { session } = useDiscordSdk()
     const [system, setSystem] = useState(systemProp)
     const [frontData, setFrontData] = useState(null)
@@ -40,16 +52,36 @@ export function SwitchPage({ system: systemProp, onNavigate }) {
     const [error, setError] = useState(null)
     const [saving, setSaving] = useState(false)
 
-    // Selection state
-    const [selectedIds, setSelectedIds] = useState([])
+    // Layer state
     const [layers, setLayers] = useState([{ name: 'Main', entityIds: [] }])
-    const [searchQuery, setSearchQuery] = useState('')
+
+    // Per-entity pre-set values (status/battery/caution for the upcoming switch)
+    const [entityMeta, setEntityMeta] = useState({})
+
+    // Which entity's popover is open
+    const [editingEntityId, setEditingEntityId] = useState(null)
+
+    // System-level status/battery
     const [status, setStatus] = useState('')
     const [battery, setBattery] = useState('')
+
+    // Change tracking for button label
+    const [entityChanges, setEntityChanges] = useState(false)
+    const [metadataChanges, setMetadataChanges] = useState(false)
+
+    // Layer DnD state
+    const [activeId, setActiveId] = useState(null)
 
     const showLayers = isSystemUser(system) || isFragmentedUser(system)
     const showDissociativeButton = isDissociativeUser(system)
 
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: { distance: 5 },
+        })
+    )
+
+    // Fetch all data
     const fetchAll = useCallback(async () => {
         try {
             setLoading(true)
@@ -69,15 +101,23 @@ export function SwitchPage({ system: systemProp, onNavigate }) {
             setStates(statesData || [])
             setGroups(groupsData || [])
 
-            // Pre-populate from current front
+            // Pre-populate layers from current front
             if (frontResult?.layers?.length) {
                 const newLayers = []
-                const newSelectedIds = []
+                const newEntityMeta = {}
                 for (const layer of frontResult.layers) {
                     const entityIds = []
                     for (const fronter of layer.fronters || []) {
                         entityIds.push(fronter._id)
-                        newSelectedIds.push(fronter._id)
+                        // Pre-populate entity meta from existing front
+                        if (fronter.status || fronter.battery != null || fronter.caution) {
+                            newEntityMeta[fronter._id] = {
+                                status: fronter.status || '',
+                                battery: fronter.battery != null ? String(fronter.battery) : '',
+                                caution: fronter.caution || null,
+                                applyTo: 'shift',
+                            }
+                        }
                     }
                     newLayers.push({
                         name: layer.name || `Layer ${newLayers.length + 1}`,
@@ -86,7 +126,7 @@ export function SwitchPage({ system: systemProp, onNavigate }) {
                 }
                 if (newLayers.length > 0) {
                     setLayers(newLayers)
-                    setSelectedIds(newSelectedIds)
+                    setEntityMeta(newEntityMeta)
                 }
                 if (frontResult.status) setStatus(frontResult.status)
                 if (frontResult.battery != null) setBattery(String(frontResult.battery))
@@ -104,100 +144,98 @@ export function SwitchPage({ system: systemProp, onNavigate }) {
     // Build entity map for lookup
     const entityMap = useMemo(() => {
         const map = {}
-        for (const e of alters) {
-            map[e._id] = { ...e, _entityType: 'alter' }
-        }
-        for (const e of states) {
-            map[e._id] = { ...e, _entityType: 'state' }
-        }
-        for (const e of groups) {
-            map[e._id] = { ...e, _entityType: 'group' }
-        }
+        for (const e of alters) map[e._id] = { ...e, _entityType: 'alter' }
+        for (const e of states) map[e._id] = { ...e, _entityType: 'state' }
+        for (const e of groups) map[e._id] = { ...e, _entityType: 'group' }
         return map
     }, [alters, states, groups])
 
-    // All available entities (not already selected)
+    // All available entities with type annotation
     const allEntities = useMemo(() => {
-        return [...alters.map(e => ({ ...e, _entityType: 'alter' })),
-                ...states.map(e => ({ ...e, _entityType: 'state' })),
-                ...groups.map(e => ({ ...e, _entityType: 'group' }))]
+        return [
+            ...alters.map(e => ({ ...e, _entityType: 'alter' })),
+            ...states.map(e => ({ ...e, _entityType: 'state' })),
+            ...groups.map(e => ({ ...e, _entityType: 'group' })),
+        ]
     }, [alters, states, groups])
 
-    // Handle entity toggle from grid
-    const handleToggleEntity = useCallback((entity) => {
-        const id = entity._id
-        setSelectedIds(prev => {
-            if (prev.includes(id)) {
-                // Remove from selection and all layers
-                setLayers(ls => ls.map(l => ({
-                    ...l,
-                    entityIds: l.entityIds.filter(eid => eid !== id)
-                })))
-                return prev.filter(eid => eid !== id)
-            } else {
-                // Add to first layer
-                setLayers(ls => {
-                    const newLayers = [...ls]
-                    if (newLayers.length === 0) {
-                        newLayers.push({ name: 'Main', entityIds: [id] })
-                    } else {
-                        newLayers[0] = { ...newLayers[0], entityIds: [...newLayers[0].entityIds, id] }
-                    }
-                    return newLayers
-                })
-                return [...prev, id]
-            }
-        })
-    }, [])
+    // Available entity types for this system
+    const availableEntityTypes = useMemo(() => buildEntityTypeList(system), [system])
 
-    // Handle entity move between layers (from DnD)
-    const handleMoveEntity = useCallback((entityId, fromLayerIndex, toLayerIndex) => {
+    // ---- Entity operations per layer ----
+
+    const handleAddEntity = useCallback((entityId, entityType) => {
         setLayers(prev => {
-            const newLayers = prev.map(l => ({ ...l, entityIds: [...l.entityIds] }))
-
-            if (fromLayerIndex === -1) {
-                // Not in any layer — add to target
-                if (newLayers[toLayerIndex]) {
-                    newLayers[toLayerIndex].entityIds.push(entityId)
-                }
-            } else if (fromLayerIndex === toLayerIndex) {
-                // Same layer — reorder is handled by DnD internally
+            const newLayers = [...prev]
+            if (newLayers.length === 0) {
+                newLayers.push({ name: 'Main', entityIds: [entityId] })
             } else {
-                // Move between layers
-                const fromLayer = newLayers[fromLayerIndex]
-                const toLayer = newLayers[toLayerIndex]
-                if (fromLayer && toLayer) {
-                    fromLayer.entityIds = fromLayer.entityIds.filter(id => id !== entityId)
-                    toLayer.entityIds.push(entityId)
+                // Add to first layer if not already there
+                if (!newLayers[0].entityIds.includes(entityId)) {
+                    newLayers[0] = { ...newLayers[0], entityIds: [...newLayers[0].entityIds, entityId] }
                 }
             }
             return newLayers
         })
+        setEntityChanges(true)
     }, [])
 
-    // Handle entity remove from layer
-    const handleRemoveEntity = useCallback((entity, layerIndex) => {
-        const id = entity._id
+    const handleRemoveEntity = useCallback((entityId, layerIndex) => {
         setLayers(prev => {
             const newLayers = prev.map(l => ({ ...l, entityIds: [...l.entityIds] }))
             if (newLayers[layerIndex]) {
-                newLayers[layerIndex].entityIds = newLayers[layerIndex].entityIds.filter(eid => eid !== id)
+                newLayers[layerIndex].entityIds = newLayers[layerIndex].entityIds.filter(id => id !== entityId)
             }
             return newLayers
         })
-        // Check if entity is still in any layer
-        setLayers(currentLayers => {
-            const stillPresent = currentLayers.some(l => l.entityIds.includes(id))
-            if (!stillPresent) {
-                setSelectedIds(prev => prev.filter(eid => eid !== id))
-            }
-            return currentLayers
-        })
+        setEntityChanges(true)
     }, [])
 
-    // Layer operations
+    const handleReplaceEntity = useCallback((oldEntityId, newEntityId) => {
+        setLayers(prev => {
+            const newLayers = prev.map(l => ({ ...l, entityIds: [...l.entityIds] }))
+            for (const layer of newLayers) {
+                const idx = layer.entityIds.indexOf(oldEntityId)
+                if (idx !== -1) {
+                    layer.entityIds[idx] = newEntityId
+                    break
+                }
+            }
+            return newLayers
+        })
+        setEntityChanges(true)
+    }, [])
+
+    const handleReplaceAll = useCallback((layerIndex) => {
+        setLayers(prev => {
+            const newLayers = prev.map(l => ({ ...l, entityIds: [...l.entityIds] }))
+            if (newLayers[layerIndex]) {
+                newLayers[layerIndex] = { ...newLayers[layerIndex], entityIds: [] }
+            }
+            return newLayers
+        })
+        setEntityChanges(true)
+    }, [])
+
+    const handleMoveEntity = useCallback((entityId, fromLayerIndex, toLayerIndex) => {
+        setLayers(prev => {
+            const newLayers = prev.map(l => ({ ...l, entityIds: [...l.entityIds] }))
+            const fromLayer = newLayers[fromLayerIndex]
+            const toLayer = newLayers[toLayerIndex]
+            if (fromLayer && toLayer && fromLayerIndex !== toLayerIndex) {
+                fromLayer.entityIds = fromLayer.entityIds.filter(id => id !== entityId)
+                toLayer.entityIds.push(entityId)
+            }
+            return newLayers
+        })
+        setEntityChanges(true)
+    }, [])
+
+    // ---- Layer operations ----
+
     const handleReorderLayers = useCallback((newLayers) => {
         setLayers(newLayers)
+        setEntityChanges(true)
     }, [])
 
     const handleRenameLayer = useCallback((layerIndex, name) => {
@@ -226,33 +264,74 @@ export function SwitchPage({ system: systemProp, onNavigate }) {
             }
             return newLayers
         })
+        setEntityChanges(true)
     }, [])
 
-    // Dissociative quick switch
-    const handleDissociativeSwitch = useCallback(async () => {
-        try {
-            setSaving(true)
-            // Find the dissociative state (auto-created "Dissociated" state)
-            const dissociativeState = states.find(s =>
-                s.name?.display?.toLowerCase().includes('dissociat') ||
-                s.name?.indexable?.toLowerCase().includes('dissociat')
-            )
-            if (!dissociativeState) {
-                setError('No dissociative state found. Create a state first.')
-                setSaving(false)
-                return
-            }
-            await api.switchOut()
-            await api.addShiftToLayer(dissociativeState._id, 'state')
-            await fetchAll()
-            setSaving(false)
-        } catch (err) {
-            setError(err.message)
-            setSaving(false)
-        }
-    }, [states, fetchAll])
+    // ---- Entity popover ----
 
-    // Confirm switch
+    const handleEntityClick = useCallback((entity, layerIndex) => {
+        setEditingEntityId(prev => prev === entity._id ? null : entity._id)
+    }, [])
+
+    const handleEditEntityClose = useCallback(() => {
+        setEditingEntityId(null)
+    }, [])
+
+    const handleEditEntitySave = useCallback((entityId, data) => {
+        setEntityMeta(prev => ({
+            ...prev,
+            [entityId]: { ...prev[entityId], ...data }
+        }))
+        setMetadataChanges(true)
+        setEditingEntityId(null)
+    }, [])
+
+    // ---- Dissociative toggle ----
+
+    const dissociativeStateName = system?.sys_type?.dissociativeStateName || 'Dissociated'
+    const dissociativeState = useMemo(() => {
+        return states.find(s =>
+            s.name?.display?.toLowerCase() === dissociativeStateName.toLowerCase() ||
+            s.name?.indexable?.toLowerCase() === dissociativeStateName.toLowerCase()
+        )
+    }, [states, dissociativeStateName])
+
+    // Check if dissociative state is currently in any layer
+    const isDissociativeFronting = useMemo(() => {
+        if (!dissociativeState) return false
+        return layers.some(l => l.entityIds.includes(dissociativeState._id))
+    }, [layers, dissociativeState])
+
+    const handleDissociativeToggle = useCallback(() => {
+        if (!dissociativeState) {
+            setError(`No "${dissociativeStateName}" state found. Create a state first.`)
+            return
+        }
+        if (isDissociativeFronting) {
+            // Remove from all layers
+            setLayers(prev => prev.map(l => ({
+                ...l,
+                entityIds: l.entityIds.filter(id => id !== dissociativeState._id)
+            })))
+        } else {
+            // Add to top layer (first layer)
+            setLayers(prev => {
+                const newLayers = [...prev]
+                if (newLayers.length === 0) {
+                    newLayers.push({ name: 'Main', entityIds: [dissociativeState._id] })
+                } else {
+                    if (!newLayers[0].entityIds.includes(dissociativeState._id)) {
+                        newLayers[0] = { ...newLayers[0], entityIds: [...dissociativeState._id, ...newLayers[0].entityIds] }
+                    }
+                }
+                return newLayers
+            })
+        }
+        setEntityChanges(true)
+    }, [dissociativeState, dissociativeStateName, isDissociativeFronting])
+
+    // ---- Switch/Update ----
+
     const handleConfirmSwitch = useCallback(async () => {
         try {
             setSaving(true)
@@ -267,7 +346,6 @@ export function SwitchPage({ system: systemProp, onNavigate }) {
                 }))
 
             if (layerPayload.length === 0) {
-                // Switch out — no entities selected
                 await api.switchOut()
             } else {
                 await api.guidedSwitch({
@@ -276,34 +354,88 @@ export function SwitchPage({ system: systemProp, onNavigate }) {
                     battery: battery ? Number(battery) : undefined,
                 })
             }
-            await fetchAll()
-            setSaving(false)
-        } catch (err) {
-            setError(err.message)
-            setSaving(false)
-        }
-    }, [layers, entityMap, status, battery, fetchAll])
 
-    // Switch out (clear all)
-    const handleSwitchOut = useCallback(async () => {
-        try {
-            setSaving(true)
-            await api.switchOut()
-            setSelectedIds([])
-            setLayers([{ name: 'Main', entityIds: [] }])
-            setStatus('')
-            setBattery('')
+            // Apply per-entity metadata to shifts
+            // guidedSwitch returns full front data with shift IDs
+            const freshFront = await api.getFront().catch(() => null)
+            if (freshFront?.layers) {
+                for (const layer of freshFront.layers) {
+                    for (const fronter of (layer.fronters || [])) {
+                        const meta = entityMeta[fronter._id]
+                        if (meta && (meta.status || meta.battery != null || meta.caution)) {
+                            if (fronter.shiftId) {
+                                await api.updateShiftStatus(fronter.shiftId, {
+                                    status: meta.status || undefined,
+                                    battery: meta.battery != null ? Number(meta.battery) : undefined,
+                                    caution: meta.caution || undefined,
+                                    applyTo: meta.applyTo || 'shift',
+                                }).catch(() => {})
+                            }
+                        }
+                    }
+                }
+            }
+
+            setEntityChanges(false)
+            setMetadataChanges(false)
+            setEntityMeta({})
+            setEditingEntityId(null)
             await fetchAll()
             setSaving(false)
         } catch (err) {
             setError(err.message)
             setSaving(false)
         }
+    }, [layers, entityMap, status, battery, entityMeta, fetchAll])
+
+    const handleCancel = useCallback(() => {
+        setEntityChanges(false)
+        setMetadataChanges(false)
+        setEntityMeta({})
+        setEditingEntityId(null)
+        fetchAll()
     }, [fetchAll])
+
+    // ---- Layer DnD ----
+
+    const handleLayerDragStart = (event) => {
+        setActiveId(event.active.id)
+    }
+
+    const handleLayerDragEnd = (event) => {
+        const { active, over } = event
+        setActiveId(null)
+        if (!over) return
+
+        const activeIdStr = active.id
+        const overIdStr = over.id
+
+        if (typeof activeIdStr === 'string' && activeIdStr.startsWith('layer-') &&
+            typeof overIdStr === 'string' && overIdStr.startsWith('layer-')) {
+            const fromIndex = parseInt(activeIdStr.replace('layer-', ''))
+            const toIndex = parseInt(overIdStr.replace('layer-', ''))
+            if (fromIndex !== toIndex) {
+                const reordered = arrayMove(layers, fromIndex, toIndex)
+                handleReorderLayers(reordered)
+            }
+        }
+    }
+
+    // ---- Terminology ----
 
     const alterLabel = useMemo(() => getAlterTerm(system, { plural: false }), [system])
     const stateLabel = useMemo(() => getStateTerm(system, { plural: false }), [system])
     const groupLabel = useMemo(() => getGroupTerm(system, { plural: false }), [system])
+
+    // Button label
+    const hasChanges = entityChanges || metadataChanges
+    const buttonLabel = saving
+        ? 'Switching...'
+        : entityChanges
+            ? 'Switch'
+            : metadataChanges
+                ? 'Update'
+                : 'Switch'
 
     if (loading && !system) {
         return (
@@ -316,52 +448,97 @@ export function SwitchPage({ system: systemProp, onNavigate }) {
 
     return (
         <div className="switch-page">
-            {/* Current Front Summary */}
-            {frontData && (
-                <div className="switch-current-front">
-                    <FrontDisplay frontData={frontData} compact={true} isOwner={true} />
-                </div>
-            )}
+            {/* Settings button */}
+            <button
+                className="btn btn-ghost btn-sm"
+                onClick={onOpenSettings}
+                title="Settings"
+                style={{ position: 'absolute', top: 'var(--space-md)', right: 'var(--space-md)', padding: '6px', minWidth: 'auto', zIndex: 5 }}
+            >
+                <Icon name="settings" size={16} />
+            </button>
 
-            {/* Dissociative Quick Button */}
-            {showDissociativeButton && (
+            {/* Dissociative button — always first if applicable */}
+            {showDissociativeButton && dissociativeState && (
                 <button
                     className="switch-dissociative-btn"
-                    onClick={handleDissociativeSwitch}
+                    onClick={handleDissociativeToggle}
                     disabled={saving}
                 >
                     <div className="switch-dissociative-icon">
                         <Icon name="moon" size={28} />
                     </div>
                     <div className="switch-dissociative-text">
-                        <span className="switch-dissociative-title">Dissociative State</span>
-                        <span className="switch-dissociative-subtitle">Pull your dissociative state to front</span>
+                        <span className="switch-dissociative-title">
+                            {isDissociativeFronting ? `End ${dissociativeStateName}` : dissociativeStateName}
+                        </span>
+                        <span className="switch-dissociative-subtitle">
+                            {isDissociativeFronting
+                                ? `Remove ${dissociativeStateName.toLowerCase()} from front`
+                                : `Pull ${dissociativeStateName.toLowerCase()} to front`
+                            }
+                        </span>
                     </div>
                 </button>
             )}
 
-            {/* Layer Panel (only for isSystem / isFragmented) */}
+            {/* Layers — full-width container */}
             {showLayers && (
-                <SwitchLayerPanel
-                    layers={layers}
-                    selectedEntities={selectedIds.map(id => entityMap[id]).filter(Boolean)}
-                    onReorderLayers={handleReorderLayers}
-                    onMoveEntity={handleMoveEntity}
-                    onRemoveEntity={handleRemoveEntity}
-                    onRenameLayer={handleRenameLayer}
-                    onAddLayer={handleAddLayer}
-                    onRemoveLayer={handleRemoveLayer}
-                />
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={handleLayerDragStart}
+                    onDragEnd={handleLayerDragEnd}
+                >
+                    <SortableContext items={layers.map((_, i) => `layer-${i}`)} strategy={verticalListSortingStrategy}>
+                        <div className="switch-layers-container">
+                            {layers.map((layer, index) => (
+                                <LayerCard
+                                    key={`layer-${index}`}
+                                    layer={layer}
+                                    layerIndex={index}
+                                    allEntities={allEntities}
+                                    entityMap={entityMap}
+                                    entityMeta={entityMeta}
+                                    onAddEntity={handleAddEntity}
+                                    onRemoveEntity={handleRemoveEntity}
+                                    onReplaceEntity={handleReplaceEntity}
+                                    onReplaceAll={handleReplaceAll}
+                                    onMoveEntity={handleMoveEntity}
+                                    onRename={handleRenameLayer}
+                                    onDelete={handleRemoveLayer}
+                                    layerCount={layers.length}
+                                    allLayers={layers}
+                                    editingEntityId={editingEntityId}
+                                    onEntityClick={handleEntityClick}
+                                    onEditEntityClose={handleEditEntityClose}
+                                    onEditEntitySave={handleEditEntitySave}
+                                />
+                            ))}
+                        </div>
+                    </SortableContext>
+
+                    <DragOverlay>
+                        {activeId ? (
+                            <div className="switch-layer-drag-overlay">
+                                {typeof activeId === 'string' && activeId.startsWith('layer-') && (
+                                    <div className="switch-layer-drag-label">
+                                        {layers[parseInt(activeId.replace('layer-', ''))]?.name || 'Layer'}
+                                    </div>
+                                )}
+                            </div>
+                        ) : null}
+                    </DragOverlay>
+                </DndContext>
             )}
 
-            {/* Entity Grid */}
-            <SwitchEntityGrid
-                entities={allEntities}
-                selectedIds={selectedIds}
-                onToggle={handleToggleEntity}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-            />
+            {/* Add Layer button */}
+            {showLayers && (
+                <button className="switch-add-layer-btn" onClick={handleAddLayer}>
+                    <Icon name="plus" size={16} />
+                    Add Layer
+                </button>
+            )}
 
             {/* Status & Battery */}
             <div className="switch-status-section">
@@ -404,24 +581,17 @@ export function SwitchPage({ system: systemProp, onNavigate }) {
             <div className="switch-actions">
                 <button
                     className="btn btn-secondary"
-                    onClick={() => { fetchAll(); setStatus(''); setBattery('') }}
+                    onClick={handleCancel}
                     disabled={saving}
                 >
                     Cancel
-                </button>
-                <button
-                    className="btn btn-danger"
-                    onClick={handleSwitchOut}
-                    disabled={saving}
-                >
-                    Switch Out
                 </button>
                 <button
                     className="btn btn-primary"
                     onClick={handleConfirmSwitch}
                     disabled={saving}
                 >
-                    {saving ? 'Switching...' : 'Switch'}
+                    {buttonLabel}
                 </button>
             </div>
         </div>

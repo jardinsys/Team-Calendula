@@ -28,6 +28,7 @@ const noopRedis = {
     get: async () => null,
     set: async () => {},
     del: async () => {},
+    scan: async () => ['0', []],
     zadd: async () => {},
     zrevrange: async () => [],
     zremrangebyrank: async () => {},

@@ -125,13 +125,13 @@ module.exports = {
         }
 
         switch (action) {
-            case 'list': return await handleShowList(interaction, user, system); break;
-            case 'show': return await handleShow(interaction, user, system); break;
-            case 'new': return await handleNew(interaction, user, system); break;
-            case 'edit': return await handleEdit(interaction, user, system); break;
-            case 'settings': return await handleSettings(interaction, user, system); break;
-            case 'remission': return await handleRemission(interaction, user, system); break;
-            case 'delete': return await handleDelete(interaction, user, system); break;
+            case 'list': return await handleShowList(interaction, user, system);
+            case 'show': return await handleShow(interaction, user, system);
+            case 'new': return await handleNew(interaction, user, system);
+            case 'edit': return await handleEdit(interaction, user, system);
+            case 'settings': return await handleSettings(interaction, user, system);
+            case 'remission': return await handleRemission(interaction, user, system);
+            case 'delete': return await handleDelete(interaction, user, system);
         }
     },
 
@@ -372,33 +372,6 @@ function buildEditInterface(state, session, system = null) {
 }
 
 // ==== COMMAND HANDLERS ====
-
-// Handle /state menu
-async function handleMenu(interaction, user, system) {
-    const embed = new EmbedBuilder()
-        .setTitle('🔄 State Management')
-        .setDescription('Select a button to start managing your states.')
-        .setFooter({ text: 'Use the buttons below to navigate' });
-
-    // Use system color if available
-    const color = utils.getSystemEmbedColor(system);
-    if (color) embed.setColor(color);
-
-    const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('state_menu_showlist')
-            .setLabel('Show List')
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji('📋'),
-        new ButtonBuilder()
-            .setCustomId('state_menu_select')
-            .setLabel('Select State')
-            .setStyle(ButtonStyle.Secondary)
-            .setEmoji('🔍')
-    );
-
-    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
-}
 
 // Handle /state showlist
 async function handleShowList(interaction, currentUser, currentSystem) {
@@ -794,8 +767,8 @@ async function handleButtonInteraction(interaction) {
 
         if (customId.startsWith('state_new_sync_')) {
             // Create the new state
+            const system = await System.findById(session.systemId);
             const newState = new State({
-                systemID: session.systemId,
                 genesisDate: new Date(),
                 addedAt: new Date(),
                 syncWithApps: { discord: session.syncWithDiscord },
@@ -808,12 +781,7 @@ async function handleButtonInteraction(interaction) {
                 metadata: { addedAt: new Date() }
             });
 
-            await newState.save();
-
-            // Add to system
-            await System.findByIdAndUpdate(session.systemId, {
-                $push: { 'states.IDs': newState._id.toString() }
-            });
+            await utils.createAndLinkEntity(newState, system, 'state');
 
             session.stateId = newState._id;
             session.type = 'edit';
@@ -1179,8 +1147,8 @@ async function handleButtonInteraction(interaction) {
             for (const bucket of sys.privacyBuckets) {
                 const privacy = state.setting?.privacy?.find(p => p.bucket === bucket.name);
                 let status = 'Default (visible)';
-                if (privacy?.settings?.hidden === false) status = '❌ Hidden';
-                else if (privacy?.settings?.hidden === true) status = '✅ Visible';
+                if (privacy?.settings?.hidden === true) status = '❌ Hidden';
+                else if (privacy?.settings?.hidden === false) status = '✅ Visible';
                 embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
             }
         } else {
@@ -1207,7 +1175,7 @@ async function handleButtonInteraction(interaction) {
 
         const bucketOptions = sys.privacyBuckets.map(b => {
             const privacy = state.setting?.privacy?.find(p => p.bucket === b.name);
-            const isHidden = privacy?.settings?.hidden === false;
+            const isHidden = privacy?.settings?.hidden === true;
             return new StringSelectMenuOptionBuilder()
                 .setLabel(`${b.name} (${isHidden ? 'Hidden' : 'Visible'})`)
                 .setValue(b.name)

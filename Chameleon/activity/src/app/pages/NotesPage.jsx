@@ -8,10 +8,11 @@ import {
     CreateNoteModal,
     TagFilterBar,
     ManageTagsModal,
+    Icon,
     noteKeys,
 } from '@chameleon/shared'
 
-export function NotesPage({ system }) {
+export function NotesPage({ system, onOpenSettings }) {
     const { session } = useDiscordSdk()
     const queryClient = useQueryClient()
     const [selectedNote, setSelectedNote] = useState(null)
@@ -94,7 +95,7 @@ export function NotesPage({ system }) {
                         <h1>Your Notes</h1>
                         <p>{notes.length} note{notes.length !== 1 ? 's' : ''}</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '4px' }}>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                         <button
                             className={`btn btn-ghost btn-sm ${viewVariant === 'grid' ? 'active' : ''}`}
                             onClick={() => setViewVariant('grid')}
@@ -108,6 +109,14 @@ export function NotesPage({ system }) {
                             title="List view"
                         >
                             ☰
+                        </button>
+                        <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={onOpenSettings}
+                            title="Settings"
+                            style={{ padding: '6px', minWidth: 'auto' }}
+                        >
+                            <Icon name="settings" size={16} />
                         </button>
                     </div>
                 </div>

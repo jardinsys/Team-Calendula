@@ -16,6 +16,13 @@ function normalizeHexColor(color) {
     return null
 }
 
+const CONDITION_OPTIONS = [
+    { value: '', label: 'None' },
+    { value: 'active', label: 'Active' },
+    { value: 'dormant', label: 'Dormant' },
+    { value: 'remission', label: 'Remission' }
+]
+
 function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onClose, onCreated, onUpdated }) {
     const isEdit = !!entity
     const [name, setName] = useState('')
@@ -30,6 +37,14 @@ function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onC
     const [groupType, setGroupType] = useState('')
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState(null)
+    const [showMore, setShowMore] = useState(false)
+    const [birthday, setBirthday] = useState('')
+    const [aliases, setAliases] = useState('')
+    const [cautionType, setCautionType] = useState('')
+    const [cautionDetail, setCautionDetail] = useState('')
+    const [condition, setCondition] = useState('')
+    const [defaultStatus, setDefaultStatus] = useState('')
+    const [defaultBattery, setDefaultBattery] = useState('')
 
     useEffect(() => {
         if (entity) {
@@ -51,6 +66,20 @@ function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onC
             if (type === 'group' && entity.type) {
                 setGroupType(entity.type.name || '')
             }
+            if (entity.birthday) {
+                const d = new Date(entity.birthday)
+                const mm = String(d.getMonth() + 1).padStart(2, '0')
+                const dd = String(d.getDate()).padStart(2, '0')
+                setBirthday(`${d.getFullYear()}-${mm}-${dd}`)
+            }
+            setAliases(entity.name?.aliases?.join(', ') || '')
+            if (entity.caution) {
+                setCautionType(entity.caution.c_type || '')
+                setCautionDetail(entity.caution.detail || '')
+            }
+            setCondition(entity.condition || '')
+            setDefaultStatus(entity.setting?.default_status || '')
+            setDefaultBattery(entity.setting?.default_battery != null ? String(entity.setting.default_battery) : '')
         }
     }, [entity, type])
 
@@ -95,6 +124,39 @@ function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onC
 
             if (type === 'group') {
                 data.type = { name: groupType.trim() || 'General', canFront: 'yes' }
+            }
+
+            if (isEdit) {
+                if (birthday !== undefined) {
+                    data.birthday = birthday || null
+                }
+                if (aliases !== undefined) {
+                    const aliasList = aliases ? aliases.split(',').map(a => a.trim()).filter(Boolean) : []
+                    data.name = {
+                        ...(typeof data.name === 'string' ? { display: data.name } : data.name),
+                        aliases: aliasList.length > 0 ? aliasList : undefined
+                    }
+                }
+                if (cautionType !== undefined || cautionDetail !== undefined) {
+                    data.caution = {
+                        ...(entity?.caution || {}),
+                        c_type: cautionType || undefined,
+                        detail: cautionDetail || undefined
+                    }
+                }
+                if (condition !== undefined) {
+                    data.condition = condition || undefined
+                }
+                const settingUpdates = {}
+                if (defaultStatus !== undefined) {
+                    settingUpdates.default_status = defaultStatus || undefined
+                }
+                if (defaultBattery !== undefined) {
+                    settingUpdates.default_battery = defaultBattery !== '' ? Number(defaultBattery) : undefined
+                }
+                if (Object.keys(settingUpdates).length > 0) {
+                    data.setting = settingUpdates
+                }
             }
 
             if (isEdit) {
@@ -273,6 +335,103 @@ function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onC
                             <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                                 Use "text" as a placeholder for the message content
                             </p>
+                        </div>
+                    )}
+
+                    {isEdit && (
+                        <div className="form-group" style={{ marginTop: '8px' }}>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', fontSize: '0.85rem' }}
+                                onClick={() => setShowMore(!showMore)}
+                            >
+                                {showMore ? '▲ Hide more options' : '▼ More options'}
+                            </button>
+                        </div>
+                    )}
+
+                    {isEdit && showMore && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                            <div className="form-group">
+                                <label>Birthday</label>
+                                <input
+                                    className="text-input"
+                                    type="date"
+                                    value={birthday}
+                                    onChange={e => setBirthday(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Aliases (comma-separated)</label>
+                                <input
+                                    className="text-input"
+                                    type="text"
+                                    value={aliases}
+                                    onChange={e => setAliases(e.target.value)}
+                                    placeholder="e.g. nickname, alt name"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Caution type</label>
+                                <input
+                                    className="text-input"
+                                    type="text"
+                                    value={cautionType}
+                                    onChange={e => setCautionType(e.target.value)}
+                                    placeholder="e.g. trauma, flashing"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Caution detail</label>
+                                <input
+                                    className="text-input"
+                                    type="text"
+                                    value={cautionDetail}
+                                    onChange={e => setCautionDetail(e.target.value)}
+                                    placeholder="Additional caution info"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Condition</label>
+                                <select
+                                    className="text-input"
+                                    value={condition}
+                                    onChange={e => setCondition(e.target.value)}
+                                >
+                                    {CONDITION_OPTIONS.map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Default status</label>
+                                <input
+                                    className="text-input"
+                                    type="text"
+                                    value={defaultStatus}
+                                    onChange={e => setDefaultStatus(e.target.value)}
+                                    placeholder="e.g. feeling okay"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Default battery (0–100)</label>
+                                <input
+                                    className="text-input"
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={defaultBattery}
+                                    onChange={e => setDefaultBattery(e.target.value)}
+                                    placeholder="0–100"
+                                />
+                            </div>
                         </div>
                     )}
 

@@ -116,12 +116,12 @@ module.exports = {
 
         const action = interaction.options.getString('action');
         switch (action) {
-            case 'list': return await handleShowList(interaction, user, system); break;
-            case 'show': return await handleShow(interaction, user, system); break;
-            case 'new': return await handleNew(interaction, user, system); break;
-            case 'edit': return await handleEdit(interaction, user, system); break;
-            case 'settings': return await handleSettings(interaction, user, system); break;
-            case 'delete': return await handleDelete(interaction, user, system); break;
+            case 'list': return await handleShowList(interaction, user, system);
+            case 'show': return await handleShow(interaction, user, system);
+            case 'new': return await handleNew(interaction, user, system);
+            case 'edit': return await handleEdit(interaction, user, system);
+            case 'settings': return await handleSettings(interaction, user, system);
+            case 'delete': return await handleDelete(interaction, user, system);
         }
     },
 
@@ -282,23 +282,6 @@ function buildEditInterface(group, session, system = null) {
 }
 
 // ==== COMMAND HANDLERS ====
-
-/*// (Dead code — menu subcommand is commented out, kept for reference)
-async function handleMenu(interaction, user, system) {
-    const embed = new EmbedBuilder()
-        .setTitle('👥 Group Management')
-        .setDescription('Select a button to start managing your groups.');
-
-    const menuColor = utils.getSystemEmbedColor(system);
-    if (menuColor) embed.setColor(menuColor);
-
-    const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('group_menu_showlist').setLabel('Show List').setStyle(ButtonStyle.Primary).setEmoji('📋'),
-        new ButtonBuilder().setCustomId('group_menu_select').setLabel('Select Group').setStyle(ButtonStyle.Secondary).setEmoji('🔍')
-    );
-
-    await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
-}*/
 
 async function handleShowList(interaction, currentUser, currentSystem) {
     const targetUser = interaction.options.getUser('user');
@@ -537,15 +520,14 @@ async function handleButtonInteraction(interaction) {
         session.id = sessionId;
 
         if (customId.startsWith('group_new_sync_')) {
+            const system = await System.findById(session.systemId);
             const newGroup = new Group({
-                systemID: session.systemId,
                 createdAt: new Date(),
                 syncWithApps: { discord: session.syncWithDiscord },
                 name: { ...(session.groupIndexable && { indexable: session.groupIndexable }), display: session.groupDisplayName },
                 metadata: { addedAt: new Date() }
             });
-            await newGroup.save();
-            await System.findByIdAndUpdate(session.systemId, { $push: { 'groups.IDs': newGroup._id.toString() } });
+            await utils.createAndLinkEntity(newGroup, system, 'group');
             session.groupId = newGroup._id;
             session.type = 'edit';
         } else {
@@ -754,8 +736,8 @@ async function handleButtonInteraction(interaction) {
             for (const bucket of sys.privacyBuckets) {
                 const privacy = group.setting?.privacy?.find(p => p.bucket === bucket.name);
                 let status = 'Default (visible)';
-                if (privacy?.settings?.hidden === false) status = '❌ Hidden';
-                else if (privacy?.settings?.hidden === true) status = '✅ Visible';
+                if (privacy?.settings?.hidden === true) status = '❌ Hidden';
+                else if (privacy?.settings?.hidden === false) status = '✅ Visible';
                 embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
             }
         } else {
@@ -782,7 +764,7 @@ async function handleButtonInteraction(interaction) {
 
         const bucketOptions = sys.privacyBuckets.map(b => {
             const privacy = group.setting?.privacy?.find(p => p.bucket === b.name);
-            const isHidden = privacy?.settings?.hidden === false;
+            const isHidden = privacy?.settings?.hidden === true;
             return new StringSelectMenuOptionBuilder()
                 .setLabel(`${b.name} (${isHidden ? 'Hidden' : 'Visible'})`)
                 .setValue(b.name)

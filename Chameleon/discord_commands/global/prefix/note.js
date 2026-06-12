@@ -12,6 +12,7 @@ const mongoose = require('mongoose');
 const Note = require('../../../schemas/note');
 const User = require('../../../schemas/user');
 const utils = require('../../functions/bot_utils');
+const { uploadNoteContent, deleteNoteContent, generatePreview } = require('../../../api/utils/r2');
 
 const WEBAPP_URL = 'https://systemise.teamcalendula.net';
 const NOTE_COLOR = '#FFD700';
@@ -138,8 +139,8 @@ async function handleShow(message, note, user) {
         .setColor(NOTE_COLOR)
         .setTitle(`${note.pinned ? '📌 ' : '📝 '}${note.title || 'Untitled Note'}`);
 
-    if (note.content) {
-        const raw = typeof note.content === 'string' ? note.content : note.contentPreview || '*No content*';
+    if (note.content || note.contentPreview) {
+        const raw = note.contentPreview || '*No content*';
         const content = raw.length > 4000
             ? raw.substring(0, 4000) + '...\n*[Content truncated]*'
             : raw;
@@ -181,14 +182,24 @@ async function handleNew(message, parsed, user) {
 
     const note = new Note({
         title,
-        content,
         tags,
         pinned: false,
         author: { userID: user._id },
-        users: { owner: { userID: user._id } }
+        users: { owner: { userID: user._id } },
+        contentPreview: content ? generatePreview(content) : undefined
     });
 
     await note.save();
+
+    if (content) {
+        try {
+            const contentMedia = await uploadNoteContent(user._id.toString(), note.id, content);
+            note.content = contentMedia;
+            await note.save();
+        } catch (error) {
+            console.error('Failed to upload note content to R2:', error);
+        }
+    }
 
     if (!user.notes) user.notes = { tags: [], notes: [] };
     user.notes.notes.push(note._id);
@@ -232,6 +243,14 @@ async function handleDelete(message, parsed, note, user) {
     if (user?.notes?.notes) {
         user.notes.notes = user.notes.notes.filter(n => n.toString() !== note._id.toString());
         await user.save();
+    }
+
+    if (note.content?.r2Key) {
+        try {
+            await deleteNoteContent(note.content.r2Key);
+        } catch (error) {
+            console.error('Failed to delete note content from R2:', error);
+        }
     }
 
     await Note.findByIdAndDelete(note._id);

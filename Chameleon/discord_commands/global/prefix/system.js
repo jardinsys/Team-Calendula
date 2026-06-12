@@ -50,8 +50,10 @@ const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const { PrivacyBucket } = require('../../../schemas/settings');
+const { Shift } = require('../../../schemas/front');
 
 const utils = require('../../functions/bot_utils');
+const proxyMessageHandler = require('../proxy-message');
 
 const { getSystemTerm, getAlterTerm } = utils;
 
@@ -253,9 +255,11 @@ async function handleNew(message, parsed) {
         }
     });
 
+    const defaultBucket = new PrivacyBucket({ name: 'Default', friends: [] });
+    await defaultBucket.save();
+    newSystem.privacyBuckets = [defaultBucket._id];
     await newSystem.save();
 
-    // Link user to system
     user.systemID = newSystem._id;
     await user.save();
 
@@ -284,6 +288,7 @@ async function handleRename(message, parsed) {
         system.name = system.name || {};
         system.name.indexable = undefined;
         await system.save();
+        await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'System indexable name cleared.');
     }
 
@@ -296,6 +301,7 @@ async function handleRename(message, parsed) {
     system.name = system.name || {};
     system.name.indexable = newName;
     await system.save();
+    await proxyMessageHandler.invalidateDisplayCache(system._id);
 
     return utils.success(message, `System indexable name set to **${newName}**`);
 }
@@ -307,6 +313,7 @@ async function handleDisplayName(message, parsed) {
     if (parsed.clear) {
         if (system.name) system.name.display = undefined;
         await system.save();
+        await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Profile display name cleared.');
     }
 
@@ -316,6 +323,7 @@ async function handleDisplayName(message, parsed) {
     system.name = system.name || {};
     system.name.display = newName;
     await system.save();
+    await proxyMessageHandler.invalidateDisplayCache(system._id);
 
     return utils.success(message, `Profile display name set to **${newName}**`);
 }
@@ -347,6 +355,7 @@ async function handleAvatar(message, parsed) {
         if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key, system.avatar.bucket || 'app');
         system.avatar = undefined;
         await system.save();
+        await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Profile avatar cleared.');
     }
 
@@ -358,6 +367,7 @@ async function handleAvatar(message, parsed) {
     if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key, system.avatar.bucket || 'app');
     system.avatar = result.media;
     await system.save();
+    await proxyMessageHandler.invalidateDisplayCache(system._id);
 
     return utils.success(message, 'Profile avatar uploaded and updated.');
 }
@@ -372,6 +382,7 @@ async function handleBanner(message, parsed) {
         if (system.discord?.image?.banner?.r2Key) await utils.deleteFromR2(system.discord.image.banner.r2Key, system.discord.image.banner.bucket || 'app');
         if (system.discord?.image) system.discord.image.banner = undefined;
         await system.save();
+        await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Profile banner cleared.');
     }
 
@@ -385,6 +396,7 @@ async function handleBanner(message, parsed) {
     system.discord.image = system.discord.image || {};
     system.discord.image.banner = result.media;
     await system.save();
+    await proxyMessageHandler.invalidateDisplayCache(system._id);
 
     return utils.success(message, 'Profile banner uploaded and updated.');
 }
@@ -781,12 +793,13 @@ async function handlePrivacyBucketField(message, parsed, system, bucketName) {
 async function handleClosedName(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
-    if (parsed.clear) { system.name = system.name || {}; system.name.closedNameDisplay = undefined; await system.save(); return utils.success(message, 'Closed name display cleared.'); }
+    if (parsed.clear) { system.name = system.name || {}; system.name.closedNameDisplay = undefined; await system.save(); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Closed name display cleared.'); }
     const newName = parsed._positional.slice(1).join(' ');
     if (!newName) return utils.error(message, 'Please provide a closed name display.');
     system.name = system.name || {};
     system.name.closedNameDisplay = newName;
     await system.save();
+    await proxyMessageHandler.invalidateDisplayCache(system._id);
     return utils.success(message, `Closed name display set to **${newName}**`);
 }
 
@@ -916,15 +929,17 @@ async function handleMask(message, parsed) {
         system.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
         system.mask.name.display = val;
         await system.save();
+        await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, `Mask name set to **${val}**`);
     }
     if (field === 'displayname' || field === 'dn') {
-        if (parsed.clear) { system.mask.name = system.mask.name || {}; system.mask.name.display = undefined; await system.save(); return utils.success(message, 'Mask display name cleared.'); }
+        if (parsed.clear) { system.mask.name = system.mask.name || {}; system.mask.name.display = undefined; await system.save(); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask display name cleared.'); }
         const val = parsed._positional.slice(2).join(' ');
         if (!val) return utils.error(message, 'Please provide a mask display name.');
         system.mask.name = system.mask.name || {};
         system.mask.name.display = val;
         await system.save();
+        await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, `Mask display name set to **${val}**`);
     }
     if (field === 'description' || field === 'desc') {
@@ -952,31 +967,34 @@ async function handleMask(message, parsed) {
         return utils.success(message, `Mask pronouns set to **${val}**`);
     }
     if (field === 'avatar' || field === 'icon' || field === 'av' || field === 'pfp') {
-        if (parsed.clear) { system.mask.avatar = undefined; await system.save(); return utils.success(message, 'Mask avatar cleared.'); }
+        if (parsed.clear) { system.mask.avatar = undefined; await system.save(); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[2];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         system.mask.avatar = { url };
         await system.save();
+        await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Mask avatar updated.');
     }
     if (field === 'banner') {
-        if (parsed.clear) { system.mask.discord = system.mask.discord || {}; system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.banner = undefined; await system.save(); return utils.success(message, 'Mask banner cleared.'); }
+        if (parsed.clear) { system.mask.discord = system.mask.discord || {}; system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.banner = undefined; await system.save(); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask banner cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[2];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         system.mask.discord = system.mask.discord || {};
         system.mask.discord.image = system.mask.discord.image || {};
         system.mask.discord.image.banner = { url };
         await system.save();
+        await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Mask banner updated.');
     }
     if (field === 'proxyavatar' || field === 'pav') {
-        if (parsed.clear) { system.mask.discord = system.mask.discord || {}; system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.proxyAvatar = undefined; await system.save(); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        if (parsed.clear) { system.mask.discord = system.mask.discord || {}; system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.proxyAvatar = undefined; await system.save(); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask proxy avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[2];
         if (!url) return utils.error(message, 'Please provide a URL.');
         system.mask.discord = system.mask.discord || {};
         system.mask.discord.image = system.mask.discord.image || {};
         system.mask.discord.image.proxyAvatar = { url };
         await system.save();
+        await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Mask proxy avatar updated.');
     }
     return utils.error(message, `Unknown mask field: ${field}. Use: name, displayname, description, color, pronouns, avatar, banner, proxyavatar`);
@@ -1131,23 +1149,31 @@ async function handleFronter(message, parsed) {
         .setTitle('🎭 Current Front');
 
     for (const layer of frontLayers) {
-        const fronters = layer.fronters || [];
-        if (fronters.length === 0) continue;
+        const shiftIds = layer.shifts || [];
+        if (shiftIds.length === 0) continue;
 
-        const fronterNames = [];
-        for (const fronter of fronters) {
+        const fronterLines = [];
+        for (const shiftId of shiftIds) {
+            const shift = await Shift.findById(shiftId);
+            if (!shift) continue;
+
             let entity = null;
-            if (fronter.alterID) entity = await Alter.findById(fronter.alterID);
-            else if (fronter.stateID) entity = await State.findById(fronter.stateID);
-            else if (fronter.groupID) entity = await Group.findById(fronter.groupID);
+            if (shift.s_type === 'alter') entity = await Alter.findById(shift.ID);
+            else if (shift.s_type === 'state') entity = await State.findById(shift.ID);
+            else if (shift.s_type === 'group') entity = await Group.findById(shift.ID);
 
-            if (entity) fronterNames.push(entity.name?.display || entity.name?.indexable || '(no name)');
+            const name = entity?.name?.display || entity?.name?.indexable || shift.type_name || '(no name)';
+            const lastStatus = shift.statuses?.[shift.statuses.length - 1];
+            let line = name;
+            if (lastStatus?.status) line += ` — *${lastStatus.status}*`;
+            if (lastStatus?.battery != null) line += ` ${utils.getBatteryEmoji(lastStatus.battery)}`;
+            fronterLines.push(line);
         }
 
-        if (fronterNames.length > 0) {
+        if (fronterLines.length > 0) {
             embed.addFields({
                 name: layer.name || 'Main',
-                value: fronterNames.join(', '),
+                value: fronterLines.join('\n'),
                 inline: false
             });
         }

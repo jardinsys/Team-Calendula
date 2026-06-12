@@ -19,7 +19,7 @@ const stateSchema = new mongoose.Schema({
     genesisDate: { type: Date, default: Date.now },
     addedAt: { type: Date, default: Date.now },
     syncWithApps: {
-        discord: Boolean
+        discord: { type: Boolean, default: true }
     },
     name: {
         indexable: String,
@@ -122,6 +122,9 @@ const stateSchema = new mongoose.Schema({
         }]
     }
 });
+
+stateSchema.index({ systemID: 1 });
+stateSchema.index({ systemID: 1, 'name.indexable': 1 });
 
 const State = sysDB.model('State', stateSchema);
 module.exports = State;

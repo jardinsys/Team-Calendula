@@ -99,6 +99,27 @@ app.use('/api/friends', authenticateToken, friendsRoutes);
 const userRoutes = require('../api/routes/user');
 app.use('/api/user', authenticateToken, userRoutes);
 
+// Public routes (optional auth — privacy-gated entity view)
+const publicRoutes = require('../api/routes/public');
+app.use('/api/public', publicRoutes);
+
+// Activity pending page — reads + clears Redis key set by bot commands
+const redis = require('../redis');
+app.get('/api/activity/pending-page', authenticateToken, async (req, res) => {
+    try {
+        const key = `pendingActivity:${req.user._id}`;
+        const page = await redis.get(key);
+        if (page) {
+            await redis.del(key);
+            return res.json({ page });
+        }
+        res.json({ page: null });
+    } catch (err) {
+        console.error('[Activity] Pending page error:', err);
+        res.json({ page: null });
+    }
+});
+
 // ==========================================
 // STATIC FILES
 // ==========================================

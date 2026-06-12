@@ -5,7 +5,10 @@
 //   sys!friend list                         - List friends
 //   sys!friend add <@user|friend_id:abc>    - Send friend request
 //   sys!friend remove <@user>               - Remove friend
-//   sys!friend requests                     - View/manage incoming requests
+//   sys!friend remove                        - Select friend from list
+//   sys!friend requests                     - View incoming requests
+//   sys!friend accept <number>              - Accept a friend request
+//   sys!friend decline <number>             - Decline a friend request
 //   sys!friend block <@user>                - Block a user
 //   sys!friend unblock <@user>              - Unblock a user
 //   sys!friend view [@user]                 - View friend's front
@@ -53,6 +56,8 @@ module.exports = {
             'add': () => handleAdd(message, parsed, user, system),
             'remove': () => handleRemove(message, parsed, user),
             'rm': () => handleRemove(message, parsed, user),
+            'accept': () => handleAccept(message, parsed, user, system),
+            'decline': () => handleDecline(message, parsed, user),
             'requests': () => handleRequests(message, user),
             'req': () => handleRequests(message, user),
             'block': () => handleBlock(message, parsed, user),
@@ -205,30 +210,43 @@ async function handleRemove(message, parsed, user) {
         return utils.success(message, `Removed **${friendName}** from your friends list.`);
     }
 
-    // No mention — show select menu
     if (!user.friends || user.friends.length === 0) 
         return utils.error(message, 'You have no friends to remove.');
 
-    const sessionId = utils.generateSessionId(message.author.id);
-    utils.setSession(sessionId, { type: 'friend_remove_select', userId: user._id });
-
-    const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId(`friend_remove_select_${sessionId}`)
-        .setPlaceholder('Select a friend to remove...')
-        .setMinValues(1)
-        .setMaxValues(1);
-
-    for (const friend of user.friends) {
-        const name = friend.customName?.display || friend.customName?.indexable || friend.discordID;
-        selectMenu.addOptions(
-            new StringSelectMenuOptionBuilder()
-                .setLabel(name)
-                .setValue(friend.discordID)
-        );
+    let list = '';
+    for (let i = 0; i < user.friends.length; i++) {
+        const name = user.friends[i].customName?.display || user.friends[i].customName?.indexable || `<@${user.friends[i].discordID}>`;
+        list += `**${i + 1}.** ${name}\n`;
     }
 
-    const row = new ActionRowBuilder().addComponents(selectMenu);
-    return message.reply({ content: 'Select a friend to remove:', components: [row] });
+    const listEmbed = new EmbedBuilder()
+        .setColor(ENTITY_COLORS.info)
+        .setTitle('Remove a Friend')
+        .setDescription(list)
+        .setFooter({ text: 'Reply with the number to remove, or "cancel" to abort.' });
+
+    await message.reply({ embeds: [listEmbed] });
+
+    const collected = await message.channel.awaitMessages({
+        filter: m => m.author.id === message.author.id,
+        max: 1,
+        time: 30000,
+        errors: ['time']
+    }).catch(() => null);
+
+    if (!collected) return utils.error(message, 'Selection timed out.');
+    const response = collected.first().content.trim().toLowerCase();
+    if (response === 'cancel' || response === 'stop') return utils.info(message, 'Cancelled.');
+
+    const idx = parseInt(response) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= user.friends.length)
+        return utils.error(message, 'Invalid selection.');
+
+    const friend = user.friends[idx];
+    const friendName = friend.customName?.display || friend.customName?.indexable || friend.discordID;
+    user.friends.splice(idx, 1);
+    await user.save();
+    return utils.success(message, `Removed **${friendName}** from your friends list.`);
 }
 
 async function handleRequests(message, user) {
@@ -240,13 +258,9 @@ async function handleRequests(message, user) {
         return message.reply({ embeds: [embed] });
     }
 
-    const sessionId = utils.generateSessionId(message.author.id);
-    utils.setSession(sessionId, { type: 'friend_requests', userId: user._id });
-
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.info)
-        .setTitle('👥 Pending Friend Requests')
-        .setDescription(`${user.friendRequests.length} pending request(s):`);
+        .setTitle('👥 Pending Friend Requests');
 
     for (let i = 0; i < user.friendRequests.length; i++) {
         const req = user.friendRequests[i];
@@ -260,27 +274,67 @@ async function handleRequests(message, user) {
         });
     }
 
-    const buttons = user.friendRequests.map((req, i) =>
-        new ButtonBuilder()
-            .setCustomId(`friend_req_accept_${i}_${sessionId}`)
-            .setLabel(`Accept ${req.fromName}`)
-            .setStyle(ButtonStyle.Success)
-            .setEmoji('✅')
-    ).slice(0, 5);
+    embed.setFooter({ text: 'Use `sys!friend accept <number>` or `sys!friend decline <number>`' });
 
-    const declineButtons = user.friendRequests.map((req, i) =>
-        new ButtonBuilder()
-            .setCustomId(`friend_req_decline_${i}_${sessionId}`)
-            .setLabel(`Decline ${req.fromName}`)
-            .setStyle(ButtonStyle.Danger)
-            .setEmoji('❌')
-    ).slice(0, 5);
+    return message.reply({ embeds: [embed] });
+}
 
-    const components = [];
-    if (buttons.length > 0) components.push(new ActionRowBuilder().addComponents(buttons));
-    if (declineButtons.length > 0) components.push(new ActionRowBuilder().addComponents(declineButtons));
+async function handleAccept(message, parsed, user, system) {
+    const index = parseInt(parsed._positional[1]) - 1;
+    if (isNaN(index) || index < 0 || index >= (user.friendRequests?.length || 0))
+        return utils.error(message, 'Invalid request number. Use `sys!friend requests` to see your pending requests.');
 
-    return message.reply({ embeds: [embed], components });
+    const req = user.friendRequests[index];
+    const fromUser = await User.findOne({ discordID: req.fromDiscordID });
+    if (!fromUser) {
+        user.friendRequests.splice(index, 1);
+        await user.save();
+        return utils.error(message, 'The user who sent this request no longer exists.');
+    }
+
+    const fromSystem = fromUser.systemID ? await System.findById(fromUser.systemID) : null;
+
+    if (!user.friends) user.friends = [];
+    user.friends.push({
+        discordID: req.fromDiscordID,
+        customName: { display: req.fromName },
+        friendID: req.fromFriendID,
+        privacyBucket: system?.setting?.friendAutoBucket || null,
+        addedAt: new Date()
+    });
+
+    const myName = user.discord?.name?.display || message.author.displayName;
+
+    if (!fromUser.friends) fromUser.friends = [];
+    const alreadyFriends = fromUser.friends.some(f => f.discordID === message.author.id);
+    if (!alreadyFriends) {
+        fromUser.friends.push({
+            discordID: message.author.id,
+            customName: { display: myName },
+            friendID: user.friendID,
+            privacyBucket: fromSystem?.setting?.friendAutoBucket || null,
+            addedAt: new Date()
+        });
+    }
+
+    user.friendRequests.splice(index, 1);
+    await user.save();
+    await fromUser.save();
+
+    return utils.success(message, `Accepted friend request from **${req.fromName}** (${req.fromSystemName}).`);
+}
+
+async function handleDecline(message, parsed, user) {
+    const index = parseInt(parsed._positional[1]) - 1;
+    if (isNaN(index) || index < 0 || index >= (user.friendRequests?.length || 0))
+        return utils.error(message, 'Invalid request number. Use `sys!friend requests` to see your pending requests.');
+
+    const req = user.friendRequests[index];
+    const fromName = req.fromName;
+    user.friendRequests.splice(index, 1);
+    await user.save();
+
+    return utils.success(message, `Declined friend request from **${fromName}**.`);
 }
 
 async function handleBlock(message, parsed, user) {
@@ -427,7 +481,7 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
                 }
 
                 const entityPrivacy = entity.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
-                if (entityPrivacy?.settings?.hidden === false) continue;
+                if (entityPrivacy?.settings?.hidden === true) continue;
 
                 const emoji = shift.s_type === 'alter' ? '🎭' : (shift.s_type === 'state' ? '🔄' : '👥');
                 const displayName = utils.getDisplayName(entity, closedCharAllowed);
@@ -560,7 +614,10 @@ async function handleHelp(message, user) {
                 '`sys!friend add @User` - Send friend request\n' +
                 '`sys!friend add friend_id:abc` - Add by Friend ID\n' +
                 '`sys!friend remove @User -confirm` - Remove friend\n' +
-                '`sys!friend requests` - Accept/decline requests', inline: false },
+                '`sys!friend remove` - Select friend from list\n' +
+                '`sys!friend requests` - View pending requests\n' +
+                '`sys!friend accept <number>` - Accept a request\n' +
+                '`sys!friend decline <number>` - Decline a request', inline: false },
             { name: 'Block', value:
                 '`sys!friend block @User` - Block a user\n' +
                 '`sys!friend unblock @User` - Unblock a user', inline: false },

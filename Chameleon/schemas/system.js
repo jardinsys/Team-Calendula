@@ -22,7 +22,7 @@ const systemSchema = new mongoose.Schema({
     },
 
     syncWithApps: {
-        discord: Boolean
+        discord: { type: Boolean, default: true }
     },
     name: {
         indexable: String,
@@ -37,7 +37,8 @@ const systemSchema = new mongoose.Schema({
         },
         isSystem: { type: Boolean, default: false }, // Alters, States, Groups
         isFragmented: { type: Boolean, default: false }, // States + Groups
-        isDissociative: { type: Boolean, default: false }, // Dereal/Depers — tracking dissociative states, no groups
+        isDissociative: { type: Boolean, default: false }, // Tracking dissociative states
+        dissociativeStateName: { type: String, default: 'Dissociated' }, // Custom name for auto-created dissociative state
         onboardingCompleted: { type: Boolean, default: false }
     },
     description: String,

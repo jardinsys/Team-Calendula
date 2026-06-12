@@ -28,15 +28,8 @@ const config = require('../../../config.json');
 const utils = require('../../functions/bot_utils');
 const redis = require('../../../redis');
 
-// Initialize R2 Client
-const sysR2 = new S3Client({
-    region: 'auto',
-    endpoint: config.r2.system.app.endpoint,
-    credentials: {
-        accessKeyId: config.r2.system.app.accessKeyId,
-        secretAccessKey: config.r2.system.app.secretAccessKey,
-    },
-});
+// Use shared R2 client from bot_utils
+const { sysR2 } = utils;
 
 // Constants
 const PREVIEW_LENGTH = 500;
@@ -70,8 +63,8 @@ module.exports = {
         if (isNew) return await utils.handleNewUserFlow(interaction, 'note');
 
         switch (quick) {
-            case true: return await handleQuick(interaction, user, system); break;
-            case false: return await handleLaunch(interaction, user, system); break;
+            case true: return await handleQuick(interaction, user, system);
+            case false: return await handleLaunch(interaction, user, system);
         }
     },
 

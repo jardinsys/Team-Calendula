@@ -5,18 +5,22 @@
 
 // Each disorder maps to its full name, source classification, and
 // which booleans it auto-sets on sys_type. Disorders with
-// `extraQuestion: true` need a follow-up before resolving.
+// `extraQuestion: true` need a yes/no follow-up before resolving.
+// Disorders with `extraQuestionMulti: true` need multi-select.
 // Disorders with `hasSubtypes: true` have a dropdown of subtypes.
+// Disorders with `dissociativeStateName` use a custom name for the
+// auto-created dissociative state instead of the default "Dissociated".
 
 export const DISORDER_MAP = {
     // ═══ DSM-5 ═══
 
-    // System disorders (isSystem + isFragmented)
+    // System + fragmented + dissociative
     'DID': {
         fullName: 'Dissociative Identity Disorder',
         source: 'DSM',
         isSystem: true,
         isFragmented: true,
+        isDissociative: true,
     },
 
     // OSDD parent — all types under this
@@ -35,7 +39,7 @@ export const DISORDER_MAP = {
         subtypes: ['OSDD-1A', 'OSDD-1B'],
     },
 
-    // OSDD-1A — extra question
+    // OSDD-1A — extra question, isDissociative on both paths
     'OSDD-1A': {
         fullName: 'Type 1A — Distinct identity states without amnesia',
         source: 'DSM',
@@ -43,8 +47,8 @@ export const DISORDER_MAP = {
         extraQuestionText: 'How do you experience your identity states or parts?',
         extraQuestionYesLabel: 'They are distinct alters',
         extraQuestionNoLabel: 'They are just fragmented states',
-        extraQuestionYes: { isSystem: true, isFragmented: true },
-        extraQuestionNo: { isSystem: false, isFragmented: true },
+        extraQuestionYes: { isSystem: true, isFragmented: true, isDissociative: true },
+        extraQuestionNo: { isSystem: false, isFragmented: true, isDissociative: true },
     },
 
     // OSDD-1B — direct select
@@ -53,20 +57,23 @@ export const DISORDER_MAP = {
         source: 'DSM',
         isSystem: true,
         isFragmented: true,
+        isDissociative: true,
     },
 
-    // Fragmented only
+    // Fragmented + dissociative
     'OSDD-2': {
         fullName: 'Type 2 — Identity disturbance',
         source: 'DSM',
         isSystem: false,
         isFragmented: true,
+        isDissociative: true,
     },
     'OSDD-3': {
         fullName: 'Type 3 — Acute dissociative reactions',
         source: 'DSM',
         isSystem: false,
         isFragmented: true,
+        isDissociative: true,
     },
     'OSDD-4': {
         fullName: 'Type 4 — Distress from unresolved grief or spiritual practices',
@@ -91,6 +98,8 @@ export const DISORDER_MAP = {
         source: 'DSM',
         isSystem: false,
         isFragmented: true,
+        isDissociative: true,
+        dissociativeStateName: 'Fugue',
     },
 
     // Dissociative only
@@ -102,30 +111,51 @@ export const DISORDER_MAP = {
         isDissociative: true,
     },
 
-    // Catch-all
+    // Catch-all — multi-select
     'UDD': {
         fullName: 'Unspecified Dissociative Disorder',
         source: 'DSM',
-        isSystem: false,
-        isFragmented: false,
+        extraQuestionMulti: true,
+        extraQuestionText: 'Which of the following apply to you?\nSelect all that apply.',
+        extraQuestionOptions: [
+            {
+                label: 'I have distinct identity states (alters)',
+                description: 'Distinct personality states that take control of your behavior',
+                flags: { isSystem: true },
+            },
+            {
+                label: 'I have fragmented or non-identity parts',
+                description: 'Emotional states, memory fragments, or parts without full identity',
+                flags: { isFragmented: true },
+            },
+            {
+                label: 'I experience dissociative states',
+                description: 'Feeling detached from yourself, your body, or feeling the world is unreal',
+                flags: { isDissociative: true },
+            },
+        ],
+        extraQuestionMin: 1,
     },
 
     // ═══ ICD-11 ═══
 
-    // System disorders (isSystem + isFragmented)
+    // System + fragmented + dissociative
     'P-DID': {
         fullName: 'Partial Dissociative Identity Disorder',
         source: 'ICD',
         isSystem: true,
         isFragmented: true,
+        isDissociative: true,
     },
 
-    // Fragmented only
+    // Fragmented + dissociative with custom state name
     'Trance': {
         fullName: 'Dissociative Trance Disorder',
         source: 'ICD',
         isSystem: false,
         isFragmented: true,
+        isDissociative: true,
+        dissociativeStateName: 'Trance',
     },
 
     // Extra question needed
@@ -176,11 +206,11 @@ export const DISORDER_DEFINITIONS = {
     'Dereal/Depers': 'Persistent or recurrent experiences of feeling detached from your mind or body (depersonalization) and/or feeling the world around you is unreal (derealization).',
     'UDD': 'Dissociative symptoms that cause clinically significant distress or impairment but do not meet criteria for any specific dissociative disorder.',
     // ICD-11
-    'P-DID': 'Identity alteration with some amnesia, but less distinct identity states than DID (ICD-11: 6B61).',
+    'P-DID': 'Identity alteration with some amnesia, but less distinct identity states than DID (ICD-11: 6B65).',
     'Trance': 'Altered state of consciousness with narrowed awareness of immediate surroundings, experienced as involuntary and distressing (ICD-11: 6B62).',
     'Possession Trance': 'Belief that a spirit, deity, or external entity has taken control of your body, experienced as involuntary and distressing (ICD-11: 6B63).',
-    'DNSD': 'Neurological symptoms like paralysis, seizures, or inability to move that cannot be explained by a neurological condition (ICD-11: 8A06).',
-    'Depersonalization-Derealization': 'Persistent feelings of being detached from yourself or feeling the world is unreal (ICD-11: 6B64).',
+    'DNSD': 'Neurological symptoms like paralysis, seizures, or inability to move that cannot be explained by a neurological condition (ICD-11: 6B60).',
+    'Depersonalization-Derealization': 'Persistent feelings of being detached from yourself or feeling the world is unreal (ICD-11: 6B66).',
 };
 
 // Ordered lists for UI select menus / lists (by diagnostic code)
@@ -201,11 +231,12 @@ export function resolveSysTypeFromDisorder(disorderKey) {
         isSystem: mapping.isSystem || false,
         isFragmented: mapping.isFragmented || false,
         isDissociative: mapping.isDissociative || false,
+        dissociativeStateName: mapping.dissociativeStateName || 'Dissociated',
         onboardingCompleted: true,
     };
 }
 
-// Resolve sys_type from extra question answer
+// Resolve sys_type from yes/no extra question answer
 export function resolveSysTypeFromExtraAnswer(disorderKey, answer) {
     const mapping = DISORDER_MAP[disorderKey];
     if (!mapping || !mapping.extraQuestion) return null;
@@ -217,6 +248,33 @@ export function resolveSysTypeFromExtraAnswer(disorderKey, answer) {
         isSystem: result.isSystem,
         isFragmented: result.isFragmented,
         isDissociative: mapping.isDissociative || false,
+        dissociativeStateName: mapping.dissociativeStateName || 'Dissociated',
+        onboardingCompleted: true,
+    };
+}
+
+// Resolve sys_type from multi-select extra question (UDD)
+export function resolveSysTypeFromMultiAnswer(disorderKey, selectedIndices) {
+    const mapping = DISORDER_MAP[disorderKey];
+    if (!mapping || !mapping.extraQuestionMulti) return null;
+
+    const combined = { isSystem: false, isFragmented: false, isDissociative: false };
+    for (const index of selectedIndices) {
+        const option = mapping.extraQuestionOptions[index];
+        if (option) {
+            if (option.flags.isSystem) combined.isSystem = true;
+            if (option.flags.isFragmented) combined.isFragmented = true;
+            if (option.flags.isDissociative) combined.isDissociative = true;
+        }
+    }
+
+    return {
+        name: mapping.fullName,
+        dd: mapping.source === 'DSM' ? { DSM: disorderKey } : { ICD: disorderKey },
+        isSystem: combined.isSystem,
+        isFragmented: combined.isFragmented,
+        isDissociative: combined.isDissociative,
+        dissociativeStateName: mapping.dissociativeStateName || 'Dissociated',
         onboardingCompleted: true,
     };
 }

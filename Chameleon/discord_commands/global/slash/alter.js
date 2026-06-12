@@ -115,13 +115,13 @@ module.exports = {
 
         const action = interaction.options.getString('action');
         switch (action) {
-            case 'list': return await handleShowList(interaction, user, system); break;
-            case 'show': return await handleShow(interaction, user, system); break;
-            case 'new': return await handleNew(interaction, user, system); break;
-            case 'edit': return await handleEdit(interaction, user, system); break;
-            case 'settings': return await handleSettings(interaction, user, system); break;
-            case 'dormant': return await handleDormant(interaction, user, system); break;
-            case 'delete': return await handleDelete(interaction, user, system); break;
+            case 'list': return await handleShowList(interaction, user, system);
+            case 'show': return await handleShow(interaction, user, system);
+            case 'new': return await handleNew(interaction, user, system);
+            case 'edit': return await handleEdit(interaction, user, system);
+            case 'settings': return await handleSettings(interaction, user, system);
+            case 'dormant': return await handleDormant(interaction, user, system);
+            case 'delete': return await handleDelete(interaction, user, system);
         }
     },
 
@@ -500,7 +500,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
 
         // Check if system is hidden
         const systemPrivacy = targetSystem.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
-        if (systemPrivacy?.settings?.hidden === false) {
+        if (systemPrivacy?.settings?.hidden === true) {
             return await interaction.reply({
                 content: '❌ This user does not have an alter list to show. They may not be registered...',
                 ephemeral: true
@@ -788,15 +788,14 @@ async function handleButtonInteraction(interaction) {
 
         if (customId.startsWith('alter_new_sync_')) {
             // Create the new alter
+            const system = await System.findById(session.systemId);
             const newAlter = new Alter({
-                systemID: session.systemId,
                 genesisDate: new Date(),
                 syncWithApps: { discord: session.syncWithDiscord },
                 name: { ...(session.alterIndexable && { indexable: session.alterIndexable }), display: session.alterDisplayName },
                 metadata: { addedAt: new Date() }
             });
-            await newAlter.save();
-            await System.findByIdAndUpdate(session.systemId, { $push: { 'alters.IDs': newAlter._id.toString() } });
+            await utils.createAndLinkEntity(newAlter, system, 'alter');
             session.alterId = newAlter._id;
             session.type = 'edit';
         } else {
@@ -1105,8 +1104,8 @@ async function handleButtonInteraction(interaction) {
             for (const bucket of system.privacyBuckets) {
                 const privacy = alter.setting?.privacy?.find(p => p.bucket === bucket.name);
                 let status = 'Default (visible)';
-                if (privacy?.settings?.hidden === false) status = '❌ Hidden';
-                else if (privacy?.settings?.hidden === true) status = '✅ Visible';
+                if (privacy?.settings?.hidden === true) status = '❌ Hidden';
+                else if (privacy?.settings?.hidden === false) status = '✅ Visible';
 
                 const fields = [];
                 if (privacy?.settings) {
@@ -1148,7 +1147,7 @@ async function handleButtonInteraction(interaction) {
         // Show select menu for bucket
         const bucketOptions = system.privacyBuckets.map(b => {
             const privacy = alter.setting?.privacy?.find(p => p.bucket === b.name);
-            const isHidden = privacy?.settings?.hidden === false;
+            const isHidden = privacy?.settings?.hidden === true;
             return new StringSelectMenuOptionBuilder()
                 .setLabel(`${b.name} (${isHidden ? 'Hidden' : 'Visible'})`)
                 .setValue(b.name)

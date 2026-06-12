@@ -5,19 +5,21 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 
-const { authMiddleware } = require('../middleware/auth');
+
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const Group = require('../../schemas/group');
 const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
-const { checkProxyExists } = require('../../discord_commands/functions/bot_utils');
+const { checkProxyExists, createAndLinkEntity } = require('../../discord_commands/functions/bot_utils');
+const { uploadMiddleware } = require('../middleware/upload');
+const { handleEntityImageUpload, handleEntityImageDelete } = require('./avatar');
 
 // ===========================================
 // GET ALL GROUPS
 // ===========================================
 
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -36,7 +38,7 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 });
 
-router.get('/summary', authMiddleware, async (req, res) => {
+router.get('/summary', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -65,7 +67,7 @@ router.get('/summary', authMiddleware, async (req, res) => {
 // GET SINGLE GROUP
 // ===========================================
 
-router.get('/:id', authMiddleware, async (req, res) => {
+router.get('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -119,7 +121,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 // CREATE GROUP
 // ===========================================
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -135,8 +137,15 @@ router.post('/', authMiddleware, async (req, res) => {
         }
         
         const grIdx = name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
+
+        // Check for duplicate name
+        const existingGroups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
+        const duplicate = grIdx ? existingGroups.find(g => g.name?.indexable?.toLowerCase() === grIdx) : undefined;
+        if (duplicate) {
+            return res.status(400).json({ error: `A group named "${name}" already exists` });
+        }
+
         const group = new Group({
-            systemID: system._id,
             name: {
                 display: name,
                 ...(grIdx && { indexable: grIdx })
@@ -148,14 +157,12 @@ router.post('/', authMiddleware, async (req, res) => {
             alterIDs: alterIDs || [],
             stateIDs: stateIDs || [],
             signoff,
-            createdAt: new Date()
+            syncWithApps: { discord: true },
+            createdAt: new Date(),
+            metadata: { addedAt: new Date() }
         });
         
-        await group.save();
-        
-        system.groups = system.groups || { IDs: [] };
-        system.groups.IDs.push(group._id);
-        await system.save();
+        await createAndLinkEntity(group, system, 'group');
         
         // Update alters and states to reference this group
         if (alterIDs?.length) {
@@ -181,7 +188,7 @@ router.post('/', authMiddleware, async (req, res) => {
 // UPDATE GROUP
 // ===========================================
 
-router.patch('/:id', authMiddleware, async (req, res) => {
+router.patch('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -211,10 +218,28 @@ router.patch('/:id', authMiddleware, async (req, res) => {
             }
         }
         
-        const allowedFields = ['description', 'color', 'avatar', 'signoff', 'type', 'discord', 'mask', 'caution'];
+        const allowedFields = ['description', 'color', 'avatar', 'signoff', 'type', 'discord', 'mask', 'caution', 'condition', 'alterIDs', 'stateIDs'];
         for (const field of allowedFields) {
             if (updates[field] !== undefined) {
                 group[field] = updates[field];
+            }
+        }
+
+        if (updates.name?.aliases !== undefined) {
+            group.name = group.name || {};
+            group.name.aliases = updates.name.aliases;
+        }
+        if (updates.name?.closedNameDisplay !== undefined) {
+            group.name = group.name || {};
+            group.name.closedNameDisplay = updates.name.closedNameDisplay;
+        }
+        if (updates.setting && typeof updates.setting === 'object') {
+            group.setting = group.setting || {};
+            const allowedSettings = ['default_status', 'default_battery', 'allowPing'];
+            for (const key of allowedSettings) {
+                if (updates.setting[key] !== undefined) {
+                    group.setting[key] = updates.setting[key];
+                }
             }
         }
         
@@ -229,7 +254,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
 // PROXY MANAGEMENT
 // ===========================================
 
-router.post('/:id/proxy', authMiddleware, async (req, res) => {
+router.post('/:id/proxy', async (req, res) => {
     try {
         const group = await Group.findById(req.params.id);
         if (!group) {
@@ -264,7 +289,7 @@ router.post('/:id/proxy', authMiddleware, async (req, res) => {
     }
 });
 
-router.delete('/:id/proxy', authMiddleware, async (req, res) => {
+router.delete('/:id/proxy', async (req, res) => {
     try {
         const group = await Group.findById(req.params.id);
         if (!group) {
@@ -282,10 +307,21 @@ router.delete('/:id/proxy', authMiddleware, async (req, res) => {
 });
 
 // ===========================================
+// GROUP IMAGE UPLOADS
+// ===========================================
+
+router.post('/:id/avatar', uploadMiddleware('file'), async (req, res, next) => { try { await handleEntityImageUpload(req, res, 'group', 'avatar'); } catch (err) { next(err); } });
+router.post('/:id/banner', uploadMiddleware('file'), async (req, res, next) => { try { await handleEntityImageUpload(req, res, 'group', 'discord.image.banner'); } catch (err) { next(err); } });
+router.post('/:id/proxyAvatar', uploadMiddleware('file'), async (req, res, next) => { try { await handleEntityImageUpload(req, res, 'group', 'discord.image.proxyAvatar'); } catch (err) { next(err); } });
+router.delete('/:id/avatar', async (req, res, next) => { try { await handleEntityImageDelete(req, res, 'group', 'avatar'); } catch (err) { next(err); } });
+router.delete('/:id/banner', async (req, res, next) => { try { await handleEntityImageDelete(req, res, 'group', 'discord.image.banner'); } catch (err) { next(err); } });
+router.delete('/:id/proxyAvatar', async (req, res, next) => { try { await handleEntityImageDelete(req, res, 'group', 'discord.image.proxyAvatar'); } catch (err) { next(err); } });
+
+// ===========================================
 // DELETE GROUP
 // ===========================================
 
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
@@ -319,7 +355,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 // MANAGE MEMBERS
 // ===========================================
 
-router.post('/:id/members', authMiddleware, async (req, res) => {
+router.post('/:id/members', async (req, res) => {
     try {
         const group = await Group.findById(req.params.id);
         if (!group) {
@@ -361,7 +397,7 @@ router.post('/:id/members', authMiddleware, async (req, res) => {
     }
 });
 
-router.delete('/:id/members', authMiddleware, async (req, res) => {
+router.delete('/:id/members', async (req, res) => {
     try {
         const group = await Group.findById(req.params.id);
         if (!group) {
