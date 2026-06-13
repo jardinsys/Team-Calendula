@@ -99,7 +99,7 @@ async function buildProfileCard(user, system, isOwner, privacyBucket, closedChar
     // Current Status field (from system) — privacy-checked
     if (system) {
         const systemPrivacy = system.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
-        const showFrontInfo = isOwner || systemPrivacy?.settings?.front?.hidden !== true;
+        const showFrontInfo = isOwner || systemPrivacy?.settings?.hidden !== true;
 
         if (showFrontInfo) {
             let statusInfo = '';

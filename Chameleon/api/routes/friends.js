@@ -200,7 +200,8 @@ router.post('/requests/:index/accept', async (req, res) => {
                 friendID: requesterUser.friendID,
                 discordID: requesterUser.discordID,
                 privacyBucket: requesterSystem?.setting?.friendAutoBucket || undefined,
-                addedAt: new Date()
+                addedAt: new Date(),
+                notifyOnSwitch: false
             });
         }
         
@@ -210,7 +211,8 @@ router.post('/requests/:index/accept', async (req, res) => {
                 friendID: user.friendID,
                 discordID: user.discordID,
                 privacyBucket: accepterSystem?.setting?.friendAutoBucket || undefined,
-                addedAt: new Date()
+                addedAt: new Date(),
+                notifyOnSwitch: false
             });
         }
         

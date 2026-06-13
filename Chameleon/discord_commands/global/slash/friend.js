@@ -217,7 +217,7 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
     const systemPrivacy = targetSystem.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
 
     let description = '';
-    const showStatus = !systemPrivacy || systemPrivacy.settings?.front?.hidden !== true;
+    const showStatus = !systemPrivacy || systemPrivacy.settings?.hidden !== true;
     if (showStatus) {
         if (targetSystem.front?.status) description += `**Status:** ${targetSystem.front.status}\n`;
         if (targetSystem.battery !== undefined && targetSystem.battery !== null) {
@@ -264,7 +264,7 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
                 }
 
                 const currentStatus = shift.statuses?.[shift.statuses.length - 1];
-                const statusVisible = !systemPrivacy || systemPrivacy.settings?.front?.hidden !== true;
+                const statusVisible = !systemPrivacy || systemPrivacy.settings?.hidden !== true;
                 if (statusVisible && currentStatus?.status) fronterLine += `\n   └ *${currentStatus.status}*`;
 
                 if (statusVisible && currentStatus?.battery !== undefined && currentStatus?.battery !== null) {
@@ -962,7 +962,8 @@ async function handleRequestAccept(interaction) {
             customName: { display: targetUser.discord?.name?.display || targetUser.discordID },
             discordID: targetUser.discordID,
             addedAt: new Date(),
-            privacyBucket: autoBucket
+            privacyBucket: autoBucket,
+            notifyOnSwitch: false
         });
 
         if (!targetUser.friends) targetUser.friends = [];
@@ -974,7 +975,8 @@ async function handleRequestAccept(interaction) {
             customName: { display: user.discord?.name?.display || user.discordID },
             discordID: user.discordID,
             addedAt: new Date(),
-            privacyBucket: targetAutoBucket
+            privacyBucket: targetAutoBucket,
+            notifyOnSwitch: false
         });
 
         await targetUser.save();

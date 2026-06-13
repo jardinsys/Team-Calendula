@@ -1,8 +1,10 @@
 // Switch notification system with debounce
 // Sends DMs to friends when a system switches front
+// Respects privacy buckets — entities hidden from a friend's bucket are omitted
 
 const User = require('../../schemas/user');
 const System = require('../../schemas/system');
+const botUtils = require('./bot_utils');
 
 // Debounce timers: systemId → { timeout, frontSnapshot }
 const debounceTimers = new Map();
@@ -46,9 +48,6 @@ function buildFrontSnapshot(system) {
     const fronters = [];
     for (const layer of (system.front?.layers || [])) {
         for (const shiftId of (layer.shifts || [])) {
-            // Shifts are ObjectId refs — we need the actual shift data
-            // For the snapshot, we store layer name and shift IDs
-            // The actual shift resolution happens when sending
             fronters.push({ layerId: layer._id, layerName: layer.name, shiftId });
         }
     }
@@ -61,6 +60,7 @@ function buildFrontSnapshot(system) {
 
 /**
  * Flush the debounced notification — resolve shifts and send DMs
+ * Applies privacy filtering per friend based on their privacy bucket
  */
 async function flushNotification(systemId, client) {
     debounceTimers.delete(systemId);
@@ -87,14 +87,15 @@ async function flushNotification(systemId, client) {
                 frontingEntities.push({
                     name: entity.name?.display || entity.name?.indexable || 'Unknown',
                     type: shift.s_type,
-                    layer: layer.name
+                    layer: layer.name,
+                    entity // keep full entity for privacy checks
                 });
             }
         }
 
         if (frontingEntities.length === 0) return;
 
-        // Find all friends who have friendSwitches enabled
+        // Find all users in this system
         const users = await Promise.all(
             system.users.map(uid => User.findById(uid))
         );
@@ -104,8 +105,6 @@ async function flushNotification(systemId, client) {
 
             const notifPrefs = user.settings?.notificationPreferences || {};
             if (notifPrefs.friendSwitches === false) continue;
-
-            const deliveryMethod = notifPrefs.friendNotifications || 'dm';
 
             for (const friend of user.friends) {
                 if (!friend.discordID) continue;
@@ -122,14 +121,31 @@ async function flushNotification(systemId, client) {
 
                 const friendDelivery = friendPrefs.friendNotifications || 'dm';
 
-                // Build notification text
-                const names = frontingEntities.map(e => {
-                    const emoji = e.type === 'alter' ? '🎭' : e.type === 'state' ? '🔄' : '👥';
-                    return `${emoji} ${e.name}`;
-                }).join(', ');
+                // Resolve friend's privacy bucket
+                const privacyBucket = botUtils.getPrivacyBucket(system, friend.discordID, friendUser.friendID);
 
+                // Filter entities based on privacy bucket
+                const visibleEntities = [];
+                for (const fe of frontingEntities) {
+                    if (botUtils.shouldShowEntity(fe.entity, privacyBucket, false)) {
+                        visibleEntities.push(fe);
+                    }
+                }
+
+                // Build notification text with only visible entities
                 const systemName = system.name?.display || system.name?.indexable || 'A system';
-                const text = `🔄 **${systemName}** switched — now fronting: ${names}`;
+                let text;
+
+                if (visibleEntities.length === 0) {
+                    // All entities hidden from this friend — send generic message
+                    text = `🔄 **${systemName}** switched front`;
+                } else {
+                    const names = visibleEntities.map(e => {
+                        const emoji = e.type === 'alter' ? '🎭' : e.type === 'state' ? '🔄' : '👥';
+                        return `${emoji} ${e.name}`;
+                    }).join(', ');
+                    text = `🔄 **${systemName}** switched — now fronting: ${names}`;
+                }
 
                 if (friendDelivery === 'dm') {
                     try {
@@ -142,7 +158,6 @@ async function flushNotification(systemId, client) {
                     }
                 }
                 // 'command' and 'none' delivery methods don't send proactive DMs
-                // For 'command', the friend sees notifications when they run /friend commands
             }
         }
     } catch (err) {

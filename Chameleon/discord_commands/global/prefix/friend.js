@@ -300,7 +300,8 @@ async function handleAccept(message, parsed, user, system) {
         customName: { display: req.fromName },
         friendID: req.fromFriendID,
         privacyBucket: system?.setting?.friendAutoBucket || null,
-        addedAt: new Date()
+        addedAt: new Date(),
+        notifyOnSwitch: false
     });
 
     const myName = user.discord?.name?.display || message.author.displayName;
@@ -313,7 +314,8 @@ async function handleAccept(message, parsed, user, system) {
             customName: { display: myName },
             friendID: user.friendID,
             privacyBucket: fromSystem?.setting?.friendAutoBucket || null,
-            addedAt: new Date()
+            addedAt: new Date(),
+            notifyOnSwitch: false
         });
     }
 
@@ -446,7 +448,7 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
     const systemPrivacy = targetSystem.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
 
     let description = '';
-    const showStatus = !systemPrivacy || systemPrivacy.settings?.front?.hidden !== true;
+    const showStatus = !systemPrivacy || systemPrivacy.settings?.hidden !== true;
     if (showStatus) {
         if (targetSystem.front?.status) description += `**Status:** ${targetSystem.front.status}\n`;
         if (targetSystem.battery !== undefined && targetSystem.battery !== null) {
@@ -492,7 +494,7 @@ async function buildFriendFrontEmbed(targetSystem, targetUser, viewerUser, priva
                     fronterLine += ` (${entity.pronouns.join('/')})`;
 
                 const currentStatus = shift.statuses?.[shift.statuses.length - 1];
-                const statusVisible = !systemPrivacy || systemPrivacy.settings?.front?.hidden !== true;
+                const statusVisible = !systemPrivacy || systemPrivacy.settings?.hidden !== true;
                 if (statusVisible && currentStatus?.status) fronterLine += `\n   └ *${currentStatus.status}*`;
 
                 if (statusVisible && currentStatus?.battery !== undefined && currentStatus?.battery !== null) {

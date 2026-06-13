@@ -1264,7 +1264,9 @@ function getPrivacyBucket(system, viewerDiscordId, viewerFriendId) {
         if (inBucket) return bucket;
     }
 
-    return null;
+    // Not in any bucket — return the Default bucket (minimal visibility)
+    const defaultBucket = system.privacyBuckets.find(b => b.name === 'Default');
+    return defaultBucket || null;
 }
 
 /* Check if an entity should be visible based on privacy settings
@@ -1279,6 +1281,9 @@ function shouldShowEntity(entity, privacyBucket, isOwner, showFullList = false) 
     if (!privacyBucket) return false;
 
     const entityPrivacy = entity.setting?.privacy?.find(p => p.bucket === privacyBucket.name);
+
+    // No privacy entry for this bucket — hide by default (minimal visibility)
+    if (!entityPrivacy) return false;
     if (entityPrivacy?.settings?.hidden === true) return false;
 
     return true;
