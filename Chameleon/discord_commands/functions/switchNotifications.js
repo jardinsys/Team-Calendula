@@ -110,6 +110,9 @@ async function flushNotification(systemId, client) {
             for (const friend of user.friends) {
                 if (!friend.discordID) continue;
 
+                // Check per-friend notification toggle (default: true)
+                if (friend.notifyOnSwitch === false) continue;
+
                 // Check if this friend has their own system and what their notification prefs are
                 const friendUser = await User.findOne({ discordID: friend.discordID });
                 if (!friendUser) continue;

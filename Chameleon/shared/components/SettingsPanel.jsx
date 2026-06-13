@@ -284,6 +284,38 @@ function SettingsPanel({ system: systemProp, discordUser, onClose, onNavigate })
                             App messages
                         </label>
                     </div>
+
+                    {systemProp?._user?.friends?.length > 0 && (
+                        <>
+                            <div className="settings-panel-section-title" style={{ marginTop: 'var(--space-md)', fontSize: '0.85rem' }}>
+                                Per-Friend Switch Notifications
+                            </div>
+                            {systemProp._user.friends.map((f, i) => {
+                                const name = f.customName?.display || f.customName?.indexable || f.discordID;
+                                const isEnabled = f.notifyOnSwitch !== false;
+                                return (
+                                    <div key={f.friendID || f.discordID || i} className="form-group">
+                                        <label className="settings-panel-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                checked={isEnabled}
+                                                onChange={async (e) => {
+                                                    try {
+                                                        await api.updateFriend(f.friendID || f.discordID, {
+                                                            notifyOnSwitch: e.target.checked
+                                                        });
+                                                    } catch (err) {
+                                                        console.error('Failed to update friend notification:', err);
+                                                    }
+                                                }}
+                                            />
+                                            {name}
+                                        </label>
+                                    </div>
+                                );
+                            })}
+                        </>
+                    )}
                 </div>
             )
 

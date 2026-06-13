@@ -56,7 +56,8 @@ const userSchema = new mongoose.Schema({
         },
         discordID: { type: String, index: true },
         addedAt: { type: Date },
-        privacyBucket: String
+        privacyBucket: String,
+        notifyOnSwitch: { type: Boolean, default: true }
     }],
     friendRequests: [{
         fromDiscordID: String,

@@ -785,30 +785,69 @@ async function handleNotificationSettings(interaction) {
             }
         );
 
-    const row = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-            .setCustomId(`friend_notif_method_${userId}`)
-            .setPlaceholder('Choose notification delivery method')
-            .addOptions(
-                new StringSelectMenuOptionBuilder()
-                    .setLabel('Discord DM')
-                    .setValue('dm')
-                    .setDescription('Receive notifications via Discord DMs')
-                    .setDefault(prefs.friendNotifications === 'dm' || prefs.friendNotifications === undefined),
-                new StringSelectMenuOptionBuilder()
-                    .setLabel('In Command')
-                    .setValue('command')
-                    .setDescription('See notifications when you use commands')
-                    .setDefault(prefs.friendNotifications === 'command'),
-                new StringSelectMenuOptionBuilder()
-                    .setLabel('None')
-                    .setValue('none')
-                    .setDescription('Don\'t receive notifications')
-                    .setDefault(prefs.friendNotifications === 'none')
-            )
-    );
+    // Per-friend switch notification toggles
+    if (user.friends?.length > 0) {
+        const friendLines = user.friends.map(f => {
+            const name = f.customName?.display || f.customName?.indexable || f.discordID;
+            const status = f.notifyOnSwitch !== false ? '✅' : '❌';
+            return `${status} ${name}`;
+        }).join('\n');
 
-    return interaction.editReply({ embeds: [embed], components: [row] });
+        embed.addFields({
+            name: 'Per-Friend Switch Notifications',
+            value: friendLines || 'No friends',
+            inline: false
+        });
+    }
+
+    const components = [
+        new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`friend_notif_method_${userId}`)
+                .setPlaceholder('Choose notification delivery method')
+                .addOptions(
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('Discord DM')
+                        .setValue('dm')
+                        .setDescription('Receive notifications via Discord DMs')
+                        .setDefault(prefs.friendNotifications === 'dm' || prefs.friendNotifications === undefined),
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('In Command')
+                        .setValue('command')
+                        .setDescription('See notifications when you use commands')
+                        .setDefault(prefs.friendNotifications === 'command'),
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('None')
+                        .setValue('none')
+                        .setDescription('Don\'t receive notifications')
+                        .setDefault(prefs.friendNotifications === 'none')
+                )
+        )
+    ];
+
+    // Add per-friend toggle select if user has friends
+    if (user.friends?.length > 0) {
+        const friendOptions = user.friends.slice(0, 25).map(f => {
+            const name = f.customName?.display || f.customName?.indexable || f.discordID;
+            const isEnabled = f.notifyOnSwitch !== false;
+            return new StringSelectMenuOptionBuilder()
+                .setLabel(name.substring(0, 100))
+                .setValue(f.friendID || f.discordID)
+                .setDescription(isEnabled ? 'Currently ON — tap to turn OFF' : 'Currently OFF — tap to turn ON')
+                .setEmoji(isEnabled ? '✅' : '❌');
+        });
+
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new StringSelectMenuBuilder()
+                    .setCustomId(`friend_notif_toggle_select_${userId}`)
+                    .setPlaceholder('Toggle per-friend switch notifications')
+                    .addOptions(friendOptions)
+            )
+        );
+    }
+
+    return interaction.editReply({ embeds: [embed], components });
 }
 
 // ============================================
@@ -1011,6 +1050,10 @@ async function handleSelectMenu(interaction) {
         return await handleNotificationMethodSelect(interaction);
     }
 
+    if (customId.startsWith('friend_notif_toggle_select_')) {
+        return await handlePerFriendToggle(interaction);
+    }
+
     return false;
 }
 
@@ -1152,6 +1195,24 @@ async function handleNotificationMethodSelect(interaction) {
 
     const msg = `✅ Notification delivery method set to: **${methodDisplay[selectedMethod]}**`;
     return interaction.reply({ content: msg, ephemeral: true });
+}
+
+async function handlePerFriendToggle(interaction) {
+    const userId = interaction.customId.replace('friend_notif_toggle_select_', '');
+    const user = await User.findById(userId);
+    if (!user) return interaction.reply({ content: '❌ User not found.', ephemeral: true });
+
+    const friendId = interaction.values[0];
+    const friend = user.friends?.find(f => f.friendID === friendId || f.discordID === friendId);
+    if (!friend) return interaction.reply({ content: '❌ Friend not found.', ephemeral: true });
+
+    // Toggle the value (default is true, so undefined/null also counts as true)
+    friend.notifyOnSwitch = friend.notifyOnSwitch === false ? true : false;
+    await user.save();
+
+    const name = friend.customName?.display || friend.customName?.indexable || friend.discordID;
+    const status = friend.notifyOnSwitch ? '✅ ON' : '❌ OFF';
+    return interaction.reply({ content: `✅ Switch notifications for **${name}**: ${status}`, ephemeral: true });
 }
 
 // ============================================

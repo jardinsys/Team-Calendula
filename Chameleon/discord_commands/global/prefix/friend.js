@@ -550,6 +550,9 @@ async function handleSettings(message, parsed, user, system) {
     if (subArg === 'defaultbucket' || subArg === 'db') 
         return handleDefaultBucket(message, parsed, user, system);
 
+    if (subArg === 'notify' || subArg === 'notification')
+        return handleNotifyToggle(message, parsed, user);
+
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.info)
         .setTitle('⚙️ Friend Settings')
@@ -571,12 +574,56 @@ async function handleSettings(message, parsed, user, system) {
         }
     }
 
+    // Show per-friend notification status
+    if (user.friends?.length > 0) {
+        const friendLines = user.friends.map(f => {
+            const name = f.customName?.display || f.customName?.indexable || f.discordID;
+            const status = f.notifyOnSwitch !== false ? '✅' : '❌';
+            return `${status} ${name}`;
+        }).join('\n');
+        embed.addFields({ name: 'Per-Friend Switch Notifications', value: friendLines, inline: false });
+    }
+
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`friend_copy_id_${user._id}`).setLabel('Copy Friend ID').setStyle(ButtonStyle.Primary).setEmoji('📋'),
         new ButtonBuilder().setCustomId(`friend_set_bucket_${user._id}`).setLabel('Set Default Bucket').setStyle(ButtonStyle.Secondary).setEmoji('🔒')
     );
 
     return message.reply({ embeds: [embed], components: [row] });
+}
+
+async function handleNotifyToggle(message, parsed, user) {
+    const friendName = parsed._positional.slice(2).join(' ');
+    if (!friendName) {
+        return utils.info(message, 'Usage: `sys!friend settings notify <friendName> <on|off>`\n\nCurrent settings:\n' +
+            (user.friends || []).map(f => {
+                const name = f.customName?.display || f.customName?.indexable || f.discordID;
+                const status = f.notifyOnSwitch !== false ? '✅ ON' : '❌ OFF';
+                return `• ${name}: ${status}`;
+            }).join('\n'));
+    }
+
+    const value = parsed._positional[parsed._positional.length - 1]?.toLowerCase();
+    if (value !== 'on' && value !== 'off') {
+        return utils.error(message, 'Please specify `on` or `off`.\nUsage: `sys!friend settings notify <friendName> <on|off>`');
+    }
+
+    // Find friend by name
+    const friend = user.friends?.find(f => {
+        const name = f.customName?.display || f.customName?.indexable || '';
+        return name.toLowerCase() === friendName.toLowerCase() ||
+               name.toLowerCase().includes(friendName.toLowerCase());
+    });
+
+    if (!friend) {
+        return utils.error(message, `Friend \`${friendName}\` not found.`);
+    }
+
+    friend.notifyOnSwitch = value === 'on';
+    await user.save();
+
+    const displayName = friend.customName?.display || friend.customName?.indexable || friend.discordID;
+    return utils.success(message, `Switch notifications for **${displayName}**: ${value === 'on' ? '✅ ON' : '❌ OFF'}`);
 }
 
 async function handleDefaultBucket(message, parsed, user, system) {

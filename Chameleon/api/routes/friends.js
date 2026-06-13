@@ -273,7 +273,7 @@ router.patch('/:friendId', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
         const { friendId } = req.params;
-        const { customName, privacyBucket } = req.body;
+        const { customName, privacyBucket, notifyOnSwitch } = req.body;
         
         const friend = user.friends?.find(
             f => f.friendID === friendId || f.discordID === friendId
@@ -292,6 +292,10 @@ router.patch('/:friendId', async (req, res) => {
         
         if (privacyBucket !== undefined) {
             friend.privacyBucket = privacyBucket;
+        }
+        
+        if (notifyOnSwitch !== undefined) {
+            friend.notifyOnSwitch = Boolean(notifyOnSwitch);
         }
         
         await user.save();
