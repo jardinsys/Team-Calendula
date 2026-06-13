@@ -16,6 +16,7 @@ import { ActivitiesPage } from './pages/ActivitiesPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { SwitchPage } from './pages/SwitchPage'
 import { EntityViewPage } from './pages/EntityViewPage'
+import { FrontHistoryPage } from './pages/FrontHistoryPage'
 import { SettingsPanel } from '@chameleon/shared/components/SettingsPanel.jsx'
 
 function getInitialPage() {
@@ -90,6 +91,7 @@ export function Activity() {
       notes: NotesPage,
       crisis: CrisisPage,
       switch: SwitchPage,
+      'front-history': FrontHistoryPage,
   }), [isSys])
 
   const handleRegistered = useCallback(async () => {

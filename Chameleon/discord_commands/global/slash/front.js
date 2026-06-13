@@ -344,39 +344,56 @@ async function handleHistory(interaction, system, quick) {
         allShiftIds.push(...(layer.shifts || []));
     }
 
-    const shifts = await Shift.find({ _id: { $in: allShiftIds } }).sort({ startTime: -1 }).limit(15);
+    const limit = 20;
+    const shifts = await Shift.find({ _id: { $in: allShiftIds } }).sort({ startTime: -1 }).limit(limit + 1);
+    const hasMore = shifts.length > limit;
+    const displayShifts = hasMore ? shifts.slice(0, limit) : shifts;
 
-    if (shifts.length === 0) {
+    if (displayShifts.length === 0) {
         return interaction.editReply({ content: '📋 No switch history found.' });
     }
 
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.system)
         .setTitle('📋 Recent Switch History')
-        .setDescription(`Last ${shifts.length} switches:`);
+        .setDescription(`Last ${displayShifts.length} switches:`);
 
     let historyText = '';
-    for (const shift of shifts) {
+    for (const shift of displayShifts) {
         const startTime = Math.floor(shift.startTime.getTime() / 1000);
         const endTime = shift.endTime ? Math.floor(shift.endTime.getTime() / 1000) : null;
         const typeEmoji = shift.s_type === 'alter' ? '🎭' : (shift.s_type === 'state' ? '🔄' : '👥');
         const status = shift.statuses?.[shift.statuses.length - 1]?.status || 'No status';
+        const battery = shift.statuses?.[shift.statuses.length - 1]?.battery;
+        const batteryText = battery != null ? (battery >= 70 ? ' 🔋' : battery >= 30 ? ' 🪫' : ' ⚠️') + ` ${battery}%` : '';
 
         if (endTime) {
-            historyText += `${typeEmoji} **${shift.type_name}** — <t:${startTime}:R> to <t:${endTime}:R>\n`;
+            historyText += `${typeEmoji} **${shift.type_name}** — <t:${startTime}:R> to <t:${endTime}:R>${batteryText}\n`;
         } else {
-            historyText += `${typeEmoji} **${shift.type_name}** — <t:${startTime}:R> (still fronting)\n`;
+            historyText += `${typeEmoji} **${shift.type_name}** — <t:${startTime}:R> (still fronting)${batteryText}\n`;
         }
         historyText += `   └ Status: *${status}*\n`;
     }
 
     embed.addFields({ name: 'Switches', value: historyText || 'No data' });
 
-    const components = quick ? [] : [
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setLabel('Open Full Front').setStyle(ButtonStyle.Link).setURL(`${WEBAPP_URL}/app/front`).setEmoji('🌐')
-        )
-    ];
+    const components = [];
+    if (!quick) {
+        const row = new ActionRowBuilder();
+        if (hasMore) {
+            row.addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`front_history_more_${system._id}`)
+                    .setLabel('Load More')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('📜')
+            );
+        }
+        row.addComponents(
+            new ButtonBuilder().setLabel('View in App').setStyle(ButtonStyle.Link).setURL(`${WEBAPP_URL}/app/front-history`).setEmoji('🌐')
+        );
+        components.push(row);
+    }
 
     return interaction.editReply({ embeds: [embed], components });
 }

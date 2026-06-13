@@ -348,9 +348,11 @@ class ApiClient {
         return this.request('/front')
     }
 
-    async getFrontHistory(limit = 20, before) {
+    async getFrontHistory(limit = 100, before, from, to) {
         const params = new URLSearchParams({ limit })
         if (before) params.set('before', before)
+        if (from) params.set('from', from)
+        if (to) params.set('to', to)
         return this.request(`/front/history?${params}`)
     }
 
@@ -429,6 +431,26 @@ class ApiClient {
         return this.request(`/front/shift/${shiftId}/status`, {
             method: 'PATCH',
             body: JSON.stringify(data)
+        })
+    }
+
+    async updateShift(shiftId, data) {
+        return this.request(`/front/shift/${shiftId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data)
+        })
+    }
+
+    async deleteShift(shiftId) {
+        return this.request(`/front/shift/${shiftId}`, {
+            method: 'DELETE'
+        })
+    }
+
+    async mergeShifts(shiftIds) {
+        return this.request('/front/shift/merge', {
+            method: 'POST',
+            body: JSON.stringify({ shiftIds })
         })
     }
 

@@ -45,8 +45,8 @@ router.get('/', async (req, res) => {
 
 /**
  * GET /api/front/history
- * Get switch history
- * Query: ?limit=10&before=timestamp
+ * Get switch history with full status details
+ * Query: ?limit=20&before=timestamp&from=ISO&to=ISO
  */
 router.get('/history', async (req, res) => {
     try {
@@ -57,7 +57,7 @@ router.get('/history', async (req, res) => {
             return res.status(404).json({ error: 'Not registered' });
         }
         
-        const { limit = 20, before } = req.query;
+        const { limit = 100, before, from, to } = req.query;
         
         // Collect all shift IDs from all layers
         const allShiftIds = [];
@@ -68,12 +68,23 @@ router.get('/history', async (req, res) => {
         // Build query
         let query = { _id: { $in: allShiftIds } };
         if (before) {
-            query.startTime = { $lt: new Date(before) };
+            query.startTime = { ...query.startTime, $lt: new Date(before) };
+        }
+        if (from || to) {
+            query.startTime = query.startTime || {};
+            if (from) query.startTime.$gte = new Date(from);
+            if (to) query.startTime.$lte = new Date(to);
         }
         
         const shifts = await Shift.find(query)
             .sort({ startTime: -1 })
             .limit(parseInt(limit));
+        
+        // Build layer lookup for name resolution
+        const layerMap = new Map();
+        for (const layer of (system.front?.layers || [])) {
+            layerMap.set(layer._id.toString(), layer.name);
+        }
         
         // Enrich shifts with entity data
         const enrichedShifts = [];
@@ -102,8 +113,12 @@ router.get('/history', async (req, res) => {
                     : Date.now() - shift.startTime,
                 statuses: shift.statuses?.map(s => ({
                     status: s.status,
+                    battery: s.battery,
+                    caution: s.caution,
                     startTime: s.startTime,
-                    endTime: s.endTime
+                    endTime: s.endTime,
+                    layerID: s.layerID,
+                    layerName: layerMap.get(s.layerID?.toString()) || null
                 }))
             });
         }
@@ -1039,5 +1054,215 @@ async function buildFrontData(system, limited = false) {
 
     return frontData;
 }
+
+// ===========================================
+// EDIT HISTORICAL SHIFT
+// ===========================================
+
+/**
+ * Check if same entity has overlapping shifts
+ */
+async function checkSameEntityOverlap(entityId, entityType, startTime, endTime, excludeShiftId) {
+    const query = {
+        s_type: entityType,
+        ID: entityId,
+        _id: { $ne: excludeShiftId },
+        $or: [
+            { startTime: { $lt: endTime || new Date() }, endTime: { $gt: startTime } },
+            { startTime: { $lt: endTime || new Date() }, endTime: null }
+        ]
+    };
+    return await Shift.find(query);
+}
+
+/**
+ * PATCH /api/front/shift/:shiftId
+ * Retroactively edit a shift's timing and status entries
+ * Body: { startTime?, endTime?, statuses?: [{ _id?, status?, battery?, caution?, startTime? }] }
+ */
+router.patch('/shift/:shiftId', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+
+        const { shiftId } = req.params;
+        const { startTime, endTime, statuses, layerId } = req.body;
+
+        const shift = await Shift.findById(shiftId);
+        if (!shift) {
+            return res.status(404).json({ error: 'Shift not found' });
+        }
+
+        // Update timing
+        if (startTime !== undefined) shift.startTime = new Date(startTime);
+        if (endTime !== undefined) shift.endTime = endTime ? new Date(endTime) : null;
+
+        // Validate timing
+        if (shift.endTime && shift.endTime <= shift.startTime) {
+            return res.status(400).json({ error: 'End time must be after start time' });
+        }
+
+        // Update statuses
+        if (Array.isArray(statuses)) {
+            shift.statuses = statuses.map(s => ({
+                ...(s._id ? { _id: s._id } : {}),
+                status: s.status,
+                battery: s.battery,
+                caution: s.caution,
+                startTime: new Date(s.startTime),
+                endTime: s.endTime ? new Date(s.endTime) : null,
+                layerID: s.layerID || layerId || shift.statuses?.[0]?.layerID,
+                hidden: s.hidden || 'n'
+            }));
+        }
+
+        // Move to different layer if requested
+        if (layerId && layerId !== shift.statuses?.[0]?.layerID?.toString()) {
+            // Remove from old layer
+            for (const layer of (system.front?.layers || [])) {
+                layer.shifts = (layer.shifts || []).filter(s => s.toString() !== shiftId);
+            }
+            // Add to new layer
+            const targetLayer = system.front?.layers?.find(l => l._id.toString() === layerId);
+            if (targetLayer) {
+                targetLayer.shifts = targetLayer.shifts || [];
+                targetLayer.shifts.push(shift._id);
+            }
+            // Update layerID in all statuses
+            for (const status of shift.statuses) {
+                status.layerID = new mongoose.Types.ObjectId(layerId);
+            }
+        }
+
+        await shift.save();
+        await system.save();
+
+        // Check for same-entity overlap
+        const overlaps = await checkSameEntityOverlap(
+            shift.ID, shift.s_type, shift.startTime, shift.endTime, shiftId
+        );
+
+        res.json({
+            shift,
+            overlaps: overlaps.map(o => ({
+                _id: o._id,
+                startTime: o.startTime,
+                endTime: o.endTime,
+                type_name: o.type_name
+            }))
+        });
+    } catch (err) {
+        console.error('[Front] Shift edit error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
+// DELETE HISTORICAL SHIFT
+// ===========================================
+
+/**
+ * DELETE /api/front/shift/:shiftId
+ * Permanently delete a historical shift
+ */
+router.delete('/shift/:shiftId', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+
+        const { shiftId } = req.params;
+        const shift = await Shift.findById(shiftId);
+        if (!shift) {
+            return res.status(404).json({ error: 'Shift not found' });
+        }
+
+        // Remove from parent layer
+        for (const layer of (system.front?.layers || [])) {
+            layer.shifts = (layer.shifts || []).filter(s => s.toString() !== shiftId);
+        }
+
+        await system.save();
+        await Shift.findByIdAndDelete(shiftId);
+
+        res.json({ success: true, message: 'Shift deleted' });
+    } catch (err) {
+        console.error('[Front] Shift delete error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
+// MERGE SHIFTS
+// ===========================================
+
+/**
+ * POST /api/front/shift/merge
+ * Merge two shifts of the same entity into one
+ * Body: { shiftIds: [id1, id2] }
+ */
+router.post('/shift/merge', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+
+        const { shiftIds } = req.body;
+
+        if (!Array.isArray(shiftIds) || shiftIds.length !== 2) {
+            return res.status(400).json({ error: 'Exactly 2 shift IDs required' });
+        }
+
+        const [shiftA, shiftB] = await Promise.all(
+            shiftIds.map(id => Shift.findById(id))
+        );
+
+        if (!shiftA || !shiftB) {
+            return res.status(404).json({ error: 'One or both shifts not found' });
+        }
+
+        // Must be same entity
+        if (shiftA.s_type !== shiftB.s_type || shiftA.ID !== shiftB.ID) {
+            return res.status(400).json({ error: 'Can only merge shifts for the same entity' });
+        }
+
+        // Determine earlier and later shift
+        const [earlier, later] = shiftA.startTime <= shiftB.startTime ? [shiftA, shiftB] : [shiftB, shiftA];
+
+        // Merge: earliest start, latest end
+        earlier.startTime = earlier.startTime;
+        earlier.endTime = later.endTime || null;
+
+        // Merge statuses sorted by startTime
+        const mergedStatuses = [...(earlier.statuses || []), ...(later.statuses || [])];
+        mergedStatuses.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+        earlier.statuses = mergedStatuses;
+
+        await earlier.save();
+
+        // Remove the absorbed shift from its layer
+        for (const layer of (system.front?.layers || [])) {
+            layer.shifts = (layer.shifts || []).filter(s => s.toString() !== later._id.toString());
+        }
+
+        await system.save();
+        await Shift.findByIdAndDelete(later._id);
+
+        res.json({ success: true, shift: earlier });
+    } catch (err) {
+        console.error('[Front] Shift merge error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 module.exports = router;

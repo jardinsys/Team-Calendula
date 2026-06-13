@@ -458,6 +458,16 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
                 <Icon name="settings" size={16} />
             </button>
 
+            {/* History button */}
+            <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => onNavigate('front-history')}
+                title="Front History"
+                style={{ position: 'absolute', top: 'var(--space-md)', right: 'calc(var(--space-md) + 34px)', padding: '6px', minWidth: 'auto', zIndex: 5 }}
+            >
+                <Icon name="notepadText" size={16} />
+            </button>
+
             {/* Dissociative button — always first if applicable */}
             {showDissociativeButton && dissociativeState && (
                 <button
