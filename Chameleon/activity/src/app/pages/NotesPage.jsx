@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
+import { useNotePresence } from '../../hooks/useNotePresence'
 import {
     api,
     NoteCardGrid,
@@ -21,6 +22,9 @@ export function NotesPage({ system, onOpenSettings }) {
     const [selectedTags, setSelectedTags] = useState([])
     const [showManageTags, setShowManageTags] = useState(false)
     const [viewVariant, setViewVariant] = useState('grid')
+
+    const username = session?.user?.username || session?.user?.global_name || 'You'
+    const { viewers, editors, lastSavedBy, notifyFocus, notifyBlur, notifySaved } = useNotePresence(selectedNote?._id, username)
 
     const { data: notesData, isLoading } = useQuery({
         queryKey: noteKeys.list({ filter, tags: selectedTags }),
@@ -147,6 +151,10 @@ export function NotesPage({ system, onOpenSettings }) {
                     onClose={() => setSelectedNote(null)}
                     onUpdated={handleNoteUpdated}
                     onDeleted={handleNoteDeleted}
+                    presence={{ viewers, editors, lastSavedBy }}
+                    onFocus={notifyFocus}
+                    onBlur={notifyBlur}
+                    onSaved={notifySaved}
                 />
             )}
 

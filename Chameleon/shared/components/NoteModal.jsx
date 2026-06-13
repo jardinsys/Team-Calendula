@@ -14,7 +14,7 @@ const NOTE_COLORS = [
     '#57F287', '#3498DB', '#9B59B6', '#EB459E', '#95A5A6'
 ]
 
-function NoteModal({ note, system, onClose, onUpdated, onDeleted }) {
+function NoteModal({ note, system, onClose, onUpdated, onDeleted, presence, onFocus, onBlur, onSaved }) {
     const [fullNote, setFullNote] = useState(null)
     const [contentText, setContentText] = useState('')
     const [loading, setLoading] = useState(true)
@@ -110,6 +110,7 @@ function NoteModal({ note, system, onClose, onUpdated, onDeleted }) {
                 }))
             })
             setEditMode(false)
+            onSaved?.()
             onUpdated?.()
         } catch (err) {
             setError(err.message)
@@ -214,14 +215,16 @@ function NoteModal({ note, system, onClose, onUpdated, onDeleted }) {
 
                     <div className="form-group">
                         <label>Content</label>
-                        <RichTextEditor
-                            content={editContent}
-                            onChange={setEditContent}
-                            placeholder="Write your note..."
-                            mode={editorMode}
-                            onModeChange={setEditorMode}
-                            height={250}
-                        />
+                        <div onFocus={onFocus} onBlur={onBlur}>
+                            <RichTextEditor
+                                content={editContent}
+                                onChange={setEditContent}
+                                placeholder="Write your note..."
+                                mode={editorMode}
+                                onModeChange={setEditorMode}
+                                height={250}
+                            />
+                        </div>
                     </div>
 
                     <div className="form-group">
@@ -337,6 +340,24 @@ function NoteModal({ note, system, onClose, onUpdated, onDeleted }) {
                     </div>
                 )}
 
+                {presence?.editors?.length > 0 && (
+                    <div style={{
+                        background: 'rgba(253, 186, 116, 0.15)',
+                        border: '1px solid rgba(253, 186, 116, 0.3)',
+                        borderRadius: 'var(--radius)',
+                        padding: '8px 12px',
+                        marginBottom: '12px',
+                        fontSize: '0.8rem',
+                        color: '#fdba74',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                    }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fdba74', flexShrink: 0 }} />
+                        {presence.editors.map(e => e.username).join(', ')} {presence.editors.length === 1 ? 'is' : 'are'} editing this note
+                    </div>
+                )}
+
                 <div className="modal-body">
                     {displayNote.media?.map((item, i) => (
                         item.media?.url && (
@@ -366,7 +387,17 @@ function NoteModal({ note, system, onClose, onUpdated, onDeleted }) {
                 />
 
                 <div className="modal-actions">
-                    <span className="note-card-meta">
+                    <span className="note-card-meta" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        {presence?.lastSavedBy && (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                                Saved by {presence.lastSavedBy.username} {Math.floor((Date.now() - presence.lastSavedBy.timestamp) / 60000) < 1 ? 'just now' : `${Math.floor((Date.now() - presence.lastSavedBy.timestamp) / 60000)}m ago`}
+                            </span>
+                        )}
+                        {presence?.viewers?.length > 0 && (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                                Also viewing: {presence.viewers.map(v => v.username).join(', ')}
+                            </span>
+                        )}
                         {displayNote.pinned && <><Icon name="pin" size={14} /> </>}{new Date(displayNote.updatedAt).toLocaleDateString()}
                     </span>
                 </div>

@@ -194,9 +194,16 @@ app.use((err, req, res, next) => {
 
 let server = null;
 let wss = null;
+let heartbeatInterval = null;
 
 // Map<systemId, Set<ws>> — tracks connected clients per system
 const wsClients = new Map();
+
+// ==========================================
+// NOTE ROOMS — real-time collaboration presence
+// Map<noteId, Map<userId, { ws, systemId, username, editing }>>
+// ==========================================
+const noteRooms = new Map();
 
 function addClient(systemId, ws) {
     if (!wsClients.has(systemId)) wsClients.set(systemId, new Set());
@@ -217,6 +224,47 @@ function broadcastToSystem(systemId, event) {
     const data = JSON.stringify(event);
     for (const ws of clients) {
         if (ws.readyState === 1) ws.send(data);
+    }
+}
+
+// ==========================================
+// NOTE ROOM HELPERS
+// ==========================================
+
+function joinNoteRoom(noteId, userId, data) {
+    if (!noteRooms.has(noteId)) noteRooms.set(noteId, new Map());
+    noteRooms.get(noteId).set(userId, data);
+}
+
+function leaveNoteRoom(noteId, userId) {
+    const room = noteRooms.get(noteId);
+    if (!room) return;
+    room.delete(userId);
+    if (room.size === 0) noteRooms.delete(noteId);
+}
+
+function leaveAllNoteRooms(userId) {
+    for (const [noteId, room] of noteRooms) {
+        room.delete(userId);
+        if (room.size === 0) noteRooms.delete(noteId);
+    }
+}
+
+function getNoteRoomUsers(noteId) {
+    const room = noteRooms.get(noteId);
+    if (!room) return [];
+    return Array.from(room.entries()).map(([uid, d]) => ({
+        userId: uid, username: d.username, editing: d.editing
+    }));
+}
+
+function broadcastToNoteRoom(noteId, event, excludeUserId) {
+    const room = noteRooms.get(noteId);
+    if (!room) return;
+    const data = JSON.stringify(event);
+    for (const [uid, entry] of room) {
+        if (uid === excludeUserId) continue;
+        if (entry.ws.readyState === 1) entry.ws.send(data);
     }
 }
 
@@ -253,6 +301,20 @@ function setupWebSocket(serverInstance) {
         });
     });
 
+    // Heartbeat: ping every 30s, terminate if no pong in 10s
+    heartbeatInterval = setInterval(() => {
+        if (!wss) return;
+        for (const ws of wss.clients) {
+            if (ws.isAlive === false) {
+                leaveAllNoteRooms(ws.userId);
+                ws.terminate();
+                continue;
+            }
+            ws.isAlive = false;
+            ws.ping();
+        }
+    }, 30000);
+
     wss.on('connection', async (ws) => {
         // Look up the user's systemID if not in JWT
         if (!ws.systemId) {
@@ -270,6 +332,9 @@ function setupWebSocket(serverInstance) {
             return;
         }
 
+        ws.isAlive = true;
+        ws.on('pong', () => { ws.isAlive = true; });
+
         addClient(ws.systemId, ws);
 
         // Subscribe this system's Redis channel
@@ -280,12 +345,88 @@ function setupWebSocket(serverInstance) {
             broadcastToSystem(ws.systemId, event);
         });
 
+        // Handle note room + system events from this client
+        ws.on('message', (raw) => {
+            let msg;
+            try { msg = JSON.parse(raw); } catch { return; }
+
+            const { type, noteId } = msg;
+
+            if (type === 'note:open' && noteId) {
+                const username = msg.username || ws.userId;
+                joinNoteRoom(noteId, ws.userId, {
+                    ws, systemId: ws.systemId, username, editing: false
+                });
+                broadcastToNoteRoom(noteId, {
+                    type: 'note:presence',
+                    noteId,
+                    users: getNoteRoomUsers(noteId)
+                });
+            }
+
+            if (type === 'note:close' && noteId) {
+                leaveNoteRoom(noteId, ws.userId);
+                broadcastToNoteRoom(noteId, {
+                    type: 'note:presence',
+                    noteId,
+                    users: getNoteRoomUsers(noteId)
+                });
+            }
+
+            if (type === 'note:focus' && noteId) {
+                const room = noteRooms.get(noteId);
+                const entry = room?.get(ws.userId);
+                if (entry) entry.editing = true;
+                broadcastToNoteRoom(noteId, {
+                    type: 'note:editing',
+                    noteId, userId: ws.userId,
+                    username: entry?.username || ws.userId,
+                    editing: true
+                }, ws.userId);
+            }
+
+            if (type === 'note:blur' && noteId) {
+                const room = noteRooms.get(noteId);
+                const entry = room?.get(ws.userId);
+                if (entry) entry.editing = false;
+                broadcastToNoteRoom(noteId, {
+                    type: 'note:editing',
+                    noteId, userId: ws.userId,
+                    username: entry?.username || ws.userId,
+                    editing: false
+                }, ws.userId);
+            }
+
+            if (type === 'note:saved' && noteId) {
+                broadcastToNoteRoom(noteId, {
+                    type: 'note:saved',
+                    noteId, userId: ws.userId,
+                    username: msg.username || ws.userId,
+                    timestamp: Date.now()
+                }, ws.userId);
+            }
+        });
+
         ws.on('close', () => {
+            // Capture rooms before leaving so we can broadcast departure
+            const roomsToNotify = [];
+            for (const [noteId, room] of noteRooms) {
+                if (room.has(ws.userId)) roomsToNotify.push(noteId);
+            }
+            leaveAllNoteRooms(ws.userId);
+            for (const noteId of roomsToNotify) {
+                broadcastToNoteRoom(noteId, {
+                    type: 'note:presence',
+                    noteId,
+                    users: getNoteRoomUsers(noteId)
+                });
+            }
             removeClient(ws.systemId, ws);
             unsub();
         });
 
         ws.on('error', () => {
+            leaveAllNoteRooms(ws.userId);
             removeClient(ws.systemId, ws);
             unsub();
         });
@@ -309,6 +450,7 @@ function start() {
 
 function stop() {
     return new Promise((resolve) => {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
         if (wss) {
             for (const ws of wss.clients) ws.close();
         }
