@@ -484,6 +484,11 @@ router.post('/switch', async (req, res) => {
 
         await system.save();
 
+        // NOTE: Friend switch notifications are not fired here because the API
+        // doesn't have access to the Discord client. Notifications fire from
+        // Discord switches (guided + quick) in slash/front.js.
+        // TODO: Add Redis pub/sub to trigger notifications from API switches.
+
         const frontData = await buildFrontData(system);
         res.json(frontData);
     } catch (err) {

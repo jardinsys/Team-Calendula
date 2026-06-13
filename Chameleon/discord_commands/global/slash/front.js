@@ -23,6 +23,7 @@ const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const { Shift } = require('../../../schemas/front');
 const utils = require('../../functions/bot_utils');
+const { sendFriendSwitchNotifications } = require('../../functions/switchNotifications');
 
 const WEBAPP_URL = 'https://systemise.teamcalendula.net';
 const ENTITY_COLORS = utils.ENTITY_COLORS;
@@ -706,6 +707,9 @@ async function executeSwitchSession(interaction, session, system, sessionId) {
     await system.save();
     utils.deleteSession(sessionId);
 
+    // Send friend switch notifications (debounced)
+    sendFriendSwitchNotifications(system, interaction.client).catch(() => {});
+
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.system)
         .setTitle('🔄 Switch Complete')
@@ -1181,6 +1185,9 @@ async function handleQuickSwitchModal(interaction, session, system) {
 
     await system.save();
     utils.deleteSession(session.id);
+
+    // Send friend switch notifications (debounced)
+    sendFriendSwitchNotifications(system, interaction.client).catch(() => {});
 
     const embed = new EmbedBuilder()
         .setColor(successes[0]?.color || ENTITY_COLORS.success)
