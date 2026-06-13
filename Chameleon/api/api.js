@@ -36,6 +36,7 @@ const quickRoutes = require('./routes/quick');
 const importRoutes = require('./routes/import');
 const userRoutes = require('./routes/user');
 const publicRoutes = require('./routes/public');
+const convertRoutes = require('./routes/convert');
 
 const app = express();
 
@@ -130,6 +131,7 @@ app.use('/api/quick', quickRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/convert', convertRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

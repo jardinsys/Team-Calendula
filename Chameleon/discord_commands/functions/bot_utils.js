@@ -369,10 +369,28 @@ async function createNewUserAndSystem(discordId) {
         joinedAt: new Date()
     });
 
+    const strangersBucket = new PrivacyBucket({ name: 'Strangers', friends: [] });
+    const friendsBucket = new PrivacyBucket({ name: 'Friends', friends: [] });
+    await strangersBucket.save();
+    await friendsBucket.save();
+
     const system = new System({
         users: [user._id],
         metadata: { joinedAt: new Date() },
-        privacyBuckets: [{ name: 'Default', friends: [] }]
+        privacyBuckets: [strangersBucket._id, friendsBucket._id],
+        setting: {
+            friendAutoBucket: 'Friends',
+            privacy: [
+                {
+                    bucket: 'Strangers',
+                    settings: { mask: false, description: false, banner: false, avatar: false, birthday: false, pronouns: false, metadata: false, caution: false, hidden: true }
+                },
+                {
+                    bucket: 'Friends',
+                    settings: { mask: false, description: true, banner: true, avatar: true, birthday: false, pronouns: true, metadata: false, caution: false, hidden: false }
+                }
+            ]
+        }
     });
 
     user.systemID = system._id;
@@ -737,9 +755,9 @@ async function handleNewUserButton(interaction) {
             });
         }
 
-        if (!system.privacyBuckets?.some(b => b.name === 'Default')) {
+        if (!system.privacyBuckets?.some(b => b.name === 'Strangers')) {
             if (!system.privacyBuckets) system.privacyBuckets = [];
-            system.privacyBuckets.push({ name: 'Default', friends: [] });
+            system.privacyBuckets.push({ name: 'Strangers', friends: [] });
             await system.save();
         }
 
@@ -1034,15 +1052,44 @@ async function finalizeOnboarding(interaction, sessionId, session, customName) {
             sysType.dd = {};
         }
 
+        // Create privacy buckets
+        const strangersBucket = new PrivacyBucket({ name: 'Strangers', friends: [] });
+        const friendsBucket = new PrivacyBucket({ name: 'Friends', friends: [] });
+        await strangersBucket.save();
+        await friendsBucket.save();
+
+        // Seed default conditions based on system type
+        const alterConditions = [];
+        const stateConditions = [];
+        if (sysType.isSystem) {
+            alterConditions.push({ name: 'Dormant', settings: { hide_to_self: false, include_in_Count: true } });
+        }
+        if (sysType.isFragmented) {
+            stateConditions.push({ name: 'Remission', settings: { hide_to_self: false, include_in_Count: true } });
+        }
+
         // Create system
         system = new System({
             users: [user._id],
             metadata: { joinedAt: new Date() },
             sys_type: sysType,
-            privacyBuckets: [{ name: 'Default', friends: [] }],
-            alters: { IDs: [] },
-            states: { IDs: [] },
-            groups: { IDs: [] },
+            privacyBuckets: [strangersBucket._id, friendsBucket._id],
+            alters: { conditions: alterConditions, IDs: [] },
+            states: { conditions: stateConditions, IDs: [] },
+            groups: { conditions: [], IDs: [] },
+            setting: {
+                friendAutoBucket: 'Friends',
+                privacy: [
+                    {
+                        bucket: 'Strangers',
+                        settings: { mask: false, description: false, banner: false, avatar: false, birthday: false, pronouns: false, metadata: false, caution: false, hidden: true }
+                    },
+                    {
+                        bucket: 'Friends',
+                        settings: { mask: false, description: true, banner: true, avatar: true, birthday: false, pronouns: true, metadata: false, caution: false, hidden: false }
+                    }
+                ]
+            }
         });
 
         if (customName) {
@@ -1265,7 +1312,7 @@ function getPrivacyBucket(system, viewerDiscordId, viewerFriendId) {
     }
 
     // Not in any bucket — return the Default bucket (minimal visibility)
-    const defaultBucket = system.privacyBuckets.find(b => b.name === 'Default');
+    const defaultBucket = system.privacyBuckets.find(b => b.name === 'Strangers');
     return defaultBucket || null;
 }
 
@@ -1916,7 +1963,7 @@ async function ensureConditionExists(system, entityType, conditionName) {
             name: conditionName,
             settings: {
                 hide_to_self: false,
-                include_in_Count: false
+                include_in_Count: true
             }
         });
         await system.save();

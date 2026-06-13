@@ -7,7 +7,7 @@ function getDisplayName(entity, fallbackName) {
     return entity?.name?.display || entity?.name?.indexable || entity?.name || fallbackName || 'Unknown'
 }
 
-function EntityCard({ entity, type = 'alter', typeLabel, onClick, fallbackName }) {
+function EntityCard({ entity, type = 'alter', typeLabel, onClick, fallbackName, selected = false, onToggle, selectionMode = false }) {
     const color = entity?.color || DEFAULT_COLOR
     const name = getDisplayName(entity, fallbackName)
     const avatar = entity?.avatar?.url || entity?.avatar
@@ -19,14 +19,27 @@ function EntityCard({ entity, type = 'alter', typeLabel, onClick, fallbackName }
             ? `${entity?.alters?.length || 0} alter${(entity?.alters?.length || 0) !== 1 ? 's' : ''}`
             : pronouns || null
 
+    const handleClick = () => {
+        if (selectionMode && onToggle) {
+            onToggle(entity)
+        } else {
+            onClick?.(entity)
+        }
+    }
+
     return (
         <div
-            className="entity-card"
+            className={`entity-card${selected ? ' entity-card-selected' : ''}`}
             style={{ '--entity-color': color }}
-            onClick={() => onClick?.(entity)}
+            onClick={handleClick}
             role="button"
             tabIndex={0}
         >
+            {selectionMode && (
+                <div className={`entity-card-check${selected ? ' checked' : ''}`}>
+                    {selected ? '✓' : ''}
+                </div>
+            )}
             <div className="entity-card-avatar">
                 {avatar ? (
                     <img src={avatar} alt="" />
@@ -54,7 +67,7 @@ function EntityCard({ entity, type = 'alter', typeLabel, onClick, fallbackName }
     )
 }
 
-function EntityCardList({ entities, type = 'alter', typeLabel, onEntityClick, emptyMessage, fallbackName }) {
+function EntityCardList({ entities, type = 'alter', typeLabel, onEntityClick, emptyMessage, fallbackName, selectedIds, onToggle, selectionMode = false }) {
     const label = typeLabel || type
     if (!entities?.length) {
         return (
@@ -77,6 +90,9 @@ function EntityCardList({ entities, type = 'alter', typeLabel, onEntityClick, em
                     type={type}
                     onClick={onEntityClick}
                     fallbackName={fallbackName}
+                    selected={selectedIds?.includes(entity._id)}
+                    onToggle={onToggle}
+                    selectionMode={selectionMode}
                 />
             ))}
         </div>

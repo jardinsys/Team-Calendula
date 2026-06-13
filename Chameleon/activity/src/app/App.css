@@ -3258,6 +3258,226 @@ select.text-input {
 .error-text { color: var(--color-error); font-size: 0.8rem; margin-bottom: var(--space-sm); }
 
 /* ═══════════════════════════════════════════
+   Batch Operations
+   ═══════════════════════════════════════════ */
+
+.entity-card-selected {
+  border: 2px solid var(--accent);
+  background: var(--accent-subtle);
+}
+
+.entity-card-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: var(--text);
+  background: var(--bg-surface);
+  transition: all 0.15s ease;
+}
+
+.entity-card-check.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+.entity-card {
+  position: relative;
+}
+
+.batch-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  border-top: 1px solid var(--glass-border);
+  padding: var(--space-sm) var(--space-md);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.batch-action-bar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.batch-action-bar-count {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-family: var(--font-accent);
+}
+
+.batch-action-bar-actions {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.batch-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-family: var(--font-accent);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.batch-action-btn:hover {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+
+.batch-action-btn-danger {
+  color: var(--color-error);
+}
+
+.batch-action-btn-danger:hover {
+  background: rgba(252, 165, 165, 0.12);
+  border-color: var(--color-error);
+}
+
+.batch-sub-menu {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  border-top: 1px solid var(--glass-border);
+  padding: var(--space-sm) var(--space-md);
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.batch-sub-menu-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.85rem;
+  font-family: var(--font-accent);
+  color: var(--text);
+  margin-bottom: var(--space-xs);
+}
+
+.batch-sub-menu-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-family: var(--font-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: var(--space-xs);
+}
+
+.batch-sub-menu-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.batch-sub-menu-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.batch-sub-menu-option:hover {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+
+.batch-sub-menu-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.batch-sub-menu-option-danger {
+  color: var(--color-error);
+}
+
+.batch-sub-menu-option-danger:hover {
+  background: rgba(252, 165, 165, 0.12);
+  border-color: var(--color-error);
+}
+
+.batch-sub-menu-meta {
+  margin-left: auto;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  font-family: var(--font-accent);
+}
+
+.batch-sub-menu-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.batch-sub-menu-empty {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: var(--space-md);
+}
+
+.batch-sub-menu-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+}
+
+.batch-sub-menu-confirm p {
+  font-size: 0.8rem;
+  color: var(--text);
+  margin: 0;
+}
+
+.batch-sub-menu-warning {
+  color: var(--color-error);
+  font-size: 0.75rem;
+}
+
+.batch-sub-menu-confirm-actions {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+/* ═══════════════════════════════════════════
    Reduced Motion
    ═══════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {

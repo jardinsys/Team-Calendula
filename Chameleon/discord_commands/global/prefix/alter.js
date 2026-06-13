@@ -383,12 +383,13 @@ async function handleGroups(message, parsed, alterName) {
 }
 
 async function handleCondition(message, parsed, alterName) {
-    const { alter } = await getAlter(message, alterName);
+    const { alter, system } = await getAlter(message, alterName);
     if (!alter) return;
     if (parsed.clear) { alter.condition = undefined; await alter.save(); return utils.success(message, 'Condition cleared.'); }
     const cond = parsed._positional.slice(2).join(' ');
     if (!cond) return utils.error(message, 'Please provide a condition.');
     alter.condition = cond; await alter.save();
+    await utils.ensureConditionExists(system, 'alter', cond);
     return utils.success(message, `Condition set to **${cond}**`);
 }
 
@@ -609,6 +610,7 @@ async function handleDormant(message, parsed, alterName) {
     const { alter, system } = await getAlter(message, alterName);
     if (!alter) return;
     alter.condition = 'Dormant'; await alter.save();
+    await utils.ensureConditionExists(system, 'alter', 'Dormant');
     return utils.success(message, `**${alter.name?.display || alterName}** marked as dormant.`);
 }
 

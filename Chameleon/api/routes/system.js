@@ -11,6 +11,7 @@ const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const { convertAltersToStates, convertStatesToAlters } = require('../../discord_commands/functions/convert_functions');
+const { PrivacyBucket } = require('../../schemas/settings');
 const { uploadMiddleware } = require('../middleware/upload');
 const { handleSystemImageUpload, handleSystemImageDelete } = require('./avatar');
 const { deleteEntityR2Media, cleanUserReferences, deleteUserNotes, deleteUserMessages, deleteSystemData } = require('../utils/cascade');
@@ -98,6 +99,22 @@ router.post('/', async (req, res) => {
         
         const { name, description, sys_type } = req.body;
         
+        // Create privacy buckets
+        const strangersBucket = new PrivacyBucket({ name: 'Strangers', friends: [] });
+        const friendsBucket = new PrivacyBucket({ name: 'Friends', friends: [] });
+        await strangersBucket.save();
+        await friendsBucket.save();
+
+        // Seed default conditions based on system type
+        const alterConditions = [];
+        const stateConditions = [];
+        if (sys_type?.isSystem) {
+            alterConditions.push({ name: 'Dormant', settings: { hide_to_self: false, include_in_Count: true } });
+        }
+        if (sys_type?.isFragmented) {
+            stateConditions.push({ name: 'Remission', settings: { hide_to_self: false, include_in_Count: true } });
+        }
+        
         const sysIdx = (name || 'My System').toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
         const system = new System({
             users: [user._id],
@@ -115,9 +132,23 @@ router.post('/', async (req, res) => {
                 isDissociative: false,
                 onboardingCompleted: false
             },
-            alters: { IDs: [] },
-            states: { IDs: [] },
-            groups: { IDs: [] }
+            privacyBuckets: [strangersBucket._id, friendsBucket._id],
+            alters: { conditions: alterConditions, IDs: [] },
+            states: { conditions: stateConditions, IDs: [] },
+            groups: { conditions: [], IDs: [] },
+            setting: {
+                friendAutoBucket: 'Friends',
+                privacy: [
+                    {
+                        bucket: 'Strangers',
+                        settings: { mask: false, description: false, banner: false, avatar: false, birthday: false, pronouns: false, metadata: false, caution: false, hidden: true }
+                    },
+                    {
+                        bucket: 'Friends',
+                        settings: { mask: false, description: true, banner: true, avatar: true, birthday: false, pronouns: true, metadata: false, caution: false, hidden: false }
+                    }
+                ]
+            }
         });
         
         await system.save();

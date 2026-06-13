@@ -1276,12 +1276,12 @@ async function handleButtonInteraction(interaction) {
 
         // Don't allow deleting Default or Friends buckets
         const deletableBuckets = system.privacyBuckets.filter(b =>
-            b.name !== 'Default' && b.name !== 'Friends'
+            b.name !== 'Strangers' && b.name !== 'Friends'
         );
 
         if (deletableBuckets.length === 0) {
             return await interaction.reply({
-                content: '❌ Cannot delete Default or Friends buckets.',
+                content: '❌ Cannot delete Strangers or Friends buckets.',
                 ephemeral: true
             });
         }

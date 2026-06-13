@@ -333,10 +333,77 @@ class ApiClient {
         })
     }
 
+    async addGroupMembers(groupId, data) {
+        return this.request(`/groups/${groupId}/members`, {
+            method: 'POST',
+            body: JSON.stringify(data)
+        })
+    }
+
+    async removeGroupMembers(groupId, data) {
+        return this.request(`/groups/${groupId}/members`, {
+            method: 'DELETE',
+            body: JSON.stringify(data)
+        })
+    }
+
     async removeGroupProxy(id, proxy) {
         return this.request(`/groups/${id}/proxy`, {
             method: 'DELETE',
             body: JSON.stringify({ proxy })
+        })
+    }
+
+    // ═══════════════════════════════════════════
+    // BATCH OPERATIONS
+    // ═══════════════════════════════════════════
+
+    async deleteAlters(ids) {
+        return this.request('/alters', {
+            method: 'DELETE',
+            body: JSON.stringify({ ids })
+        })
+    }
+
+    async updateAlters(ids, updates) {
+        return this.request('/alters', {
+            method: 'PATCH',
+            body: JSON.stringify({ ids, updates })
+        })
+    }
+
+    async deleteStates(ids) {
+        return this.request('/states', {
+            method: 'DELETE',
+            body: JSON.stringify({ ids })
+        })
+    }
+
+    async updateStates(ids, updates) {
+        return this.request('/states', {
+            method: 'PATCH',
+            body: JSON.stringify({ ids, updates })
+        })
+    }
+
+    async deleteGroups(ids) {
+        return this.request('/groups', {
+            method: 'DELETE',
+            body: JSON.stringify({ ids })
+        })
+    }
+
+    async updateGroups(ids, updates) {
+        return this.request('/groups', {
+            method: 'PATCH',
+            body: JSON.stringify({ ids, updates })
+        })
+    }
+
+    async convertEntities(sourceType, targetType, names, keep) {
+        return this.request('/convert', {
+            method: 'POST',
+            body: JSON.stringify({ sourceType, targetType, names, keep })
         })
     }
 

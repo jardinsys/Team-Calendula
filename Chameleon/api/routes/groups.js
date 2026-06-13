@@ -429,4 +429,71 @@ router.delete('/:id/members', async (req, res) => {
     }
 });
 
+// ===========================================
+// BATCH OPERATIONS
+// ===========================================
+
+router.delete('/', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system) return res.status(404).json({ error: 'Not registered' });
+
+        const { ids } = req.body;
+        if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+
+        const validIds = ids.filter(id => system.groups?.IDs?.includes(id));
+        if (!validIds.length) return res.status(404).json({ error: 'No valid groups found' });
+
+        await Alter.updateMany({ groupsIDs: { $in: validIds } }, { $pull: { groupsIDs: { $in: validIds } } });
+        await State.updateMany({ groupIDs: { $in: validIds } }, { $pull: { groupIDs: { $in: validIds } } });
+        await Group.deleteMany({ _id: { $in: validIds } });
+
+        system.groups.IDs = system.groups.IDs.filter(id => !validIds.includes(id));
+        await system.save();
+
+        res.json({ success: true, deleted: validIds.length });
+    } catch (err) {
+        console.error('[Groups] Batch delete error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.patch('/', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system) return res.status(404).json({ error: 'Not registered' });
+
+        const { ids, updates } = req.body;
+        if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids array required' });
+        if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'updates object required' });
+
+        const validIds = ids.filter(id => system.groups?.IDs?.includes(id));
+        if (!validIds.length) return res.status(404).json({ error: 'No valid groups found' });
+
+        const allowedFields = ['condition', 'color', 'description', 'proxy', 'type'];
+        const dbUpdates = {};
+        for (const field of allowedFields) {
+            if (updates[field] !== undefined) dbUpdates[field] = updates[field];
+        }
+        if (updates.setting && typeof updates.setting === 'object') {
+            const allowedSettings = ['default_status', 'default_battery', 'allowPing'];
+            for (const key of allowedSettings) {
+                if (updates.setting[key] !== undefined) {
+                    dbUpdates[`setting.${key}`] = updates.setting[key];
+                }
+            }
+        }
+
+        if (Object.keys(dbUpdates).length === 0) return res.status(400).json({ error: 'No valid update fields' });
+
+        const result = await Group.updateMany({ _id: { $in: validIds } }, { $set: dbUpdates });
+        res.json({ success: true, updated: result.modifiedCount });
+    } catch (err) {
+        console.error('[Groups] Batch update error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

@@ -371,12 +371,13 @@ async function handleAlters(message, parsed, stateName) {
 }
 
 async function handleCondition(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
+    const { state, system } = await getState(message, stateName);
     if (!state) return;
     if (parsed.clear) { state.condition = undefined; await state.save(); return utils.success(message, 'Condition cleared.'); }
     const cond = parsed._positional.slice(2).join(' ');
     if (!cond) return utils.error(message, 'Please provide a condition.');
     state.condition = cond; await state.save();
+    await utils.ensureConditionExists(system, 'state', cond);
     return utils.success(message, `Condition set to **${cond}**`);
 }
 

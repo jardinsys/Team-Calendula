@@ -255,9 +255,24 @@ async function handleNew(message, parsed) {
         }
     });
 
-    const defaultBucket = new PrivacyBucket({ name: 'Default', friends: [] });
-    await defaultBucket.save();
-    newSystem.privacyBuckets = [defaultBucket._id];
+    const strangersBucket = new PrivacyBucket({ name: 'Strangers', friends: [] });
+    const friendsBucket = new PrivacyBucket({ name: 'Friends', friends: [] });
+    await strangersBucket.save();
+    await friendsBucket.save();
+    newSystem.privacyBuckets = [strangersBucket._id, friendsBucket._id];
+    newSystem.setting = {
+        friendAutoBucket: 'Friends',
+        privacy: [
+            {
+                bucket: 'Strangers',
+                settings: { mask: false, description: false, banner: false, avatar: false, birthday: false, pronouns: false, metadata: false, caution: false, hidden: true }
+            },
+            {
+                bucket: 'Friends',
+                settings: { mask: false, description: true, banner: true, avatar: true, birthday: false, pronouns: true, metadata: false, caution: false, hidden: false }
+            }
+        ]
+    };
     await newSystem.save();
 
     user.systemID = newSystem._id;
