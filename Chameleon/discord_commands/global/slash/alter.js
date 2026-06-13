@@ -974,6 +974,7 @@ async function handleButtonInteraction(interaction) {
         await State.updateMany({ alters: alterId }, { $pull: { alters: alterId } });
 
         await Alter.findByIdAndDelete(session.alterId);
+        utils.publishDeleteEvent(system._id, 'alter', session.alterId);
         utils.deleteSession(sessionId);
         return await interaction.update({ content: '✅ Alter has been deleted.', embeds: [], components: [] });
     }

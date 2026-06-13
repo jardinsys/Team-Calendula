@@ -675,6 +675,7 @@ async function handleButtonInteraction(interaction) {
         system.groups.IDs = system.groups.IDs.filter(id => id !== session.groupId.toString());
         await system.save();
         await Group.findByIdAndDelete(session.groupId);
+        utils.publishDeleteEvent(system._id, 'group', session.groupId);
         utils.deleteSession(sessionId);
         return await interaction.update({ content: '✅ Group deleted.', embeds: [], components: [] });
     }

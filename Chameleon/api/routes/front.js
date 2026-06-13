@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const router = express.Router();
 
 const { optionalAuthMiddleware } = require('../middleware/auth');
+const { publishEvent } = require('../../redis');
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const Alter = require('../../schemas/alter');
@@ -205,6 +206,7 @@ router.patch('/status', async (req, res) => {
             battery: system.battery,
             caution: system.front.caution
         });
+        publishEvent(system._id.toString(), { type: 'front:update', systemId: system._id.toString() });
     } catch (err) {
         console.error('[Front] Update status error:', err);
         res.status(500).json({ error: err.message });
@@ -271,6 +273,7 @@ router.post('/layers', async (req, res) => {
         await system.save();
         
         res.status(201).json(newLayer);
+        publishEvent(system._id.toString(), { type: 'front:update', systemId: system._id.toString() });
     } catch (err) {
         console.error('[Front] Create layer error:', err);
         res.status(500).json({ error: err.message });
@@ -319,6 +322,7 @@ router.delete('/layers/:layerId', async (req, res) => {
         await system.save();
         
         res.json({ success: true });
+        publishEvent(system._id.toString(), { type: 'front:update', systemId: system._id.toString() });
     } catch (err) {
         console.error('[Front] Delete layer error:', err);
         res.status(500).json({ error: err.message });
@@ -506,6 +510,7 @@ router.post('/switch', async (req, res) => {
 
         const frontData = await buildFrontData(system);
         res.json(frontData);
+        publishEvent(system._id.toString(), { type: 'front:switch', systemId: system._id.toString() });
     } catch (err) {
         console.error('[Front] Guided switch error:', err);
         res.status(500).json({ error: err.message });
@@ -606,6 +611,7 @@ router.post('/shift', async (req, res) => {
 
         const frontData = await buildFrontData(system);
         res.json(frontData);
+        publishEvent(system._id.toString(), { type: 'front:switch', systemId: system._id.toString() });
     } catch (err) {
         console.error('[Front] Add shift error:', err);
         res.status(500).json({ error: err.message });
@@ -659,6 +665,7 @@ router.delete('/shift/:shiftId', async (req, res) => {
 
         const frontData = await buildFrontData(system);
         res.json(frontData);
+        publishEvent(system._id.toString(), { type: 'front:switch', systemId: system._id.toString() });
     } catch (err) {
         console.error('[Front] Remove shift error:', err);
         res.status(500).json({ error: err.message });
@@ -708,6 +715,7 @@ router.patch('/layers/reorder', async (req, res) => {
         await system.save();
 
         res.json({ success: true, layers: reordered.map(l => ({ _id: l._id, name: l.name })) });
+        publishEvent(system._id.toString(), { type: 'front:update', systemId: system._id.toString() });
     } catch (err) {
         console.error('[Front] Reorder layers error:', err);
         res.status(500).json({ error: err.message });
@@ -746,6 +754,7 @@ router.patch('/layers/:layerId', async (req, res) => {
         await system.save();
 
         res.json({ success: true, layer: { _id: layer._id, name: layer.name, color: layer.color } });
+        publishEvent(system._id.toString(), { type: 'front:update', systemId: system._id.toString() });
     } catch (err) {
         console.error('[Front] Rename layer error:', err);
         res.status(500).json({ error: err.message });
@@ -1155,6 +1164,7 @@ router.patch('/shift/:shiftId', async (req, res) => {
                 type_name: o.type_name
             }))
         });
+        publishEvent(system._id.toString(), { type: 'front:update', systemId: system._id.toString() });
     } catch (err) {
         console.error('[Front] Shift edit error:', err);
         res.status(500).json({ error: err.message });
@@ -1193,6 +1203,7 @@ router.delete('/shift/:shiftId', async (req, res) => {
         await Shift.findByIdAndDelete(shiftId);
 
         res.json({ success: true, message: 'Shift deleted' });
+        publishEvent(system._id.toString(), { type: 'front:update', systemId: system._id.toString() });
     } catch (err) {
         console.error('[Front] Shift delete error:', err);
         res.status(500).json({ error: err.message });

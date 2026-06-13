@@ -598,6 +598,7 @@ async function handleDelete(message, parsed, stateName) {
 
     system.states.IDs = system.states.IDs?.filter(id => id !== state._id) || [];
     await system.save(); await State.deleteOne({ _id: state._id });
+    utils.publishDeleteEvent(system._id, 'state', state._id);
     return utils.success(message, `**${state.name?.display || stateName}** deleted.`);
 }
 

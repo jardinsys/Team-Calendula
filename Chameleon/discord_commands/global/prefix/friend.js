@@ -32,6 +32,7 @@ const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const { Shift } = require('../../../schemas/front');
 const { PrivacyBucket } = require('../../../schemas/settings');
+const { publishEvent } = require('../../../redis');
 const utils = require('../../functions/bot_utils');
 
 const WEBAPP_URL = 'https://systemise.teamcalendula.net';
@@ -158,6 +159,7 @@ async function handleAdd(message, parsed, user, system) {
         sentAt: new Date()
     });
     await target.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:request', systemId: user.systemID.toString() });
 
     // DM notification
     const notifPrefs = target.settings?.notificationPreferences || {};
@@ -207,6 +209,7 @@ async function handleRemove(message, parsed, user) {
         const friendName = user.friends[friendIndex].customName?.display || user.friends[friendIndex].customName?.indexable || targetUser.displayName;
         user.friends.splice(friendIndex, 1);
         await user.save();
+        if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:removed', systemId: user.systemID.toString() });
         return utils.success(message, `Removed **${friendName}** from your friends list.`);
     }
 
@@ -246,6 +249,7 @@ async function handleRemove(message, parsed, user) {
     const friendName = friend.customName?.display || friend.customName?.indexable || friend.discordID;
     user.friends.splice(idx, 1);
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:removed', systemId: user.systemID.toString() });
     return utils.success(message, `Removed **${friendName}** from your friends list.`);
 }
 
@@ -321,7 +325,9 @@ async function handleAccept(message, parsed, user, system) {
 
     user.friendRequests.splice(index, 1);
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:accepted', systemId: user.systemID.toString() });
     await fromUser.save();
+    if (fromUser.systemID) publishEvent(fromUser.systemID.toString(), { type: 'friend:accepted', systemId: fromUser.systemID.toString() });
 
     return utils.success(message, `Accepted friend request from **${req.fromName}** (${req.fromSystemName}).`);
 }
@@ -335,6 +341,7 @@ async function handleDecline(message, parsed, user) {
     const fromName = req.fromName;
     user.friendRequests.splice(index, 1);
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:declined', systemId: user.systemID.toString() });
 
     return utils.success(message, `Declined friend request from **${fromName}**.`);
 }
@@ -366,6 +373,7 @@ async function handleBlock(message, parsed, user) {
         user.friends.splice(friendIndex, 1);
 
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:blocked', systemId: user.systemID.toString() });
     return utils.success(message, `Blocked **${targetName}**. They have been removed from your friends list if they were on it.`);
 }
 
@@ -381,6 +389,7 @@ async function handleUnblock(message, parsed, user) {
     const blockedName = user.blocked[blockedIndex].name?.display || targetUser.displayName;
     user.blocked.splice(blockedIndex, 1);
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:unblocked', systemId: user.systemID.toString() });
     return utils.success(message, `Unblocked **${blockedName}**.`);
 }
 

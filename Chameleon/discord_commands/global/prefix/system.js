@@ -54,6 +54,7 @@ const { Shift } = require('../../../schemas/front');
 
 const utils = require('../../functions/bot_utils');
 const proxyMessageHandler = require('../proxy-message');
+const { publishEvent } = require('../../redis');
 
 const { getSystemTerm, getAlterTerm } = utils;
 
@@ -303,6 +304,7 @@ async function handleRename(message, parsed) {
         system.name = system.name || {};
         system.name.indexable = undefined;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'System indexable name cleared.');
     }
@@ -316,6 +318,7 @@ async function handleRename(message, parsed) {
     system.name = system.name || {};
     system.name.indexable = newName;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     await proxyMessageHandler.invalidateDisplayCache(system._id);
 
     return utils.success(message, `System indexable name set to **${newName}**`);
@@ -328,6 +331,7 @@ async function handleDisplayName(message, parsed) {
     if (parsed.clear) {
         if (system.name) system.name.display = undefined;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Profile display name cleared.');
     }
@@ -338,6 +342,7 @@ async function handleDisplayName(message, parsed) {
     system.name = system.name || {};
     system.name.display = newName;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     await proxyMessageHandler.invalidateDisplayCache(system._id);
 
     return utils.success(message, `Profile display name set to **${newName}**`);
@@ -350,6 +355,7 @@ async function handleDescription(message, parsed) {
     if (parsed.clear) {
         system.description = undefined;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, 'Profile description cleared.');
     }
 
@@ -358,6 +364,7 @@ async function handleDescription(message, parsed) {
 
     system.description = desc;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, 'Profile description updated.');
 }
@@ -370,6 +377,7 @@ async function handleAvatar(message, parsed) {
         if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key, system.avatar.bucket || 'app');
         system.avatar = undefined;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Profile avatar cleared.');
     }
@@ -382,6 +390,7 @@ async function handleAvatar(message, parsed) {
     if (system.avatar?.r2Key) await utils.deleteFromR2(system.avatar.r2Key, system.avatar.bucket || 'app');
     system.avatar = result.media;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     await proxyMessageHandler.invalidateDisplayCache(system._id);
 
     return utils.success(message, 'Profile avatar uploaded and updated.');
@@ -397,6 +406,7 @@ async function handleBanner(message, parsed) {
         if (system.discord?.image?.banner?.r2Key) await utils.deleteFromR2(system.discord.image.banner.r2Key, system.discord.image.banner.bucket || 'app');
         if (system.discord?.image) system.discord.image.banner = undefined;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Profile banner cleared.');
     }
@@ -411,6 +421,7 @@ async function handleBanner(message, parsed) {
     system.discord.image = system.discord.image || {};
     system.discord.image.banner = result.media;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     await proxyMessageHandler.invalidateDisplayCache(system._id);
 
     return utils.success(message, 'Profile banner uploaded and updated.');
@@ -423,6 +434,7 @@ async function handleColor(message, parsed) {
     if (parsed.clear) {
         system.color = undefined;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, 'Profile color cleared.');
     }
 
@@ -433,6 +445,7 @@ async function handleColor(message, parsed) {
 
     system.color = color;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, `Profile color set to **${color}**`);
 }
@@ -446,6 +459,7 @@ async function handleTag(message, parsed) {
         system.discord.tag = system.discord.tag || {};
         system.discord.tag.normal = [];
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, 'Profile tags cleared.');
     }
 
@@ -458,6 +472,7 @@ async function handleTag(message, parsed) {
     system.discord.tag = system.discord.tag || {};
     system.discord.tag.normal = tags;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, `Profile tags set to: ${tags.map(t => `**${t}**`).join(', ')}`);
 }
@@ -469,6 +484,7 @@ async function handleBirthday(message, parsed) {
     if (parsed.clear) {
         system.birthday = undefined;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, 'Profile birthday cleared.');
     }
 
@@ -480,6 +496,7 @@ async function handleBirthday(message, parsed) {
 
     system.birthday = date;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, `Profile birthday set to **${utils.formatDate(date)}**`);
 }
@@ -491,6 +508,7 @@ async function handleTimezone(message, parsed) {
     if (parsed.clear) {
         system.timezone = undefined;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, 'Profile timezone cleared.');
     }
 
@@ -499,6 +517,7 @@ async function handleTimezone(message, parsed) {
 
     system.timezone = tz;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, `Profile timezone set to **${tz}**`);
 }
@@ -511,6 +530,7 @@ async function handleType(message, parsed) {
         system.sys_type = system.sys_type || {};
         system.sys_type.name = 'None';
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, 'Profile type cleared.');
     }
 
@@ -520,6 +540,7 @@ async function handleType(message, parsed) {
     system.sys_type = system.sys_type || {};
     system.sys_type.name = typeName;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, `Profile type set to **${typeName}**`);
 }
@@ -533,6 +554,7 @@ async function handleDSM(message, parsed) {
         system.sys_type.dd = system.sys_type.dd || {};
         system.sys_type.dd.DSM = undefined;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, 'DSM classification cleared.');
     }
 
@@ -546,6 +568,7 @@ async function handleDSM(message, parsed) {
     system.sys_type.dd = system.sys_type.dd || {};
     system.sys_type.dd.DSM = dsmType;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, `DSM classification set to **${dsmType}**`);
 }
@@ -559,6 +582,7 @@ async function handleICD(message, parsed) {
         system.sys_type.dd = system.sys_type.dd || {};
         system.sys_type.dd.ICD = undefined;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, 'ICD classification cleared.');
     }
 
@@ -572,6 +596,7 @@ async function handleICD(message, parsed) {
     system.sys_type.dd = system.sys_type.dd || {};
     system.sys_type.dd.ICD = icdType;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, `ICD classification set to **${icdType}**`);
 }
@@ -586,6 +611,7 @@ async function handleSynonym(message, parsed) {
     if (parsed.clear) {
         system.alterSynonym = { singular: 'alter', plural: 'alters' };
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, 'Alter synonyms reset to default (alter/alters).');
     }
 
@@ -596,6 +622,7 @@ async function handleSynonym(message, parsed) {
         plural: plural || singular + 's'
     };
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, `Alter synonyms set to **${system.alterSynonym.singular}**/**${system.alterSynonym.plural}**`);
 }
@@ -648,6 +675,7 @@ async function handlePrivacy(message, parsed) {
     
     defaultPrivacy.settings[field] = value === 'private';
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, `**${field}** is now **${value}**`);
 }
@@ -684,6 +712,7 @@ async function handlePrivacyBuckets(message, parsed, system) {
         system.privacyBuckets = system.privacyBuckets || [];
         system.privacyBuckets.push(bucket._id);
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
         return utils.success(message, `Privacy bucket **${nameArg}** created.`);
     }
@@ -698,11 +727,13 @@ async function handlePrivacyBuckets(message, parsed, system) {
         // Remove from system
         system.privacyBuckets = (system.privacyBuckets || []).filter(id => id.toString() !== bucket._id.toString());
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
         // Remove privacy settings referencing this bucket
         system.setting = system.setting || {};
         system.setting.privacy = (system.setting.privacy || []).filter(p => p.bucket !== nameArg);
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
         // Delete bucket
         await PrivacyBucket.deleteOne({ _id: bucket._id });
@@ -801,6 +832,7 @@ async function handlePrivacyBucketField(message, parsed, system, bucketName) {
     
     bucketPrivacy.settings[field] = value === 'private';
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 
     return utils.success(message, `**${field}** is now **${value}** in bucket **${bucketName}**`);
 }
@@ -808,12 +840,14 @@ async function handlePrivacyBucketField(message, parsed, system, bucketName) {
 async function handleClosedName(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
-    if (parsed.clear) { system.name = system.name || {}; system.name.closedNameDisplay = undefined; await system.save(); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Closed name display cleared.'); }
+    if (parsed.clear) { system.name = system.name || {}; system.name.closedNameDisplay = undefined; await system.save(); 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Closed name display cleared.'); }
     const newName = parsed._positional.slice(1).join(' ');
     if (!newName) return utils.error(message, 'Please provide a closed name display.');
     system.name = system.name || {};
     system.name.closedNameDisplay = newName;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     await proxyMessageHandler.invalidateDisplayCache(system._id);
     return utils.success(message, `Closed name display set to **${newName}**`);
 }
@@ -826,6 +860,7 @@ async function handleSync(message, parsed) {
     system.syncWithApps = system.syncWithApps || {};
     system.syncWithApps.discord = ['true', 'on', 'yes'].includes(val);
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Discord sync is now **${system.syncWithApps.discord ? 'enabled' : 'disabled'}**`);
 }
 
@@ -837,6 +872,7 @@ async function handleAutoshare(message, parsed) {
     system.setting = system.setting || {};
     system.setting.autoshareNotestoUsers = ['true', 'on', 'yes'].includes(val);
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Auto-share notes is now **${system.setting.autoshareNotestoUsers ? 'enabled' : 'disabled'}**`);
 }
 
@@ -848,18 +884,21 @@ async function handleCooldown(message, parsed) {
     system.setting = system.setting || {};
     system.setting.proxyCoolDown = val;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Proxy cooldown set to **${val}s** (${Math.floor(val / 60)}m ${val % 60}s)`);
 }
 
 async function handleFriendAutoBucket(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
-    if (parsed.clear) { system.setting = system.setting || {}; system.setting.friendAutoBucket = undefined; await system.save(); return utils.success(message, 'Friend auto-bucket cleared.'); }
+    if (parsed.clear) { system.setting = system.setting || {}; system.setting.friendAutoBucket = undefined; await system.save(); 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); return utils.success(message, 'Friend auto-bucket cleared.'); }
     const bucketName = parsed._positional.slice(1).join(' ');
     if (!bucketName) return utils.error(message, 'Please provide a bucket name.');
     system.setting = system.setting || {};
     system.setting.friendAutoBucket = bucketName;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Friend auto-bucket set to **${bucketName}**`);
 }
 
@@ -868,13 +907,15 @@ async function handleProxyLayout(message, parsed) {
     if (!await utils.requireSystem(message, system)) return;
     const entityType = parsed._positional[1]?.toLowerCase();
     if (!entityType || !['alter', 'state', 'group'].includes(entityType)) return utils.error(message, 'Specify entity type: `alter`, `state`, or `group`.');
-    if (parsed.clear) { system.discord = system.discord || {}; system.discord.proxylayout = system.discord.proxylayout || {}; system.discord.proxylayout[entityType] = undefined; await system.save(); return utils.success(message, `Proxy layout for ${entityType} cleared.`); }
+    if (parsed.clear) { system.discord = system.discord || {}; system.discord.proxylayout = system.discord.proxylayout || {}; system.discord.proxylayout[entityType] = undefined; await system.save(); 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); return utils.success(message, `Proxy layout for ${entityType} cleared.`); }
     const layout = parsed._positional.slice(2).join(' ');
     if (!layout) return utils.error(message, 'Please provide a layout string. Use `{name}`, `{sys-name}`, `{pronouns}`, `{caution}`, `{tag1}`, etc.');
     system.discord = system.discord || {};
     system.discord.proxylayout = system.discord.proxylayout || {};
     system.discord.proxylayout[entityType] = layout;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Proxy layout for ${entityType} set to \`${layout}\``);
 }
 
@@ -886,41 +927,48 @@ async function handleProxyBreak(message, parsed) {
     system.proxy = system.proxy || {};
     system.proxy.break = ['true', 'on', 'yes'].includes(val);
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Proxy break is now **${system.proxy.break ? 'active' : 'inactive'}**`);
 }
 
 async function handleFrontStatus(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
-    if (parsed.clear) { system.front = system.front || { layers: [] }; system.front.status = undefined; await system.save(); return utils.success(message, 'Front status cleared.'); }
+    if (parsed.clear) { system.front = system.front || { layers: [] }; system.front.status = undefined; await system.save(); 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); return utils.success(message, 'Front status cleared.'); }
     const status = parsed._positional.slice(1).join(' ');
     if (!status) return utils.error(message, 'Please provide a front status.');
     system.front = system.front || { layers: [] };
     system.front.status = status;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Front status set to **${status}**`);
 }
 
 async function handleBattery(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
-    if (parsed.clear) { system.battery = undefined; await system.save(); return utils.success(message, 'Battery cleared.'); }
+    if (parsed.clear) { system.battery = undefined; await system.save(); 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); return utils.success(message, 'Battery cleared.'); }
     const val = parseInt(parsed._positional[1]);
     if (isNaN(val) || val < 0 || val > 100) return utils.error(message, 'Please provide a battery level (0-100).');
     system.battery = val;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Profile battery set to **${val}** ${utils.getBatteryEmoji(val)}`);
 }
 
 async function handleCaution(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
-    if (parsed.clear) { system.caution = undefined; await system.save(); return utils.success(message, 'Profile caution cleared.'); }
+    if (parsed.clear) { system.caution = undefined; await system.save(); 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); return utils.success(message, 'Profile caution cleared.'); }
     const type = parsed._positional[1];
     const detail = parsed._positional.slice(2).join(' ');
     if (!type) return utils.error(message, 'Please provide a caution type.');
     system.caution = { c_type: type, detail: detail || undefined };
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Profile caution set to **${type}**`);
 }
 
@@ -944,71 +992,86 @@ async function handleMask(message, parsed) {
         system.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
         system.mask.name.display = val;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, `Mask name set to **${val}**`);
     }
     if (field === 'displayname' || field === 'dn') {
-        if (parsed.clear) { system.mask.name = system.mask.name || {}; system.mask.name.display = undefined; await system.save(); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask display name cleared.'); }
+        if (parsed.clear) { system.mask.name = system.mask.name || {}; system.mask.name.display = undefined; await system.save(); 
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask display name cleared.'); }
         const val = parsed._positional.slice(2).join(' ');
         if (!val) return utils.error(message, 'Please provide a mask display name.');
         system.mask.name = system.mask.name || {};
         system.mask.name.display = val;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, `Mask display name set to **${val}**`);
     }
     if (field === 'description' || field === 'desc') {
-        if (parsed.clear) { system.mask.description = undefined; await system.save(); return utils.success(message, 'Mask description cleared.'); }
+        if (parsed.clear) { system.mask.description = undefined; await system.save(); 
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); return utils.success(message, 'Mask description cleared.'); }
         const val = parsed._positional.slice(2).join(' ');
         if (!val) return utils.error(message, 'Please provide a mask description.');
         system.mask.description = val;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, 'Mask description updated.');
     }
     if (field === 'color' || field === 'colour') {
-        if (parsed.clear) { system.mask.color = undefined; await system.save(); return utils.success(message, 'Mask color cleared.'); }
+        if (parsed.clear) { system.mask.color = undefined; await system.save(); 
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); return utils.success(message, 'Mask color cleared.'); }
         const val = utils.normalizeColor(parsed._positional[2]);
         if (!val) return utils.error(message, 'Please provide a valid hex color.');
         system.mask.color = val;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, `Mask color set to **${val}**`);
     }
     if (field === 'pronouns' || field === 'prns') {
-        if (parsed.clear) { system.mask.pronouns = undefined; await system.save(); return utils.success(message, 'Mask pronouns cleared.'); }
+        if (parsed.clear) { system.mask.pronouns = undefined; await system.save(); 
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); return utils.success(message, 'Mask pronouns cleared.'); }
         const val = parsed._positional.slice(2).join(' ');
         if (!val) return utils.error(message, 'Please provide mask pronouns.');
         system.mask.pronouns = val;
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, `Mask pronouns set to **${val}**`);
     }
     if (field === 'avatar' || field === 'icon' || field === 'av' || field === 'pfp') {
-        if (parsed.clear) { system.mask.avatar = undefined; await system.save(); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask avatar cleared.'); }
+        if (parsed.clear) { system.mask.avatar = undefined; await system.save(); 
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[2];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         system.mask.avatar = { url };
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Mask avatar updated.');
     }
     if (field === 'banner') {
-        if (parsed.clear) { system.mask.discord = system.mask.discord || {}; system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.banner = undefined; await system.save(); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask banner cleared.'); }
+        if (parsed.clear) { system.mask.discord = system.mask.discord || {}; system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.banner = undefined; await system.save(); 
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask banner cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[2];
         if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
         system.mask.discord = system.mask.discord || {};
         system.mask.discord.image = system.mask.discord.image || {};
         system.mask.discord.image.banner = { url };
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Mask banner updated.');
     }
     if (field === 'proxyavatar' || field === 'pav') {
-        if (parsed.clear) { system.mask.discord = system.mask.discord || {}; system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.proxyAvatar = undefined; await system.save(); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask proxy avatar cleared.'); }
+        if (parsed.clear) { system.mask.discord = system.mask.discord || {}; system.mask.discord.image = system.mask.discord.image || {}; system.mask.discord.image.proxyAvatar = undefined; await system.save(); 
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); await proxyMessageHandler.invalidateDisplayCache(system._id); return utils.success(message, 'Mask proxy avatar cleared.'); }
         const url = message.attachments.first()?.url || parsed._positional[2];
         if (!url) return utils.error(message, 'Please provide a URL.');
         system.mask.discord = system.mask.discord || {};
         system.mask.discord.image = system.mask.discord.image || {};
         system.mask.discord.image.proxyAvatar = { url };
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         await proxyMessageHandler.invalidateDisplayCache(system._id);
         return utils.success(message, 'Mask proxy avatar updated.');
     }
@@ -1023,10 +1086,12 @@ async function handleProxyStyle(message, parsed) {
         const current = system.proxy?.style || 'off';
         return utils.info(message, `Current proxy style: **${current}**\nOptions: \`off\`, \`last\`, \`front\`, or an entity name.\nUsage: \`sys!system proxystyle <style>\``);
     }
-    if (parsed.clear) { system.proxy = system.proxy || {}; system.proxy.style = 'off'; await system.save(); return utils.success(message, 'Proxy style reset to **off**.'); }
+    if (parsed.clear) { system.proxy = system.proxy || {}; system.proxy.style = 'off'; await system.save(); 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); return utils.success(message, 'Proxy style reset to **off**.'); }
     system.proxy = system.proxy || {};
     system.proxy.style = val;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Proxy style set to **${val}**`);
 }
 
@@ -1041,6 +1106,7 @@ async function handleReplyStyle(message, parsed) {
     system.proxy = system.proxy || {};
     system.proxy.replyStyle = val;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     if (val === 'embed') return utils.success(message, 'Reply style set to **embed**. Proxied replies will use a custom embed.');
     if (val === 'native') return utils.success(message, 'Reply style set to **native**. Proxied replies will use Discord\'s built-in reply feature.');
 }
@@ -1056,13 +1122,15 @@ async function handleCaseSensitive(message, parsed) {
     system.proxy = system.proxy || {};
     system.proxy.caseSensitive = ['true', 'on', 'yes'].includes(val);
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Case sensitivity is now **${system.proxy.caseSensitive ? 'on' : 'off'}**`);
 }
 
 async function handlePronounSeparator(message, parsed) {
     const { user, system } = await utils.getOrCreateUserAndSystem(message);
     if (!await utils.requireSystem(message, system)) return;
-    if (parsed.clear) { system.discord = system.discord || {}; system.discord.pronounSeparator = undefined; await system.save(); return utils.success(message, 'Pronoun separator cleared.'); }
+    if (parsed.clear) { system.discord = system.discord || {}; system.discord.pronounSeparator = undefined; await system.save(); 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() }); return utils.success(message, 'Pronoun separator cleared.'); }
     const sep = parsed._positional.slice(1).join(' ');
     if (!sep) {
         const current = system.discord?.pronounSeparator || '/';
@@ -1071,6 +1139,7 @@ async function handlePronounSeparator(message, parsed) {
     system.discord = system.discord || {};
     system.discord.pronounSeparator = sep;
     await system.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Pronoun separator set to **${sep}**`);
 }
 
@@ -1094,6 +1163,7 @@ async function handleConditions(message, parsed) {
         if (container.conditions.find(c => c.name?.toLowerCase() === name.toLowerCase())) return utils.error(message, `Condition **${name}** already exists.`);
         container.conditions.push({ name, settings: { hide_to_self: false, include_in_Count: true } });
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, `Condition **${name}** added for ${entityType}.`);
     }
     if (action === 'delete') {
@@ -1105,6 +1175,7 @@ async function handleConditions(message, parsed) {
         if (idx === -1) return utils.error(message, `Condition **${name}** not found.`);
         container.conditions.splice(idx, 1);
         await system.save();
+        if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
         return utils.success(message, `Condition **${name}** deleted for ${entityType}.`);
     }
     return utils.error(message, `Unknown action: ${action}. Use: list, new, delete`);

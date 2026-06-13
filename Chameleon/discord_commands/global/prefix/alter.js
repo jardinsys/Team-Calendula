@@ -603,6 +603,7 @@ async function handleDelete(message, parsed, alterName) {
     }
     system.alters.IDs = system.alters.IDs?.filter(id => id !== alter._id) || [];
     await system.save(); await Alter.deleteOne({ _id: alter._id });
+    utils.publishDeleteEvent(system._id, 'alter', alter._id);
     return utils.success(message, `**${alter.name?.display || alterName}** deleted.`);
 }
 

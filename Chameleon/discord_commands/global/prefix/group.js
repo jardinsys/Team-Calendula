@@ -644,6 +644,7 @@ async function handleDelete(message, parsed, groupName) {
     
     system.groups.IDs = system.groups.IDs?.filter(id => id !== group._id) || [];
     await system.save(); await Group.deleteOne({ _id: group._id });
+    utils.publishDeleteEvent(system._id, 'group', group._id);
     return utils.success(message, `**${group.name?.display || groupName}** deleted.`);
 }
 

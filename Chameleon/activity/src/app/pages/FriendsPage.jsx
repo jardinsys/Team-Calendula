@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, FriendCardList, FriendDetailModal, AddFriendModal, Icon } from '@chameleon/shared'
+import { api, FriendCardList, FriendDetailModal, AddFriendModal, Icon, friendKeys } from '@chameleon/shared'
 
 const TABS = [
     { key: 'friends', label: 'Friends' },
@@ -10,110 +11,98 @@ const TABS = [
 
 export function FriendsPage({ onNavigate, onOpenSettings }) {
     const { session } = useDiscordSdk()
+    const queryClient = useQueryClient()
     const [activeTab, setActiveTab] = useState('friends')
-    const [friends, setFriends] = useState([])
-    const [requests, setRequests] = useState([])
-    const [blocked, setBlocked] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
-    const [myFriendId, setMyFriendId] = useState(null)
 
     const [selectedFriend, setSelectedFriend] = useState(null)
     const [showAddFriend, setShowAddFriend] = useState(false)
 
     const [actionLoading, setActionLoading] = useState({})
 
-    const fetchFriends = useCallback(async () => {
-        try {
-            const [friendsData, idData] = await Promise.all([
-                api.getFriends().catch(() => []),
-                api.getMyFriendId().catch(() => null)
-            ])
-            setFriends(friendsData)
-            setMyFriendId(idData)
-        } catch (err) {
-            setError(err.message)
-        }
-    }, [])
+    const friendsQuery = useQuery({
+        queryKey: friendKeys.lists(),
+        queryFn: () => api.getFriends().catch(() => []),
+    })
 
-    const fetchRequests = useCallback(async () => {
-        try {
-            const data = await api.getFriendRequests().catch(() => [])
-            setRequests(data)
-        } catch (err) {
-            setError(err.message)
-        }
-    }, [])
+    const requestsQuery = useQuery({
+        queryKey: friendKeys.requests(),
+        queryFn: () => api.getFriendRequests().catch(() => []),
+    })
 
-    const fetchBlocked = useCallback(async () => {
-        try {
-            const data = await api.getBlocked().catch(() => [])
-            setBlocked(data)
-        } catch (err) {
-            setError(err.message)
-        }
-    }, [])
+    const blockedQuery = useQuery({
+        queryKey: friendKeys.blocked(),
+        queryFn: () => api.getBlocked().catch(() => []),
+    })
 
-    const fetchAll = useCallback(async () => {
-        try {
-            setLoading(true)
-            await Promise.all([fetchFriends(), fetchRequests(), fetchBlocked()])
-            setLoading(false)
-        } catch (err) {
-            setError(err.message)
-            setLoading(false)
-        }
-    }, [fetchFriends, fetchRequests, fetchBlocked])
+    const myIdQuery = useQuery({
+        queryKey: friendKeys.myId(),
+        queryFn: () => api.getMyFriendId().catch(() => null),
+    })
 
-    useEffect(() => { fetchAll() }, [fetchAll])
+    const friends = friendsQuery.data ?? []
+    const requests = requestsQuery.data ?? []
+    const blocked = blockedQuery.data ?? []
+    const myFriendId = myIdQuery.data ?? null
+    const loading = friendsQuery.isLoading || requestsQuery.isLoading || blockedQuery.isLoading || myIdQuery.isLoading
+    const error = friendsQuery.error?.message || requestsQuery.error?.message || blockedQuery.error?.message || null
 
-    const refreshCurrentTab = useCallback(async () => {
-        if (activeTab === 'friends') await fetchFriends()
-        else if (activeTab === 'requests') await fetchRequests()
-        else if (activeTab === 'blocked') await fetchBlocked()
-    }, [activeTab, fetchFriends, fetchRequests, fetchBlocked])
+    const acceptMutation = useMutation({
+        mutationFn: (index) => api.acceptFriendRequest(index),
+        onMutate: (index) => {
+            setActionLoading(prev => ({ ...prev, [`accept-${index}`]: true }))
+        },
+        onSettled: (_data, _err, index) => {
+            setActionLoading(prev => ({ ...prev, [`accept-${index}`]: false }))
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: friendKeys.lists() })
+            queryClient.invalidateQueries({ queryKey: friendKeys.requests() })
+        },
+    })
 
-    const handleFriendAdded = () => { fetchFriends(); fetchRequests(); setShowAddFriend(false) }
-    const handleFriendRemoved = () => { fetchFriends(); setSelectedFriend(null) }
-    const handleFriendBlocked = () => { fetchFriends(); fetchBlocked(); setSelectedFriend(null) }
+    const declineMutation = useMutation({
+        mutationFn: (index) => api.declineFriendRequest(index),
+        onMutate: (index) => {
+            setActionLoading(prev => ({ ...prev, [`decline-${index}`]: true }))
+        },
+        onSettled: (_data, _err, index) => {
+            setActionLoading(prev => ({ ...prev, [`decline-${index}`]: false }))
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: friendKeys.requests() })
+        },
+    })
 
-    const handleAcceptRequest = async (index) => {
-        const key = `accept-${index}`
-        setActionLoading(prev => ({ ...prev, [key]: true }))
-        try {
-            await api.acceptFriendRequest(index)
-            await Promise.all([fetchFriends(), fetchRequests()])
-        } catch (err) {
-            setError(err.message)
-        } finally {
-            setActionLoading(prev => ({ ...prev, [key]: false }))
-        }
+    const unblockMutation = useMutation({
+        mutationFn: (blockedId) => api.unblockUser(blockedId),
+        onMutate: (blockedId) => {
+            setActionLoading(prev => ({ ...prev, [`unblock-${blockedId}`]: true }))
+        },
+        onSettled: (_data, _err, blockedId) => {
+            setActionLoading(prev => ({ ...prev, [`unblock-${blockedId}`]: false }))
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: friendKeys.blocked() })
+        },
+    })
+
+    const handleAcceptRequest = (index) => acceptMutation.mutate(index)
+    const handleDeclineRequest = (index) => declineMutation.mutate(index)
+    const handleUnblock = (blockedId) => unblockMutation.mutate(blockedId)
+
+    const handleFriendAdded = () => {
+        queryClient.invalidateQueries({ queryKey: friendKeys.lists() })
+        queryClient.invalidateQueries({ queryKey: friendKeys.requests() })
+        setShowAddFriend(false)
     }
-
-    const handleDeclineRequest = async (index) => {
-        const key = `decline-${index}`
-        setActionLoading(prev => ({ ...prev, [key]: true }))
-        try {
-            await api.declineFriendRequest(index)
-            await fetchRequests()
-        } catch (err) {
-            setError(err.message)
-        } finally {
-            setActionLoading(prev => ({ ...prev, [key]: false }))
-        }
+    const handleFriendRemoved = () => {
+        queryClient.invalidateQueries({ queryKey: friendKeys.lists() })
+        setSelectedFriend(null)
     }
-
-    const handleUnblock = async (blockedId) => {
-        const key = `unblock-${blockedId}`
-        setActionLoading(prev => ({ ...prev, [key]: true }))
-        try {
-            await api.unblockUser(blockedId)
-            await fetchBlocked()
-        } catch (err) {
-            setError(err.message)
-        } finally {
-            setActionLoading(prev => ({ ...prev, [key]: false }))
-        }
+    const handleFriendBlocked = () => {
+        queryClient.invalidateQueries({ queryKey: friendKeys.lists() })
+        queryClient.invalidateQueries({ queryKey: friendKeys.blocked() })
+        setSelectedFriend(null)
     }
 
     if (loading && !friends.length && !requests.length && !blocked.length) {
@@ -171,7 +160,7 @@ export function FriendsPage({ onNavigate, onOpenSettings }) {
                     <button
                         key={tab.key}
                         className={`friends-tab ${activeTab === tab.key ? 'friends-tab--active' : ''}`}
-                        onClick={() => { setActiveTab(tab.key); setError(null) }}
+                        onClick={() => setActiveTab(tab.key)}
                     >
                         {tab.label}
                         {tab.key === 'requests' && requests.length > 0 && (

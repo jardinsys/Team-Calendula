@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, Icon, NoteCardGrid, NoteModal, isFragmentedUser, isDissociativeUser } from '@chameleon/shared'
+import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, Icon, NoteCardGrid, NoteModal, isFragmentedUser, isDissociativeUser, systemKeys, stateKeys, frontKeys, noteKeys } from '@chameleon/shared'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -10,13 +11,39 @@ function getDisplayName(entity, fallbackName) {
 
 export function ProfilePage({ system: systemProp }) {
     const { session } = useDiscordSdk()
+    const queryClient = useQueryClient()
     const [subPage, setSubPage] = useState(null)
-    const [system, setSystem] = useState(systemProp)
-    const [frontData, setFrontData] = useState(null)
-    const [states, setStates] = useState([])
-    const [notes, setNotes] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
+
+    const { data: system, isLoading: sysLoading, error: sysError } = useQuery({
+        queryKey: systemKeys.detail(),
+        queryFn: () => systemProp || api.getSystemFull(),
+        initialData: systemProp,
+        staleTime: 30 * 1000,
+    })
+
+    const { data: frontData } = useQuery({
+        queryKey: frontKeys.current(),
+        queryFn: () => api.getFront().catch(() => null),
+        enabled: !!system,
+        staleTime: 30 * 1000,
+    })
+
+    const isStatesEnabled = !!system && (isFragmentedUser(system) || isDissociativeUser(system))
+
+    const { data: states = [] } = useQuery({
+        queryKey: stateKeys.lists(),
+        queryFn: () => api.getStates().catch(() => []),
+        enabled: isStatesEnabled,
+        staleTime: 30 * 1000,
+    })
+
+    const { data: notesData } = useQuery({
+        queryKey: noteKeys.lists(),
+        queryFn: () => api.getNotes('all', null, 0, 6).catch(() => ({ notes: [] })),
+        enabled: !!system,
+        staleTime: 30 * 1000,
+    })
+    const notes = notesData?.notes || []
 
     const [selectedEntity, setSelectedEntity] = useState(null)
     const [showCreateEntity, setShowCreateEntity] = useState(false)
@@ -24,32 +51,19 @@ export function ProfilePage({ system: systemProp }) {
 
     const [selectedNote, setSelectedNote] = useState(null)
 
-    const fetchAll = useCallback(async () => {
-        try {
-            setLoading(true)
-            const sysData = systemProp ? await Promise.resolve(systemProp) : await api.getSystemFull()
-            const isStatesEnabled = isFragmentedUser(sysData) || isDissociativeUser(sysData)
-            const [frontResult, statesData, notesData] = await Promise.all([
-                api.getFront().catch(() => null),
-                isStatesEnabled ? api.getStates().catch(() => []) : Promise.resolve([]),
-                api.getNotes('all', null, 0, 6).catch(() => ({ notes: [] }))
-            ])
-            setSystem(sysData)
-            setFrontData(frontResult)
-            setStates(statesData)
-            setNotes(notesData.notes || [])
-            setLoading(false)
-        } catch (err) {
-            setError(err.message)
-            setLoading(false)
-        }
-    }, [systemProp])
-
-    useEffect(() => { fetchAll() }, [fetchAll])
-
-    const handleEntityCreated = () => { fetchAll(); setShowCreateEntity(null) }
-    const handleEntityUpdated = () => { fetchAll(); setEditingEntity(null); setSelectedEntity(null) }
-    const handleEntityDeleted = () => { fetchAll(); setSelectedEntity(null) }
+    const handleEntityCreated = () => {
+        queryClient.invalidateQueries({ queryKey: stateKeys.all })
+        setShowCreateEntity(null)
+    }
+    const handleEntityUpdated = () => {
+        queryClient.invalidateQueries({ queryKey: stateKeys.all })
+        setEditingEntity(null)
+        setSelectedEntity(null)
+    }
+    const handleEntityDeleted = () => {
+        queryClient.invalidateQueries({ queryKey: stateKeys.all })
+        setSelectedEntity(null)
+    }
 
     const handleEntityClick = (entity) => {
         setSelectedEntity(entity)
@@ -59,6 +73,9 @@ export function ProfilePage({ system: systemProp }) {
         setSelectedEntity(null)
         setEditingEntity(entity)
     }
+
+    const loading = sysLoading && !system
+    const error = sysError?.message || null
 
     if (loading && !system) {
         return (
@@ -173,8 +190,8 @@ export function ProfilePage({ system: systemProp }) {
                     <NoteModal
                         note={selectedNote}
                         onClose={() => setSelectedNote(null)}
-                        onUpdated={() => fetchAll()}
-                        onDeleted={() => { fetchAll(); setSelectedNote(null) }}
+                        onUpdated={() => queryClient.invalidateQueries({ queryKey: noteKeys.lists() })}
+                        onDeleted={() => { queryClient.invalidateQueries({ queryKey: noteKeys.lists() }); setSelectedNote(null) }}
                     />
                 )}
             </div>
@@ -187,7 +204,7 @@ export function ProfilePage({ system: systemProp }) {
                 <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
-                <EditProfileSubPage system={system} onSaved={() => { fetchAll(); setSubPage(null) }} />
+                <EditProfileSubPage system={system} onSaved={() => { queryClient.invalidateQueries({ queryKey: systemKeys.all }); setSubPage(null) }} />
             </div>
         )
     }

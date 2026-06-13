@@ -59,3 +59,63 @@ export const quickKeys = {
     switch: () => [...quickKeys.all, 'switch'],
     notes: () => [...quickKeys.all, 'notes'],
 };
+
+// ==========================================
+// EVENT → QUERY KEY MAPPING
+// Used by the WebSocket handler to invalidate
+// the correct React Query caches on real-time events.
+// ==========================================
+
+const ENTITY_KEY_MAP = {
+    alter: alterKeys,
+    state: stateKeys,
+    group: groupKeys,
+};
+
+export function eventToKeys(event) {
+    switch (event.type) {
+        case 'front:switch':
+        case 'front:update':
+            return [frontKeys.all, systemKeys.front(), systemKeys.layers(), systemKeys.detail()];
+
+        case 'entity:created':
+            return [ENTITY_KEY_MAP[event.entityType]?.all, systemKeys.detail()].filter(Boolean);
+
+        case 'entity:edited':
+            return [
+                ENTITY_KEY_MAP[event.entityType]?.all,
+                ENTITY_KEY_MAP[event.entityType]?.detail(event.entityId),
+                systemKeys.detail(),
+            ].filter(Boolean);
+
+        case 'entity:deleted':
+            return [
+                ENTITY_KEY_MAP[event.entityType]?.all,
+                ENTITY_KEY_MAP[event.entityType]?.detail(event.entityId),
+                systemKeys.detail(),
+                groupKeys.all, // bidirectional group membership cleanup
+            ].filter(Boolean);
+
+        case 'note:created':
+        case 'note:edited':
+        case 'note:deleted':
+            return [noteKeys.lists(), noteKeys.tags()];
+
+        case 'friend:request':
+        case 'friend:accepted':
+        case 'friend:declined':
+        case 'friend:removed':
+            return [friendKeys.lists(), friendKeys.requests(), friendKeys.blocked()];
+
+        case 'friend:blocked':
+        case 'friend:unblocked':
+            return [friendKeys.lists(), friendKeys.blocked()];
+
+        case 'system:updated':
+        case 'system:created':
+            return [systemKeys.all, frontKeys.all, alterKeys.all, stateKeys.all, groupKeys.all];
+
+        default:
+            return [];
+    }
+}

@@ -25,6 +25,7 @@ const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const { Shift } = require('../../../schemas/front');
 const utils = require('../../functions/bot_utils');
+const { publishEvent } = require('../../../redis');
 
 const WEBAPP_URL = 'https://systemise.teamcalendula.net';
 const ENTITY_COLORS = utils.ENTITY_COLORS;
@@ -379,6 +380,7 @@ async function handleAdd(interaction, user, system) {
         sentAt: new Date()
     });
     await targetUser.save();
+    if (system?._id) publishEvent(system._id.toString(), { type: 'friend:request', systemId: system._id.toString() });
 
     // Handle notification based on user preferences
     const notifPrefs = targetUser.settings?.notificationPreferences || {};
@@ -496,6 +498,7 @@ async function handleRemoveByUser(interaction, user, targetDiscordUser) {
 
     user.friends.splice(friendIndex, 1);
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:removed', systemId: user.systemID.toString() });
 
     // Also remove from the target user's friends list
     const targetUser = await User.findOne({ discordID: targetDiscordUser.id });
@@ -652,6 +655,7 @@ async function handleBlockByUser(interaction, user, targetDiscordUser) {
     }
 
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:blocked', systemId: user.systemID.toString() });
 
     return interaction.editReply({ content: `✅ Blocked **${targetName}**. They have been removed from your friends list if they were on it.`, ephemeral: true });
 }
@@ -706,6 +710,7 @@ async function handleUnblockByUser(interaction, user, targetDiscordUser) {
     const blockedName = user.blocked[blockedIndex].name?.display || targetDiscordUser.displayName;
     user.blocked.splice(blockedIndex, 1);
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:unblocked', systemId: user.systemID.toString() });
 
     return interaction.editReply({ content: `✅ Unblocked **${blockedName}**.`, ephemeral: true });
 }
@@ -984,6 +989,7 @@ async function handleRequestAccept(interaction) {
 
     user.friendRequests.splice(reqIndex, 1);
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:accepted', systemId: user.systemID.toString() });
 
     const friendName = request.fromName || targetUser.discord?.name?.display || utils.getFallbackName(interaction.user, interaction.user?.displayName);
     return interaction.update({
@@ -1013,6 +1019,7 @@ async function handleRequestDecline(interaction) {
 
     user.friendRequests.splice(reqIndex, 1);
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:declined', systemId: user.systemID.toString() });
 
     return interaction.update({
         content: `❌ Declined friend request from **${friendName}**.`,
@@ -1133,6 +1140,7 @@ async function handleBlockSelect(interaction) {
     }
 
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:blocked', systemId: user.systemID.toString() });
     return interaction.reply({ content: `✅ Blocked **${targetName}**.`, ephemeral: true });
 }
 
@@ -1153,6 +1161,7 @@ async function handleUnblockSelect(interaction) {
     const blockedName = user.blocked[blockedIndex].name?.display || targetDiscordId;
     user.blocked.splice(blockedIndex, 1);
     await user.save();
+    if (user.systemID) publishEvent(user.systemID.toString(), { type: 'friend:unblocked', systemId: user.systemID.toString() });
 
     return interaction.reply({ content: `✅ Unblocked **${blockedName}**.`, ephemeral: true });
 }

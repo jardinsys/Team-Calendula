@@ -5,6 +5,7 @@
 const User = require('../../schemas/user');
 const System = require('../../schemas/system');
 const botUtils = require('./bot_utils');
+const { publishEvent } = require('../../redis');
 
 // Debounce timers: systemId → { timeout, frontSnapshot }
 const debounceTimers = new Map();
@@ -94,6 +95,9 @@ async function flushNotification(systemId, client) {
         }
 
         if (frontingEntities.length === 0) return;
+
+        // Publish real-time front switch event via Redis pub/sub
+        publishEvent(systemId, { type: 'front:switch', systemId });
 
         // Find all users in this system
         const users = await Promise.all(

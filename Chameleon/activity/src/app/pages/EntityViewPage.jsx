@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { api, EntityFormModal, Icon } from '@chameleon/shared'
+import React, { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, EntityFormModal, Icon, alterKeys, stateKeys, groupKeys } from '@chameleon/shared'
+
+const ENTITY_KEY_MAP = { alter: alterKeys, state: stateKeys, group: groupKeys }
 
 function getDisplayName(entity) {
     if (!entity) return 'Unknown'
@@ -8,44 +11,38 @@ function getDisplayName(entity) {
 }
 
 export function EntityViewPage({ system, onNavigate, entityId, entityType }) {
-    const [entity, setEntity] = useState(null)
-    const [isOwner, setIsOwner] = useState(false)
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
+    const queryClient = useQueryClient()
     const [editing, setEditing] = useState(false)
     const [confirmDelete, setConfirmDelete] = useState(false)
     const [deleting, setDeleting] = useState(false)
+    const [deleteError, setDeleteError] = useState(null)
 
-    const fetchEntity = useCallback(async () => {
-        try {
-            setLoading(true)
-            setError(null)
-            const result = await api.getPublicEntity(entityType, entityId)
-            setEntity(result.entity)
-            setIsOwner(result.isOwner)
-            setLoading(false)
-        } catch (err) {
-            setError(err.message)
-            setLoading(false)
-        }
-    }, [entityType, entityId])
+    const { data, isLoading, error: queryError } = useQuery({
+        queryKey: ENTITY_KEY_MAP[entityType]?.detail(entityId) ?? [entityType, 'detail', entityId],
+        queryFn: () => api.getPublicEntity(entityType, entityId),
+        staleTime: 30 * 1000,
+    })
 
-    useEffect(() => { fetchEntity() }, [fetchEntity])
+    const entity = data?.entity ?? null
+    const isOwner = data?.isOwner ?? false
+    const loading = isLoading
+    const error = queryError?.message || null
 
     const handleEntityUpdated = () => {
         setEditing(false)
-        fetchEntity()
     }
 
     const handleDelete = async () => {
         setDeleting(true)
+        setDeleteError(null)
         try {
             if (entityType === 'alter') await api.deleteAlter(entityId)
             else if (entityType === 'state') await api.deleteState(entityId)
             else if (entityType === 'group') await api.deleteGroup(entityId)
+            queryClient.invalidateQueries({ queryKey: ENTITY_KEY_MAP[entityType]?.all })
             onNavigate?.('system')
         } catch (err) {
-            setError(err.message)
+            setDeleteError(err.message)
             setDeleting(false)
         }
     }
@@ -117,7 +114,7 @@ export function EntityViewPage({ system, onNavigate, entityId, entityType }) {
                     <p style={{ marginBottom: '24px' }}>
                         Are you sure you want to delete <strong>{name}</strong>? This cannot be undone.
                     </p>
-                    {error && <p style={{ color: 'var(--color-error)', fontSize: '0.8rem', marginBottom: '12px' }}>{error}</p>}
+                    {deleteError && <p style={{ color: 'var(--color-error)', fontSize: '0.8rem', marginBottom: '12px' }}>{deleteError}</p>}
                     <div className="modal-actions">
                         <button className="btn btn-secondary" onClick={() => setConfirmDelete(false)}>Cancel</button>
                         <button className="btn btn-primary" style={{ backgroundColor: 'var(--color-error)' }} onClick={handleDelete} disabled={deleting}>

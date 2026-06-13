@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const router = express.Router();
 
 const { optionalAuthMiddleware } = require('../middleware/auth');
+const { broadcastLocal } = require('../../redis');
 const Note = require('../../schemas/note');
 const User = require('../../schemas/user');
 const System = require('../../schemas/system');
@@ -564,6 +565,7 @@ router.post('/', async (req, res) => {
         await user.save();
 
         res.status(201).json(note);
+        if (user.systemID) broadcastLocal(user.systemID.toString(), { type: 'note:created', noteId: note._id.toString() });
     } catch (err) {
         console.error('[Notes] Create error:', err);
         res.status(500).json({ error: err.message });
@@ -672,6 +674,7 @@ router.patch('/:id', async (req, res) => {
         await note.save();
 
         res.json(note);
+        if (user.systemID) broadcastLocal(user.systemID.toString(), { type: 'note:edited', noteId: note._id.toString() });
     } catch (err) {
         console.error('[Notes] Update error:', err);
         res.status(500).json({ error: err.message });
@@ -718,6 +721,7 @@ router.delete('/:id', async (req, res) => {
         await user.save();
 
         res.json({ success: true });
+        if (user.systemID) broadcastLocal(user.systemID.toString(), { type: 'note:deleted', noteId: note._id.toString() });
     } catch (err) {
         console.error('[Notes] Delete error:', err);
         res.status(500).json({ error: err.message });

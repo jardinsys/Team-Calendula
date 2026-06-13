@@ -6,8 +6,12 @@ const cors = require('cors');
 const session = require('express-session');
 const mongoose = require('mongoose');
 const path = require('path');
+const { WebSocketServer } = require('ws');
+const jwt = require('jsonwebtoken');
 
 const config = require('../config.json');
+const { JWT_SECRET } = require('../api/middleware/auth');
+const { subscribeEvents, broadcastLocal } = require('../redis');
 
 const app = express();
 const PORT = config.apiPort || 3001;
@@ -185,15 +189,119 @@ app.use((err, req, res, next) => {
 });
 
 // ==========================================
-// START SERVER
+// START SERVER + WEBSOCKET
 // ==========================================
 
 let server = null;
+let wss = null;
+
+// Map<systemId, Set<ws>> — tracks connected clients per system
+const wsClients = new Map();
+
+function addClient(systemId, ws) {
+    if (!wsClients.has(systemId)) wsClients.set(systemId, new Set());
+    wsClients.get(systemId).add(ws);
+}
+
+function removeClient(systemId, ws) {
+    const clients = wsClients.get(systemId);
+    if (clients) {
+        clients.delete(ws);
+        if (clients.size === 0) wsClients.delete(systemId);
+    }
+}
+
+function broadcastToSystem(systemId, event) {
+    const clients = wsClients.get(systemId);
+    if (!clients || !clients.size) return;
+    const data = JSON.stringify(event);
+    for (const ws of clients) {
+        if (ws.readyState === 1) ws.send(data);
+    }
+}
+
+// Wire Redis local broadcasts to WebSocket clients
+// (API-originated events: notes, friends, etc.)
+const { publishEvent } = require('../redis');
+
+function setupWebSocket(serverInstance) {
+    wss = new WebSocketServer({ noServer: true });
+
+    serverInstance.on('upgrade', (request, socket, head) => {
+        const url = new URL(request.url, `http://${request.headers.host}`);
+        const token = url.searchParams.get('token');
+
+        if (!token) {
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (err) {
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            ws.userId = decoded.userId;
+            ws.systemId = decoded.systemId || null;
+            wss.emit('connection', ws, request);
+        });
+    });
+
+    wss.on('connection', async (ws) => {
+        // Look up the user's systemID if not in JWT
+        if (!ws.systemId) {
+            try {
+                const User = require('../schemas/user');
+                const user = await User.findById(ws.userId).select('systemID');
+                ws.systemId = user?.systemID?.toString() || null;
+            } catch (err) {
+                console.error('[WS] Failed to resolve systemId:', err.message);
+            }
+        }
+
+        if (!ws.systemId) {
+            ws.close(4000, 'No system');
+            return;
+        }
+
+        addClient(ws.systemId, ws);
+
+        // Subscribe this system's Redis channel
+        subscribeEvents(ws.systemId);
+
+        // Also listen for local (same-process) broadcasts
+        const unsub = subscribeEvents(ws.systemId, (event) => {
+            broadcastToSystem(ws.systemId, event);
+        });
+
+        ws.on('close', () => {
+            removeClient(ws.systemId, ws);
+            unsub();
+        });
+
+        ws.on('error', () => {
+            removeClient(ws.systemId, ws);
+            unsub();
+        });
+
+        // Send initial connection ack
+        ws.send(JSON.stringify({ type: 'connected', systemId: ws.systemId }));
+    });
+
+    console.log('[WebSocket] Server attached');
+}
 
 function start() {
     return new Promise((resolve, reject) => {
         server = app.listen(PORT, () => {
             console.log(`🌐 Webapp API running on port ${PORT}`);
+            setupWebSocket(server);
             resolve(server);
         }).on('error', reject);
     });
@@ -201,6 +309,9 @@ function start() {
 
 function stop() {
     return new Promise((resolve) => {
+        if (wss) {
+            for (const ws of wss.clients) ws.close();
+        }
         if (server) {
             server.close(resolve);
         } else {
@@ -217,4 +328,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { app, start, stop, PORT };
+module.exports = { app, start, stop, PORT, broadcastToSystem };

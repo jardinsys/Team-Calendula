@@ -67,7 +67,7 @@ function NoteModal({ note, system, onClose, onUpdated, onDeleted }) {
                             ? data.attribution[data.attribution.length - 1].entities?.map(e => ({
                                 type: e.entity?.type, id: e.entity?.ID, name: e.entity?.name, avatar: e.entity?.avatar, color: e.entity?.color,
                                 entityStates: e.entityStates
-                            })) || []
+                            })).filter(e => e.type !== 'user') || []
                             : []
                         setEditAttribution(latestAttr)
                         setLoading(false)
@@ -259,7 +259,8 @@ function NoteModal({ note, system, onClose, onUpdated, onDeleted }) {
                             compact
                         />
                     </div>
-                    )}
+                    )
+                })()}
 
                     {error && (
                         <p style={{ color: 'var(--color-error)', fontSize: '0.8rem', marginBottom: '12px' }}>
@@ -310,9 +311,12 @@ function NoteModal({ note, system, onClose, onUpdated, onDeleted }) {
                     </div>
                 )}
 
-                {latestAttribution && latestAttribution.entities?.length > 0 && (system?.sys_type?.isSystem || system?.sys_type?.isFragmented || system?.sys_type?.isDissociative) && (
+                {(() => {
+                    const visibleEntities = latestAttribution?.entities?.filter(e => e.entity?.type !== 'user') || []
+                    if (!visibleEntities.length || !(system?.sys_type?.isSystem || system?.sys_type?.isFragmented || system?.sys_type?.isDissociative)) return null
+                    return (
                     <div className="note-attribution-display" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                        {latestAttribution.entities.map((ent, i) => (
+                        {visibleEntities.map((ent, i) => (
                             <span key={i} className="attribution-chip" style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '4px',
                                 padding: '2px 8px', borderRadius: '12px',

@@ -123,7 +123,7 @@ function EditHistoryPanel({ noteId, attributionStyle = 'entityAndUser' }) {
                             <div className="edit-history-details" style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: '0.8rem' }}>
                                     <span style={{ color: 'var(--text)' }}>
-                                        {(entry.entities || []).map(e => (e.entity || e).name).join(', ') || 'Unknown'}
+                                        {(entry.entities || []).filter(e => (e.entity || e).type !== 'user').map(e => (e.entity || e).name).join(', ') || 'Unknown'}
                                     </span>
                                     <span style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>
                                         {actionLabel(entry.action)}

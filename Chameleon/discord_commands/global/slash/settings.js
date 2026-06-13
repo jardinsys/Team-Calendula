@@ -20,6 +20,7 @@ const System = require('../../../schemas/system');
 const User = require('../../../schemas/user');
 const Guild = require('../../../schemas/guild');
 const utils = require('../../functions/bot_utils');
+const { publishEvent } = require('../../../redis');
 
 const SETTINGS_COLOR = '#808080';
 
@@ -1135,6 +1136,7 @@ async function handleProxyCaseToggle(interaction, sessionId) {
     system.proxy.caseSensitive = !system.proxy.caseSensitive;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
@@ -1146,6 +1148,7 @@ async function handleProxyBreakToggle(interaction, sessionId) {
     system.proxy.break = !system.proxy.break;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
@@ -1195,6 +1198,7 @@ async function handleProxyReplyStyleSave(interaction, sessionId) {
     system.proxy.replyStyle = selected;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
@@ -1300,6 +1304,7 @@ async function handleProxyServerReplyStyleSave(interaction, sessionId) {
     }
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return await handleProxyServerReplyStyle(interaction, sessionId);
 }
 
@@ -1361,6 +1366,7 @@ async function handleGeneralSyncToggle(interaction, sessionId) {
     system.syncWithApps.discord = !system.syncWithApps.discord;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     const user = await User.findById(session.userId);
     return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
@@ -1499,6 +1505,7 @@ async function handleGeneralAutoshareToggle(interaction, sessionId) {
     system.setting.autoshareNotestoUsers = !system.setting.autoshareNotestoUsers;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     const user = await User.findById(session.userId);
     return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
@@ -1530,6 +1537,7 @@ async function handleGeneralAutoAttribution(interaction, sessionId) {
     system.setting.noteAutoAttribution = AUTO_ATTRIBUTION_OPTIONS[nextIndex];
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     const user = await User.findById(session.userId);
     return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
@@ -1617,6 +1625,7 @@ async function handleProxyCooldownSave(interaction, sessionId) {
     system.setting.proxyCoolDown = cooldown;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
@@ -1638,6 +1647,7 @@ async function handleProxyStyleSave(interaction, sessionId) {
             if (!system.proxy) system.proxy = {};
             system.proxy.break = onBreak?.toLowerCase() === 'yes';
             await system.save();
+            if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
             return await interaction.reply({
                 content: 'Could not find an entity named "' + validation.finalStyle + '". Style was not changed.',
                 ephemeral: true
@@ -1650,6 +1660,7 @@ async function handleProxyStyleSave(interaction, sessionId) {
     system.proxy.break = onBreak?.toLowerCase() === 'yes';
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
@@ -1668,6 +1679,7 @@ async function handleProxyLayoutSave(interaction, sessionId, type) {
     system.proxy.layout[type] = layout || '';
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
@@ -1685,6 +1697,7 @@ async function handleProxyStyleSelect(interaction, sessionId) {
     system.proxy.style = selected;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return await buildProxyOverview(interaction, system, sessionId, true);
 }
 
@@ -1763,6 +1776,7 @@ async function handleProxyServerStyleSave(interaction, sessionId) {
     serverEntry.proxyStyle = style;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return await handleProxyServerStyle(interaction, sessionId);
 }
 
@@ -1999,6 +2013,7 @@ async function handleGeneralFriendBucketSelect(interaction, sessionId) {
     system.setting.friendAutoBucket = bucket || undefined;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     const user = await User.findById(session.userId);
     return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
@@ -2013,6 +2028,7 @@ async function handleGeneralPronounSepSave(interaction, sessionId) {
     system.discord.pronounSeparator = separator || undefined;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     const user = await User.findById(session.userId);
     return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
@@ -2032,6 +2048,7 @@ async function handleGeneralTerminologySave(interaction, sessionId) {
     system.systemSynonym = systemSynonym || 'system';
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     const user = await User.findById(session.userId);
     return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
@@ -2045,6 +2062,7 @@ async function handleGeneralTimezoneSave(interaction, sessionId) {
     system.timezone = timezone || undefined;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     const user = await User.findById(session.userId);
     return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
@@ -2062,6 +2080,7 @@ async function handleGeneralTagsSave(interaction, sessionId) {
     system.discord.tag.normal = tags;
     await system.save();
 
+    if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     const user = await User.findById(session.userId);
     return await buildGeneralOverview(interaction, user, system, sessionId, true);
 }
@@ -2349,6 +2368,7 @@ async function handleAccountDeleteExecute(interaction, sessionId) {
                 // Multi-user: just remove this user
                 system.users = otherUsers;
                 await system.save();
+                if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
             }
         }
 

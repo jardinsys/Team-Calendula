@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, List, Calendar, Trash2, Edit3, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
-import { api, getBatteryIcon } from '../index.js'
+import { api, getBatteryIcon, frontKeys } from '@chameleon/shared'
 import { ShiftEditModal } from '../components/ShiftEditModal.jsx'
 
 function formatDuration(ms) {
@@ -34,8 +35,7 @@ function batteryEmoji(level) {
 }
 
 export function FrontHistoryPage({ system, onNavigate }) {
-  const [shifts, setShifts] = useState([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [view, setView] = useState('list')
   const [dateRange, setDateRange] = useState('7d')
   const [customFrom, setCustomFrom] = useState('')
@@ -44,7 +44,6 @@ export function FrontHistoryPage({ system, onNavigate }) {
   const [editingShift, setEditingShift] = useState(null)
   const [editingEntityName, setEditingEntityName] = useState('')
   const [deletingId, setDeletingId] = useState(null)
-  const [hasMore, setHasMore] = useState(false)
 
   const getDateRange = useCallback(() => {
     const now = new Date()
@@ -63,26 +62,23 @@ export function FrontHistoryPage({ system, onNavigate }) {
     return { from, to }
   }, [dateRange, customFrom, customTo])
 
-  const loadShifts = useCallback(async () => {
-    setLoading(true)
-    try {
-      const { from, to } = getDateRange()
-      const data = await api.getFrontHistory(100, undefined, from, to)
-      setShifts(data.history || [])
-      setHasMore(data.hasMore)
-    } catch (err) {
-      console.error('Failed to load history:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [getDateRange])
+  const { from, to } = getDateRange()
 
-  useEffect(() => { loadShifts() }, [loadShifts])
+  const { data, isLoading: loading, error: queryError } = useQuery({
+    queryKey: frontKeys.history({ limit: 100, from, to }),
+    queryFn: async () => {
+      return api.getFrontHistory(100, undefined, from, to)
+    },
+  })
+
+  const shifts = data?.history || []
+  const hasMore = data?.hasMore || false
+  const error = queryError ? queryError.message : null
 
   const handleDelete = async (shiftId) => {
     try {
       await api.deleteShift(shiftId)
-      setShifts(shifts.filter(s => s._id !== shiftId))
+      queryClient.invalidateQueries({ queryKey: frontKeys.all })
       setDeletingId(null)
     } catch (err) {
       console.error('Failed to delete shift:', err)
@@ -95,7 +91,7 @@ export function FrontHistoryPage({ system, onNavigate }) {
   }
 
   const handleSaved = () => {
-    loadShifts()
+    queryClient.invalidateQueries({ queryKey: frontKeys.all })
     setEditingShift(null)
   }
 

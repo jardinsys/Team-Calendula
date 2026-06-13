@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
-import { api, EntityCardList, EntityFormModal, FrontDisplay, Icon, getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm, isFragmentedUser, isDissociativeUser, ImageUpload } from '@chameleon/shared'
+import { api, EntityCardList, EntityFormModal, FrontDisplay, Icon, getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm, isFragmentedUser, isDissociativeUser, ImageUpload, systemKeys, alterKeys, stateKeys, groupKeys, frontKeys } from '@chameleon/shared'
 
 function getDisplayName(entity, fallbackName) {
     if (!entity) return fallbackName || 'Unknown'
@@ -10,55 +11,66 @@ function getDisplayName(entity, fallbackName) {
 
 export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
     const { session } = useDiscordSdk()
+    const queryClient = useQueryClient()
     const [subPage, setSubPage] = useState(null)
-    const [system, setSystem] = useState(systemProp)
-    const [frontData, setFrontData] = useState(null)
-    const [alters, setAlters] = useState([])
-    const [states, setStates] = useState([])
-    const [groups, setGroups] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
 
     const [showCreateEntity, setShowCreateEntity] = useState(null)
 
     // Batch selection state
     const [selectionMode, setSelectionMode] = useState(false)
     const [selectedIds, setSelectedIds] = useState([])
-    const [batchAction, setBatchAction] = useState(null) // 'condition' | 'group' | 'convert' | 'delete'
+    const [batchAction, setBatchAction] = useState(null)
     const [batchLoading, setBatchLoading] = useState(false)
-    const [batchEntityType, setBatchEntityType] = useState(null) // 'alter' | 'state' | 'group'
+    const [batchEntityType, setBatchEntityType] = useState(null)
 
-    const fetchAll = useCallback(async () => {
-        try {
-            setLoading(true)
-            const sysData = systemProp ? await Promise.resolve(systemProp) : await api.getSystemFull()
-            const isStatesEnabled = isFragmentedUser(sysData) || isDissociativeUser(sysData)
-            const [frontResult, altersData, statesData, groupsData] = await Promise.all([
-                api.getFront().catch(() => null),
-                api.getAlters().catch(() => []),
-                isStatesEnabled ? api.getStates().catch(() => []) : Promise.resolve([]),
-                api.getGroups().catch(() => [])
-            ])
-            setSystem(sysData)
-            setFrontData(frontResult)
-            setAlters(altersData)
-            setStates(statesData)
-            setGroups(groupsData)
-            setLoading(false)
-        } catch (err) {
-            setError(err.message)
-            setLoading(false)
-        }
-    }, [systemProp])
+    // React Query — system data
+    const { data: system, isLoading: sysLoading, error: sysError } = useQuery({
+        queryKey: systemKeys.detail(),
+        queryFn: () => systemProp || api.getSystemFull(),
+        staleTime: 30 * 1000,
+    })
 
-    useEffect(() => { fetchAll() }, [fetchAll])
+    const isStatesEnabled = !!system && (isFragmentedUser(system) || isDissociativeUser(system))
 
-    const handleEntityCreated = () => { fetchAll(); setShowCreateEntity(null) }
+    const { data: frontData } = useQuery({
+        queryKey: frontKeys.current(),
+        queryFn: () => api.getFront().catch(() => null),
+        enabled: !!system,
+        staleTime: 30 * 1000,
+    })
+
+    const { data: alters = [] } = useQuery({
+        queryKey: alterKeys.lists(),
+        queryFn: () => api.getAlters().catch(() => []),
+        enabled: !!system,
+        staleTime: 30 * 1000,
+    })
+
+    const { data: states = [] } = useQuery({
+        queryKey: stateKeys.lists(),
+        queryFn: () => api.getStates().catch(() => []),
+        enabled: isStatesEnabled,
+        staleTime: 30 * 1000,
+    })
+
+    const { data: groups = [] } = useQuery({
+        queryKey: groupKeys.lists(),
+        queryFn: () => api.getGroups().catch(() => []),
+        enabled: !!system,
+        staleTime: 30 * 1000,
+    })
+
+    const loading = sysLoading && !system
+    const error = sysError?.message || null
+
+    const [batchError, setBatchError] = useState(null)
+
+    const handleEntityCreated = () => { queryClient.invalidateQueries({ queryKey: alterKeys.all }); queryClient.invalidateQueries({ queryKey: stateKeys.all }); queryClient.invalidateQueries({ queryKey: groupKeys.all }); setShowCreateEntity(null) }
 
     const handleFronterEdit = useCallback(async (shiftId, data) => {
         await api.updateShiftStatus(shiftId, data)
-        await fetchAll()
-    }, [fetchAll])
+        queryClient.invalidateQueries({ queryKey: frontKeys.all })
+    }, [queryClient])
 
     const handleEntityClick = (entity, type) => {
         if (selectionMode) {
@@ -109,10 +121,11 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
             } else if (batchEntityType === 'state') {
                 await api.updateStates(selectedIds, { condition: conditionName || undefined })
             }
-            await fetchAll()
+            queryClient.invalidateQueries({ queryKey: alterKeys.all })
+            queryClient.invalidateQueries({ queryKey: stateKeys.all })
             exitSelectionMode()
         } catch (err) {
-            setError(err.message)
+            setBatchError(err.message)
             setBatchLoading(false)
         }
     }
@@ -128,10 +141,12 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
             } else if (batchEntityType === 'group') {
                 await api.deleteGroups(selectedIds)
             }
-            await fetchAll()
+            queryClient.invalidateQueries({ queryKey: alterKeys.all })
+            queryClient.invalidateQueries({ queryKey: stateKeys.all })
+            queryClient.invalidateQueries({ queryKey: groupKeys.all })
             exitSelectionMode()
         } catch (err) {
-            setError(err.message)
+            setBatchError(err.message)
             setBatchLoading(false)
         }
     }
@@ -145,10 +160,12 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
             } else if (batchEntityType === 'state') {
                 await api.addGroupMembers(groupId, { stateIDs: selectedIds })
             }
-            await fetchAll()
+            queryClient.invalidateQueries({ queryKey: alterKeys.all })
+            queryClient.invalidateQueries({ queryKey: stateKeys.all })
+            queryClient.invalidateQueries({ queryKey: groupKeys.all })
             exitSelectionMode()
         } catch (err) {
-            setError(err.message)
+            setBatchError(err.message)
             setBatchLoading(false)
         }
     }
@@ -162,10 +179,12 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
             } else if (batchEntityType === 'state') {
                 await api.removeGroupMembers(groupId, { stateIDs: selectedIds })
             }
-            await fetchAll()
+            queryClient.invalidateQueries({ queryKey: alterKeys.all })
+            queryClient.invalidateQueries({ queryKey: stateKeys.all })
+            queryClient.invalidateQueries({ queryKey: groupKeys.all })
             exitSelectionMode()
         } catch (err) {
-            setError(err.message)
+            setBatchError(err.message)
             setBatchLoading(false)
         }
     }
@@ -182,10 +201,11 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
                 .map(e => e.name?.display || e.name?.indexable)
                 .filter(Boolean)
             await api.convertEntities(sourceType, targetType, names)
-            await fetchAll()
+            queryClient.invalidateQueries({ queryKey: alterKeys.all })
+            queryClient.invalidateQueries({ queryKey: stateKeys.all })
             exitSelectionMode()
         } catch (err) {
-            setError(err.message)
+            setBatchError(err.message)
             setBatchLoading(false)
         }
     }
@@ -539,7 +559,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
                 <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
-                <EditSystemSubPage system={system} onSaved={() => { fetchAll(); setSubPage(null) }} />
+                <EditSystemSubPage system={system} onSaved={() => { queryClient.invalidateQueries({ queryKey: systemKeys.all }); setSubPage(null) }} />
             </div>
         )
     }
@@ -557,6 +577,13 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
                     <Icon name="settings" size={16} />
                 </button>
             </header>
+
+            {batchError && (
+                <div style={{ background: 'rgba(252, 165, 165, 0.1)', border: '1px solid var(--color-error)', borderRadius: 'var(--radius)', padding: '8px 12px', marginBottom: '12px', fontSize: '0.8rem', color: 'var(--color-error)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{batchError}</span>
+                    <button className="btn-ghost btn-sm" onClick={() => setBatchError(null)} style={{ minWidth: 'auto', padding: '2px 6px' }}>×</button>
+                </div>
+            )}
 
             <div className="system-overview">
                 <div className="system-overview-avatar">

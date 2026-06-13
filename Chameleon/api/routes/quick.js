@@ -6,6 +6,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 
 const System = require('../../schemas/system');
+const { publishEvent } = require('../../redis');
 const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
@@ -220,6 +221,7 @@ router.post('/switch', async (req, res) => {
             status: system.front.status,
             battery: system.battery
         });
+        publishEvent(system._id.toString(), { type: 'front:switch', systemId: system._id.toString() });
         
     } catch (error) {
         console.error('Quick switch error:', error);
@@ -259,6 +261,7 @@ router.post('/switch/out', async (req, res) => {
         await system.save();
         
         res.json({ success: true, message: 'Switched out' });
+        publishEvent(system._id.toString(), { type: 'front:switch', systemId: system._id.toString() });
         
     } catch (error) {
         console.error('Switch out error:', error);

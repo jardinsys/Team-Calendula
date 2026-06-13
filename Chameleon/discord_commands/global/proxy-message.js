@@ -616,6 +616,11 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
 
     // Update last proxy time (Redis — no MongoDB write)
     await redis.set(`system:${system._id}:lastProxyTime`, Date.now().toString());
+
+    // Publish real-time front:update event for WebSocket subscribers
+    if (system?._id) {
+        redis.publishEvent(system._id.toString(), { type: 'front:update', systemId: system._id.toString() });
+    }
 }
 
 /**

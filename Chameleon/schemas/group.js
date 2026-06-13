@@ -123,5 +123,13 @@ const groupSchema = new mongoose.Schema({
 groupSchema.index({ systemID: 1 });
 groupSchema.index({ systemID: 1, 'name.indexable': 1 });
 
+groupSchema.post('save', function (doc) {
+    try {
+        const { publishEvent } = require('../redis');
+        const eventType = this.$wasNew ? 'entity:created' : 'entity:edited';
+        publishEvent(doc.systemID, { type: eventType, entityType: 'group', entityId: doc._id.toString() });
+    } catch (_) {}
+});
+
 const Group = sysDB.model('Group', groupSchema);
 module.exports = Group;

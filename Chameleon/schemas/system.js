@@ -219,5 +219,13 @@ const systemSchema = new mongoose.Schema({
     affirmations: [String]
 });
 
+systemSchema.post('save', function (doc) {
+    try {
+        const { publishEvent } = require('../redis');
+        const eventType = this.$wasNew ? 'system:created' : 'system:updated';
+        publishEvent(doc._id?.toString(), { type: eventType });
+    } catch (_) {}
+});
+
 const System = sysDB.model('System', systemSchema);
 module.exports = System;

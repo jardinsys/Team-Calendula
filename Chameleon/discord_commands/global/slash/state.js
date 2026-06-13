@@ -980,6 +980,7 @@ async function handleButtonInteraction(interaction) {
 
         // Delete the state
         await State.findByIdAndDelete(session.stateId);
+        utils.publishDeleteEvent(system._id, 'state', session.stateId);
 
         utils.deleteSession(sessionId);
         return await interaction.update({

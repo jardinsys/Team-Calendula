@@ -1,9 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { api, getSystemTerm } from '@chameleon/shared'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, getSystemTerm, systemKeys } from '@chameleon/shared'
 
 export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
-  const [system, setSystem] = useState(systemProp)
-  const [loading, setLoading] = useState(!systemProp)
+  const queryClient = useQueryClient()
+  const { data: system, isLoading } = useQuery({
+    queryKey: systemKeys.detail(),
+    queryFn: () => systemProp || api.getSystemFull(),
+    staleTime: 30 * 1000,
+  })
+  const loading = isLoading && !system
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -42,26 +48,8 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
   }, [])
 
   useEffect(() => {
-    if (systemProp) {
-      setSystem(systemProp)
-      syncStateFromData(systemProp)
-      setLoading(false)
-      return
-    }
-
-    let cancelled = false
-    api.getSystemFull()
-      .then(data => {
-        if (!cancelled) {
-          setSystem(data)
-          syncStateFromData(data)
-          setLoading(false)
-        }
-      })
-      .catch(() => { if (!cancelled) setLoading(false) })
-
-    return () => { cancelled = true }
-  }, [systemProp, syncStateFromData])
+    if (system) syncStateFromData(system)
+  }, [system, syncStateFromData])
 
   const handleSave = useCallback(async () => {
     setSaving(true)
@@ -90,6 +78,7 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
         },
       }).catch(() => {})
       setSaved(true)
+      queryClient.invalidateQueries({ queryKey: systemKeys.all })
       setTimeout(() => setSaved(false), 2000)
     } catch (err) {
       console.error('[Settings] Save error:', err)

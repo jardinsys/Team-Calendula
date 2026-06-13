@@ -145,5 +145,13 @@ const alterSchema = new mongoose.Schema({
 alterSchema.index({ systemID: 1 });
 alterSchema.index({ systemID: 1, 'name.indexable': 1 });
 
+alterSchema.post('save', function (doc) {
+    try {
+        const { publishEvent } = require('../redis');
+        const eventType = this.$wasNew ? 'entity:created' : 'entity:edited';
+        publishEvent(doc.systemID, { type: eventType, entityType: 'alter', entityId: doc._id.toString() });
+    } catch (_) {}
+});
+
 const Alter = sysDB.model('Alter', alterSchema);
 module.exports = Alter;

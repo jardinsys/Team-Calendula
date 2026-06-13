@@ -126,5 +126,13 @@ const stateSchema = new mongoose.Schema({
 stateSchema.index({ systemID: 1 });
 stateSchema.index({ systemID: 1, 'name.indexable': 1 });
 
+stateSchema.post('save', function (doc) {
+    try {
+        const { publishEvent } = require('../redis');
+        const eventType = this.$wasNew ? 'entity:created' : 'entity:edited';
+        publishEvent(doc.systemID, { type: eventType, entityType: 'state', entityId: doc._id.toString() });
+    } catch (_) {}
+});
+
 const State = sysDB.model('State', stateSchema);
 module.exports = State;

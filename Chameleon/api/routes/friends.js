@@ -5,7 +5,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 
-
+const { broadcastLocal } = require('../../redis');
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const Alter = require('../../schemas/alter');
@@ -157,6 +157,7 @@ router.post('/', async (req, res) => {
         await targetUser.save();
         
         res.status(201).json({ success: true, message: 'Friend request sent' });
+        if (user.systemID) broadcastLocal(user.systemID.toString(), { type: 'friend:request', toUserId: targetUser._id.toString() });
     } catch (err) {
         console.error('[Friends] Add error:', err);
         res.status(500).json({ error: err.message });
@@ -221,6 +222,7 @@ router.post('/requests/:index/accept', async (req, res) => {
         await Promise.all([user.save(), requesterUser.save()]);
         
         res.json({ success: true });
+        if (user.systemID) broadcastLocal(user.systemID.toString(), { type: 'friend:accepted', fromUserId: requesterUser._id.toString() });
     } catch (err) {
         console.error('[Friends] Accept request error:', err);
         res.status(500).json({ error: err.message });
@@ -261,6 +263,7 @@ router.delete('/:friendId', async (req, res) => {
         
         await user.save();
         res.json({ success: true });
+        if (user.systemID) broadcastLocal(user.systemID.toString(), { type: 'friend:removed', friendId });
     } catch (err) {
         console.error('[Friends] Remove error:', err);
         res.status(500).json({ error: err.message });

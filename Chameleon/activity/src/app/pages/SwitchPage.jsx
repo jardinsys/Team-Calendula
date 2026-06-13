@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
 import {
     api, Icon,
     isSystemUser, isFragmentedUser, isDissociativeUser,
-    getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm
+    getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm,
+    systemKeys, alterKeys, stateKeys, groupKeys, frontKeys
 } from '@chameleon/shared'
 import { LayerCard } from '@chameleon/shared/components/LayerCard.jsx'
 import {
@@ -43,13 +45,7 @@ function buildEntityTypeList(system) {
 
 export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
     const { session } = useDiscordSdk()
-    const [system, setSystem] = useState(systemProp)
-    const [frontData, setFrontData] = useState(null)
-    const [alters, setAlters] = useState([])
-    const [states, setStates] = useState([])
-    const [groups, setGroups] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
+    const queryClient = useQueryClient()
     const [saving, setSaving] = useState(false)
 
     // Layer state
@@ -72,8 +68,8 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
     // Layer DnD state
     const [activeId, setActiveId] = useState(null)
 
-    const showLayers = isSystemUser(system) || isFragmentedUser(system)
-    const showDissociativeButton = isDissociativeUser(system)
+    // Local error state for non-query errors (e.g. dissociative toggle)
+    const [localError, setLocalError] = useState(null)
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -81,65 +77,80 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
         })
     )
 
-    // Fetch all data
-    const fetchAll = useCallback(async () => {
-        try {
-            setLoading(true)
-            const sysData = systemProp || await api.getSystemFull()
-            const types = buildEntityTypeList(sysData)
-            const fetches = [
-                api.getFront().catch(() => null),
-                types.includes('alter') ? api.getAlters(true).catch(() => []) : Promise.resolve([]),
-                types.includes('state') ? api.getStates(true).catch(() => []) : Promise.resolve([]),
-                types.includes('group') ? api.getGroups(true).catch(() => []) : Promise.resolve([]),
-            ]
-            const [frontResult, altersData, statesData, groupsData] = await Promise.all(fetches)
+    // React Query — system data
+    const { data: system, isLoading: sysLoading, error: sysError } = useQuery({
+        queryKey: systemKeys.detail(),
+        queryFn: () => systemProp || api.getSystemFull(),
+        staleTime: 30 * 1000,
+    })
 
-            setSystem(sysData)
-            setFrontData(frontResult)
-            setAlters(altersData || [])
-            setStates(statesData || [])
-            setGroups(groupsData || [])
+    const isStatesEnabled = !!system && (isFragmentedUser(system) || isDissociativeUser(system) || isSystemUser(system))
 
-            // Pre-populate layers from current front
-            if (frontResult?.layers?.length) {
-                const newLayers = []
-                const newEntityMeta = {}
-                for (const layer of frontResult.layers) {
-                    const entityIds = []
-                    for (const fronter of layer.fronters || []) {
-                        entityIds.push(fronter._id)
-                        // Pre-populate entity meta from existing front
-                        if (fronter.status || fronter.battery != null || fronter.caution) {
-                            newEntityMeta[fronter._id] = {
-                                status: fronter.status || '',
-                                battery: fronter.battery != null ? String(fronter.battery) : '',
-                                caution: fronter.caution || null,
-                                applyTo: 'shift',
-                            }
+    const { data: frontData } = useQuery({
+        queryKey: frontKeys.current(),
+        queryFn: () => api.getFront().catch(() => null),
+        enabled: !!system,
+        staleTime: 30 * 1000,
+    })
+
+    const { data: alters = [] } = useQuery({
+        queryKey: alterKeys.lists(),
+        queryFn: () => api.getAlters(true).catch(() => []),
+        enabled: !!system,
+        staleTime: 30 * 1000,
+    })
+
+    const { data: states = [] } = useQuery({
+        queryKey: stateKeys.lists(),
+        queryFn: () => api.getStates(true).catch(() => []),
+        enabled: isStatesEnabled,
+        staleTime: 30 * 1000,
+    })
+
+    const { data: groups = [] } = useQuery({
+        queryKey: groupKeys.lists(),
+        queryFn: () => api.getGroups(true).catch(() => []),
+        enabled: !!system,
+        staleTime: 30 * 1000,
+    })
+
+    const loading = sysLoading && !system
+    const error = localError || sysError?.message || null
+
+    const showLayers = isSystemUser(system) || isFragmentedUser(system)
+    const showDissociativeButton = isDissociativeUser(system)
+
+    // Pre-populate layers from front data when it arrives
+    useEffect(() => {
+        if (frontData?.layers?.length) {
+            const newLayers = []
+            const newEntityMeta = {}
+            for (const layer of frontData.layers) {
+                const entityIds = []
+                for (const fronter of layer.fronters || []) {
+                    entityIds.push(fronter._id)
+                    if (fronter.status || fronter.battery != null || fronter.caution) {
+                        newEntityMeta[fronter._id] = {
+                            status: fronter.status || '',
+                            battery: fronter.battery != null ? String(fronter.battery) : '',
+                            caution: fronter.caution || null,
+                            applyTo: 'shift',
                         }
                     }
-                    newLayers.push({
-                        name: layer.name || `Layer ${newLayers.length + 1}`,
-                        entityIds,
-                    })
                 }
-                if (newLayers.length > 0) {
-                    setLayers(newLayers)
-                    setEntityMeta(newEntityMeta)
-                }
-                if (frontResult.status) setStatus(frontResult.status)
-                if (frontResult.battery != null) setBattery(String(frontResult.battery))
+                newLayers.push({
+                    name: layer.name || `Layer ${newLayers.length + 1}`,
+                    entityIds,
+                })
             }
-
-            setLoading(false)
-        } catch (err) {
-            setError(err.message)
-            setLoading(false)
+            if (newLayers.length > 0) {
+                setLayers(newLayers)
+                setEntityMeta(newEntityMeta)
+            }
+            if (frontData.status) setStatus(frontData.status)
+            if (frontData.battery != null) setBattery(String(frontData.battery))
         }
-    }, [systemProp])
-
-    useEffect(() => { fetchAll() }, [fetchAll])
+    }, [frontData])
 
     // Build entity map for lookup
     const entityMap = useMemo(() => {
@@ -304,7 +315,7 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
 
     const handleDissociativeToggle = useCallback(() => {
         if (!dissociativeState) {
-            setError(`No "${dissociativeStateName}" state found. Create a state first.`)
+            setLocalError(`No "${dissociativeStateName}" state found. Create a state first.`)
             return
         }
         if (isDissociativeFronting) {
@@ -356,7 +367,6 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
             }
 
             // Apply per-entity metadata to shifts
-            // guidedSwitch returns full front data with shift IDs
             const freshFront = await api.getFront().catch(() => null)
             if (freshFront?.layers) {
                 for (const layer of freshFront.layers) {
@@ -380,21 +390,25 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
             setMetadataChanges(false)
             setEntityMeta({})
             setEditingEntityId(null)
-            await fetchAll()
+
+            // Invalidate relevant queries so React Query refetches
+            queryClient.invalidateQueries({ queryKey: frontKeys.all })
+            queryClient.invalidateQueries({ queryKey: systemKeys.detail() })
+
             setSaving(false)
         } catch (err) {
-            setError(err.message)
+            setLocalError(err.message)
             setSaving(false)
         }
-    }, [layers, entityMap, status, battery, entityMeta, fetchAll])
+    }, [layers, entityMap, status, battery, entityMeta, queryClient])
 
     const handleCancel = useCallback(() => {
         setEntityChanges(false)
         setMetadataChanges(false)
         setEntityMeta({})
         setEditingEntityId(null)
-        fetchAll()
-    }, [fetchAll])
+        queryClient.invalidateQueries({ queryKey: frontKeys.all })
+    }, [queryClient])
 
     // ---- Layer DnD ----
 
@@ -581,7 +595,7 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
 
             {/* Error */}
             {error && (
-                <div className="switch-error" onClick={() => setError(null)}>
+                <div className="switch-error" onClick={() => setLocalError(null)}>
                     <Icon name="alert" size={16} color="var(--color-error)" />
                     <span>{error}</span>
                 </div>

@@ -2658,6 +2658,18 @@ function unlinkEntityFromSystem(entityId, system, entityType) {
 }
 
 /**
+ * Publish an entity:deleted event via Redis pub/sub.
+ * Call after every deleteOne / findByIdAndDelete since Mongoose hooks
+ * don't uniformly cover both methods.
+ */
+function publishDeleteEvent(systemId, entityType, entityId) {
+    try {
+        const { publishEvent } = require('../../redis');
+        publishEvent(systemId, { type: 'entity:deleted', entityType, entityId: entityId.toString() });
+    } catch (_) {}
+}
+
+/**
  * Bidirectional group membership link.
  * Links entity → group AND group → entity.
  * @param {string|ObjectId} entityId - The alter or state _id
@@ -2802,6 +2814,9 @@ module.exports = {
     unlinkEntityFromSystem,
     linkEntityToGroup,
     unlinkEntityFromGroup,
+
+    // Real-time events
+    publishDeleteEvent,
 
     // Edit helpers
     getEditTarget,
