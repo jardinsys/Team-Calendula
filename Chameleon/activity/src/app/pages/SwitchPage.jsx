@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
 import {
     api, Icon,
@@ -93,26 +93,32 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
         staleTime: 30 * 1000,
     })
 
-    const { data: alters = [] } = useQuery({
+    const altersQuery = useInfiniteQuery({
         queryKey: alterKeys.lists(),
-        queryFn: () => api.getAlters(true).catch(() => []),
+        queryFn: ({ pageParam = 0 }) => api.getAlters(pageParam, 20).catch(() => ({ data: [], total: 0, hasMore: false })),
+        getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length * 20 : undefined,
         enabled: !!system,
         staleTime: 30 * 1000,
     })
+    const alters = useMemo(() => altersQuery.data?.pages?.flatMap(p => p.data || p) ?? [], [altersQuery.data])
 
-    const { data: states = [] } = useQuery({
+    const statesQuery = useInfiniteQuery({
         queryKey: stateKeys.lists(),
-        queryFn: () => api.getStates(true).catch(() => []),
+        queryFn: ({ pageParam = 0 }) => api.getStates(pageParam, 20).catch(() => ({ data: [], total: 0, hasMore: false })),
+        getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length * 20 : undefined,
         enabled: isStatesEnabled,
         staleTime: 30 * 1000,
     })
+    const states = useMemo(() => statesQuery.data?.pages?.flatMap(p => p.data || p) ?? [], [statesQuery.data])
 
-    const { data: groups = [] } = useQuery({
+    const groupsQuery = useInfiniteQuery({
         queryKey: groupKeys.lists(),
-        queryFn: () => api.getGroups(true).catch(() => []),
+        queryFn: ({ pageParam = 0 }) => api.getGroups(pageParam, 20).catch(() => ({ data: [], total: 0, hasMore: false })),
+        getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length * 20 : undefined,
         enabled: !!system,
         staleTime: 30 * 1000,
     })
+    const groups = useMemo(() => groupsQuery.data?.pages?.flatMap(p => p.data || p) ?? [], [groupsQuery.data])
 
     const loading = sysLoading && !system
     const error = localError || sysError?.message || null

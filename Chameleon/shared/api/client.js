@@ -194,12 +194,20 @@ class ApiClient {
     // ALTERS
     // ═══════════════════════════════════════════
 
-    async getAlters() {
-        return this.request('/alters')
+    async getAlters(skip, limit) {
+        const params = new URLSearchParams();
+        if (skip !== undefined) params.set('skip', skip);
+        if (limit !== undefined) params.set('limit', limit);
+        const qs = params.toString();
+        return this.request(`/alters${qs ? '?' + qs : ''}`)
     }
 
-    async getAlterSummary() {
-        return this.request('/alters/summary')
+    async getAlterSummary(skip, limit) {
+        const params = new URLSearchParams();
+        if (skip !== undefined) params.set('skip', skip);
+        if (limit !== undefined) params.set('limit', limit);
+        const qs = params.toString();
+        return this.request(`/alters/summary${qs ? '?' + qs : ''}`)
     }
 
     async getAlter(id, populate = false) {
@@ -244,12 +252,20 @@ class ApiClient {
     // STATES
     // ═══════════════════════════════════════════
 
-    async getStates() {
-        return this.request('/states')
+    async getStates(skip, limit) {
+        const params = new URLSearchParams();
+        if (skip !== undefined) params.set('skip', skip);
+        if (limit !== undefined) params.set('limit', limit);
+        const qs = params.toString();
+        return this.request(`/states${qs ? '?' + qs : ''}`)
     }
 
-    async getStateSummary() {
-        return this.request('/states/summary')
+    async getStateSummary(skip, limit) {
+        const params = new URLSearchParams();
+        if (skip !== undefined) params.set('skip', skip);
+        if (limit !== undefined) params.set('limit', limit);
+        const qs = params.toString();
+        return this.request(`/states/summary${qs ? '?' + qs : ''}`)
     }
 
     async getState(id) {
@@ -294,12 +310,20 @@ class ApiClient {
     // GROUPS
     // ═══════════════════════════════════════════
 
-    async getGroups() {
-        return this.request('/groups')
+    async getGroups(skip, limit) {
+        const params = new URLSearchParams();
+        if (skip !== undefined) params.set('skip', skip);
+        if (limit !== undefined) params.set('limit', limit);
+        const qs = params.toString();
+        return this.request(`/groups${qs ? '?' + qs : ''}`)
     }
 
-    async getGroupSummary() {
-        return this.request('/groups/summary')
+    async getGroupSummary(skip, limit) {
+        const params = new URLSearchParams();
+        if (skip !== undefined) params.set('skip', skip);
+        if (limit !== undefined) params.set('limit', limit);
+        const qs = params.toString();
+        return this.request(`/groups/summary${qs ? '?' + qs : ''}`)
     }
 
     async getGroup(id, populate = false) {
@@ -546,8 +570,12 @@ class ApiClient {
     // FRIENDS
     // ═══════════════════════════════════════════
 
-    async getFriends() {
-        return this.request('/friends')
+    async getFriends(skip, limit) {
+        const params = new URLSearchParams();
+        if (skip !== undefined) params.set('skip', skip);
+        if (limit !== undefined) params.set('limit', limit);
+        const qs = params.toString();
+        return this.request(`/friends${qs ? '?' + qs : ''}`)
     }
 
     async getFriendFront(friendId) {
@@ -591,12 +619,20 @@ class ApiClient {
         })
     }
 
-    async getBlocked() {
-        return this.request('/friends/blocked')
+    async getBlocked(skip, limit) {
+        const params = new URLSearchParams();
+        if (skip !== undefined) params.set('skip', skip);
+        if (limit !== undefined) params.set('limit', limit);
+        const qs = params.toString();
+        return this.request(`/friends/blocked${qs ? '?' + qs : ''}`)
     }
 
-    async getFriendRequests() {
-        return this.request('/friends/requests')
+    async getFriendRequests(skip, limit) {
+        const params = new URLSearchParams();
+        if (skip !== undefined) params.set('skip', skip);
+        if (limit !== undefined) params.set('limit', limit);
+        const qs = params.toString();
+        return this.request(`/friends/requests${qs ? '?' + qs : ''}`)
     }
 
     async acceptFriendRequest(index) {

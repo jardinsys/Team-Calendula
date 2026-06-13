@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import React, { useState, useCallback, useMemo } from 'react'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
 import { useNotePresence } from '../../hooks/useNotePresence'
+import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import {
     api,
     NoteCardGrid,
@@ -26,12 +27,13 @@ export function NotesPage({ system, onOpenSettings }) {
     const username = session?.user?.username || session?.user?.global_name || 'You'
     const { viewers, editors, lastSavedBy, notifyFocus, notifyBlur, notifySaved } = useNotePresence(selectedNote?._id, username)
 
-    const { data: notesData, isLoading } = useQuery({
+    const notesQuery = useInfiniteQuery({
         queryKey: noteKeys.list({ filter, tags: selectedTags }),
-        queryFn: async () => {
+        queryFn: async ({ pageParam = 0 }) => {
             const tagParam = selectedTags.length > 0 ? selectedTags.join(',') : undefined
-            return api.getNotes(filter, tagParam, 0, 100)
+            return api.getNotes(filter, tagParam, pageParam, 20)
         },
+        getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length * 20 : undefined,
     })
 
     const { data: tags = [] } = useQuery({
@@ -47,7 +49,9 @@ export function NotesPage({ system, onOpenSettings }) {
         },
     })
 
-    const notes = notesData?.notes || []
+    const notes = useMemo(() => notesQuery.data?.pages?.flatMap(p => p.notes || p.data || []) ?? [], [notesQuery.data])
+
+    const notesSentinel = useInfiniteScroll(notesQuery.fetchNextPage, notesQuery.hasNextPage, notesQuery.isFetchingNextPage)
 
     const handleNoteCreated = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: noteKeys.lists() })
@@ -82,7 +86,7 @@ export function NotesPage({ system, onOpenSettings }) {
         setSelectedTags(prev => prev.filter(t => t !== tag))
     }, [deleteTagMutation])
 
-    if (isLoading && !notes.length) {
+    if (notesQuery.isLoading) {
         return (
             <div className="status-screen">
                 <div className="spinner" />
@@ -141,6 +145,8 @@ export function NotesPage({ system, onOpenSettings }) {
                 onNoteClick={setSelectedNote}
                 variant={viewVariant}
             />
+
+            <div ref={notesSentinel} style={{ height: 1 }} />
 
             <button className="fab" title="New note" onClick={() => setShowCreate(true)}>+</button>
 

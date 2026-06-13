@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
+import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { api, EntityCardList, EntityFormModal, FrontDisplay, Icon, getSystemTerm, getAlterTerm, getStateTerm, getGroupTerm, isFragmentedUser, isDissociativeUser, ImageUpload, systemKeys, alterKeys, stateKeys, groupKeys, frontKeys } from '@chameleon/shared'
 
 function getDisplayName(entity, fallbackName) {
@@ -39,26 +40,36 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
         staleTime: 30 * 1000,
     })
 
-    const { data: alters = [] } = useQuery({
+    const altersQuery = useInfiniteQuery({
         queryKey: alterKeys.lists(),
-        queryFn: () => api.getAlters().catch(() => []),
+        queryFn: ({ pageParam = 0 }) => api.getAlters(pageParam, 20).catch(() => ({ data: [], total: 0, hasMore: false })),
+        getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length * 20 : undefined,
         enabled: !!system,
         staleTime: 30 * 1000,
     })
+    const alters = useMemo(() => altersQuery.data?.pages?.flatMap(p => p.data || p) ?? [], [altersQuery.data])
 
-    const { data: states = [] } = useQuery({
+    const statesQuery = useInfiniteQuery({
         queryKey: stateKeys.lists(),
-        queryFn: () => api.getStates().catch(() => []),
+        queryFn: ({ pageParam = 0 }) => api.getStates(pageParam, 20).catch(() => ({ data: [], total: 0, hasMore: false })),
+        getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length * 20 : undefined,
         enabled: isStatesEnabled,
         staleTime: 30 * 1000,
     })
+    const states = useMemo(() => statesQuery.data?.pages?.flatMap(p => p.data || p) ?? [], [statesQuery.data])
 
-    const { data: groups = [] } = useQuery({
+    const groupsQuery = useInfiniteQuery({
         queryKey: groupKeys.lists(),
-        queryFn: () => api.getGroups().catch(() => []),
+        queryFn: ({ pageParam = 0 }) => api.getGroups(pageParam, 20).catch(() => ({ data: [], total: 0, hasMore: false })),
+        getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length * 20 : undefined,
         enabled: !!system,
         staleTime: 30 * 1000,
     })
+    const groups = useMemo(() => groupsQuery.data?.pages?.flatMap(p => p.data || p) ?? [], [groupsQuery.data])
+
+    const altersSentinel = useInfiniteScroll(altersQuery.fetchNextPage, altersQuery.hasNextPage, altersQuery.isFetchingNextPage)
+    const statesSentinel = useInfiniteScroll(statesQuery.fetchNextPage, statesQuery.hasNextPage, statesQuery.isFetchingNextPage)
+    const groupsSentinel = useInfiniteScroll(groupsQuery.fetchNextPage, groupsQuery.hasNextPage, groupsQuery.isFetchingNextPage)
 
     const loading = sysLoading && !system
     const error = sysError?.message || null
@@ -310,6 +321,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
                     onToggle={toggleSelection}
                     selectionMode={selectionMode}
                 />
+                <div ref={altersSentinel} style={{ height: 1 }} />
                 {selectionMode ? (
                     <BatchActionBar
                         selectedCount={selectedIds.length}
@@ -407,6 +419,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
                     onToggle={toggleSelection}
                     selectionMode={selectionMode}
                 />
+                <div ref={statesSentinel} style={{ height: 1 }} />
                 {selectionMode ? (
                     <BatchActionBar
                         selectedCount={selectedIds.length}
@@ -500,6 +513,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
                     onToggle={toggleSelection}
                     selectionMode={selectionMode}
                 />
+                <div ref={groupsSentinel} style={{ height: 1 }} />
                 {selectionMode ? (
                     <BatchActionBar
                         selectedCount={selectedIds.length}

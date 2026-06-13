@@ -27,9 +27,21 @@ router.get('/', async (req, res) => {
             return res.status(404).json({ error: 'Not registered' });
         }
         
-        const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } })
+        const allIds = system.alters?.IDs || [];
+        const total = allIds.length;
+        const { skip, limit } = req.query;
+
+        if (skip !== undefined || limit !== undefined) {
+            const s = parseInt(skip, 10) || 0;
+            const l = parseInt(limit, 10) || 20;
+            const pageIds = allIds.slice(s, s + l);
+            const alters = await Alter.find({ _id: { $in: pageIds } })
+                .select('_id name avatar color pronouns groupsIDs description proxy metadata states activeStates');
+            return res.json({ data: alters, total, hasMore: s + l < total });
+        }
+
+        const alters = await Alter.find({ _id: { $in: allIds } })
             .select('_id name avatar color pronouns groupsIDs description proxy metadata states activeStates');
-        
         res.json(alters);
     } catch (err) {
         console.error('[Alters] List error:', err);
@@ -46,16 +58,30 @@ router.get('/summary', async (req, res) => {
             return res.status(404).json({ error: 'Not registered' });
         }
         
-        const alters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } })
+        const allIds = system.alters?.IDs || [];
+        const total = allIds.length;
+        const { skip, limit } = req.query;
+        const ids = (skip !== undefined || limit !== undefined)
+            ? allIds.slice(parseInt(skip, 10) || 0, (parseInt(skip, 10) || 0) + (parseInt(limit, 10) || 20))
+            : allIds;
+
+        const alters = await Alter.find({ _id: { $in: ids } })
             .select('_id name avatar color pronouns');
         
-        res.json(alters.map(a => ({
+        const mapped = alters.map(a => ({
             _id: a._id,
             name: a.name?.display || a.name?.indexable,
             avatar: a.avatar?.url,
             color: a.color,
             pronouns: a.pronouns
-        })));
+        }));
+
+        if (skip !== undefined || limit !== undefined) {
+            const s = parseInt(skip, 10) || 0;
+            const l = parseInt(limit, 10) || 20;
+            return res.json({ data: mapped, total, hasMore: s + l < total });
+        }
+        res.json(mapped);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

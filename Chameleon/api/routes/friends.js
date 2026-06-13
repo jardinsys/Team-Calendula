@@ -22,54 +22,99 @@ router.get('/', async (req, res) => {
         const user = await User.findById(req.user._id);
         const friends = user?.friends || [];
         
+        const { skip, limit } = req.query;
+        const total = friends.length;
+        const page = (skip !== undefined || limit !== undefined)
+            ? friends.slice(parseInt(skip, 10) || 0, (parseInt(skip, 10) || 0) + (parseInt(limit, 10) || 20))
+            : friends;
+
+        // Batch lookup: collect all discordIDs and friendIDs
+        const discordIds = page.map(f => f.discordID).filter(Boolean);
+        const friendIds = page.map(f => f.friendID).filter(Boolean);
+
+        const friendUsers = await User.find({
+            $or: [
+                { discordID: { $in: discordIds } },
+                { friendID: { $in: friendIds } }
+            ]
+        }).select('_id friendID discordID systemID');
+
+        // Map for O(1) lookup
+        const userMap = new Map();
+        for (const fu of friendUsers) {
+            if (fu.discordID) userMap.set(`d:${fu.discordID}`, fu);
+            if (fu.friendID) userMap.set(`f:${fu.friendID}`, fu);
+        }
+
+        // Batch lookup systems
+        const systemIds = [...new Set(friendUsers.map(fu => fu.systemID).filter(Boolean))];
+        const systems = await System.find({ _id: { $in: systemIds } })
+            .select('name avatar front battery');
+        const systemMap = new Map(systems.map(s => [s._id.toString(), s]));
+
+        // Batch lookup all active shifts across all friend systems
+        const allShiftIds = [];
+        for (const sys of systems) {
+            for (const layer of sys.front?.layers || []) {
+                for (const shiftId of layer.shifts || []) {
+                    allShiftIds.push(shiftId);
+                }
+            }
+        }
+        const activeShifts = allShiftIds.length > 0
+            ? await Shift.find({ _id: { $in: allShiftIds }, endTime: { $exists: false } })
+            : [];
+        const shiftMap = new Map(activeShifts.map(s => [s._id.toString(), s]));
+
+        // Batch lookup entities from active shifts
+        const entityLookups = new Map();
+        for (const shift of activeShifts) {
+            const key = `${shift.s_type}:${shift.ID}`;
+            if (!entityLookups.has(key)) {
+                entityLookups.set(key, { type: shift.s_type, id: shift.ID });
+            }
+        }
+        const entityMap = new Map();
+        for (const [key, { type, id }] of entityLookups) {
+            let entity;
+            if (type === 'alter') entity = await Alter.findById(id).select('name avatar color');
+            else if (type === 'state') entity = await State.findById(id).select('name avatar color');
+            else if (type === 'group') entity = await Group.findById(id).select('name avatar color');
+            if (entity) entityMap.set(key, entity);
+        }
+
+        // Build enriched friends
         const enrichedFriends = [];
-        
-        for (const friend of friends) {
-            let friendUser = null;
-            
-            if (friend.discordID) {
-                friendUser = await User.findOne({ discordID: friend.discordID });
-            } else if (friend.friendID) {
-                friendUser = await User.findOne({ friendID: friend.friendID });
-            }
-            
+        for (const friend of page) {
+            const friendUser = friend.discordID
+                ? userMap.get(`d:${friend.discordID}`)
+                : userMap.get(`f:${friend.friendID}`);
+
             if (!friendUser) continue;
-            
-            let system = null;
-            if (friendUser.systemID) {
-                system = await System.findById(friendUser.systemID)
-                    .select('name avatar front battery');
-            }
-            
-            // Get current fronters (basic info only)
-            let currentFront = [];
-            if (system?.front?.layers?.length > 0) {
+
+            const system = friendUser.systemID
+                ? systemMap.get(friendUser.systemID.toString())
+                : null;
+
+            const currentFront = [];
+            if (system?.front?.layers) {
                 for (const layer of system.front.layers) {
                     for (const shiftId of layer.shifts || []) {
-                        const shift = await Shift.findById(shiftId);
-                        if (shift && !shift.endTime) {
-                            let entity = null;
-                            if (shift.s_type === 'alter') {
-                                entity = await Alter.findById(shift.ID).select('name avatar color');
-                            } else if (shift.s_type === 'state') {
-                                entity = await State.findById(shift.ID).select('name avatar color');
-                            } else if (shift.s_type === 'group') {
-                                entity = await Group.findById(shift.ID).select('name avatar color');
-                            }
-                            
-                            if (entity) {
-                                currentFront.push({
-                                    name: entity.name?.closedNameDisplay || entity.name?.display || entity.name?.indexable,
-                                    avatar: entity.avatar?.url,
-                                    color: entity.color,
-                                    type: shift.s_type
-                                });
-                            }
+                        const shift = shiftMap.get(shiftId.toString());
+                        if (!shift) continue;
+                        const entity = entityMap.get(`${shift.s_type}:${shift.ID}`);
+                        if (entity) {
+                            currentFront.push({
+                                name: entity.name?.closedNameDisplay || entity.name?.display || entity.name?.indexable,
+                                avatar: entity.avatar?.url,
+                                color: entity.color,
+                                type: shift.s_type
+                            });
                         }
                     }
                 }
             }
-            
+
             enrichedFriends.push({
                 _id: friendUser._id,
                 friendID: friendUser.friendID,
@@ -87,7 +132,12 @@ router.get('/', async (req, res) => {
                 hasSystem: !!system
             });
         }
-        
+
+        if (skip !== undefined || limit !== undefined) {
+            const s = parseInt(skip, 10) || 0;
+            const l = parseInt(limit, 10) || 20;
+            return res.json({ data: enrichedFriends, total, hasMore: s + l < total });
+        }
         res.json(enrichedFriends);
     } catch (err) {
         console.error('[Friends] List error:', err);
@@ -167,7 +217,15 @@ router.post('/', async (req, res) => {
 router.get('/requests', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
-        res.json(user?.friendRequests || []);
+        const all = user?.friendRequests || [];
+        const { skip, limit } = req.query;
+
+        if (skip !== undefined || limit !== undefined) {
+            const s = parseInt(skip, 10) || 0;
+            const l = parseInt(limit, 10) || 20;
+            return res.json({ data: all.slice(s, s + l), total: all.length, hasMore: s + l < all.length });
+        }
+        res.json(all);
     } catch (err) {
         console.error('[Friends] Get requests error:', err);
         res.status(500).json({ error: err.message });
@@ -374,7 +432,15 @@ router.delete('/block/:id', async (req, res) => {
 router.get('/blocked', async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
-        res.json(user?.blocked || []);
+        const all = user?.blocked || [];
+        const { skip, limit } = req.query;
+
+        if (skip !== undefined || limit !== undefined) {
+            const s = parseInt(skip, 10) || 0;
+            const l = parseInt(limit, 10) || 20;
+            return res.json({ data: all.slice(s, s + l), total: all.length, hasMore: s + l < all.length });
+        }
+        res.json(all);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

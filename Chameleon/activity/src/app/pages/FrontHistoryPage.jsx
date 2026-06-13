@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, List, Calendar, Trash2, Edit3, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
 import { api, getBatteryIcon, frontKeys } from '@chameleon/shared'
@@ -64,6 +64,11 @@ export function FrontHistoryPage({ system, onNavigate }) {
 
   const { from, to } = getDateRange()
 
+  const [allShifts, setAllShifts] = useState([])
+  const [nextCursor, setNextCursor] = useState(null)
+  const [loadMoreError, setLoadMoreError] = useState(null)
+  const isAccumulating = useRef(false)
+
   const { data, isLoading: loading, error: queryError } = useQuery({
     queryKey: frontKeys.history({ limit: 100, from, to }),
     queryFn: async () => {
@@ -71,9 +76,34 @@ export function FrontHistoryPage({ system, onNavigate }) {
     },
   })
 
-  const shifts = data?.history || []
-  const hasMore = data?.hasMore || false
-  const error = queryError ? queryError.message : null
+  useEffect(() => {
+    if (data && !isAccumulating.current) {
+      setAllShifts(data.history || [])
+      setNextCursor(data.hasMore ? data.history?.[data.history.length - 1]?.startTime : null)
+    }
+    isAccumulating.current = false
+  }, [data])
+
+  const shifts = allShifts
+  const hasMore = nextCursor != null
+  const [loadingMore, setLoadingMore] = useState(false)
+  const error = loadMoreError || (queryError ? queryError.message : null)
+
+  const handleLoadMore = async () => {
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
+    setLoadMoreError(null)
+    isAccumulating.current = true
+    try {
+      const nextPage = await api.getFrontHistory(100, nextCursor, from, to)
+      setAllShifts(prev => [...prev, ...(nextPage.history || [])])
+      setNextCursor(nextPage.hasMore ? nextPage.history?.[nextPage.history.length - 1]?.startTime : null)
+    } catch (err) {
+      setLoadMoreError(err.message)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const handleDelete = async (shiftId) => {
     try {
@@ -357,6 +387,18 @@ export function FrontHistoryPage({ system, onNavigate }) {
               ))}
             </div>
           ))}
+        </div>
+      )}
+
+      {shifts.length > 0 && hasMore && (
+        <div className="load-more-container" style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
+          <button
+            className="btn btn-ghost"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? 'Loading...' : 'Load More'}
+          </button>
         </div>
       )}
 

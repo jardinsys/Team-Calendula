@@ -32,9 +32,21 @@ router.get('/', async (req, res) => {
             return res.status(404).json({ error: 'Not registered' });
         }
         
-        const states = await State.find({ _id: { $in: system.states?.IDs || [] } })
+        const allIds = system.states?.IDs || [];
+        const total = allIds.length;
+        const { skip, limit } = req.query;
+
+        if (skip !== undefined || limit !== undefined) {
+            const s = parseInt(skip, 10) || 0;
+            const l = parseInt(limit, 10) || 20;
+            const pageIds = allIds.slice(s, s + l);
+            const states = await State.find({ _id: { $in: pageIds } })
+                .select('_id name avatar color description groupIDs alters proxy metadata');
+            return res.json({ data: states, total, hasMore: s + l < total });
+        }
+
+        const states = await State.find({ _id: { $in: allIds } })
             .select('_id name avatar color description groupIDs alters proxy metadata');
-        
         res.json(states);
     } catch (err) {
         console.error('[States] List error:', err);
@@ -55,15 +67,29 @@ router.get('/summary', async (req, res) => {
             return res.status(404).json({ error: 'Not registered' });
         }
         
-        const states = await State.find({ _id: { $in: system.states?.IDs || [] } })
+        const allIds = system.states?.IDs || [];
+        const total = allIds.length;
+        const { skip, limit } = req.query;
+        const ids = (skip !== undefined || limit !== undefined)
+            ? allIds.slice(parseInt(skip, 10) || 0, (parseInt(skip, 10) || 0) + (parseInt(limit, 10) || 20))
+            : allIds;
+
+        const states = await State.find({ _id: { $in: ids } })
             .select('_id name avatar color');
         
-        res.json(states.map(s => ({
+        const mapped = states.map(s => ({
             _id: s._id,
             name: s.name?.display || s.name?.indexable,
             avatar: s.avatar?.url,
             color: s.color
-        })));
+        }));
+
+        if (skip !== undefined || limit !== undefined) {
+            const s = parseInt(skip, 10) || 0;
+            const l = parseInt(limit, 10) || 20;
+            return res.json({ data: mapped, total, hasMore: s + l < total });
+        }
+        res.json(mapped);
     } catch (err) {
         console.error('[States] Summary error:', err);
         res.status(500).json({ error: err.message });

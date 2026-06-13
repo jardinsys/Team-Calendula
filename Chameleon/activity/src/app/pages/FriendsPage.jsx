@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import React, { useState, useMemo } from 'react'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
+import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { api, FriendCardList, FriendDetailModal, AddFriendModal, Icon, friendKeys } from '@chameleon/shared'
 
 const TABS = [
@@ -19,9 +20,10 @@ export function FriendsPage({ onNavigate, onOpenSettings }) {
 
     const [actionLoading, setActionLoading] = useState({})
 
-    const friendsQuery = useQuery({
+    const friendsQuery = useInfiniteQuery({
         queryKey: friendKeys.lists(),
-        queryFn: () => api.getFriends().catch(() => []),
+        queryFn: ({ pageParam = 0 }) => api.getFriends(pageParam, 20).catch(() => ({ data: [], total: 0, hasMore: false })),
+        getNextPageParam: (lastPage, allPages) => lastPage.hasMore ? allPages.length * 20 : undefined,
     })
 
     const requestsQuery = useQuery({
@@ -39,7 +41,8 @@ export function FriendsPage({ onNavigate, onOpenSettings }) {
         queryFn: () => api.getMyFriendId().catch(() => null),
     })
 
-    const friends = friendsQuery.data ?? []
+    const friends = useMemo(() => friendsQuery.data?.pages?.flatMap(p => p.data || p) ?? [], [friendsQuery.data])
+    const friendsSentinel = useInfiniteScroll(friendsQuery.fetchNextPage, friendsQuery.hasNextPage, friendsQuery.isFetchingNextPage)
     const requests = requestsQuery.data ?? []
     const blocked = blockedQuery.data ?? []
     const myFriendId = myIdQuery.data ?? null
@@ -177,6 +180,7 @@ export function FriendsPage({ onNavigate, onOpenSettings }) {
                         onFriendClick={setSelectedFriend}
                         fallbackName={session?.global_name || session?.username}
                     />
+                    <div ref={friendsSentinel} style={{ height: 1 }} />
                     <button className="fab" title="Add friend" onClick={() => setShowAddFriend(true)}>+</button>
                 </>
             )}

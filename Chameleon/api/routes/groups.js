@@ -28,9 +28,21 @@ router.get('/', async (req, res) => {
             return res.status(404).json({ error: 'Not registered' });
         }
         
-        const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } })
+        const allIds = system.groups?.IDs || [];
+        const total = allIds.length;
+        const { skip, limit } = req.query;
+
+        if (skip !== undefined || limit !== undefined) {
+            const s = parseInt(skip, 10) || 0;
+            const l = parseInt(limit, 10) || 20;
+            const pageIds = allIds.slice(s, s + l);
+            const groups = await Group.find({ _id: { $in: pageIds } })
+                .select('_id name avatar color description type alterIDs stateIDs proxy metadata');
+            return res.json({ data: groups, total, hasMore: s + l < total });
+        }
+
+        const groups = await Group.find({ _id: { $in: allIds } })
             .select('_id name avatar color description type alterIDs stateIDs proxy metadata');
-        
         res.json(groups);
     } catch (err) {
         console.error('[Groups] List error:', err);
@@ -47,17 +59,31 @@ router.get('/summary', async (req, res) => {
             return res.status(404).json({ error: 'Not registered' });
         }
         
-        const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } })
+        const allIds = system.groups?.IDs || [];
+        const total = allIds.length;
+        const { skip, limit } = req.query;
+        const ids = (skip !== undefined || limit !== undefined)
+            ? allIds.slice(parseInt(skip, 10) || 0, (parseInt(skip, 10) || 0) + (parseInt(limit, 10) || 20))
+            : allIds;
+
+        const groups = await Group.find({ _id: { $in: ids } })
             .select('_id name avatar color type');
         
-        res.json(groups.map(g => ({
+        const mapped = groups.map(g => ({
             _id: g._id,
             name: g.name?.display || g.name?.indexable,
             avatar: g.avatar?.url,
             color: g.color,
             type: g.type?.name,
             canFront: g.type?.canFront
-        })));
+        }));
+
+        if (skip !== undefined || limit !== undefined) {
+            const s = parseInt(skip, 10) || 0;
+            const l = parseInt(limit, 10) || 20;
+            return res.json({ data: mapped, total, hasMore: s + l < total });
+        }
+        res.json(mapped);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
