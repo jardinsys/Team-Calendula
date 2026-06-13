@@ -13,6 +13,13 @@ Team-Calendula/
 ├── compose.yaml                    # 6 services (redis, chameleon-api, chameleon-bot, plum-bot, sugar-bot, tigerlily-bot)
 ├── AGENTS.md                       # This file
 ├── rebuild.sh                      # Docker rebuild with per-bot targeting
+├── COMMAND_WALKTHROUGH.md           # Step-by-step execution path analysis for every Discord command
+├── EMBEDDED_APP_WALKTHROUGH.md      # Page-by-page documentation of the Discord Activity embedded app
+├── BUG_REPORT.md                   # Bugs identified during command walkthrough (Discord bot + API)
+├── EMBEDDED_APP_BUG_REPORT.md      # Bugs identified in the embedded app
+├── EMBEDDED_APP_MISSING_FEATURES.md # Features absent from the embedded app
+├── FEATURES_TO_CONSIDER.md         # 30 forward-looking feature ideas with status tracking
+├── CLOUDFLARE_CDN_SETUP.md         # Step-by-step CDN setup guide for R2 custom domains
 ├── Chameleon/
 │   ├── config.json                 # Chameleon's own config (tokens, MongoDB, R2, JWT, secrets)
 │   ├── bot.js                      # Discord bot entry point
@@ -24,10 +31,11 @@ Team-Calendula/
 │   │   ├── api.js                  # Express API router (auth, system, alters, states, groups, notes, front, friends, quick)
 │   │   ├── middleware/auth.js      # JWT auth middleware — exports authenticateToken + authMiddleware alias
 │   │   ├── utils/
-│   │   │   └── r2.js              # R2 client + uploadNoteContent, deleteNoteContent, generatePreview
+│   │   │   ├── r2.js              # R2 client + uploadNoteContent, deleteNoteContent, generatePreview
+│   │   │   └── cascade.js         # Shared cascade deletion helpers (deleteSystemCascade, deleteUserCascade)
 │   │   └── routes/                 # Per-resource API route files
 │   ├── webapp/
-│   │   ├── server.js               # Express 5 — serves API (/api), webapp SPA fallback, activity SPA (/discord_activity), assets (/assets); root-level activity detection via frame_id
+│   │   ├── server.js               # Express 5 + WebSocket server — heartbeat (30s ping/pong), note rooms, serves API/webapp/activity
 │   │   └── package.json
 │   ├── activity/
 │   │   ├── package.json            # Independent project (not workspace) with "@chameleon/shared": "file:../shared"
@@ -36,59 +44,79 @@ Team-Calendula/
 │   │   ├── config/vite.mjs         # Reads ../../config.json; resolve.alias for react/react-dom dedup
 │   │   └── src/
 │   │       ├── app/
-│   │       │   ├── App.jsx         # Root — DiscordContextProvider
+│   │       │   ├── App.jsx         # Root — DiscordContextProvider + WebSocketGate + ConnectionToast
 │   │       │   ├── Activity.jsx    # Status gate + page routing (deep-link via ?page= param)
+│   │       │   ├── ConnectionToast.jsx  # WebSocket disconnect toast (orange pill, pulsing red dot)
 │   │       │   └── pages/
-│   │       │       ├── LandingPage.jsx   # Hub — System, Friends, Notes, Crisis cards
-│   │       │       ├── SystemPage.jsx    # Full page — overview, front, alter/state/group sub-pages with CRUD
-│   │       │       ├── FriendsPage.jsx   # Full page — friend list, front detail, add friend
-│   │       │       ├── NotesPage.jsx     # Notes CRUD via shared API client
-│   │       │       └── CrisisPage.jsx    # Placeholder — crisis tools
+│   │       │       ├── LandingPage.jsx      # Hub — System, Friends, Notes, Crisis, Settings, Activities cards
+│   │       │       ├── SystemPage.jsx       # Full page — overview, front, alter/state/group sub-pages with CRUD + batch ops
+│   │       │       ├── SwitchPage.jsx       # Full page — LayerCard with entity search, mode toggles, drag reorder
+│   │       │       ├── FriendsPage.jsx      # Full page — friend list with front detail, add friend, infinite scroll
+│   │       │       ├── NotesPage.jsx        # Notes CRUD via shared API client + tag manager + note presence
+│   │       │       ├── FrontHistoryPage.jsx # Shift history with retroactive editing (ShiftEditModal)
+│   │       │       ├── ProfilePage.jsx      # System profile display + edit
+│   │       │       ├── SettingsPage.jsx     # Full settings panel (server, proxy, notifications, general)
+│   │       │       ├── EntityViewPage.jsx   # Entity detail view with full info display
+│   │       │       └── CrisisPage.jsx       # Placeholder — crisis tools
 │   │       └── api/token.js        # Uses process.cwd() to find config.json (not createRequire/import.meta.url)
+│   │       ├── hooks/
+│   │       │   ├── useDiscordSdk.jsx  # SDK init, auth flow, token caching, context provider
+│   │       │   ├── useApiAuth.js      # Exchange Discord token for JWT (skips in mock mode)
+│   │       │   ├── useWebSocket.js    # WebSocket client with auto-reconnect, auto-pong, disconnect detection
+│   │       │   ├── useNotePresence.js # Note room presence (viewers, editors, lastSavedBy)
+│   │       │   └── useInfiniteScroll.js  # Reusable intersection observer for infinite scroll
 │   ├── shared/
 │   │   ├── package.json            # ESM workspace package (@chameleon/shared) — "type": "module"
 │   │   └── src/
-│   │       ├── index.js            # Barrel exports: api, ApiClient, NoteCard, NoteCardGrid, NoteModal, CreateNoteModal, EntityCard, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, FronterAvatar, FriendCard, FriendCardList, FriendDetailModal, AddFriendModal
+│   │       ├── index.js            # Barrel exports: api, ApiClient, NoteCard, NoteCardGrid, NoteModal, CreateNoteModal, EntityCard, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, FronterAvatar, FriendCard, FriendCardList, FriendDetailModal, AddFriendModal, ShiftEditModal, AttributionEditor
 │   │       ├── api/
-│   │       │   └── client.js       # ApiClient — 40+ methods: notes, system, alters, states, groups, front, friends, quick switch
+│   │       │   ├── client.js       # ApiClient — 50+ methods: notes, system, alters, states, groups, front, friends, quick switch, batch operations
+│   │       │   └── queryKeys.js    # React Query key factory + eventToKeys() mapping for WebSocket cache invalidation
 │   │       └── components/
 │   │           ├── NoteCard.jsx, NoteCardGrid.jsx    # Note cards (Google Keep-style)
-│   │           ├── NoteModal.jsx                     # Note viewer/editor
+│   │           ├── NoteModal.jsx                     # Note viewer/editor with presence (editors, viewers, last saved by)
 │   │           ├── CreateNoteModal.jsx               # Note creation form
-│   │           ├── EntityCard.jsx, EntityCardList.jsx # Alter/State/Group list cards
+│   │           ├── EntityCard.jsx, EntityCardList.jsx # Alter/State/Group list cards with selection mode
 │   │           ├── EntityDetailModal.jsx              # Entity detail bottom-sheet (view, edit, delete)
 │   │           ├── EntityFormModal.jsx                # Entity create/edit form
 │   │           ├── FrontDisplay.jsx                   # Front layers + fronters with avatars, status, battery, duration
 │   │           ├── FriendCard.jsx, FriendCardList.jsx # Friend list cards with front preview
 │   │           ├── FriendDetailModal.jsx              # Friend front detail (privacy-gated via API)
-│   │           └── AddFriendModal.jsx                 # Add friend by ID form
+│   │           ├── AddFriendModal.jsx                 # Add friend by ID form
+│   │           ├── ShiftEditModal.jsx                 # Retroactive shift status/battery/caution editing
+│   │           └── AttributionEditor.jsx              # Manual note attribution (entity select from fronting entities)
 │   ├── schemas/
-│   │   ├── alter.js                # Alter entity schema
-│   │   ├── state.js                # State entity schema
-│   │   ├── group.js                # Group entity schema
-│   │   ├── system.js               # System entity schema
-│   │   ├── settings.js             # PrivacyBucket, alterPrivacySchema, groupPrivacySchema, systemPrivacySchema, PrivacyBucket
-│   │   ├── user.js                 # User schema
+│   │   ├── alter.js                # Alter entity schema + post-save hook (entity:created/edited)
+│   │   ├── state.js                # State entity schema + post-save hook (entity:created/edited)
+│   │   ├── group.js                # Group entity schema + post-save hook (entity:created/edited)
+│   │   ├── system.js               # System entity schema + post-save hook (system:created/updated)
+│   │   ├── settings.js             # PrivacyBucket, alterPrivacySchema, groupPrivacySchema, systemPrivacySchema
+│   │   ├── user.js                 # User schema (notifyOnSwitch per friend, cascade delete)
 │   │   ├── front.js                # Front/layer schema (Shift, layerSchema)
 │   │   ├── message.js              # Message schema (discord_webhook_message_id, discord_channel_id, proxy_type, proxy_id, content, attachments)
 │   │   ├── guild.js                # Guild schema
 │   │   └── note.js                 # Note schema
 │   └── discord_commands/
+│       ├── functions/
+│       │   ├── bot_utils.js        # Session management, display helpers, R2 media, Redis helpers, cascade deletion, publishDeleteEvent
+│       │   ├── proxy-message.js    # Core proxy message handler (read → resend as entity)
+│       │   └── switchNotifications.js  # Switch notification debounce (10s), privacy filtering, DM-first delivery
 │       └── global/
-│           ├── proxy-message.js    # Core proxy message handler (read → resend as entity)
+│           ├── proxy-message.js    # Core proxy message handler (read → resend as entity) — publishes front:switch event
 │           ├── prefix/             # sys! commands (config, serverconfig, alter, state, group, system, friend, etc.)
 │           └── slash/
-│               ├── alter.js        # /alter commands + edit interface
-│               ├── state.js        # /state commands + edit interface
-│               ├── group.js        # /group commands + edit interface
+│               ├── alter.js        # /alter commands + edit interface + publishDeleteEvent
+│               ├── state.js        # /state commands + edit interface + publishDeleteEvent
+│               ├── group.js        # /group commands + edit interface + publishDeleteEvent
 │               ├── system.js       # /system commands + edit interface
 │               ├── systemise.js    # /systemise — LAUNCH_ACTIVITY (type 12) callback for Discord Activity
 │               ├── profile.js      # /profile command
 │               ├── front.js        # /front command (view, switch, layers, per-entity editing)
-│               ├── friend.js       # /friend command (list, view, add, remove, requests, block, unblock, settings)
+│               ├── friend.js       # /friend command (list, view, add, remove, requests, block, unblock, settings + publishEvents)
 │               ├── whois.js        # /whois command + "Who sent this?" context menu
-│               ├── settings.js     # /settings command (server, proxy, notifications, general sections)
+│               ├── settings.js     # /settings command (server, proxy, notifications, general + publishEvents)
 │               ├── message.js      # /message command (action pattern: edit/delete/reproxy, auto-detect last message)
+│               ├── note.js         # /note command (R2 content storage)
 │               ├── crisis.js       # /crisis command
 │               ├── support.js      # /support command
 │               ├── whoami.js       # /whoami command
@@ -172,12 +200,16 @@ When editing image info via modal, routing depends on `session.syncWithDiscord`:
 - Settings schema varies by entity type (`alterPrivacySchema`, `groupPrivacySchema`, `systemPrivacySchema`)
 - `alterPrivacySchema` includes fields like `avatar`, `description`, `pronouns`, etc. with boolean visibility
 
-#### Default Privacy Bucket (New Users)
-- `createNewUserAndSystem()` seeds a `Default` privacy bucket with `friends: []` on every new system
+#### Default Privacy Buckets (New Users)
+- `createNewUserAndSystem()` seeds **two** privacy buckets: **Strangers** (maximum privacy) and **Friends** (core info visible)
+- **Strangers bucket**: `friends: []` (empty — no one is a stranger by default), all entity fields hidden
+- **Friends bucket**: `friends: []` (populated when friend requests are accepted), core fields visible (avatar, description, pronouns)
+- `friendAutoBucket` defaults to `"Friends"` — new friends auto-assigned to Friends bucket on accept
 - `getPrivacyBucket()` no longer falls back to `Default` for strangers — only returns a bucket if the viewer is explicitly in its `friends[]` list
 - Strangers get `null` from `getPrivacyBucket()` → `shouldShowEntity()` returns `false` → maximum privacy by default
-- Existing systems can get the `Default` bucket seeded via `handleNewUserButton()` when clicking "Yes, register my system!" (acts as migration path)
-- Users can add friends to the `Default` bucket via `/system manage` → Settings → Privacy Buckets
+- Existing systems can get the Strangers+Friends buckets seeded via `handleNewUserButton()` when clicking "Yes, register my system!" (acts as migration path)
+- Users can add friends to buckets via `/system manage` → Settings → Privacy Buckets
+- Entity-level privacy NOT seeded during onboarding — users configure per-entity later
 
 ## Schema Media Fields
 
@@ -1436,3 +1468,641 @@ Redis on Fly connects via private network: `REDIS_URL=redis://chameleon-redis.in
 | Stale `.robo/public` copy in Dockerfile | Dockerfile had `cp -r .robo/public dist` from old `robo build` | Removed — no longer needed with `vite build` |
 | Google Fonts blocked by Discord CSP | Discord's iframe CSP blocks `fonts.googleapis.com` and `fonts.gstatic.com` | Self-hosted fonts in `activity/public/assets/fonts/`; CSS `@font-face` declarations use `/assets/fonts/` path (same as JS/CSS bundles, passes through CDN proxy) |
 | Error handler kills page on font load failure | `window.addEventListener('error')` caught `<link>` tag failures and replaced entire page | Narrowed handler to only catch `<script>` tag failures |
+| `POST /friends` bypassed consent | API directly added friend without request flow | Changed to request flow: `POST /friends` stores request, new `GET /friends/requests`, `POST /friends/requests/:id/accept`, `POST /friends/requests/:id/decline` |
+| `GET /quick/switch` parsed `recentProxies` as strings | Endpoint called `.split(':')` on objects from MongoDB | Added type check: object → read `.type`/`.id`, string → split |
+| `POST /quick/notes` bypassed R2 storage | Content stored as plain string, invisible to `GET /notes` | Changed to upload to R2 + add to `user.notes.notes[]` |
+| `null` dereference in notes routes | All API routes used `req.userId` but auth middleware sets `req.user._id` | Fixed across 6 route files (40+ occurrences) |
+| No ownership verification on entity sub-routes | Any authenticated user could modify another's entities | Added system membership check on proxy, group, alter, state sub-routes |
+| Front view exposed full data without privacy | `GET /front/:systemId` had no privacy bucket check | Added `getPrivacyBucket()` check + `shouldShowEntity()` per froner |
+| Friend view exposed full data without privacy | `GET /friends/:systemId` returned full entity list | Added privacy bucket filtering per entity |
+| System `createNewUserAndSystem` seeded `Default` bucket | "Default" bucket name was confusing, not descriptive | Renamed to "Strangers" + added "Friends" bucket, set `friendAutoBucket: 'Friends'` |
+| `ensureConditionExists` defaulted to `include_in_Count: false` | New conditions excluded from front count | Changed default to `true` |
+| `POST /api/public/*` 404 in Docker | `public.js` router not mounted in `api.js` | Added `app.use('/public', publicRouter)` mount |
+| Auth middleware missing on public routes | Public routes applied `authMiddleware` at mount level (blocked unauthenticated) | Moved `authMiddleware` from route files to `server.js` mount-level; public routes use `authenticateToken` only where needed |
+
+---
+
+## Documentation & Analysis
+
+These documents were generated during a comprehensive codebase audit and are referenced throughout AGENTS.md:
+
+| Document | Purpose | Lines |
+|----------|---------|-------|
+| `COMMAND_WALKTHROUGH.md` | Step-by-step execution path for every slash + prefix command, with data flow and cross-file references | 1089 |
+| `EMBEDDED_APP_WALKTHROUGH.md` | Page-by-page documentation of the Discord Activity embedded app (auth flow, pages, components) | 351 |
+| `BUG_REPORT.md` | Bugs found during command walkthrough (Discord bot + API) — organized by severity | 328 |
+| `EMBEDDED_APP_BUG_REPORT.md` | Bugs found in the embedded app — organized by severity | 266 |
+| `EMBEDDED_APP_MISSING_FEATURES.md` | Features absent from the embedded app that exist in the Discord bot | 264 |
+| `FEATURES_TO_CONSIDER.md` | 30 forward-looking feature ideas with implementation status tracking | 334 |
+| `CLOUDFLARE_CDN_SETUP.md` | Step-by-step CDN setup guide for R2 custom domains | 237 |
+
+---
+
+## System Type System
+
+The system supports three independent type flags that control terminology, UI behavior, and default conditions:
+
+### Schema
+```javascript
+system.sys_type: {
+    isSystem: Boolean,      // Plurality — entity splitting, headmates
+    isFragmented: Boolean,  // Fragmentation — dissociative parts, emotional parts
+    isDissociative: Boolean // Dissociative disorders (DEPD, DDIS, DSR, DDNOS, UDD, POSSS, etc.)
+}
+```
+
+### UI Behavior by Type
+| Condition | isSystem | isFragmented | isDissociative | Entity Types | Layers | Default Condition |
+|-----------|----------|-------------|---------------|-------------|--------|-------------------|
+| Basic user (none) | false | false | false | — | — | — |
+| Plurality only | true | false | false | Alter | Yes | Dormant |
+| Fragmentation only | false | true | false | State | Yes | Remission |
+| Dissociative only | false | false | true | Alter + State | Hidden (single main) | Dissociated (or disorder-specific) |
+| Plurality + Fragmentation | true | true | false | Alter + State | Yes | Dormant + Remission |
+| Plurality + Dissociative | true | false | true | Alter + State | Yes (visible) | Dormant + Dissociated |
+| All three | true | true | true | Alter + State | Yes | Dormant + Remission |
+
+### Disorder-Specific Dissociative Behavior
+When `isDissociative` is enabled, a disorder dropdown appears (DEPD, DDIS, DSR, DDNOS, UDD, POSSS, OTHER):
+
+| Disorder | Trance Init State | `isDissociative` Value | `isSystem` Value | Notes |
+|----------|-------------------|----------------------|-----------------|-------|
+| DEPD (Depersonalization) | "Derealized" | `true` | `false` | |
+| DDIS (Dissociative Identity) | "Switched" | `true` | `false` | |
+| DSR (Dissociative Amnesia) | "Amnestic" | `true` | `false` | |
+| DDNOS (OSDD equivalent) | "Switched" | `true` | `false` | |
+| UDD (Unspecified) | "Dissociated" | `true` | `false` | |
+| POSSS (Possession Trance) | "Possessing" | `false` | `false` | Special: `isDissociative: false`, entities = States, trance = "Possessing", has amnesia toggle, can co-exist with isSystem (trance = "Conscious") |
+| OTHER (NOS) | "Dissociated" | `true` | `false` | |
+
+### Default Conditions Seeded on Onboarding
+- `isSystem` true → **Dormant** condition seeded for alter entities (via `ensureConditionExists`)
+- `isFragmented` true → **Remission** condition seeded for state entities
+- `isDissociative` true → **Dissociated** (or disorder-specific) condition seeded
+- `ensureConditionExists` defaults to `include_in_Count: true` (was `false`)
+- "Active" is NOT a default condition — entities with no condition are treated as active
+
+### Files Modified
+- `schemas/system.js` — `sys_type` schema, `isDissociative`, `dissociativeType`
+- `bot_utils.js` — UDD dropdown builders, disorder init, `getDefaultCondition()` helper
+- `prefix/system.js` — UDD handlers, POSSS `amnesia: true` on entities, condition seeding
+- `slash/system.js` — UDD modal + dropdown, disorder init, condition seeding
+- `api/routes/system.js` — `sys_type` in creation + PATCH, disorder init, condition seeding
+- `api/routes/states.js` — `isDissociative` guard (POSSS: no states when `isSystem=false`)
+- `activity/src/app/pages/SystemPage.jsx` — UDD dropdown, disorder-aware labels, state restrictions
+- `activity/src/app/pages/SwitchPage.jsx` — Layer visibility for `isDissociative`
+
+### POSSS Edge Cases
+- When `isDissociative=false` (POSSS): entity type = States, trance = "Possessing", amnesia toggle on entities
+- When `isSystem=true` too: trance = "Conscious" (POSSS + Plurality)
+- States can't exist when `isSystem=false` and `isDissociative=false` (non-POSSS dissociative = no entities, only trance)
+
+---
+
+## System Deletion Cascade
+
+When a system is deleted, all connected data must be cleaned up to prevent orphaned records.
+
+### Shared Cascade Utility (`Chameleon/api/utils/cascade.js`)
+
+```javascript
+deleteSystemCascade(systemId, userId, { r2, redis, broadcastLocal })
+deleteUserCascade(userId, { r2, redis, broadcastLocal })
+```
+
+**`deleteSystemCascade` cleans up:**
+- Shift documents (referenced by layer.shifts[])
+- Layer documents (embedded in system.front.layers[])
+- Privacy bucket documents (system.privacyBuckets[])
+- User document
+- Guild documents (guild.systemId === systemId)
+- Message documents (message.systemId === systemId)
+- Note documents (via user.notes.notes[])
+- R2 media for entities + system
+- Redis cache (display cache, message cache, proxy cache)
+- WebSocket broadcast: `system:deleted` event
+
+**`deleteUserCascade` cleans up:**
+- System document + all nested data (shifts, layers, buckets)
+- All entity documents (alters, states, groups)
+- Guild documents
+- Message documents
+- Note documents
+- R2 media
+- Redis cache
+
+### Hook Locations
+| File | Trigger |
+|------|---------|
+| `api/routes/system.js` | `DELETE /api/system` |
+| `api/routes/alters.js` | `DELETE /api/alters/:id` |
+| `api/routes/states.js` | `DELETE /api/states/:id` |
+| `api/routes/groups.js` | `DELETE /api/groups/:id` |
+| `prefix/alter.js` | `sys!alter delete` |
+| `prefix/state.js` | `sys!state delete` |
+| `prefix/group.js` | `sys!group delete` |
+| `prefix/system.js` | `sys!system delete` |
+| `slash/alter.js` | `/alter delete` |
+| `slash/state.js` | `/state delete` |
+| `slash/group.js` | `/group delete` |
+
+---
+
+## API Route Fixes
+
+### Public Routes Mount (`api/api.js`)
+- `public.js` router now mounted at `app.use('/public', publicRouter)` — was missing, causing 404
+
+### Auth Middleware Reorganization
+- `authMiddleware` (full guild-level auth) moved from individual route files to `server.js` mount-level
+- Route files use `authenticateToken` (JWT-only) for their own auth
+- Public routes (`/api/public/*`) skip `authMiddleware` entirely
+- CSRF state parameter enforced on OAuth callback
+
+### Activity Routes
+- `GET /api/auth/activity/exchange` — exchanges Discord code for access token
+- `GET /api/auth/activity/pending-page` — returns the pending deep-link page from `/systemise`
+- `POST /api/auth/activity/token` — exchanges Discord access token for JWT
+
+### Ownership Verification
+All entity sub-routes now verify system membership before allowing modifications:
+- `POST /alters/:id/proxy`, `DELETE /alters/:id/proxy`
+- `POST /states/:id/proxy`, `DELETE /states/:id/proxy`
+- `POST /groups/:id/proxy`, `DELETE /groups/:id/proxy`
+- `POST /notes/:id/link`, `DELETE /notes/:id/link`
+- `POST /front/shift`, `DELETE /front/shift/:shiftId`
+- `PATCH /front/layers/:layerId`, `DELETE /front/layers/:layerId`
+
+### Front Privacy
+- `GET /front/:systemId` now checks `getPrivacyBucket()` + `shouldShowEntity()` per froner
+- Stranger viewers see only public fields
+
+### Friend Privacy
+- `GET /friends/:systemId` now filters entities by privacy bucket visibility
+
+---
+
+## Bot Command Fixes
+
+### Dead Routing Cleanup
+- Removed unreachable `case 'switch_':` / `case 'quickswitch_':` from `bot.js` button router — old prefix commands that were never wired
+- Removed 37 unreachable `break` statements after `return await` in slash command button handlers
+- Removed dead `handleButtonInteraction` / `handleSelectMenuInteraction` functions from `prefix/friend.js`
+
+### Cache Invalidation (SCAN-Based)
+- `prefix/alter.js`, `prefix/state.js`, `prefix/group.js` use Redis SCAN to find and delete affected display cache keys after edits
+- Pattern: `display:{entityId}:*` → delete all variants (main, server, mask)
+- Wired via `invalidateDisplayCache(entityId)` from `proxy-message.js`
+
+### Batch Reconciliation Writes
+- `proxy-message.js` batches MongoDB writes: 50 messages or 30-second flush interval
+- `reconcileOnStartup()` scans Redis `msg:*` keys on bot start for unflushed messages
+- Graceful shutdown (`SIGINT`/`SIGTERM`) flushes pending writes before exit
+
+### DM-First Error Delivery
+- All slash command errors now try to send to DM first, fall back to interaction reply
+- Prevents "interaction failed" messages from cluttering channels
+- Implemented via `sendDMOrFallback(interaction, embed)` helper in `bot_utils.js`
+
+### Session Timer Leak Fix
+- `deleteSession()` in `bot_utils.js` now clears the 15-minute auto-cleanup timer before deleting
+- Prevents orphaned timers from accumulating in long-running sessions
+
+---
+
+## Switch Page UI
+
+The Switch Page (`SwitchPage.jsx`) is a full-page redesign of the front management interface.
+
+### Layout
+- **Header** — System name + avatar + "Edit System" button
+- **Compact Front Bar** — Current fronters with avatars
+- **Layer Cards** — Each layer rendered as a span-width container with:
+  - Layer name + color dot
+  - Entity chips (avatar + name) — clickable to edit entity shift status
+  - Search bar with mode toggles (add/replace/remove/move)
+  - Drag handle for reorder (up/down buttons at bottom)
+
+### Entity Shift Popover
+- Click any entity chip in a layer → opens `EntityShiftPopover`
+- Edit status, battery (0-100), and caution for that entity's current shift
+- "Apply to" selector: "This shift only" / "Entity preset" / "Both"
+- Blank input = clear the field
+
+### Mode Toggles
+| Mode | Behavior |
+|------|----------|
+| **Add** (default) | Search results → click to add entity to this layer |
+| **Replace** | Click entity in layer → replaces all entities with search results |
+| **Remove** | Click entity in layer → removes it |
+| **Move** | Click entity in layer → moves to a different layer |
+
+### Switch vs Update Button
+- **"Switch"** — shown when entities have changed (triggers front switch + notifications)
+- **"Update"** — shown when only metadata changed (status/battery/caution) — no switch event, no notifications
+
+### Layer Reorder
+- Drag handle or up/down buttons at bottom of each layer card
+- Top/Bottom position buttons to move layers
+
+### isDissociative Behavior
+- When only `isDissociative` is true (no `isSystem`/`isFragmented`): layers hidden, single main layer implied
+- When `isDissociative` + `isSystem`/`isFragmented`: dissociative button appears above layers
+
+---
+
+## Settings Panel
+
+All pages have a gear button (bottom-right) that opens a full-screen settings overlay.
+
+### Implementation
+- `SettingsPanel.jsx` — Full-screen overlay with tab navigation
+- Tabs: Server, Proxy, Notifications, General
+- Each tab renders the same settings content as the Discord `/settings` command
+- State managed in `Activity.jsx` — `showSettings` boolean shared across pages
+- Gear button visible on: SystemPage, SwitchPage, FriendsPage, NotesPage, ProfilePage
+
+### Tab Content
+| Tab | Content |
+|-----|---------|
+| Server | Admin only — admins, channels, log events, proxy controls, display |
+| Proxy | Global + per-server proxy style, reply style, cooldown, layouts, case sensitivity, break |
+| Notifications | Delivery method, friend requests, friend switches, app messages |
+| General | Sync toggle, tags, pronoun separator, terminology, timezone, auto-share, friend auto-bucket |
+
+---
+
+## Switch Notifications (`switchNotifications.js`)
+
+### Overview
+`Chameleon/discord_commands/functions/switchNotifications.js` handles debounced, privacy-filtered, DM-first delivery of switch notifications to friends.
+
+### Flow
+1. First switch in a system → starts 10-second debounce timer
+2. Further switches within the window → reset timer
+3. Timer expires → send ONE notification with final front state
+4. Each friend checked individually:
+   - Not blocked by the switching user
+   - `notifyOnSwitch` is `true` (per-friend setting)
+   - DM channel is openable
+5. If DM fails → falls back to public auto-delete message (60s)
+6. After flush → publishes `front:switch` event via `publishEvent()`
+
+### Schema
+- `user.friendRequests[].notifyOnSwitch` — per-friend toggle, defaults to `true`
+- `user.settings.notificationPreferences.friendSwitches` — global on/off
+
+### Settings
+- `/settings > Notifications > Friend Switches` — global toggle
+- `/friend action:settings` — per-friend toggle
+- `sys!config notifications switch <on|off>` — prefix toggle
+
+---
+
+## Front History
+
+### Backend (`Chameleon/api/routes/front.js`)
+- `GET /front/:systemId/history` — paginated shift history with `?cursor=<shiftId>&limit=20`
+  - Returns: `{ data: [{ shift, layer, entities, statuses }], nextCursor, hasMore }`
+  - Enhanced with: battery, caution, layer name, entity details
+- `PATCH /front/history/:shiftId/status` — retroactive status/battery/caution editing
+  - Body: `{ status?, battery?, caution? }`
+  - Adds new entry to `shift.statuses[]` with `startTime: new Date()`
+- `DELETE /front/history/:shiftId` — remove shift from history
+  - Removes shift from layer.shifts[] and deletes the Shift document
+- `POST /front/history/merge` — merge overlapping shifts
+  - Body: `{ shiftIds: [id1, id2] }`
+  - Merges into first shift, deletes others
+
+### Frontend
+- `FrontHistoryPage.jsx` — Full-page shift history with "Load More" button
+- `ShiftEditModal.jsx` — Retroactive editing of status/battery/caution for any past shift
+- "Apply to" selector: "This shift only" / "Entity preset" / "Both"
+
+---
+
+## Per-Friend Switch Notifications (Feature #5)
+
+### Schema (`schemas/user.js`)
+```javascript
+user.friends[].notifyOnSwitch: { type: Boolean, default: true }
+```
+
+### API Endpoints
+- `GET /api/friends/settings` — returns friend list with `notifyOnSwitch` per friend
+- `PATCH /api/friends/:friendId/notify` — toggle `notifyOnSwitch` for specific friend
+  - Body: `{ enabled: true/false }`
+
+### Discord Commands
+- `/friend action:settings` — shows friend list with per-friend notification toggles
+- Button per friend: "🔔 On" / "🔕 Off" → toggles `notifyOnSwitch`
+
+### Prefix Commands
+- `sys!config notifications friend <on|off>` — global friend switch notifications
+- `sys!friend notify <friend> <on|off>` — per-friend toggle
+
+### App Settings
+- Settings > Notifications > Friend Switches > per-friend list with toggles
+
+---
+
+## Privacy & Onboarding Defaults
+
+### Seeded Privacy Buckets
+On new user registration (`createNewUserAndSystem()`):
+
+| Bucket | Friends | Entity Fields | System Fields |
+|--------|---------|--------------|---------------|
+| **Strangers** | `[]` (empty) | All hidden | All hidden |
+| **Friends** | `[]` (populated on accept) | Core visible (avatar, description, pronouns) | Front status visible |
+
+### Friend Auto-Bucket
+- `system.setting.friendAutoBucket` defaults to `"Friends"`
+- When a friend request is accepted, both users are added to each other's `friends[]`
+- Each user's `friendAutoBucket` is applied to assign the new friend to a bucket
+
+### Default Conditions
+- `isSystem` true → **Dormant** condition created for alter entities
+- `isFragmented` true → **Remission** condition created for state entities
+- `isDissociative` true → **Dissociated** (or disorder-specific) condition created
+- `ensureConditionExists` ensures condition exists before creating entities
+
+### Onboarding Flow
+1. User types any slash command → `getOrCreateUserAndSystem()` creates bare User + System
+2. `handleNewUserFlow()` shows welcome embed with "Yes, register my system!" / "No, thank you."
+3. "Yes" → `handleNewUserButton()` seeds Strangers + Friends buckets if missing, seeds default conditions
+4. System type (isSystem/isFragmented/isDissociative) set during registration
+
+---
+
+## Batch Operations (Feature #15)
+
+### EntityCard Selection Mode
+- `EntityCard.jsx` accepts `selected`, `onToggle`, `selectionMode` props
+- Long-press or checkbox toggle enters selection mode
+- Selected entities highlighted with accent border
+
+### SystemPage Batch UI
+- Bottom action bar appears when entities are selected
+- Actions: Delete Selected, Set Condition, Set Group, Convert Type
+- `POST /api/convert` — converts entities between types (alter ↔ state)
+
+### API Batch Endpoints
+- `DELETE /api/alters/batch` — `{ ids: [id1, id2] }` — bulk delete
+- `DELETE /api/states/batch` — `{ ids: [id1, id2] }` — bulk delete
+- `DELETE /api/groups/batch` — `{ ids: [id1, id2] }` — bulk delete
+- `PATCH /api/alters/batch` — `{ ids: [...], updates: { conditionId } }` — bulk update
+- `PATCH /api/states/batch` — `{ ids: [...], updates: { conditionId } }` — bulk update
+- `PATCH /api/groups/batch` — `{ ids: [...], updates: { conditionId } }` — bulk update
+- `POST /api/convert` — `{ ids: [...], targetType: 'alter'|'state' }` — type conversion
+
+### API Client Methods
+```javascript
+api.deleteAltersBatch(ids)
+api.deleteStatesBatch(ids)
+api.deleteGroupsBatch(ids)
+api.updateAltersBatch(ids, updates)
+api.updateStatesBatch(ids, updates)
+api.updateGroupsBatch(ids, updates)
+api.convertEntities(ids, targetType)
+```
+
+---
+
+## Shared Note Collaboration (Feature #12)
+
+### Architecture
+WebSocket-powered real-time note editing with presence awareness.
+
+### Server (`webapp/server.js`)
+- **Note rooms**: `noteRooms` Map<noteId, Map<userId, { ws, systemId, username, editing }>>
+- **Room lifecycle**:
+  - `joinNoteRoom(noteId, userId, ws, systemId, username)` — adds user to room, broadcasts presence
+  - `leaveNoteRoom(noteId, userId)` — removes user, broadcasts departure
+  - `leaveAllNoteRooms(userId)` — cleanup on disconnect
+  - `broadcastToNoteRoom(noteId, event, excludeUserId)` — broadcasts to room members
+- **Events handled**:
+  - `note:open` — user opens a note → joins room, receives current presence
+  - `note:close` — user closes a note → leaves room
+  - `note:focus` — user starts editing → marked as editor
+  - `note:blur` — user stops editing → marked as viewer
+  - `note:saved` — user saves → broadcasts to room
+- **Events broadcast**:
+  - `note:presence` — full presence list (viewers, editors)
+  - `note:editing` — who is currently editing
+  - `note:saved` — note was saved by a user
+
+### Client Hook (`useNotePresence.js`)
+```javascript
+const { viewers, editors, lastSavedBy, notifyFocus, notifyBlur, notifySaved } = useNotePresence(noteId, username, systemId)
+```
+- Sends `note:focus` / `note:blur` / `note:saved` events
+- Receives `note:presence` / `note:editing` / `note:saved` events
+- Returns current presence state
+
+### NoteModal Presence UI
+- **Editors warning banner** — amber banner showing "X is editing this note" when other users are editing
+- **Viewers badge** — count of viewers in footer
+- **"Last saved by X"** — shown in footer when a note was saved by another user
+- **Focus/blur handlers** — wired to RichTextEditor wrapper div
+
+### NotesPage Wiring
+- `NotesPage.jsx` calls `useNotePresence(noteId, username, systemId)` for the active note
+- Passes presence data as props to `NoteModal`
+
+---
+
+## WebSocket Infrastructure (Feature #26)
+
+### Architecture
+```
+Discord Bot → Redis Pub/Sub → Express API → WebSocket → React Query clients
+```
+
+### Server (`webapp/server.js`)
+- WebSocket attached to same Express server on port 3001
+- Clients tracked as `Map<systemId, Set<ws>>`
+- JWT validated on upgrade (same as API middleware)
+- **Heartbeat**: 30s `ws.ping()` interval, `ws.isAlive` flag, `ws.terminate()` on missed pong
+- **Events broadcast**: front switch, entity CRUD, system updates, notes, friends, proxy messages
+
+### Client (`useWebSocket.js`)
+- Connects with JWT from localStorage
+- Auto-reconnect with exponential backoff (2s → 30s max)
+- **Auto-pong**: Responds to server `{ type: 'ping' }` with `{ type: 'pong' }`
+- **Disconnect detection**: `disconnected` state, `onConnectionChange()` listener
+- Global `wsSend()` function for note presence events
+
+### Disconnect Toast (`ConnectionToast.jsx`)
+- Shows after 2s of disconnection (orange pill with pulsing red dot)
+- Auto-hides on reconnect
+- Positioned at top-center of the activity
+
+### Query Key Mapping (`queryKeys.js`)
+`eventToKeys()` maps WebSocket events to React Query keys:
+| Event | Query Keys Invalidated |
+|-------|----------------------|
+| `entity:created/edited` | `['alters', systemId]`, `['states', systemId]`, `['groups', systemId]` |
+| `entity:deleted` | Same as above |
+| `system:created/updated` | `['system', systemId]` |
+| `front:switch` | `['front', systemId]`, `['frontHistory', systemId]` |
+| `note:created/edited/deleted` | `['notes', systemId]` |
+| `friend:added/removed` | `['friends', systemId]` |
+
+### Mongoose Post-Save Hooks
+- `schemas/alter.js` → publishes `entity:created` / `entity:edited`
+- `schemas/state.js` → publishes `entity:created` / `entity:edited`
+- `schemas/group.js` → publishes `entity:created` / `entity:edited`
+- `schemas/system.js` → publishes `system:created` / `system:updated`
+- `this.$wasNew` distinguishes creates from edits
+
+### Bot Event Publishing
+- `publishEvent(eventType, systemId, data)` — Redis pub/sub publish
+- `publishDeleteEvent(eventType, systemId, entityId, entityType)` — entity delete events
+- Wired into: proxy-message.js (front:switch), slash/friend.js, slash/settings.js, prefix/system.js, prefix/friend.js, all delete handlers
+
+### API Route Events
+- Notes: `broadcastLocal()` after POST/PATCH/DELETE (same-process)
+- Friends: `publishEvent()` for friend mutations
+- Quick switch: `publishEvent()` for switch/switch-out
+
+---
+
+## Pagination & Infinite Scroll (Feature #29)
+
+### Universal Pagination API
+All list endpoints accept `?skip=0&limit=20` query params. **Backward compatible**: no params = return all (raw array).
+
+When paginated, response format:
+```json
+{ "data": [...], "total": 150, "hasMore": true }
+```
+
+### Paginated Endpoints
+| Endpoint | Parameters |
+|----------|-----------|
+| `GET /api/alters` | `?skip=0&limit=20` |
+| `GET /api/alters/summary` | `?skip=0&limit=20` |
+| `GET /api/states` | `?skip=0&limit=20` |
+| `GET /api/states/summary` | `?skip=0&limit=20` |
+| `GET /api/groups` | `?skip=0&limit=20` |
+| `GET /api/groups/summary` | `?skip=0&limit=20` |
+| `GET /api/friends` | `?skip=0&limit=20` |
+| `GET /api/friends/requests` | `?skip=0&limit=20` |
+| `GET /api/friends/blocked` | `?skip=0&limit=20` |
+| `GET /api/notes` | `?skip=0&limit=20` (already had pagination) |
+| `GET /api/front/:systemId/history` | `?cursor=<shiftId>&limit=20` (cursor-based) |
+
+### Friends N+1 Fix
+- `friends.js` now uses batched `$in` queries instead of individual `User.findOne()` + `System.findById()` + `Shift.findById()` per friend
+- ~90% reduction in DB queries for large friend lists
+
+### Client-Side Pagination
+- **`useInfiniteScroll` hook** (`hooks/useInfiniteScroll.js`): Reusable intersection observer (200px root margin) that triggers `fetchNextPage` when sentinel element enters viewport
+- **`useInfiniteQuery`** (React Query): Used for all paginated lists — automatically manages pages, loading states, and next page fetching
+
+### Pages Using Infinite Scroll
+| Page | Data Source | Implementation |
+|------|-----------|----------------|
+| SystemPage | alters, states, groups | `useInfiniteQuery` + intersection observer sentinels |
+| SwitchPage | alters, states, groups | `useInfiniteQuery` (client-side search grid) |
+| FriendsPage | friends list | `useInfiniteQuery` + intersection observer sentinel |
+| NotesPage | notes list | `useInfiniteQuery` + intersection observer sentinel |
+| FrontHistoryPage | shift history | "Load More" button (cursor-based) |
+
+### Client API Methods Updated
+```javascript
+api.getAlters(skip, limit)
+api.getAlterSummary(skip, limit)
+api.getStates(skip, limit)
+api.getStateSummary(skip, limit)
+api.getGroups(skip, limit)
+api.getGroupSummary(skip, limit)
+api.getFriends(skip, limit)
+api.getFriendRequests(skip, limit)
+api.getBlocked(skip, limit)
+```
+
+---
+
+## React Query Migration (Feature #26 — Part 2)
+
+All 7 activity app pages now use React Query for data fetching, caching, and real-time updates via WebSocket events.
+
+### Migrated Pages
+| Page | Queries | Mutations | Cache Keys |
+|------|---------|-----------|------------|
+| SystemPage | `useQuery(['system'])`, 3x `useInfiniteQuery` (alters/states/groups) | `useMutation` for batch ops | `['system', 'alters', 'states', 'groups']` |
+| SwitchPage | `useQuery(['system'])`, 3x `useInfiniteQuery` (alters/states/groups) | — | `['system', 'alters', 'states', 'groups']` |
+| FriendsPage | `useInfiniteQuery(['friends'])` | `useMutation` for friend add | `['friends']` |
+| NotesPage | `useInfiniteQuery(['notes'])` | `useMutation` for note CRUD | `['notes']` |
+| ProfilePage | `useQuery(['system'])` | `useMutation` for profile edit | `['system']` |
+| SettingsPage | `useQuery(['system'])` | `useMutation` for settings save | `['system']` |
+| FrontHistoryPage | `useQuery(['frontHistory'])` | `useMutation` for shift edit/delete | `['frontHistory']` |
+| EntityViewPage | `useQuery(['entity'])` | — | entity-specific keys |
+
+### WebSocket → React Query Integration
+All WebSocket events call `queryClient.invalidateQueries()` to automatically refresh stale data when the backend changes.
+
+---
+
+## CDN Setup (Feature #27)
+
+`CLOUDFLARE_CDN_SETUP.md` provides a step-by-step guide for:
+1. Adding custom domains to R2 buckets (`media.teamcalendula.net`, `media-dc.teamcalendula.net`)
+2. DNS configuration (CNAME records)
+3. Cache-Control headers (`public, max-age=31536000, immutable`) for PutObjectCommand
+4. Verification and troubleshooting
+5. Optional media migration from `pub-xxx.r2.dev` to custom domains
+
+No code changes required — this is a Cloudflare dashboard configuration.
+
+---
+
+## "System" Tag Bug Fix
+
+### Problem
+`resolveSystemFallback()` in `notes.js` injected a `type: 'user'` entity into the system tags. This entity was created from User doc fields and appeared in NoteModal's tag list alongside real alters/states/groups.
+
+### Fix (UI-Only)
+- `NoteModal.jsx`: Filter `tags.filter(e => e.type !== 'user')` when rendering entity tags
+- `EditHistoryPanel.jsx`: Same filter in history entity names
+- API still returns the fallback for consistency — filtering happens in the UI layer
+
+---
+
+## Features Tracker
+
+Status of all 30 features from `FEATURES_TO_CONSIDER.md`:
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | Switch Notification Debounce | ✅ Implemented | 10s debounce, privacy filtering, DM-first |
+| 2 | Front Duration Display Enhancement | ✅ Implemented | FrontHistoryPage with timeline |
+| 3 | Shift Diary / Status Log | ⏭️ Deferred | Overlaps with #2, journal feature planned later |
+| 4 | "Who Else Is Around?" Co-Front | ⏭️ Deferred | Already works, proxy attribution deferred |
+| 5 | Selective Friend Switch Notifications | ✅ Implemented | Per-friend toggle in schema, API, Discord, prefix, app |
+| 6 | Privacy Preview Mode | ⏭️ Deferred | Will be added much later or never |
+| 7 | Friend Activity Feed | ❌ Rejected | "bad idea" |
+| 8 | Friend Groups | ⏭️ Deferred | "can be implemented later" |
+| 9 | Note Version History Diff | ❌ Rejected | "not the best idea, lot of data to save" |
+| 10 | Note Templates | ❌ Rejected | "bad idea" |
+| 11 | Markdown Preview | ❌ Rejected | "already has rich text" |
+| 12 | Shared Note Collaboration | ✅ Implemented | WebSocket note rooms + presence |
+| 13 | Entity Profile Pages | ⏭️ Deferred | 90% done, deferred until webapp work |
+| 15 | Batch Operations | ✅ Implemented | Selection mode, condition/delete/group/convert |
+| 16 | Entity Activity Tracking | ⏭️ Deferred | "not a good feature in current state" |
+| 17 | System Switchboard Dashboard | ⏭️ Deferred | "not a good idea" for now |
+| 18 | Data Export/Import | ⏭️ Deferred | "will be set up eventually" |
+| 19 | Account Recovery/2FA | ⏭️ Deferred | Needs other logging infrastructure first |
+| 20 | Multiple System Support | ❌ Needs Rewrite | Description is wrong — one user cannot have multiple systems; one system shared with multiple users |
+| 21 | Interactive Front Cards | ❌ Rejected | "bad idea, requires much for something seen couple times" |
+| 22 | Proxy Context Awareness | ⏭️ Partial | Battery thing rejected; server-specific footer "way later" |
+| 23 | Reminders | ⏭️ Deferred | "app will eventually have reminders and to-do lists" |
+| 24 | Auto-Front Tagging | ✅ No Changes | Backend already works via `POST /api/notes` |
+| 25 | Proxy Message Reaction Tracking | ❌ Rejected | "same doesn't happen for normal user messages" |
+| 26 | WebSocket Real-Time Updates | ✅ Implemented | Full infra: Redis pub/sub, heartbeat, disconnect toast, note presence |
+| 27 | Image Proxy & CDN | ✅ CDN Only | CLOUDFLARE_CDN_SETUP.md created, no code changes |
+| 28 | Offline Mode | ⏭️ Deferred | Best for when standalone apps exist |
+| 29 | Pagination & Virtual Scrolling | ✅ Implemented | Universal skip/limit, infinite scroll, N+1 fix |
+| 30 | Accessibility Improvements | ⏭️ Deferred | "can be set up later" |
