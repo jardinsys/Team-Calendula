@@ -461,8 +461,9 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStar
 // Step 5: Import or New System (for isSystem conditions)
 // ═══════════════════════════════════════════
 
-function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
+function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate, refreshSystem }) {
   const [systemName, setSystemName] = useState('')
+  const [creating, setCreating] = useState(false)
 
   const handleNewSystem = () => {
     onComplete({
@@ -471,8 +472,23 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
     })
   }
 
-  const handleImport = () => {
-    if (onNavigate) onNavigate('import')
+  const handleImport = async () => {
+    if (creating) return
+    setCreating(true)
+    try {
+      // Create the system first so ImportPage has something to import into
+      await api.createSystem({
+        name: systemName.trim() || null,
+        sys_type: sysType,
+      })
+      // Refresh system state in Activity.jsx
+      if (refreshSystem) await refreshSystem()
+      // Navigate to import
+      if (onNavigate) onNavigate('import')
+    } catch (err) {
+      console.error('[Register] Failed to create system for import:', err)
+      setCreating(false)
+    }
   }
 
   return (
@@ -486,9 +502,10 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
         <button
           className="import-option-btn"
           onClick={handleImport}
+          disabled={creating}
         >
-          <span className="import-option-title">Import from Another Tool</span>
-          <span className="import-option-desc">Preview and import your existing alters and data</span>
+          <span className="import-option-title">{creating ? 'Creating profile...' : 'Import from Another Tool'}</span>
+          <span className="import-option-desc">{creating ? 'Setting up your profile for import' : 'Preview and import your existing alters and data'}</span>
         </button>
 
         <button
@@ -623,7 +640,7 @@ function FirstAlterStep({ systemName, onComplete, onBack, saving }) {
 // Main Register Page
 // ═══════════════════════════════════════════
 
-export function RegisterPage({ onNavigate, onRegistered, discordUser }) {
+export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordUser }) {
   const [step, setStep] = useState(1)
   const [category, setCategory] = useState(null)
   const [disorderKey, setDisorderKey] = useState(null)
@@ -909,6 +926,7 @@ export function RegisterPage({ onNavigate, onRegistered, discordUser }) {
           onBack={handleBack}
           onStartOver={handleStartOver}
           onNavigate={onNavigate}
+          refreshSystem={refreshSystem}
         />
       )}
       {step === 6 && (

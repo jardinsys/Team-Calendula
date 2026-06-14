@@ -107,6 +107,17 @@ export function Activity() {
     }
   }, [])
 
+  // Called by RegisterPage/ImportStep after creating a system during onboarding
+  const refreshSystem = useCallback(async () => {
+    try {
+      const data = await api.getSystemFull()
+      setSystem(data)
+      setHasSystem(true)
+    } catch (err) {
+      console.error('[Activity] Failed to refresh system:', err)
+    }
+  }, [])
+
   const handleNavigate = useCallback((page, params) => {
     // Track if navigating from onboarding (register) to hide back button
     if (activePage === 'register' && page === 'import') {
@@ -207,7 +218,7 @@ export function Activity() {
         ) : activePage === 'activities' ? (
           <ActivitiesPage />
         ) : activePage === 'register' ? (
-          <RegisterPage onNavigate={handleNavigate} onRegistered={handleRegistered} discordUser={discordUser} />
+          <RegisterPage onNavigate={handleNavigate} onRegistered={handleRegistered} refreshSystem={refreshSystem} discordUser={discordUser} />
         ) : (
           <LandingPage
             onNavigate={handleNavigate}

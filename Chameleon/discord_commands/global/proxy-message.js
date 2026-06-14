@@ -10,7 +10,7 @@ const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const Guild = require('../../schemas/guild');
 const { Shift } = require('../../schemas/front');
-const redis = require('../../../redis');
+const redis = require('../../redis');
 
 // Import shared utilities (for findEntityByName)
 const utils = require('../functions/bot_utils');

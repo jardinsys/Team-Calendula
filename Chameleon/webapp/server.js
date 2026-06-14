@@ -352,6 +352,14 @@ function setupWebSocket(serverInstance) {
 
             const { type, noteId } = msg;
 
+            // Client JSON ping — respond with pong and mark alive
+            // This keeps the connection alive when Discord proxy strips protocol-level pings
+            if (type === 'ping') {
+                ws.isAlive = true;
+                try { ws.send(JSON.stringify({ type: 'pong' })); } catch {}
+                return;
+            }
+
             if (type === 'note:open' && noteId) {
                 const username = msg.username || ws.userId;
                 joinNoteRoom(noteId, ws.userId, {
