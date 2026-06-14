@@ -1,6 +1,6 @@
 # Test Sheet — Chameleon Bug Fixes
 
-> Testing guide for all fixes across batches 1–3. Each test includes steps and expected behavior.
+> Testing guide for all fixes across batches 1–4. Each test includes steps and expected behavior.
 
 ---
 
@@ -167,6 +167,68 @@
 ### 3.10 PK Import — Multi-Dash URLs
 - Import from a PK system with ID like `abc-123-xyz`
 - Should parse full ID, not truncate at first dash
+
+---
+
+## Batch 3.5 — Medium Priority Fixes
+
+### 4.1 Proxy Cooldown Field Mismatch
+- Set cooldown via API: `PATCH /api/system` with `{ proxy: { cooldown: 60 } }`
+- Check `sys!config proxy cooldown` — should show the same value
+- Previously, API wrote to `proxy.cooldown` while prefix read from `setting.proxyCoolDown`
+
+### 4.2 Notes — No Auto-Attribution on Every Edit
+- Create a note, add attribution
+- Edit the note title (send PATCH without attribution field)
+- Attribution array should NOT grow — only one entry
+- Previously, every PATCH appended a new attribution entry
+
+### 4.3 Notes — Entity Link Ownership
+- User A creates a note
+- User B tries `POST /api/notes/:id/link` with an entity
+- Should return 403 (previously used wrong field `note.owner` which is undefined)
+
+### 4.4 EntityFormModal — Multiple Proxy Patterns
+- Create an alter with proxy patterns `a:text, b:text`
+- Open edit form — proxy field should show `a:text, b:text`
+- Save — should preserve both patterns (previously only kept first)
+
+### 4.5 SettingsPage — Error Handling
+- Simulate a network error during settings save
+- Error should be logged/visible (previously silently swallowed)
+
+### 4.6 ImportPage — Terminology
+- Open Import page without a registered system
+- Heading should use the user's custom terminology (e.g., "No Profile Found" instead of "No System Found")
+
+### 4.7 State Schema — No Duplicate addedAt
+- Create a state entity
+- Document should have `genesisDate` but NOT a separate `addedAt` field
+
+### 4.8 Note Schema — Pinned Default
+- Create a note without setting pinned
+- `note.pinned` should be `false` (not `undefined`)
+
+### 4.9 Note Schema — EntityOwner Accepts States
+- Create a note with `entityOwner: { type: 'state', ID: '...' }`
+- Should save without validation error (previously only allowed 'alter' and 'group')
+
+### 4.10 Group Schema — canFront Enum
+- Try to set `canFront: 'maybe'` on a group
+- Should be rejected by schema validation (only 'yes' or 'no' allowed)
+
+### 4.11 Auth Middleware — System Caching
+- Make 10 rapid API requests
+- Should see improved response times (system fetched once, cached 30s)
+
+### 4.12 Guided Switch — No Privacy Crash
+- `POST /api/front/switch` with valid entities
+- Should not crash with `privacyBucket is not defined` error
+
+### 4.13 Proxy Pattern with Colons (Re-test)
+- Create proxy `a:b:c` on an alter
+- Send `a:b:c Hello` — should proxy correctly
+- Verify the fix from batch 3 still works
 
 ---
 

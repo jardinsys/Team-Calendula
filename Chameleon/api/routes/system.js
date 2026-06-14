@@ -272,6 +272,11 @@ router.patch('/', async (req, res) => {
                             system.proxy[pf] = updates.proxy[pf];
                         }
                     }
+                    // Also write to setting.proxyCoolDown for prefix command compatibility
+                    if (updates.proxy.cooldown !== undefined) {
+                        system.setting = system.setting || {};
+                        system.setting.proxyCoolDown = updates.proxy.cooldown;
+                    }
                 } else if (field === 'setting') {
                     system.setting = system.setting || {};
                     if (updates.setting.closedCharAllowed !== undefined) {

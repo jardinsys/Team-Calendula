@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
-import { api, isSystemUser, isFragmentedUser, isDissociativeUser, Icon } from '@chameleon/shared'
+import { api, isSystemUser, isFragmentedUser, isDissociativeUser, Icon, getSystemTerm } from '@chameleon/shared'
 
 const SOURCES = [
     {
@@ -39,14 +39,15 @@ function getSourceTerm(source) {
 }
 
 export function ImportPage({ system, onNavigate }) {
+    const systemTerm = getSystemTerm(system, { context: 'label' }) || 'system'
     // Check if user has a registered system
     if (!system) {
         return (
             <div className="page-container" style={{ padding: '24px', textAlign: 'center' }}>
                 <div className="card" style={{ padding: '32px', maxWidth: '400px', margin: '40px auto' }}>
-                    <h2 style={{ marginBottom: '12px' }}>No System Found</h2>
+                    <h2 style={{ marginBottom: '12px' }}>No {systemTerm} Found</h2>
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-                        You need to register a system before importing data.
+                        You need to register a {systemTerm} before importing data.
                     </p>
                     <button
                         className="btn-gradient btn-gradient-primary"

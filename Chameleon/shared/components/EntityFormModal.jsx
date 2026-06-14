@@ -62,7 +62,7 @@ function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onC
                 setCustomColorValue('')
             }
             setSignoff(entity.signoff || '')
-            setProxy(entity.proxy?.[0] || '')
+            setProxy(entity.proxy?.join(', ') || '')
             if (type === 'group' && entity.type) {
                 setGroupType(entity.type.name || '')
             }
@@ -119,7 +119,7 @@ function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onC
             }
 
             if (proxy.trim()) {
-                data.proxy = [proxy.trim()]
+                data.proxy = proxy.split(',').map(p => p.trim()).filter(Boolean)
             }
 
             if (type === 'group') {

@@ -36,7 +36,7 @@ const noteSchema = new mongoose.Schema({
         }]
     },
     tags: [String],
-    pinned: Boolean,
+    pinned: { type: Boolean, default: false },
     title: String,
     content: mediaSchema,
     contentPreview: String,
@@ -48,7 +48,7 @@ const noteSchema = new mongoose.Schema({
     }],
     color: String,
     entityOwner: {
-        type: { type: String, enum: ['alter', 'group'] },
+        type: { type: String, enum: ['alter', 'state', 'group'] },
         ID: String
     },
     attribution: [{

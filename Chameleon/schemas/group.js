@@ -28,7 +28,7 @@ const groupSchema = new mongoose.Schema({
     },
     type: {
         name: String,
-        canFront: String
+        canFront: { type: String, enum: ['yes', 'no'], default: 'yes' }
     },
     description: String,
     color: String,

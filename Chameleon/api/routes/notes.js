@@ -643,7 +643,8 @@ router.patch('/:id', async (req, res) => {
         }
 
         let attributionEntities = updates.attribution || [];
-        if (!attributionEntities.length && isOwner) {
+        if (!attributionEntities.length && isOwner && updates.attribution !== undefined) {
+            // Only auto-fill attribution when client explicitly sends an empty attribution array
             const system = user.systemID ? await System.findById(user.systemID) : null;
             const autoMode = system?.setting?.noteAutoAttribution || 'topLayer';
             if (autoMode !== 'off' && system) {
@@ -653,7 +654,7 @@ router.patch('/:id', async (req, res) => {
             }
         }
 
-        if (attributionEntities.length || updates.attribution !== undefined) {
+        if (updates.attribution !== undefined) {
             note.attribution = note.attribution || [];
             note.attribution.push({
                 entities: attributionEntities.map(e => {
@@ -985,7 +986,7 @@ router.post('/:id/link', async (req, res) => {
         }
 
         // Verify ownership
-        if (note.owner?.toString() !== req.user._id?.toString()) {
+        if (note.users?.owner?.userID?.toString() !== req.user._id?.toString()) {
             return res.status(403).json({ error: 'Not authorized' });
         }
 
@@ -1030,7 +1031,7 @@ router.delete('/:id/link', async (req, res) => {
         }
 
         // Verify ownership
-        if (note.owner?.toString() !== req.user._id?.toString()) {
+        if (note.users?.owner?.userID?.toString() !== req.user._id?.toString()) {
             return res.status(403).json({ error: 'Not authorized' });
         }
 

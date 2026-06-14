@@ -76,7 +76,7 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
           friendSwitches,
           appMessages,
         },
-      }).catch(() => {})
+      })
       setSaved(true)
       queryClient.invalidateQueries({ queryKey: systemKeys.all })
       setTimeout(() => setSaved(false), 2000)

@@ -500,9 +500,6 @@ router.post('/switch', async (req, res) => {
 
             if (!entity) continue;
 
-            // Check entity-level privacy for non-owners
-            if (privacyBucket && !shouldShowEntity(entity, privacyBucket, false, false)) continue;
-
                 const shift = new Shift({
                     _id: new mongoose.Types.ObjectId(),
                     s_type: ent.type,

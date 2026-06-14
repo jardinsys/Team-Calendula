@@ -8,6 +8,18 @@ const System = require('../../schemas/system');
 
 const JWT_SECRET = config.jwtSecret || 'change-this-secret';
 
+// Cache system lookups to avoid DB hit on every request (30s TTL)
+const systemCache = new Map();
+const SYSTEM_CACHE_TTL = 30 * 1000;
+
+async function getCachedSystem(systemId) {
+    const cached = systemCache.get(systemId);
+    if (cached && Date.now() - cached.time < SYSTEM_CACHE_TTL) return cached.system;
+    const system = await System.findById(systemId);
+    systemCache.set(systemId, { system, time: Date.now() });
+    return system;
+}
+
 /**
  * Middleware to verify JWT token and attach user to request
  */
@@ -48,7 +60,7 @@ async function authenticateToken(req, res, next) {
 
         // If user has a system, attach system info
         if (user.systemID) {
-            const system = await System.findById(user.systemID);
+            const system = await getCachedSystem(user.systemID);
             if (system) {
                 req.system = system;
             }

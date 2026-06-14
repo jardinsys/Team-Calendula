@@ -17,7 +17,6 @@ const stateSchema = new mongoose.Schema({
     },
     systemID: String,
     genesisDate: { type: Date, default: Date.now },
-    addedAt: { type: Date, default: Date.now },
     syncWithApps: {
         discord: { type: Boolean, default: true }
     },
