@@ -3478,6 +3478,78 @@ select.text-input {
 }
 
 /* ═══════════════════════════════════════════
+   Portrait Mode
+   ═══════════════════════════════════════════ */
+
+/* All portrait viewports — lift fixed bottom elements above the bottom nav */
+@media (orientation: portrait) {
+  .switch-actions {
+    bottom: 72px;
+  }
+  .batch-action-bar,
+  .batch-sub-menu {
+    bottom: 72px;
+  }
+}
+
+/* Narrow portrait phones — layout restructuring */
+@media (orientation: portrait) and (max-width: 480px) {
+  /* Landing feature buttons: row → 2-column grid */
+  .landing-feature-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: clamp(12px, 3vw, 20px);
+    justify-items: center;
+    width: 100%;
+    max-width: 300px;
+  }
+
+  /* Top-right crisis/settings buttons: fixed corner → flow layout */
+  .landing-top-right-btns {
+    position: static;
+    flex-direction: row;
+    justify-content: center;
+    margin-bottom: var(--space-md);
+    z-index: auto;
+  }
+
+  /* Settings tabs: horizontal scroll → wrap */
+  .settings-panel-tabs {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .settings-panel-tab {
+    flex: 0 0 auto;
+  }
+
+  /* Friends tabs: wrap */
+  .friends-tabs {
+    flex-wrap: wrap;
+  }
+
+  /* Entity tabs: wrap */
+  .entity-tabs {
+    flex-wrap: wrap;
+  }
+
+  /* Fronter edit popover: absolute dropdown → bottom-sheet */
+  .fronter-edit-popover {
+    position: fixed;
+    top: auto;
+    bottom: calc(72px + var(--space-md));
+    left: var(--space-md);
+    right: var(--space-md);
+    max-width: none;
+    width: auto;
+  }
+
+  /* Modals: slightly shorter to show more context */
+  .modal-content {
+    max-height: 85vh;
+  }
+}
+
+/* ═══════════════════════════════════════════
    Reduced Motion
    ═══════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {

@@ -496,7 +496,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
             });
         }
 
-        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
+        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, currentUser?.friendID);
 
         // Check if system is hidden
         const systemPrivacy = targetSystem.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
@@ -561,7 +561,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         targetSystem = await System.findById(otherUser.systemID);
         if (!targetSystem) return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
 
-        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
+        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, currentUser?.friendID);
     }
 
     if (!targetSystem) return await interaction.reply({ content: '❌ Not registered.', ephemeral: true });
@@ -628,7 +628,7 @@ async function handleEdit(interaction, user, system) {
         alterId: alter._id,
         systemId: system._id,
         mode: null,
-        syncWithDiscord: alter.syncWithApps?.discord || true
+        syncWithDiscord: alter.syncWithApps?.discord ?? true
     });
 
     // Go straight to edit interface (sync is managed in settings)
@@ -965,7 +965,7 @@ async function handleButtonInteraction(interaction) {
 
     if (customId.startsWith('alter_delete_confirm_')) {
         const system = await System.findById(session.systemId);
-        system.alters.IDs = system.alters.IDs.filter(id => id !== session.alterId.toString());
+        system.alters.IDs = system.alters.IDs.filter(id => id.toString() !== session.alterId.toString());
         await system.save();
 
         // Clean up reverse references from groups and states
@@ -1333,8 +1333,8 @@ async function handleSelectMenu(interaction) {
             for (const bucket of system.privacyBuckets) {
                 const p = alter.setting?.privacy?.find(pr => pr.bucket === bucket.name);
                 let status = 'Default (visible)';
-                if (p?.settings?.hidden === false) status = '❌ Hidden';
-                else if (p?.settings?.hidden === true) status = '✅ Visible';
+                if (p?.settings?.hidden === true) status = '❌ Hidden';
+                else if (p?.settings?.hidden === false) status = '✅ Visible';
                 embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
             }
         }
@@ -1478,7 +1478,7 @@ async function handleModalSubmit(interaction) {
         alter.condition = conditionName;
         await alter.save();
 
-        await utils.ensureConditionExists(await System.findById(session.systemId), 'alters', conditionName);
+        await utils.ensureConditionExists(await System.findById(session.systemId), 'alter', conditionName);
 
         utils.deleteSession(sessionId);
         return await interaction.update({ content: `✅ **${utils.getDisplayName(alter)}** condition changed to "${conditionName}".`, embeds: [], components: [] });

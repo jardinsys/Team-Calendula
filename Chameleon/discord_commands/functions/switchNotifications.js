@@ -126,7 +126,7 @@ async function flushNotification(systemId, client) {
                 const friendDelivery = friendPrefs.friendNotifications || 'dm';
 
                 // Resolve friend's privacy bucket
-                const privacyBucket = botUtils.getPrivacyBucket(system, friend.discordID, friendUser.friendID);
+                const privacyBucket = botUtils.getPrivacyBucket(system, friend.discordID, friendUser.friendID || null);
 
                 // Filter entities based on privacy bucket
                 const visibleEntities = [];

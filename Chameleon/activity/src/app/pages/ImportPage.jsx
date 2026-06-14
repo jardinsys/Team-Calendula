@@ -5,7 +5,7 @@ const SOURCES = [
     {
         id: 'pluralkit', label: 'PluralKit', icon: '🦊',
         methods: [
-            { id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'pk;token or your 5-6 char system token', help: 'DM PluralKit with pk;token', privacyNote: null },
+            { id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'Your PluralKit token (DM PluralKit: pk;token)', help: 'DM PluralKit with pk;token to get your token', privacyNote: null },
             { id: 'file', label: 'File Import', help: 'Export with: /export in DMs with PluralKit', privacyNote: 'Your export file may contain private data (descriptions, pronouns, avatar URLs, proxy patterns). This data will only be stored in your system\'s database.' },
         ],
     },
@@ -39,6 +39,26 @@ function getSourceTerm(source) {
 }
 
 export function ImportPage({ system, onNavigate }) {
+    // Check if user has a registered system
+    if (!system) {
+        return (
+            <div className="page-container" style={{ padding: '24px', textAlign: 'center' }}>
+                <div className="card" style={{ padding: '32px', maxWidth: '400px', margin: '40px auto' }}>
+                    <h2 style={{ marginBottom: '12px' }}>No System Found</h2>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                        You need to register a system before importing data.
+                    </p>
+                    <button
+                        className="btn-gradient btn-gradient-primary"
+                        onClick={() => onNavigate?.('register')}
+                    >
+                        Register Now
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
     const [source, setSource] = useState(null)
     const [selectedMethod, setSelectedMethod] = useState(null)
     const [token, setToken] = useState('')

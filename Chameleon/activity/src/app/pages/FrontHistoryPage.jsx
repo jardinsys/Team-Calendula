@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, List, Calendar, Trash2, Edit3, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
-import { api, getBatteryIcon, frontKeys } from '@chameleon/shared'
-import { ShiftEditModal } from '../components/ShiftEditModal.jsx'
+import { api, getBatteryIcon, frontKeys, ShiftEditModal } from '@chameleon/shared'
 
 function formatDuration(ms) {
   if (!ms || ms < 0) return '—'

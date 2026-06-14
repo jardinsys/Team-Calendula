@@ -47,6 +47,7 @@ export function Activity() {
   const [system, setSystem] = useState(null)
   const [hasSystem, setHasSystem] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [fromOnboarding, setFromOnboarding] = useState(false)
 
   useEffect(() => {
     if (authStatus !== 'READY') return
@@ -100,15 +101,22 @@ export function Activity() {
       setSystem(data)
       setHasSystem(true)
       setActivePage(null)
+      setFromOnboarding(false)
     } catch (err) {
       console.error('[Activity] Failed to fetch system after registration:', err)
     }
   }, [])
 
   const handleNavigate = useCallback((page, params) => {
+    // Track if navigating from onboarding (register) to hide back button
+    if (activePage === 'register' && page === 'import') {
+      setFromOnboarding(true)
+    } else if (page !== 'import') {
+      setFromOnboarding(false)
+    }
     setActivePage(page)
     setPageParams(params || null)
-  }, [])
+  }, [activePage])
 
   const handleOpenSettings = useCallback(() => {
     setShowSettings(true)
@@ -156,13 +164,14 @@ export function Activity() {
 
   const PageComponent = activePage ? PAGES[activePage] : null
 
-  const showBackButton = activePage && activePage !== 'what-is' && activePage !== 'register'
+  const showBackButton = activePage && activePage !== 'what-is' && activePage !== 'register' && !fromOnboarding
 
-  const isStaticPage = !activePage || activePage === 'what-is' || activePage === 'register'
+  const isStaticPage = !activePage || activePage === 'what-is'
 
   const handleBack = () => {
     setActivePage(null)
     setPageParams(null)
+    setFromOnboarding(false)
   }
 
   return (

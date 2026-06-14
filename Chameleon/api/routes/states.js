@@ -184,10 +184,17 @@ router.post('/', async (req, res) => {
         
         // Bidirectional alter linking
         if (alters?.length) {
-            await Alter.updateMany(
-                { _id: { $in: alters } },
-                { $addToSet: { states: state._id.toString() } }
-            );
+            for (const alterId of alters) {
+                const alter = await Alter.findById(alterId);
+                if (alter && !alter.states?.some(s => s.connected_id === state._id.toString())) {
+                    alter.states = alter.states || [];
+                    alter.states.push({
+                        connected_id: state._id.toString(),
+                        name: { indexable: state.name?.indexable, display: state.name?.display }
+                    });
+                    await alter.save();
+                }
+            }
         }
         
         console.log(`[States] Created state ${state._id} for system ${system._id}`);
@@ -334,6 +341,22 @@ router.delete('/:id', async (req, res) => {
             { $pull: { stateIDs: req.params.id } }
         );
         
+        // Clean up orphaned shifts in front layers
+        const { Shift } = require('../../schemas/front');
+        for (const layer of system.front?.layers || []) {
+            const shiftsToRemove = [];
+            for (const shiftId of layer.shifts || []) {
+                const shift = await Shift.findById(shiftId);
+                if (shift && shift.ID === req.params.id && shift.s_type === 'state') {
+                    await Shift.findByIdAndDelete(shiftId);
+                    shiftsToRemove.push(shiftId);
+                }
+            }
+            if (shiftsToRemove.length) {
+                layer.shifts = layer.shifts.filter(s => !shiftsToRemove.includes(s.toString()));
+            }
+        }
+        
         console.log(`[States] Deleted state ${req.params.id}`);
         
         res.json({ success: true, message: 'State deleted' });
@@ -354,6 +377,16 @@ router.delete('/:id', async (req, res) => {
  */
 router.post('/:id/proxy', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+
+        if (!system.states?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'State not found' });
+        }
+
         const state = await State.findById(req.params.id);
         if (!state) {
             return res.status(404).json({ error: 'State not found' });
@@ -362,12 +395,6 @@ router.post('/:id/proxy', async (req, res) => {
         const { proxy } = req.body;
         if (!proxy || !proxy.includes('text')) {
             return res.status(400).json({ error: 'Proxy must contain "text" placeholder' });
-        }
-
-        const user = await User.findById(req.user._id);
-        const system = await System.findById(user?.systemID);
-        if (!system) {
-            return res.status(404).json({ error: 'Not registered' });
         }
 
         const { exists, entity, type } = await checkProxyExists(proxy, system, state._id.toString());
@@ -396,6 +423,12 @@ router.post('/:id/proxy', async (req, res) => {
  */
 router.delete('/:id/proxy', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system || !system.states?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'State not found' });
+        }
+
         const state = await State.findById(req.params.id);
         if (!state) {
             return res.status(404).json({ error: 'State not found' });
@@ -424,6 +457,12 @@ router.delete('/:id/proxy', async (req, res) => {
  */
 router.post('/:id/alters', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system || !system.states?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'State not found' });
+        }
+
         const state = await State.findById(req.params.id);
         if (!state) {
             return res.status(404).json({ error: 'State not found' });
@@ -443,6 +482,12 @@ router.post('/:id/alters', async (req, res) => {
         
         await state.save();
         
+        // Update reverse links on alters
+        await Alter.updateMany(
+            { _id: { $in: alterIds } },
+            { $addToSet: { states: state._id.toString() } }
+        );
+        
         res.json({ success: true, alters: state.alters });
     } catch (err) {
         console.error('[States] Link alters error:', err);
@@ -456,6 +501,12 @@ router.post('/:id/alters', async (req, res) => {
  */
 router.delete('/:id/alters/:alterId', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system || !system.states?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'State not found' });
+        }
+
         const state = await State.findById(req.params.id);
         if (!state) {
             return res.status(404).json({ error: 'State not found' });
@@ -463,6 +514,12 @@ router.delete('/:id/alters/:alterId', async (req, res) => {
         
         state.alters = (state.alters || []).filter(id => id !== req.params.alterId);
         await state.save();
+        
+        // Update reverse link on alter
+        await Alter.updateOne(
+            { _id: req.params.alterId },
+            { $pull: { states: state._id.toString() } }
+        );
         
         res.json({ success: true, alters: state.alters });
     } catch (err) {

@@ -305,7 +305,7 @@ async function handleAccept(message, parsed, user, system) {
         friendID: req.fromFriendID,
         privacyBucket: system?.setting?.friendAutoBucket || null,
         addedAt: new Date(),
-        notifyOnSwitch: false
+        notifyOnSwitch: true
     });
 
     const myName = user.discord?.name?.display || message.author.displayName;
@@ -319,7 +319,7 @@ async function handleAccept(message, parsed, user, system) {
             friendID: user.friendID,
             privacyBucket: fromSystem?.setting?.friendAutoBucket || null,
             addedAt: new Date(),
-            notifyOnSwitch: false
+            notifyOnSwitch: true
         });
     }
 

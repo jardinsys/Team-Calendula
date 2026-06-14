@@ -244,10 +244,44 @@ router.patch('/:id', async (req, res) => {
             }
         }
         
-        const allowedFields = ['description', 'color', 'avatar', 'signoff', 'type', 'discord', 'mask', 'caution', 'condition', 'alterIDs', 'stateIDs'];
+        const allowedFields = ['description', 'color', 'avatar', 'signoff', 'type', 'discord', 'mask', 'caution', 'condition'];
         for (const field of allowedFields) {
             if (updates[field] !== undefined) {
                 group[field] = updates[field];
+            }
+        }
+
+        // Handle alterIDs with bidirectional linking
+        if (updates.alterIDs !== undefined) {
+            const oldIds = (group.alterIDs || []).map(id => id.toString());
+            const newIds = updates.alterIDs.map(id => id.toString());
+            const added = newIds.filter(id => !oldIds.includes(id));
+            const removed = oldIds.filter(id => !newIds.includes(id));
+            
+            group.alterIDs = updates.alterIDs;
+            
+            if (added.length) {
+                await Alter.updateMany({ _id: { $in: added } }, { $addToSet: { groupsIDs: group._id } });
+            }
+            if (removed.length) {
+                await Alter.updateMany({ _id: { $in: removed } }, { $pull: { groupsIDs: group._id } });
+            }
+        }
+
+        // Handle stateIDs with bidirectional linking
+        if (updates.stateIDs !== undefined) {
+            const oldIds = (group.stateIDs || []).map(id => id.toString());
+            const newIds = updates.stateIDs.map(id => id.toString());
+            const added = newIds.filter(id => !oldIds.includes(id));
+            const removed = oldIds.filter(id => !newIds.includes(id));
+            
+            group.stateIDs = updates.stateIDs;
+            
+            if (added.length) {
+                await State.updateMany({ _id: { $in: added } }, { $addToSet: { groupIDs: group._id } });
+            }
+            if (removed.length) {
+                await State.updateMany({ _id: { $in: removed } }, { $pull: { groupIDs: group._id } });
             }
         }
 
@@ -282,6 +316,16 @@ router.patch('/:id', async (req, res) => {
 
 router.post('/:id/proxy', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+
+        if (!system.groups?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+
         const group = await Group.findById(req.params.id);
         if (!group) {
             return res.status(404).json({ error: 'Group not found' });
@@ -290,12 +334,6 @@ router.post('/:id/proxy', async (req, res) => {
         const { proxy } = req.body;
         if (!proxy || !proxy.includes('text')) {
             return res.status(400).json({ error: 'Proxy must contain "text" placeholder' });
-        }
-
-        const user = await User.findById(req.user._id);
-        const system = await System.findById(user?.systemID);
-        if (!system) {
-            return res.status(404).json({ error: 'Not registered' });
         }
 
         const { exists, entity, type } = await checkProxyExists(proxy, system, group._id.toString());
@@ -317,6 +355,12 @@ router.post('/:id/proxy', async (req, res) => {
 
 router.delete('/:id/proxy', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system || !system.groups?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+
         const group = await Group.findById(req.params.id);
         if (!group) {
             return res.status(404).json({ error: 'Group not found' });
@@ -366,6 +410,22 @@ router.delete('/:id', async (req, res) => {
             { $pull: { groupIDs: req.params.id } }
         );
         
+        // Clean up orphaned shifts in front layers
+        const { Shift } = require('../../schemas/front');
+        for (const layer of system.front?.layers || []) {
+            const shiftsToRemove = [];
+            for (const shiftId of layer.shifts || []) {
+                const shift = await Shift.findById(shiftId);
+                if (shift && shift.ID === req.params.id && shift.s_type === 'group') {
+                    await Shift.findByIdAndDelete(shiftId);
+                    shiftsToRemove.push(shiftId);
+                }
+            }
+            if (shiftsToRemove.length) {
+                layer.shifts = layer.shifts.filter(s => !shiftsToRemove.includes(s.toString()));
+            }
+        }
+        
         await Group.findByIdAndDelete(req.params.id);
         
         system.groups.IDs = system.groups.IDs.filter(id => id !== req.params.id);
@@ -383,6 +443,12 @@ router.delete('/:id', async (req, res) => {
 
 router.post('/:id/members', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system || !system.groups?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+
         const group = await Group.findById(req.params.id);
         if (!group) {
             return res.status(404).json({ error: 'Group not found' });
@@ -425,6 +491,12 @@ router.post('/:id/members', async (req, res) => {
 
 router.delete('/:id/members', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system || !system.groups?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'Group not found' });
+        }
+
         const group = await Group.findById(req.params.id);
         if (!group) {
             return res.status(404).json({ error: 'Group not found' });

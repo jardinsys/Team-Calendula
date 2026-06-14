@@ -84,7 +84,7 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
         staleTime: 30 * 1000,
     })
 
-    const isStatesEnabled = !!system && (isFragmentedUser(system) || isDissociativeUser(system) || isSystemUser(system))
+    const isStatesEnabled = !!system && (isFragmentedUser(system) || isDissociativeUser(system))
 
     const { data: frontData } = useQuery({
         queryKey: frontKeys.current(),
@@ -92,6 +92,8 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
         enabled: !!system,
         staleTime: 30 * 1000,
     })
+
+    const layersInitialized = React.useRef(false)
 
     const altersQuery = useInfiniteQuery({
         queryKey: alterKeys.lists(),
@@ -126,9 +128,10 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
     const showLayers = isSystemUser(system) || isFragmentedUser(system)
     const showDissociativeButton = isDissociativeUser(system)
 
-    // Pre-populate layers from front data when it arrives
+    // Pre-populate layers from front data when it arrives (only on first load)
     useEffect(() => {
-        if (frontData?.layers?.length) {
+        if (frontData?.layers?.length && !layersInitialized.current) {
+            layersInitialized.current = true
             const newLayers = []
             const newEntityMeta = {}
             for (const layer of frontData.layers) {
@@ -338,7 +341,7 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
                     newLayers.push({ name: 'Main', entityIds: [dissociativeState._id] })
                 } else {
                     if (!newLayers[0].entityIds.includes(dissociativeState._id)) {
-                        newLayers[0] = { ...newLayers[0], entityIds: [...dissociativeState._id, ...newLayers[0].entityIds] }
+                        newLayers[0] = { ...newLayers[0], entityIds: [dissociativeState._id, ...newLayers[0].entityIds] }
                     }
                 }
                 return newLayers
@@ -619,7 +622,7 @@ export function SwitchPage({ system: systemProp, onNavigate, onOpenSettings }) {
                 <button
                     className="btn btn-primary"
                     onClick={handleConfirmSwitch}
-                    disabled={saving}
+                    disabled={saving || !hasChanges}
                 >
                     {buttonLabel}
                 </button>

@@ -10,7 +10,7 @@ const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const Guild = require('../../schemas/guild');
 const { Shift } = require('../../schemas/front');
-const redis = require('../../redis');
+const redis = require('../../../redis');
 
 // Import shared utilities (for findEntityByName)
 const utils = require('../functions/bot_utils');
@@ -224,7 +224,8 @@ async function checkRecentProxies(content, system) {
     
     for (const proxyId of recentProxies) {
         // recentProxies format: "type:id:proxy" e.g., "alter:123456:a:"
-        const [type, entityId, proxyPattern] = proxyId.split(':');
+        const [type, entityId, ...rest] = proxyId.split(':');
+        const proxyPattern = rest.join(':');
         
         if (!proxyPattern) continue;
 
@@ -592,7 +593,7 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
         system_id: system._id.toString(),
         proxy_type: type,
         proxy_id: entity._id.toString(),
-        proxy_matched: entity.proxy?.[0] || null,
+        proxy_matched: null,
         content: content,
         attachments: originalMessage.attachments.map(att => ({
             url: att.url, name: att.name, size: att.size

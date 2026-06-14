@@ -24,7 +24,7 @@ export function NotesPage({ system, onOpenSettings }) {
     const [showManageTags, setShowManageTags] = useState(false)
     const [viewVariant, setViewVariant] = useState('grid')
 
-    const username = session?.user?.username || session?.user?.global_name || 'You'
+    const username = session?.global_name || session?.username || 'You'
     const { viewers, editors, lastSavedBy, notifyFocus, notifyBlur, notifySaved } = useNotePresence(selectedNote?._id, username)
 
     const notesQuery = useInfiniteQuery({

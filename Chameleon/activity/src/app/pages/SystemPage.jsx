@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
@@ -39,6 +39,13 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
         enabled: !!system,
         staleTime: 30 * 1000,
     })
+
+    // Reset subPage if it's not supported by current system type
+    useEffect(() => {
+        if (system && subPage === 'states' && !isFragmentedUser(system) && !isDissociativeUser(system)) {
+            setSubPage(null)
+        }
+    }, [system, subPage])
 
     const altersQuery = useInfiniteQuery({
         queryKey: alterKeys.lists(),
@@ -303,7 +310,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
                 <div className="section-header">
                     <div>
                         <h2 className="section-title">{alterLabelPlural.charAt(0).toUpperCase() + alterLabelPlural.slice(1)}</h2>
-                        <span className="section-count">{alters.length} {alterLabel}{alters.length !== 1 ? 's' : ''}</span>
+                        <span className="section-count">{alters.length} {alterLabelPlural}</span>
                     </div>
                     {!selectionMode && (
                         <button className="btn btn-ghost btn-sm" onClick={() => enterSelectionMode('alter')}>
@@ -390,7 +397,6 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
 
     if (subPage === 'states') {
         if (!isFragmentedUser(system) && !isDissociativeUser(system)) {
-            setSubPage(null)
             return null
         }
         return (
@@ -401,7 +407,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
                 <div className="section-header">
                     <div>
                         <h2 className="section-title">{stateLabelPlural.charAt(0).toUpperCase() + stateLabelPlural.slice(1)}</h2>
-                        <span className="section-count">{states.length} {stateLabel}{states.length !== 1 ? 's' : ''}</span>
+                        <span className="section-count">{states.length} {stateLabelPlural}</span>
                     </div>
                     {!selectionMode && (
                         <button className="btn btn-ghost btn-sm" onClick={() => enterSelectionMode('state')}>
@@ -495,7 +501,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
                 <div className="section-header">
                     <div>
                         <h2 className="section-title">{groupLabelPlural.charAt(0).toUpperCase() + groupLabelPlural.slice(1)}</h2>
-                        <span className="section-count">{groups.length} {groupLabel}{groups.length !== 1 ? 's' : ''}</span>
+                        <span className="section-count">{groups.length} {groupLabelPlural}</span>
                     </div>
                     {!selectionMode && (
                         <button className="btn btn-ghost btn-sm" onClick={() => enterSelectionMode('group')}>

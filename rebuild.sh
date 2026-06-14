@@ -1,17 +1,17 @@
 #!/bin/bash
 # Team-Calendula Docker rebuild script
-# 
+#
 # Usage:
-#   ./rebuild.sh                  — down ALL, clear build cache, rebuild image, start ALL
-#   ./rebuild.sh --no-cache       — same but also purge all Docker cache (images, build cache)
-#   ./rebuild.sh plum             — down + rebuild + restart only Plum
-#   ./rebuild.sh sugar            — down + rebuild + restart only Sugar
-#   ./rebuild.sh tigerlily        — down + rebuild + restart only TigerLily
-#   ./rebuild.sh chameleon        — down + rebuild + restart both Chameleon services
-#   ./rebuild.sh chameleon-api    — down + rebuild + restart only the Chameleon API
-#   ./rebuild.sh chameleon-bot    — down + rebuild + restart only the Chameleon bot
-#   ./rebuild.sh redis            — down + restart only Redis
-# 
+#   ./rebuild.sh                  — rebuild ALL images, restart ALL services
+#   ./rebuild.sh --no-cache       — full clean rebuild (purge all Docker cache)
+#   ./rebuild.sh plum             — rebuild + restart only Plum
+#   ./rebuild.sh sugar            — rebuild + restart only Sugar
+#   ./rebuild.sh tigerlily        — rebuild + restart only TigerLily
+#   ./rebuild.sh chameleon        — rebuild + restart both Chameleon services
+#   ./rebuild.sh chameleon-api    — rebuild + restart only the Chameleon API
+#   ./rebuild.sh chameleon-bot    — rebuild + restart only the Chameleon bot
+#   ./rebuild.sh redis            — restart only Redis (no rebuild)
+#
 # Friendly aliases (from index.js bot names):
 #   prune    → plum-bot
 #   sucre    → sugar-bot
@@ -71,14 +71,28 @@ if [ ${#SERVICES[@]} -eq 0 ]; then
     exit 0
 fi
 
-# === SPECIFIC SERVICE(S) ===
+# === SPECIFIC SERVICE(S) — only touch targeted containers ===
 echo "=== Rebuilding: ${SERVICES[*]} ==="
-docker compose down "${SERVICES[@]}"
-clear_caches
+
+# Stop only the targeted services
+docker compose stop "${SERVICES[@]}"
+
+# Remove only the targeted containers (not images, not other services)
+docker compose rm -f "${SERVICES[@]}"
+
+# Clear caches if requested
+if [ "$NO_CACHE" = true ]; then
+    clear_caches
+fi
+
+# Rebuild only the targeted services
 BUILD_ARGS=""
 if [ "$NO_CACHE" = true ]; then
     BUILD_ARGS="--no-cache"
 fi
-docker compose build $BUILD_ARGS
-docker compose up -d "${SERVICES[@]}"
+docker compose build $BUILD_ARGS "${SERVICES[@]}"
+
+# Start only the targeted services (with --no-deps so we don't touch dependencies)
+docker compose up -d --no-deps "${SERVICES[@]}"
+
 echo "=== ${SERVICES[*]} are up ==="

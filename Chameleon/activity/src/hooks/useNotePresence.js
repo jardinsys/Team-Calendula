@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { wsSend } from './useWebSocket'
+import { wsSend, onWsMessage } from './useWebSocket'
 
 export function useNotePresence(noteId, username) {
   const [viewers, setViewers] = useState([])
@@ -13,9 +13,8 @@ export function useNotePresence(noteId, username) {
 
     wsSend({ type: 'note:open', noteId, username })
 
-    const handler = (event) => {
+    const unsubscribe = onWsMessage((data) => {
       try {
-        const data = JSON.parse(event.data)
         if (data.type === 'note:presence' && data.noteId === noteId) {
           const all = data.users || []
           setViewers(all.filter(u => !u.editing))
@@ -33,13 +32,11 @@ export function useNotePresence(noteId, username) {
           setLastSavedBy({ username: data.username, timestamp: data.timestamp })
         }
       } catch {}
-    }
-
-    window.addEventListener('message', handler)
+    })
 
     return () => {
+      unsubscribe()
       wsSend({ type: 'note:close', noteId: noteIdRef.current })
-      window.removeEventListener('message', handler)
       setViewers([])
       setEditors([])
       setLastSavedBy(null)

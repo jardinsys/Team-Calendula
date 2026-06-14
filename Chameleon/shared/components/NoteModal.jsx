@@ -262,8 +262,7 @@ function NoteModal({ note, system, onClose, onUpdated, onDeleted, presence, onFo
                             compact
                         />
                     </div>
-                    )
-                })()}
+                    )}
 
                     {error && (
                         <p style={{ color: 'var(--color-error)', fontSize: '0.8rem', marginBottom: '12px' }}>
@@ -338,7 +337,7 @@ function NoteModal({ note, system, onClose, onUpdated, onDeleted, presence, onFo
                             </span>
                         ))}
                     </div>
-                )}
+                )})()}
 
                 {presence?.editors?.length > 0 && (
                     <div style={{

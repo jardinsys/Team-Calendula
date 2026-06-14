@@ -1108,6 +1108,9 @@ async function handleModalSubmit(interaction) {
         return interaction.reply({ content: '❌ Session expired. Please try again.', ephemeral: true });
     }
 
+    // Ensure session.id is available for sub-handlers
+    session.id = sessionId;
+
     const system = await System.findById(session.systemId);
     if (!system) return interaction.reply({ content: '❌ Not registered.', ephemeral: true });
 
@@ -1201,7 +1204,7 @@ async function handleQuickSwitchModal(interaction, session, system) {
     }
 
     await system.save();
-    utils.deleteSession(session.id);
+    utils.deleteSession(sessionId);
 
     // Send friend switch notifications (debounced)
     sendFriendSwitchNotifications(system, interaction.client).catch(() => {});
@@ -1509,11 +1512,11 @@ async function findEntityByName(name, system) {
     if (entity) return { entity, type: 'alter' };
 
     const states = await State.find({ _id: { $in: system.states?.IDs || [] } });
-    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName || s.name?.display?.toLowerCase() === searchName);
+    entity = states.find(s => s.name?.indexable?.toLowerCase() === searchName || s.name?.display?.toLowerCase() === searchName || s.name?.aliases?.some(al => al.toLowerCase() === searchName));
     if (entity) return { entity, type: 'state' };
 
     const groups = await Group.find({ _id: { $in: system.groups?.IDs || [] } });
-    entity = groups.find(g => (g.name?.indexable?.toLowerCase() === searchName || g.name?.display?.toLowerCase() === searchName) && g.type?.canFront !== 'no');
+    entity = groups.find(g => (g.name?.indexable?.toLowerCase() === searchName || g.name?.display?.toLowerCase() === searchName || g.name?.aliases?.some(al => al.toLowerCase() === searchName)) && g.type?.canFront !== 'no');
     if (entity) return { entity, type: 'group' };
 
     return { entity: null, type: null };

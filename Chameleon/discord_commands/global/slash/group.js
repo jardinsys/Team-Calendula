@@ -305,7 +305,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) 
             return await interaction.reply({ content: '❌ This user does not have a group list to show.', ephemeral: true });
 
-        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
+        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, currentUser?.friendID);
     }
 
     if (!targetSystem) return await interaction.reply({ content: '❌ Not registered.', ephemeral: true });
@@ -352,7 +352,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         targetSystem = await System.findById(otherUser.systemID);
         if (!targetSystem) return await interaction.reply({ content: '❌ Group cannot be found.', ephemeral: true });
 
-        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
+        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, currentUser?.friendID);
     }
 
     if (!targetSystem) return await interaction.reply({ content: '❌ Not registered.', ephemeral: true });
@@ -672,7 +672,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('group_delete_confirm_')) {
         await Alter.updateMany({ groupsIDs: session.groupId.toString() }, { $pull: { groupsIDs: session.groupId.toString() } });
         await State.updateMany({ groupIDs: session.groupId.toString() }, { $pull: { groupIDs: session.groupId.toString() } });
-        system.groups.IDs = system.groups.IDs.filter(id => id !== session.groupId.toString());
+        system.groups.IDs = system.groups.IDs.filter(id => id.toString() !== session.groupId.toString());
         await system.save();
         await Group.findByIdAndDelete(session.groupId);
         utils.publishDeleteEvent(system._id, 'group', session.groupId);
@@ -1002,8 +1002,8 @@ async function handleSelectMenu(interaction) {
             for (const bucket of sys.privacyBuckets) {
                 const p = group.setting?.privacy?.find(pr => pr.bucket === bucket.name);
                 let status = 'Default (visible)';
-                if (p?.settings?.hidden === false) status = '❌ Hidden';
-                else if (p?.settings?.hidden === true) status = '✅ Visible';
+                if (p?.settings?.hidden === true) status = '❌ Hidden';
+                else if (p?.settings?.hidden === false) status = '✅ Visible';
                 embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
             }
         }

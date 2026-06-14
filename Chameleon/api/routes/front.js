@@ -13,7 +13,7 @@ const Alter = require('../../schemas/alter');
 const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const { Shift } = require('../../schemas/front');
-const { resolveAlterDisplay } = require('../../discord_commands/functions/bot_utils');
+const { resolveAlterDisplay, getPrivacyBucket, shouldShowEntity } = require('../../discord_commands/functions/bot_utils');
 
 // ===========================================
 // GET CURRENT FRONT
@@ -79,7 +79,7 @@ router.get('/history', async (req, res) => {
         
         const shifts = await Shift.find(query)
             .sort({ startTime: -1 })
-            .limit(parseInt(limit));
+            .limit(isNaN(parseInt(limit)) ? 50 : Math.min(parseInt(limit), 100));
         
         // Build layer lookup for name resolution
         const layerMap = new Map();
@@ -228,10 +228,24 @@ router.get('/:systemId', optionalAuthMiddleware, async (req, res) => {
         // Check if requester has access (is owner or friend)
         const isOwner = req.user?._id && system.users?.some(u => u.toString() === req.user?._id);
         
-        // TODO: Add privacy bucket checking here
-        // For now, return basic front info
+        // Get viewer's privacy bucket for non-owners
+        let privacyBucket = null;
+        if (!isOwner && req.user?._id) {
+            const viewerUser = await User.findById(req.user._id);
+            if (viewerUser) {
+                privacyBucket = getPrivacyBucket(system, viewerUser.discordID, viewerUser.friendID);
+            }
+        }
         
-        const frontData = await buildFrontData(system, !isOwner);
+        // Check system-level privacy
+        if (!isOwner) {
+            const systemPrivacy = system.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
+            if (systemPrivacy?.settings?.hidden === true) {
+                return res.status(403).json({ error: 'This system is hidden' });
+            }
+        }
+        
+        const frontData = await buildFrontData(system, !isOwner, privacyBucket);
         res.json(frontData);
     } catch (err) {
         console.error('[Front] Get by ID error:', err);
@@ -313,6 +327,10 @@ router.delete('/layers/:layerId', async (req, res) => {
             const shift = await Shift.findById(shiftId);
             if (shift && !shift.endTime) {
                 shift.endTime = new Date();
+                // Clear stale layerID references in statuses
+                for (const status of shift.statuses || []) {
+                    status.layerID = undefined;
+                }
                 await shift.save();
             }
         }
@@ -353,6 +371,12 @@ router.patch('/shift/:shiftId/status', async (req, res) => {
             return res.status(404).json({ error: 'Shift not found' });
         }
 
+        // Verify the shift belongs to an entity in this system
+        const entityIds = system[`${shift.s_type}s`]?.IDs || [];
+        if (!entityIds.some(id => id.toString() === shift.ID)) {
+            return res.status(404).json({ error: 'Shift not found' });
+        }
+
         if (shift.endTime) {
             return res.status(400).json({ error: 'Cannot update ended shift' });
         }
@@ -372,7 +396,8 @@ router.patch('/shift/:shiftId/status', async (req, res) => {
             shift.statuses = shift.statuses || [];
             const newEntry = {
                 startTime: new Date(),
-                hidden: 'n'
+                hidden: 'n',
+                layerID: shift.statuses?.[0]?.layerID
             };
             if (hasStatusChange) newEntry.status = status;
             if (hasBatteryChange) newEntry.battery = battery !== null && battery !== '' ? Number(battery) : null;
@@ -440,6 +465,16 @@ router.post('/switch', async (req, res) => {
             return res.status(400).json({ error: 'At least one layer with entities is required' });
         }
 
+        // Verify all entities belong to this system
+        for (const layer of layerInputs) {
+            for (const entityInfo of layer.entities || []) {
+                const ids = system[`${entityInfo.type}s`]?.IDs || [];
+                if (!ids.some(id => id.toString() === entityInfo.id)) {
+                    return res.status(404).json({ error: `${entityInfo.type} not found` });
+                }
+            }
+        }
+
         // Close all active shifts across all layers
         await closeAllActiveShifts(system);
 
@@ -463,7 +498,10 @@ router.post('/switch', async (req, res) => {
                 else if (ent.type === 'state') entity = await State.findById(ent.id);
                 else if (ent.type === 'group') entity = await Group.findById(ent.id);
 
-                if (!entity) continue;
+            if (!entity) continue;
+
+            // Check entity-level privacy for non-owners
+            if (privacyBucket && !shouldShowEntity(entity, privacyBucket, false, false)) continue;
 
                 const shift = new Shift({
                     _id: new mongoose.Types.ObjectId(),
@@ -551,6 +589,12 @@ router.post('/shift', async (req, res) => {
             return res.status(404).json({ error: 'Entity not found' });
         }
 
+        // Verify the entity belongs to this system
+        const ids = system[`${entityType}s`]?.IDs || [];
+        if (!ids.some(id => id.toString() === entityId)) {
+            return res.status(404).json({ error: `${entityType} not found` });
+        }
+
         // Check if already fronting
         const existing = await findActiveShiftAsync(entityId, entityType, system);
         if (existing) {
@@ -633,6 +677,12 @@ router.delete('/shift/:shiftId', async (req, res) => {
 
         const shift = await Shift.findById(req.params.shiftId);
         if (!shift) {
+            return res.status(404).json({ error: 'Shift not found' });
+        }
+
+        // Verify the shift belongs to an entity in this system
+        const entityIds = system[`${shift.s_type}s`]?.IDs || [];
+        if (!entityIds.some(id => id.toString() === shift.ID)) {
             return res.status(404).json({ error: 'Shift not found' });
         }
 
@@ -783,6 +833,13 @@ router.post('/shift/:shiftId/children', async (req, res) => {
         if (!parentShift) {
             return res.status(404).json({ error: 'Parent shift not found' });
         }
+
+        // Verify the shift belongs to an entity in this system
+        const entityIds = system[`${parentShift.s_type}s`]?.IDs || [];
+        if (!entityIds.some(id => id.toString() === parentShift.ID)) {
+            return res.status(404).json({ error: 'Shift not found' });
+        }
+
         if (parentShift.endTime) {
             return res.status(400).json({ error: 'Parent shift already ended' });
         }
@@ -801,6 +858,12 @@ router.post('/shift/:shiftId/children', async (req, res) => {
 
         if (!entity) {
             return res.status(404).json({ error: 'Entity not found' });
+        }
+
+        // Verify the child entity belongs to this system
+        const childEntityIds = system[`${entityType}s`]?.IDs || [];
+        if (!childEntityIds.some(id => id.toString() === entityId)) {
+            return res.status(404).json({ error: `${entityType} not found` });
         }
 
         // Find which layer the parent shift is in
@@ -972,7 +1035,7 @@ async function resolveEntityDisplay(entity, type, system, limited) {
     return { displayName, avatarUrl, entityColor, pronouns };
 }
 
-async function buildFrontData(system, limited = false) {
+async function buildFrontData(system, limited = false, privacyBucket = null) {
     const frontData = {
         status: system.front?.status,
         battery: system.battery,
@@ -1032,6 +1095,9 @@ async function buildFrontData(system, limited = false) {
                     else if (childShift.s_type === 'state') childEntity = await State.findById(childShift.ID);
 
                     if (!childEntity) continue;
+
+                    // Check entity-level privacy for child entities
+                    if (privacyBucket && !shouldShowEntity(childEntity, privacyBucket, false, false)) continue;
 
                     const childStatus = childShift.statuses?.[childShift.statuses.length - 1];
                     const childDisplay = await resolveEntityDisplay(childEntity, childShift.s_type, system, limited);
@@ -1103,6 +1169,12 @@ router.patch('/shift/:shiftId', async (req, res) => {
 
         const shift = await Shift.findById(shiftId);
         if (!shift) {
+            return res.status(404).json({ error: 'Shift not found' });
+        }
+
+        // Verify the shift belongs to an entity in this system
+        const entityIds = system[`${shift.s_type}s`]?.IDs || [];
+        if (!entityIds.some(id => id.toString() === shift.ID)) {
             return res.status(404).json({ error: 'Shift not found' });
         }
 
@@ -1194,6 +1266,12 @@ router.delete('/shift/:shiftId', async (req, res) => {
             return res.status(404).json({ error: 'Shift not found' });
         }
 
+        // Verify the shift belongs to an entity in this system
+        const entityIds = system[`${shift.s_type}s`]?.IDs || [];
+        if (!entityIds.some(id => id.toString() === shift.ID)) {
+            return res.status(404).json({ error: 'Shift not found' });
+        }
+
         // Remove from parent layer
         for (const layer of (system.front?.layers || [])) {
             layer.shifts = (layer.shifts || []).filter(s => s.toString() !== shiftId);
@@ -1240,6 +1318,16 @@ router.post('/shift/merge', async (req, res) => {
 
         if (!shiftA || !shiftB) {
             return res.status(404).json({ error: 'One or both shifts not found' });
+        }
+
+        // Verify both shifts belong to an entity in this system
+        const entityIdsA = system[`${shiftA.s_type}s`]?.IDs || [];
+        if (!entityIdsA.some(id => id.toString() === shiftA.ID)) {
+            return res.status(404).json({ error: 'Shift not found' });
+        }
+        const entityIdsB = system[`${shiftB.s_type}s`]?.IDs || [];
+        if (!entityIdsB.some(id => id.toString() === shiftB.ID)) {
+            return res.status(404).json({ error: 'Shift not found' });
         }
 
         // Must be same entity

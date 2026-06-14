@@ -54,7 +54,7 @@ const { Shift } = require('../../../schemas/front');
 
 const utils = require('../../functions/bot_utils');
 const proxyMessageHandler = require('../proxy-message');
-const { publishEvent } = require('../../redis');
+const { publishEvent } = require('../../../redis');
 
 const { getSystemTerm, getAlterTerm } = utils;
 
@@ -667,13 +667,14 @@ async function handlePrivacy(message, parsed) {
     system.setting = system.setting || {};
     system.setting.privacy = system.setting.privacy || [];
     
-    let defaultPrivacy = system.setting.privacy.find(p => p.bucket === 'default');
-    if (!defaultPrivacy) {
-        defaultPrivacy = { bucket: 'default', settings: {} };
-        system.setting.privacy.push(defaultPrivacy);
+    await system.populate('privacyBuckets');
+    let privacy = system.setting.privacy.find(p => p.bucket === 'Strangers') || system.setting.privacy.find(p => p.bucket === 'Friends') || system.setting.privacy[0];
+    if (!privacy) {
+        privacy = { bucket: 'Strangers', settings: {} };
+        system.setting.privacy.push(privacy);
     }
     
-    defaultPrivacy.settings[field] = value === 'private';
+    privacy.settings[field] = value === 'private';
     await system.save();
     if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
 

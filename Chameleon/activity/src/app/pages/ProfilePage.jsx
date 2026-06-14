@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDiscordSdk } from '../../hooks/useDiscordSdk'
 import { api, EntityCardList, EntityDetailModal, EntityFormModal, FrontDisplay, Icon, NoteCardGrid, NoteModal, isFragmentedUser, isDissociativeUser, systemKeys, stateKeys, frontKeys, noteKeys } from '@chameleon/shared'
@@ -27,6 +27,13 @@ export function ProfilePage({ system: systemProp }) {
         enabled: !!system,
         staleTime: 30 * 1000,
     })
+
+    // Reset subPage if it's not supported by current system type
+    useEffect(() => {
+        if (system && subPage === 'states' && !isFragmentedUser(system) && !isDissociativeUser(system)) {
+            setSubPage(null)
+        }
+    }, [system, subPage])
 
     const isStatesEnabled = !!system && (isFragmentedUser(system) || isDissociativeUser(system))
 
@@ -112,7 +119,6 @@ export function ProfilePage({ system: systemProp }) {
 
     if (subPage === 'states') {
         if (!isFragmentedUser(system) && !isDissociativeUser(system)) {
-            setSubPage(null)
             return null
         }
         return (

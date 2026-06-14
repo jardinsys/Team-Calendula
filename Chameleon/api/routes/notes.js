@@ -984,6 +984,11 @@ router.post('/:id/link', async (req, res) => {
             return res.status(404).json({ error: 'Note not found' });
         }
 
+        // Verify ownership
+        if (note.owner?.toString() !== req.user._id?.toString()) {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+
         note.author = note.author || {};
         note.author.subs = note.author.subs || [];
 
@@ -1022,6 +1027,11 @@ router.delete('/:id/link', async (req, res) => {
 
         if (!note) {
             return res.status(404).json({ error: 'Note not found' });
+        }
+
+        // Verify ownership
+        if (note.owner?.toString() !== req.user._id?.toString()) {
+            return res.status(403).json({ error: 'Not authorized' });
         }
 
         if (note.author?.subs?.length) {

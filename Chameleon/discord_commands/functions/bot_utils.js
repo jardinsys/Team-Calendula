@@ -755,9 +755,13 @@ async function handleNewUserButton(interaction) {
             });
         }
 
-        if (!system.privacyBuckets?.some(b => b.name === 'Strangers')) {
+        // Populate privacyBuckets to check names (they are ObjectId refs)
+        await system.populate('privacyBuckets');
+        if (!system.privacyBuckets?.some(b => b?.name === 'Strangers')) {
             if (!system.privacyBuckets) system.privacyBuckets = [];
-            system.privacyBuckets.push({ name: 'Strangers', friends: [] });
+            const strangersBucket = new PrivacyBucket({ name: 'Strangers', friends: [] });
+            await strangersBucket.save();
+            system.privacyBuckets.push(strangersBucket._id);
             await system.save();
         }
 
@@ -2640,6 +2644,7 @@ async function createAndLinkEntity(entity, system, entityType) {
     if (!system[key].IDs.includes(entity._id)) {
         system[key].IDs.push(entity._id);
     }
+    await system.save();
     return entity;
 }
 

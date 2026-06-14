@@ -291,7 +291,7 @@ function SettingsPanel({ system: systemProp, discordUser, onClose, onNavigate })
                                 Per-Friend Switch Notifications
                             </div>
                             {systemProp._user.friends.map((f, i) => {
-                                const name = f.customName?.display || f.customName?.indexable || f.discordID;
+                                const name = typeof f.customName === 'string' ? f.customName : f.customName?.display || f.customName?.indexable || f.discordID;
                                 const isEnabled = f.notifyOnSwitch !== false;
                                 return (
                                     <div key={f.friendID || f.discordID || i} className="form-group">

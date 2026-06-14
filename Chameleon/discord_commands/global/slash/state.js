@@ -401,7 +401,7 @@ async function handleShowList(interaction, currentUser, currentSystem) {
         if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) 
             return await interaction.reply({ content: refuse_list_message, ephemeral: true });
 
-        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
+        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, currentUser?.friendID);
     }
 
     if (!targetSystem) return await interaction.reply({ content: '❌ Not registered. Use `/system` to set up first.', ephemeral: true });
@@ -463,7 +463,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         targetSystem = await System.findById(otherUser.systemID);
         if (!targetSystem) return await interaction.reply({ content: '❌ State cannot be found.', ephemeral: true });
 
-        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
+        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, currentUser?.friendID);
     }
 
     if (!targetSystem) return await interaction.reply({ content: '❌ Not registered.', ephemeral: true });
@@ -547,7 +547,7 @@ async function handleEdit(interaction, user, system) {
         stateId: state._id,
         systemId: system._id,
         mode: null,
-        syncWithDiscord: state.syncWithApps?.discord || true
+        syncWithDiscord: state.syncWithApps?.discord ?? true
     });
 
     // Go straight to edit interface (sync is managed in settings)
@@ -970,7 +970,7 @@ async function handleButtonInteraction(interaction) {
         const system = await System.findById(session.systemId);
 
         // Remove from system
-        system.states.IDs = system.states.IDs.filter(id => id !== session.stateId.toString());
+        system.states.IDs = system.states.IDs.filter(id => id.toString() !== session.stateId.toString());
         await system.save();
 
         // Clean up reverse references from alters and groups
@@ -1345,8 +1345,8 @@ async function handleSelectMenu(interaction) {
             for (const bucket of sys.privacyBuckets) {
                 const p = state.setting?.privacy?.find(pr => pr.bucket === bucket.name);
                 let status = 'Default (visible)';
-                if (p?.settings?.hidden === false) status = '❌ Hidden';
-                else if (p?.settings?.hidden === true) status = '✅ Visible';
+                if (p?.settings?.hidden === true) status = '❌ Hidden';
+                else if (p?.settings?.hidden === false) status = '✅ Visible';
                 embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
             }
         }
@@ -1611,7 +1611,7 @@ async function handleModalSubmit(interaction) {
 
         // Ensure condition exists in system
         const system = await System.findById(session.systemId);
-        await utils.ensureConditionExists(system, 'states', conditionName);
+        await utils.ensureConditionExists(system, 'state', conditionName);
 
         utils.deleteSession(sessionId);
         return await interaction.update({

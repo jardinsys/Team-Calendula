@@ -201,11 +201,21 @@ async function deleteSystemData(system) {
         await redis.del(`system:${system._id}:lastProxyTime`);
     } catch (e) { /* Redis may be unavailable */ }
 
-    // Delete display cache for all entities
+    // Delete display cache for all entities (main, server, mask variants)
     try {
         const allEntityIds = [...alterIds, ...stateIds, ...groupIds];
         for (const eid of allEntityIds) {
+            // Delete main cache
             await redis.del(`display:${eid}:main`);
+            // Scan and delete server/mask variants
+            let cursor = '0';
+            do {
+                const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', `display:${eid}:*`, 'COUNT', 100);
+                cursor = nextCursor;
+                for (const key of keys) {
+                    await redis.del(key);
+                }
+            } while (cursor !== '0');
         }
     } catch (e) { /* Redis may be unavailable */ }
 }

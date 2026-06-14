@@ -225,7 +225,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         if (currentUser && utils.isBlocked(user, interaction.user.id, currentUser.friendID))
             return await interaction.reply({ content: '❌ This user\'s profile is not available.', ephemeral: true });
 
-        if (system) privacyBucket = utils.getPrivacyBucket(system, interaction.user.id, interaction.guildId);
+        if (system) privacyBucket = utils.getPrivacyBucket(system, interaction.user.id, currentUser?.friendID);
     }
 
     if (!user) return await interaction.reply({ content: '❌ User not found.', ephemeral: true });
@@ -473,8 +473,8 @@ async function handleSelectMenu(interaction) {
         for (const bucket of system.privacyBuckets) {
             const p = system.setting?.privacy?.find(pr => pr.bucket === bucket.name);
             let status = 'Default (visible)';
-            if (p?.settings?.hidden === false) status = '❌ Hidden';
-            else if (p?.settings?.hidden === true) status = '✅ Visible';
+            if (p?.settings?.hidden === true) status = '❌ Hidden';
+            else if (p?.settings?.hidden === false) status = '✅ Visible';
             embed.addFields({ name: `Bucket: ${bucket.name}`, value: status, inline: false });
         }
 

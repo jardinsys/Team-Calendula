@@ -14,6 +14,18 @@ const { checkProxyExists, createAndLinkEntity } = require('../../discord_command
 const { uploadMiddleware } = require('../middleware/upload');
 const { handleEntityImageUpload, handleEntityImageDelete } = require('./avatar');
 
+function deepMerge(target, source) {
+    const result = { ...target };
+    for (const key of Object.keys(source)) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key]) && result[key] && typeof result[key] === 'object' && !Array.isArray(result[key])) {
+            result[key] = deepMerge(result[key], source[key]);
+        } else {
+            result[key] = source[key];
+        }
+    }
+    return result;
+}
+
 // ===========================================
 // GET ALL ALTERS
 // ===========================================
@@ -239,7 +251,11 @@ router.patch('/:id', async (req, res) => {
         
         for (const field of allowedFields) {
             if (updates[field] !== undefined) {
-                alter[field] = updates[field];
+                if (typeof updates[field] === 'object' && updates[field] !== null && !Array.isArray(updates[field]) && alter[field] && typeof alter[field] === 'object') {
+                    alter[field] = deepMerge(alter[field], updates[field]);
+                } else {
+                    alter[field] = updates[field];
+                }
             }
         }
 
@@ -299,6 +315,22 @@ router.delete('/:id', async (req, res) => {
             { $pull: { alterIDs: req.params.id } }
         );
         
+        // Clean up orphaned shifts in front layers
+        const { Shift } = require('../../schemas/front');
+        for (const layer of system.front?.layers || []) {
+            const shiftsToRemove = [];
+            for (const shiftId of layer.shifts || []) {
+                const shift = await Shift.findById(shiftId);
+                if (shift && shift.ID === req.params.id && shift.s_type === 'alter') {
+                    await Shift.findByIdAndDelete(shiftId);
+                    shiftsToRemove.push(shiftId);
+                }
+            }
+            if (shiftsToRemove.length) {
+                layer.shifts = layer.shifts.filter(s => !shiftsToRemove.includes(s.toString()));
+            }
+        }
+        
         await Alter.findByIdAndDelete(req.params.id);
         
         system.alters.IDs = system.alters.IDs.filter(id => id !== req.params.id);
@@ -319,20 +351,24 @@ router.delete('/:id', async (req, res) => {
 
 router.post('/:id/proxy', async (req, res) => {
     try {
-        const alter = await Alter.findById(req.params.id);
-        if (!alter) {
-            return res.status(404).json({ error: 'Alter not found' });
-        }
-        
-        const { proxy } = req.body;
-        if (!proxy || !proxy.includes('text')) {
-            return res.status(400).json({ error: 'Proxy must contain "text" placeholder' });
-        }
-
         const user = await User.findById(req.user._id);
         const system = await System.findById(user?.systemID);
         if (!system) {
             return res.status(404).json({ error: 'Not registered' });
+        }
+
+        if (!system.alters?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'Alter not found' });
+        }
+
+        const alter = await Alter.findById(req.params.id);
+        if (!alter) {
+            return res.status(404).json({ error: 'Alter not found' });
+        }
+
+        const { proxy } = req.body;
+        if (!proxy || !proxy.includes('text')) {
+            return res.status(400).json({ error: 'Proxy must contain "text" placeholder' });
         }
 
         const { exists, entity, type } = await checkProxyExists(proxy, system, alter._id.toString());
@@ -354,6 +390,12 @@ router.post('/:id/proxy', async (req, res) => {
 
 router.delete('/:id/proxy', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system || !system.alters?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'Alter not found' });
+        }
+
         const alter = await Alter.findById(req.params.id);
         if (!alter) {
             return res.status(404).json({ error: 'Alter not found' });
@@ -375,6 +417,12 @@ router.delete('/:id/proxy', async (req, res) => {
 
 router.post('/:id/groups', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system || !system.alters?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'Alter not found' });
+        }
+
         const alter = await Alter.findById(req.params.id);
         if (!alter) {
             return res.status(404).json({ error: 'Alter not found' });
@@ -408,6 +456,12 @@ router.post('/:id/groups', async (req, res) => {
 
 router.delete('/:id/groups/:groupId', async (req, res) => {
     try {
+        const user = await User.findById(req.user._id);
+        const system = await System.findById(user?.systemID);
+        if (!system || !system.alters?.IDs?.includes(req.params.id)) {
+            return res.status(404).json({ error: 'Alter not found' });
+        }
+
         const alter = await Alter.findById(req.params.id);
         if (!alter) {
             return res.status(404).json({ error: 'Alter not found' });

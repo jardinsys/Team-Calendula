@@ -204,7 +204,7 @@ router.post('/layers', async (req, res) => {
             shifts: [],
         }));
         
-        system.front.layers = newLayers;
+        system.front.layers.push(...newLayers);
         await system.save();
         
         console.log(`[System] Created ${newLayers.length} preset layers for system ${system._id}`);

@@ -645,7 +645,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
         // Check if blocked
         if (currentUser && utils.isBlocked(otherUser, interaction.user.id, currentUser.friendID)) return await interaction.reply({ content: dont_show_system_message, ephemeral: true });
         
-        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, interaction.guildId);
+        privacyBucket = utils.getPrivacyBucket(targetSystem, interaction.user.id, currentUser?.friendID);
     }
 
     if (!targetSystem) {
@@ -700,7 +700,7 @@ async function handleManage(interaction, user, system) {
             systemId: system._id,
             userId: user._id,
             mode: null,
-            syncWithDiscord: system.syncWithApps?.discord || true
+            syncWithDiscord: system.syncWithApps?.discord ?? true
         });
 
         // Use management menu instead of sync confirmation (consistent with alter/state/group flow)

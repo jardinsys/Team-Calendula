@@ -39,7 +39,7 @@ function parsePluralKitUrl(input) {
 
     // URL format: pluralkit.me/systems/abc12 or pluralkit.me/systems/abc12-xyz
     const urlMatch = input.match(/pluralkit\.me\/systems\/([a-zA-Z0-9-]+)/i);
-    if (urlMatch) return urlMatch[1].replace('-', '');
+    if (urlMatch) return urlMatch[1].replace(/-/g, '');
 
     // Short ID: 5-6 alphanumeric chars
     if (/^[a-zA-Z0-9]{5,6}$/.test(input)) return input;
@@ -1111,21 +1111,23 @@ async function importOctoconFronts(system, fronts, alterIdMap, options, onProgre
 
         if (members.length === 0) continue;
 
-        const shift = new Shift({
-            s_type: 'alter',
-            ID: system._id,
-            type_name: system.name?.display || 'System',
-            startTime: group.startTime,
-            endTime: group.endTime,
-            statuses: [{
+        for (const member of members) {
+            const shift = new Shift({
+                s_type: member.s_type,
+                ID: member.ID,
+                type_name: member.type_name,
                 startTime: group.startTime,
                 endTime: group.endTime,
-                layerID: targetLayer._id
-            }]
-        });
+                statuses: [{
+                    startTime: group.startTime,
+                    endTime: group.endTime,
+                    layerID: targetLayer._id
+                }]
+            });
 
-        await shift.save();
-        targetLayer.shifts.push(shift._id);
+            await shift.save();
+            targetLayer.shifts.push(shift._id);
+        }
         imported++;
     }
 

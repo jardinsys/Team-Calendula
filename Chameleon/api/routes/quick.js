@@ -126,6 +126,14 @@ router.post('/switch', async (req, res) => {
         if (!system) {
             return res.status(404).json({ error: 'Not registered' });
         }
+
+        // Verify all entities belong to this system
+        for (const entityInfo of entities || []) {
+            const ids = system[`${entityInfo.type}s`]?.IDs || [];
+            if (!ids.some(id => id.toString() === entityInfo.id)) {
+                return res.status(404).json({ error: `${entityInfo.type} not found` });
+            }
+        }
         
         const now = new Date();
         
@@ -153,7 +161,7 @@ router.post('/switch', async (req, res) => {
             }];
         }
         
-        system.front.layers[0].shifts = [];
+        // Don't clear shifts — keep closed shifts for history. New shifts are appended.
         
         // Create new shifts
         const successes = [];
@@ -243,7 +251,7 @@ router.post('/switch/out', async (req, res) => {
         
         const now = new Date();
         
-        // Close all active shifts
+        // Close all active shifts (keep references for history)
         for (const layer of system.front?.layers || []) {
             for (const shiftId of layer.shifts || []) {
                 const shift = await Shift.findById(shiftId);
@@ -255,7 +263,6 @@ router.post('/switch/out', async (req, res) => {
                     await shift.save();
                 }
             }
-            layer.shifts = [];
         }
         
         await system.save();

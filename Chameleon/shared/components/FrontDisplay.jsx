@@ -186,7 +186,7 @@ function FronterEditPopover({ fronter, onSave, onClose }) {
     )
 }
 
-function FrontDisplay({ frontData, compact = false, isOwner = true, onFronterClick }) {
+function FrontDisplay({ frontData, compact = false, isOwner = true, onFronterClick, onFronterSave }) {
     const [editingFronter, setEditingFronter] = useState(null)
 
     if (!frontData) {
@@ -219,10 +219,8 @@ function FrontDisplay({ frontData, compact = false, isOwner = true, onFronterCli
     }
 
     const handleFronterSave = async (data) => {
-        const { updateShiftStatus } = require ? {} : {}
-        const api = window.__chameleon_api
-        if (api && editingFronter?.shiftId) {
-            await api.updateShiftStatus(editingFronter.shiftId, data)
+        if (onFronterSave && editingFronter?.shiftId) {
+            await onFronterSave(editingFronter.shiftId, data)
         }
     }
 

@@ -968,7 +968,7 @@ async function handleRequestAccept(interaction) {
             discordID: targetUser.discordID,
             addedAt: new Date(),
             privacyBucket: autoBucket,
-            notifyOnSwitch: false
+            notifyOnSwitch: true
         });
 
         if (!targetUser.friends) targetUser.friends = [];
@@ -981,7 +981,7 @@ async function handleRequestAccept(interaction) {
             discordID: user.discordID,
             addedAt: new Date(),
             privacyBucket: targetAutoBucket,
-            notifyOnSwitch: false
+            notifyOnSwitch: true
         });
 
         await targetUser.save();

@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const router = express.Router();
 
 const { broadcastLocal } = require('../../redis');
+const { getPrivacyBucket, shouldShowEntity } = require('../../discord_commands/functions/bot_utils');
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const Alter = require('../../schemas/alter');
@@ -242,10 +243,13 @@ router.post('/requests/:index/accept', async (req, res) => {
         }
         
         const request = user.friendRequests[idx];
+        
+        // Use fromDiscordID for stable lookup (index may shift if concurrent requests arrive)
         const requesterUser = await User.findOne({ discordID: request.fromDiscordID });
         
         if (!requesterUser) {
-            user.friendRequests.splice(idx, 1);
+            // Remove by matching fromDiscordID, not by index
+            user.friendRequests = user.friendRequests.filter(r => r.fromDiscordID !== request.fromDiscordID);
             await user.save();
             return res.status(404).json({ error: 'Requester not found' });
         }
@@ -260,7 +264,7 @@ router.post('/requests/:index/accept', async (req, res) => {
                 discordID: requesterUser.discordID,
                 privacyBucket: requesterSystem?.setting?.friendAutoBucket || undefined,
                 addedAt: new Date(),
-                notifyOnSwitch: false
+                notifyOnSwitch: true
             });
         }
         
@@ -271,11 +275,12 @@ router.post('/requests/:index/accept', async (req, res) => {
                 discordID: user.discordID,
                 privacyBucket: accepterSystem?.setting?.friendAutoBucket || undefined,
                 addedAt: new Date(),
-                notifyOnSwitch: false
+                notifyOnSwitch: true
             });
         }
         
-        user.friendRequests.splice(idx, 1);
+        // Remove the specific request by fromDiscordID (stable against concurrent changes)
+        user.friendRequests = user.friendRequests.filter(r => r.fromDiscordID !== request.fromDiscordID);
         
         await Promise.all([user.save(), requesterUser.save()]);
         
@@ -315,9 +320,25 @@ router.delete('/:friendId', async (req, res) => {
         const user = await User.findById(req.user._id);
         const { friendId } = req.params;
         
+        // Find the friend's discordID before removing from our list
+        const friendEntry = (user.friends || []).find(
+            f => f.friendID === friendId || f.discordID === friendId
+        );
+        
         user.friends = (user.friends || []).filter(
             f => f.friendID !== friendId && f.discordID !== friendId
         );
+        
+        // Also remove from the other user's friends list (bidirectional)
+        if (friendEntry?.discordID) {
+            const otherUser = await User.findOne({ discordID: friendEntry.discordID });
+            if (otherUser) {
+                otherUser.friends = (otherUser.friends || []).filter(
+                    f => f.discordID !== user.discordID
+                );
+                await otherUser.save();
+            }
+        }
         
         await user.save();
         res.json({ success: true });
@@ -387,6 +408,10 @@ router.post('/block', async (req, res) => {
         
         if (!targetUser) {
             return res.status(404).json({ error: 'User not found' });
+        }
+        
+        if (targetUser._id.toString() === user._id.toString()) {
+            return res.status(400).json({ error: 'Cannot block yourself' });
         }
         
         // Remove from friends
@@ -493,12 +518,25 @@ router.get('/:friendId/front', async (req, res) => {
             return res.status(404).json({ error: 'Not registered' });
         }
         
+        // Get viewer's privacy bucket
+        const friendEntry = user.friends?.find(f => f.friendID === friendId || f.discordID === friendId);
+        const privacyBucket = getPrivacyBucket(system, user.discordID, user.friendID);
+        
+        // Check system-level privacy
+        const systemPrivacy = system.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
+        if (systemPrivacy?.settings?.hidden === true) {
+            return res.status(403).json({ error: 'This system is hidden' });
+        }
+        
+        // Check if front data is visible
+        const frontHidden = systemPrivacy?.settings?.front?.hidden === true;
+        
         const frontData = {
             systemName: system.name?.closedNameDisplay || system.name?.display || system.name?.indexable,
             avatar: system.avatar?.url,
-            status: system.front?.status,
-            battery: system.battery,
-            caution: system.front?.caution,
+            status: frontHidden ? undefined : system.front?.status,
+            battery: frontHidden ? undefined : system.battery,
+            caution: frontHidden ? undefined : system.front?.caution,
             layers: []
         };
         
@@ -520,15 +558,21 @@ router.get('/:friendId/front', async (req, res) => {
                 
                 if (!entity) continue;
                 
+                // Check entity-level privacy
+                if (!shouldShowEntity(entity, privacyBucket, false, false)) continue;
+                
                 const currentStatus = shift.statuses?.[shift.statuses.length - 1];
+                
+                // Check entity-level privacy for sensitive fields
+                const entityPrivacy = entity.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
                 
                 layerData.fronters.push({
                     _id: entity._id,
                     type: shift.s_type,
                     name: entity.name?.closedNameDisplay || entity.name?.display || entity.name?.indexable,
-                    avatar: entity.avatar?.url,
+                    avatar: entityPrivacy?.settings?.avatar === false ? undefined : entity.avatar?.url,
                     color: entity.color,
-                    status: currentStatus?.status,
+                    status: frontHidden ? undefined : currentStatus?.status,
                     startTime: shift.startTime
                 });
             }
