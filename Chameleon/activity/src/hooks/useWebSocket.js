@@ -11,6 +11,11 @@ let globalWs = null
 let globalListeners = new Set()
 let globalMessageListeners = new Set()
 
+function getToken() {
+  if (typeof window === 'undefined') return null
+  return window.localStorage.getItem('systemiser_token')
+}
+
 function sendRaw(data) {
   if (globalWs?.readyState === WebSocket.OPEN) {
     globalWs.send(JSON.stringify(data))
@@ -29,15 +34,14 @@ export function useWebSocket() {
   const [disconnected, setDisconnected] = useState(false)
 
   const connect = useCallback(() => {
-    // Guard against OPEN and CONNECTING states
-    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return
-
-    const token = localStorage.getItem('systemiser_token')
+    const token = getToken()
     if (!token) return
+
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const url = `${protocol}//${host}?token=${token}`
+    const url = `${protocol}//${host}?token=${encodeURIComponent(token)}`
 
     try {
       const ws = new WebSocket(url)
@@ -50,7 +54,6 @@ export function useWebSocket() {
         setDisconnected(false)
         for (const fn of globalListeners) fn(true)
 
-        // Start client-side JSON ping (bypasses Discord proxy stripping protocol-level pings)
         if (pingInterval.current) clearInterval(pingInterval.current)
         pingInterval.current = setInterval(() => {
           sendRaw({ type: 'ping' })
@@ -60,16 +63,12 @@ export function useWebSocket() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data)
-
-          // Auto-respond to server JSON pings
           if (data.type === 'ping') {
             sendRaw({ type: 'pong' })
             return
           }
-
           if (data.type === 'connected') return
 
-          // Notify message listeners (for hooks like useNotePresence)
           for (const fn of globalMessageListeners) {
             try { fn(data) } catch (_) {}
           }
@@ -84,13 +83,10 @@ export function useWebSocket() {
       }
 
       ws.onclose = () => {
-        // Stop ping interval
         if (pingInterval.current) {
           clearInterval(pingInterval.current)
           pingInterval.current = null
         }
-
-        // Only reset backoff if connection was stable (open for > 10s)
         const wasStable = openedAt.current && (Date.now() - openedAt.current) > WS_STABLE_CONNECTION_MS
         if (wasStable) {
           reconnectDelay.current = WS_RECONNECT_DELAY
@@ -120,8 +116,22 @@ export function useWebSocket() {
     mountedRef.current = true
     connect()
 
+    const onStorage = (event) => {
+      if (event.key === 'systemiser_token' && event.newValue) {
+        reconnectDelay.current = WS_RECONNECT_DELAY
+        connect()
+      }
+    }
+
+    const handler = () => connect()
+
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('focus', handler)
+
     return () => {
       mountedRef.current = false
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('focus', handler)
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
       if (pingInterval.current) clearInterval(pingInterval.current)
       if (wsRef.current) {
