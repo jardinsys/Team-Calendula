@@ -132,7 +132,7 @@ router.post('/', async (req, res) => {
                 isDissociative: false,
                 onboardingCompleted: false
             },
-            privacyBuckets: [strangersBucket._id, friendsBucket._id],
+            privacyBuckets: [strangersBucket._id, friendsBucket._id].filter(Boolean),
             alters: { conditions: alterConditions, IDs: [] },
             states: { conditions: stateConditions, IDs: [] },
             groups: { conditions: [], IDs: [] },
