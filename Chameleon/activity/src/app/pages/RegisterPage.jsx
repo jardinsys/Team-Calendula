@@ -733,10 +733,12 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
   const handleImportChoice = (choice) => {
     setPendingSystemName(choice.systemName)
     if (choice.import) {
-      // TODO: Handle import
-      console.log('[Register] Import not yet implemented')
+      setStep(5)
+      setTimeout(() => {
+        const btn = document.querySelector('.import-option-btn')
+        if (btn) btn.click()
+      }, 0)
     } else {
-      // New system → go to first alter step
       setStep(6)
     }
   }

@@ -57,6 +57,12 @@ export function useApiAuth() {
           setHasSystem(data.user?.hasSystem || false)
           setDiscordUser(data.user || null)
           setAuthStatus('READY')
+
+          const tokenChanged = () => {}
+          try {
+            tokenChanged()
+            window.dispatchEvent(new CustomEvent('systemiser_token_updated', { detail: { key: 'systemiser_token' } }))
+          } catch (_) {}
         }
       } catch (err) {
         if (!cancelled) {

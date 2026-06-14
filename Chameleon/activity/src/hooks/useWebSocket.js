@@ -116,22 +116,34 @@ export function useWebSocket() {
     mountedRef.current = true
     connect()
 
-    const onStorage = (event) => {
-      if (event.key === 'systemiser_token' && event.newValue) {
+    const tokenChanged = () => {
+      const token = getToken()
+      if (token) {
         reconnectDelay.current = WS_RECONNECT_DELAY
         connect()
       }
     }
 
-    const handler = () => connect()
+    const onCrossStorage = (event) => {
+      if (event.key === 'systemiser_token') tokenChanged()
+    }
+    const onCustom = (event) => {
+      if (event?.detail?.key === 'systemiser_token') tokenChanged()
+    }
+    const onFocus = () => tokenChanged()
+    const onDiscordFrameUpdate = () => tokenChanged()
 
-    window.addEventListener('storage', onStorage)
-    window.addEventListener('focus', handler)
+    window.addEventListener('storage', onCrossStorage)
+    window.addEventListener('systemiser_token_updated', onCustom)
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('discord_frame_update', onDiscordFrameUpdate)
 
     return () => {
       mountedRef.current = false
-      window.removeEventListener('storage', onStorage)
-      window.removeEventListener('focus', handler)
+      window.removeEventListener('storage', onCrossStorage)
+      window.removeEventListener('systemiser_token_updated', onCustom)
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('discord_frame_update', onDiscordFrameUpdate)
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
       if (pingInterval.current) clearInterval(pingInterval.current)
       if (wsRef.current) {
