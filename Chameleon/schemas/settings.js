@@ -11,7 +11,8 @@ const systemPrivacySchema = new mongoose.Schema({
     pronouns: Boolean,
     metadata: Boolean,
     caution: Boolean,
-    hidden: Boolean
+    hidden: Boolean,
+    list: Boolean,
 });
 
 //Group
