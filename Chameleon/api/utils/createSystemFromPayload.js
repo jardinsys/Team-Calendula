@@ -3,6 +3,7 @@
 
 const path = require('path');
 const mongoose = require('mongoose');
+const sysDB = require('../database'); // Use the same connection as models
 
 // Resolve schemas from Chameleon folder
 const chameleonDir = path.resolve(__dirname, '../..');
@@ -20,7 +21,7 @@ const { PrivacyBucket } = require(path.join(chameleonDir, 'schemas/settings'));
  * @returns {Promise<{system, user}>}
  */
 async function createSystemFromPayload(userId, payload) {
-    const session = await mongoose.startSession();
+    const session = await sysDB.startSession(); // Use sysDB connection, not default mongoose
     session.startTransaction();
     
     try {
