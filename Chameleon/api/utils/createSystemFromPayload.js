@@ -3,7 +3,7 @@
 
 const path = require('path');
 const mongoose = require('mongoose');
-const sysDB = require('../database'); // Use the same connection as models
+const sysDB = require('../../database'); // Use the same connection as models
 
 // Resolve schemas from Chameleon folder
 const chameleonDir = path.resolve(__dirname, '../..');
