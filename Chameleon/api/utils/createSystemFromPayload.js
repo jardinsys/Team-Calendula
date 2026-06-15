@@ -37,11 +37,10 @@ async function createSystemFromPayload(userId, payload) {
         const isStagedPayload = payload.sys_type && payload.alters && payload.states && payload.groups;
         
         // --- Privacy Buckets ---
-        let strangersBucketId, friendsBucketId;
+        let strangersBucketId, friendsBucketId, privateBucketId;
         const privacyBuckets = payload.privacyBuckets || [];
-        
+
         if (privacyBuckets.length >= 2 && typeof privacyBuckets[0] === 'object') {
-            // Staged: privacyBuckets are objects with name/friends
             const strangersBucket = new PrivacyBucket({ 
                 name: privacyBuckets[0].name || 'Strangers', 
                 friends: privacyBuckets[0].friends || [] 
@@ -54,12 +53,22 @@ async function createSystemFromPayload(userId, payload) {
             await friendsBucket.save({ session });
             strangersBucketId = strangersBucket._id;
             friendsBucketId = friendsBucket._id;
+
+            if (privacyBuckets.length >= 3 && privacyBuckets[2]) {
+                const privateBucket = new PrivacyBucket({ 
+                    name: privacyBuckets[2].name || 'Private', 
+                    friends: privacyBuckets[2].friends || [] 
+                });
+                await privateBucket.save({ session });
+                privateBucketId = privateBucket._id;
+            }
         } else if (privacyBuckets.length >= 2 && typeof privacyBuckets[0] === 'string') {
-            // Staged: privacyBuckets are pre-created IDs
             strangersBucketId = new mongoose.Types.ObjectId(privacyBuckets[0]);
             friendsBucketId = new mongoose.Types.ObjectId(privacyBuckets[1]);
+            if (privacyBuckets.length >= 3) {
+                privateBucketId = new mongoose.Types.ObjectId(privacyBuckets[2]);
+            }
         } else {
-            // Simple mode: create default buckets
             const strangersBucket = new PrivacyBucket({ name: 'Strangers', friends: [] });
             const friendsBucket = new PrivacyBucket({ name: 'Friends', friends: [] });
             await strangersBucket.save({ session });
@@ -67,7 +76,6 @@ async function createSystemFromPayload(userId, payload) {
             strangersBucketId = strangersBucket._id;
             friendsBucketId = friendsBucket._id;
         }
-        
         // --- System Type ---
         let sysType;
         if (isStagedPayload) {
@@ -120,6 +128,7 @@ async function createSystemFromPayload(userId, payload) {
         const groupIds = (isStagedPayload && payload.groups?.IDs) ? payload.groups.IDs.map(id => new mongoose.Types.ObjectId(id)) : [];
         
         // --- Settings ---
+        const privateBucketSettings = { mask: false, description: false, banner: false, avatar: false, birthday: false, pronouns: false, metadata: false, caution: false, hidden: true };
         const setting = isStagedPayload && payload.setting ? payload.setting : {
             friendAutoBucket: 'Friends',
             privacy: [
@@ -130,6 +139,10 @@ async function createSystemFromPayload(userId, payload) {
                 {
                     bucket: 'Friends',
                     settings: { mask: false, description: true, banner: true, avatar: true, birthday: false, pronouns: true, metadata: false, caution: false, hidden: false }
+                },
+                {
+                    bucket: 'Private',
+                    settings: privateBucketSettings
                 }
             ]
         };
@@ -162,7 +175,7 @@ async function createSystemFromPayload(userId, payload) {
             },
             description: payload.description || '',
             sys_type: sysType,
-            privacyBuckets: [strangersBucketId, friendsBucketId].filter(Boolean),
+            privacyBuckets: [strangersBucketId, friendsBucketId, privateBucketId].filter(Boolean),
             alters: { conditions: alterConditions, IDs: alterIds },
             states: { conditions: stateConditions, IDs: stateIds },
             groups: { conditions: groupConditions, IDs: groupIds },
@@ -193,6 +206,36 @@ async function createSystemFromPayload(userId, payload) {
                 { $set: { systemID: system._id.toString() } },
                 { session }
             );
+        }
+
+        // --- Assign Private bucket to imported entities that were private in source ---
+        if (isStagedPayload && payload.privateEntityIDs && privateBucketId) {
+            const { alters: privateAlterIds = [], states: privateStateIds = [], groups: privateGroupIds = [] } = payload.privateEntityIDs;
+            
+            if (privateAlterIds.length > 0) {
+                const alterObjIds = privateAlterIds.map(id => new mongoose.Types.ObjectId(id));
+                await Alter.updateMany(
+                    { _id: { $in: alterObjIds } },
+                    { $addToSet: { "setting.privacy": { bucket: "Private", settings: privateBucketSettings } } },
+                    { session }
+                );
+            }
+            if (privateStateIds.length > 0) {
+                const stateObjIds = privateStateIds.map(id => new mongoose.Types.ObjectId(id));
+                await State.updateMany(
+                    { _id: { $in: stateObjIds } },
+                    { $addToSet: { "setting.privacy": { bucket: "Private", settings: privateBucketSettings } } },
+                    { session }
+                );
+            }
+            if (privateGroupIds.length > 0) {
+                const groupObjIds = privateGroupIds.map(id => new mongoose.Types.ObjectId(id));
+                await Group.updateMany(
+                    { _id: { $in: groupObjIds } },
+                    { $addToSet: { "setting.privacy": { bucket: "Private", settings: privateBucketSettings } } },
+                    { session }
+                );
+            }
         }
         
         // --- Update User ---

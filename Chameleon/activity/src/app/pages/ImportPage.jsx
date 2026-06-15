@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { api, isSystemUser, isFragmentedUser, isDissociativeUser, Icon, getSystemTerm } from '@chameleon/shared'
+import { useSystemSession } from '../../hooks/useSystemSession';
 
 const SOURCES = [
     {
@@ -41,6 +42,7 @@ function getSourceTerm(source) {
 export function ImportPage({ system, onNavigate }) {
     const systemTerm = getSystemTerm(system, { context: 'label' }) || 'system'
     // Check if user has a registered system
+    const { markPrivateFromPreview } = useSystemSession();
     if (!system) {
         return (
             <div className="page-container" style={{ padding: '24px', textAlign: 'center' }}>
@@ -163,6 +165,9 @@ export function ImportPage({ system, onNavigate }) {
             res.preview.members.forEach(m => { types[m.sourceId] = forceAsStates ? 'state' : 'alter' })
             setMemberEntityTypes(types)
             setEntityTypeMode(forceAsStates ? 'all_states' : 'all_alters')
+            if (res.preview) {
+                markPrivateFromPreview(res.preview, allMemberIds, allGroupIds);
+            }
         } catch (err) {
             setError(err.message || 'Failed to fetch preview')
         } finally {

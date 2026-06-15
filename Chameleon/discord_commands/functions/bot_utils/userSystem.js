@@ -18,7 +18,7 @@ const PrivacyBucket = require('../../../schemas/settings').PrivacyBucket;
 const mongoose = require('mongoose');
 
 // Bot session manager for staged onboarding/import
-const BotSessionManager = require('../BotSessionManager');
+const BotSessionManager = require('./BotSessionManager');
 
 // Shared system creation from staged payload
 const { createSystemFromPayload } = require('../../../api/utils/createSystemFromPayload');

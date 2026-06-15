@@ -7,6 +7,7 @@ const DEFAULT_SESSION = () => ({
   privacyBuckets: {
     Strangers: { name: 'Strangers', friends: [] },
     Friends:   { name: 'Friends',   friends: [] },
+    Private:   { name: 'Private',   friends: [] },
   },
   alters:     { conditions: [], IDs: [] },
   states:     { conditions: [], IDs: [] },
@@ -15,6 +16,7 @@ const DEFAULT_SESSION = () => ({
   shiftHistory: [],
   members:    [],
   source:     null,
+  privateEntityIDs: { alters: [], states: [], groups: [] },
 })
 
 export function useSystemSession() {
@@ -56,9 +58,50 @@ export function useSystemSession() {
     setResult(null)
   }, [])
 
+  const markPrivateFromPreview = useCallback((preview, selectedMemberIds, selectedGroupIds) => {
+    const privateMemberIds = new Set()
+    const privateGroupIds = new Set()
+
+    if (preview?.members) {
+      for (const member of preview.members) {
+        if (!selectedMemberIds.has(member.sourceId)) continue
+        const isPrivate = member.visibility === 'private' || member.visible === false || (member.flags && member.flags.private)
+        if (isPrivate) privateMemberIds.add(member.sourceId)
+      }
+    }
+    if (preview?.groups) {
+      for (const group of preview.groups) {
+        if (!selectedGroupIds.has(group.sourceId)) continue
+        const isPrivate = group.visibility === 'private' || group.visible === false || (group.flags && group.flags.private)
+        if (isPrivate) privateGroupIds.add(group.sourceId)
+      }
+    }
+
+    setSession(prev => ({
+      ...prev,
+      privateEntityIDs: {
+        alters: [...privateMemberIds].filter(sourceId => {
+          const m = prev.members?.find(x => x.sourceId === sourceId)
+          return m && m.entityType !== 'state'
+        })
+        .map(sourceId => prev.members.find(x => x.sourceId === sourceId)?.id)
+        .filter(Boolean),
+        states: [...privateMemberIds].filter(sourceId => {
+          const m = prev.members?.find(x => x.sourceId === sourceId)
+          return m && m.entityType === 'state'
+        })
+        .map(sourceId => prev.members.find(x => x.sourceId === sourceId)?.id)
+        .filter(Boolean),
+        groups: [...privateGroupIds].map(sourceId => prev.groups?.find(g => g.sourceId === sourceId)?.id).filter(Boolean),
+      },
+    }))
+  }, [])
+
+
   const deriveFlags = useCallback((sysType = session.sysType) => {
     if (!sysType) return { isSystem: false, isFragmented: false, isDissociative: false }
     return {
+    markPrivateFromPreview,
       isSystem:      !!sysType.isSystem,
       isFragmented:  !!sysType.isFragmented,
       isDissociative:!!sysType.isDissociative,
@@ -70,6 +113,7 @@ export function useSystemSession() {
 
     if ((current.shiftHistory || []).length) {
       return {
+    markPrivateFromPreview,
         ...base,
         layers: [
           {
@@ -85,6 +129,7 @@ export function useSystemSession() {
     }
 
     return {
+    markPrivateFromPreview,
       ...base,
       layers: base.layers || [],
     }
@@ -107,11 +152,10 @@ export function useSystemSession() {
         isSystem,
         isFragmented,
         isDissociative,
-        onboardingCompleted: true,
-      },
       privacyBuckets: [
         session.privacyBuckets?.Strangers?._id,
         session.privacyBuckets?.Friends?._id,
+        session.privacyBuckets?.Private?._id,
       ].filter(Boolean),
       alters: {
         conditions: (session.members || [])
@@ -147,7 +191,17 @@ export function useSystemSession() {
               birthday: false, pronouns: true, metadata: false, caution: false, hidden: false,
             },
           },
+          {
+            bucket: 'Private',
+            settings: {
+              mask: false, description: false, banner: false, avatar: false,
+              birthday: false, pronouns: false, metadata: false, caution: false, hidden: true,
+            },
+          },
         ],
+      },
+      privateEntityIDs: session.privateEntityIDs || { alters: [], states: [], groups: [] },
+      front,
       },
       front,
     }
@@ -192,6 +246,7 @@ export function useSystemSession() {
     if (isDissociative) statusParts.push('Dissociative')
     if (!statusParts.length) statusParts.push('Basic')
     return {
+    markPrivateFromPreview,
       systemName: session.systemName,
       sysType: session.sysType,
       statusParts,
@@ -201,6 +256,7 @@ export function useSystemSession() {
   }, [session, deriveFlags])
 
   return {
+    markPrivateFromPreview,
     session,
     update,
     setSystemName,

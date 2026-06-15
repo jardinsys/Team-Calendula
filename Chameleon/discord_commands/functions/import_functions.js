@@ -170,6 +170,8 @@ async function importPluralKitFile(system, user, fileData, options, onProgress) 
 
 async function processPluralKitData(system, user, data, options, onProgress) {
     const emit = onProgress || (() => {});
+    const privateMemberIds = options.privateMemberIds || new Set();
+    const privateGroupIds = options.privateGroupIds || new Set();
     const result = {
         systemUpdated: false,
         membersImported: 0,
@@ -185,6 +187,32 @@ async function processPluralKitData(system, user, data, options, onProgress) {
     };
 
     const memberIdMap = new Map();
+
+    // Helper to add Private bucket to entity
+    const addPrivateBucket = async (entity, sourceId, isGroup = false) => {
+        const privateIds = isGroup ? privateGroupIds : privateMemberIds;
+        if (!privateIds.has(sourceId)) return;
+        const setting = entity.setting || {};
+        const privacy = setting.privacy || [];
+        const hasPrivate = privacy.some(p => p.bucket === 'Private');
+        if (hasPrivate) return;
+        privacy.push({
+            bucket: 'Private',
+            settings: {
+                mask: false,
+                description: false,
+                banner: false,
+                avatar: false,
+                birthday: false,
+                pronouns: false,
+                metadata: false,
+                caution: false,
+                hidden: true
+            }
+        });
+        setting.privacy = privacy;
+        entity.setting = setting;
+    };
 
     // Update system info
     if (data.system) {
@@ -247,11 +275,13 @@ async function processPluralKitData(system, user, data, options, onProgress) {
 
                 if (existingGroup && !options.replace) {
                     updateGroupFromPK(existingGroup, pkGroup);
+                    await addPrivateBucket(existingGroup, pkGroup.id, true);
                     await existingGroup.save();
                     groupMembershipMap.set(existingGroup._id.toString(), (pkGroup.members || []).map(m => typeof m === 'string' ? m : m.id));
                     result.groupsUpdated++;
                 } else {
                     const newGroup = createGroupFromPK(pkGroup);
+                    await addPrivateBucket(newGroup, pkGroup.id, true);
                     await utils.createAndLinkEntity(newGroup, system, 'group');
                     groupMembershipMap.set(newGroup._id.toString(), (pkGroup.members || []).map(m => typeof m === 'string' ? m : m.id));
                     result.groupsImported++;
@@ -291,12 +321,14 @@ async function processPluralKitData(system, user, data, options, onProgress) {
 
                 if (existingState && !options.replace) {
                     await updateStateFromPK(existingState, pkMember, system, options.target);
+                    await addPrivateBucket(existingState, pkMember.id);
                     await existingState.save();
                     memberIdMap.set(pkMember.id, { id: existingState._id, type: 'state' });
                     entity = existingState;
                     result.statesUpdated++;
                 } else if (existingState && options.target === TARGET_DISCORD) {
                     await updateStateFromPK(existingState, pkMember, system, options.target);
+                    await addPrivateBucket(existingState, pkMember.id);
                     await existingState.save();
                     memberIdMap.set(pkMember.id, { id: existingState._id, type: 'state' });
                     entity = existingState;
@@ -306,6 +338,7 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                         ? createStateFromPKDiscord(pkMember)
                         : createStateFromPK(pkMember);
                     await filterConflictingProxies(newState, system);
+                    await addPrivateBucket(newState, pkMember.id);
                     await utils.createAndLinkEntity(newState, system, 'state');
                     memberIdMap.set(pkMember.id, { id: newState._id, type: 'state' });
                     entity = newState;
@@ -322,12 +355,14 @@ async function processPluralKitData(system, user, data, options, onProgress) {
 
                 if (existingAlter && !options.replace) {
                     await updateAlterFromPK(existingAlter, pkMember, system, options.target);
+                    await addPrivateBucket(existingAlter, pkMember.id);
                     await existingAlter.save();
                     memberIdMap.set(pkMember.id, { id: existingAlter._id, type: 'alter' });
                     entity = existingAlter;
                     result.membersUpdated++;
                 } else if (existingAlter && options.target === TARGET_DISCORD) {
                     await updateAlterFromPK(existingAlter, pkMember, system, options.target);
+                    await addPrivateBucket(existingAlter, pkMember.id);
                     await existingAlter.save();
                     memberIdMap.set(pkMember.id, { id: existingAlter._id, type: 'alter' });
                     entity = existingAlter;
@@ -337,6 +372,7 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                         ? createAlterFromPKDiscord(pkMember)
                         : createAlterFromPK(pkMember);
                     await filterConflictingProxies(newAlter, system);
+                    await addPrivateBucket(newAlter, pkMember.id);
                     await utils.createAndLinkEntity(newAlter, system, 'alter');
                     memberIdMap.set(pkMember.id, { id: newAlter._id, type: 'alter' });
                     entity = newAlter;
@@ -392,6 +428,8 @@ async function importTupperboxFile(system, user, fileData, options, onProgress) 
 
 async function processTupperboxData(system, data, options, onProgress) {
     const emit = onProgress || (() => {});
+    const privateMemberIds = options.privateMemberIds || new Set();
+    const privateGroupIds = options.privateGroupIds || new Set();
     const result = {
         systemUpdated: false,
         membersImported: 0,
@@ -404,6 +442,32 @@ async function processTupperboxData(system, data, options, onProgress) {
     };
 
     const groupIdMap = new Map();
+
+    // Helper to add Private bucket to entity
+    const addPrivateBucket = async (entity, sourceId, isGroup = false) => {
+        const privateIds = isGroup ? privateGroupIds : privateMemberIds;
+        if (!privateIds.has(sourceId)) return;
+        const setting = entity.setting || {};
+        const privacy = setting.privacy || [];
+        const hasPrivate = privacy.some(p => p.bucket === 'Private');
+        if (hasPrivate) return;
+        privacy.push({
+            bucket: 'Private',
+            settings: {
+                mask: false,
+                description: false,
+                banner: false,
+                avatar: false,
+                birthday: false,
+                pronouns: false,
+                metadata: false,
+                caution: false,
+                hidden: true
+            }
+        });
+        setting.privacy = privacy;
+        entity.setting = setting;
+    };
 
     if (!system.alters) system.alters = { IDs: [], conditions: [] };
     if (!system.groups) system.groups = { IDs: [], types: [], conditions: [] };
@@ -427,6 +491,7 @@ async function processTupperboxData(system, data, options, onProgress) {
 
                 if (existingGroup && !options.replace) {
                     if (tbGroup.tag) existingGroup.signoff = tbGroup.tag;
+                    await addPrivateBucket(existingGroup, tbGroup.id, true);
                     await existingGroup.save();
                     groupIdMap.set(tbGroup.id, existingGroup._id);
                     result.groupsUpdated++;
@@ -443,6 +508,7 @@ async function processTupperboxData(system, data, options, onProgress) {
                             importedAt: new Date()
                         }
                     });
+                    await addPrivateBucket(newGroup, tbGroup.id, true);
                     await utils.createAndLinkEntity(newGroup, system, 'group');
 
                     groupIdMap.set(tbGroup.id, newGroup._id);
@@ -488,6 +554,7 @@ async function processTupperboxData(system, data, options, onProgress) {
                 }
                 if (tupper.tag) existingAlter.signoff = tupper.tag;
 
+                await addPrivateBucket(existingAlter, tupper.name);
                 await existingAlter.save();
 
                 if (tupper.group_id && groupIdMap.has(tupper.group_id)) {
@@ -518,6 +585,7 @@ async function processTupperboxData(system, data, options, onProgress) {
                         importedAt: new Date()
                     }
                 });
+                await addPrivateBucket(newAlter, tupper.name);
                 await utils.createAndLinkEntity(newAlter, system, 'alter');
 
                 if (tupper.group_id && groupIdMap.has(tupper.group_id)) {
@@ -591,6 +659,8 @@ async function importSimplyPluralAPI(system, user, token, options, onProgress) {
 
 async function processSimplyPluralData(system, data, options, onProgress) {
     const emit = onProgress || (() => {});
+    const privateMemberIds = options.privateMemberIds || new Set();
+    const privateGroupIds = options.privateGroupIds || new Set();
     const result = {
         systemUpdated: false,
         membersImported: 0,
@@ -602,6 +672,32 @@ async function processSimplyPluralData(system, data, options, onProgress) {
         groupsUpdated: 0,
         switchesImported: 0,
         errors: []
+    };
+
+    // Helper to add Private bucket to entity
+    const addPrivateBucket = async (entity, sourceId, isGroup = false) => {
+        const privateIds = isGroup ? privateGroupIds : privateMemberIds;
+        if (!privateIds.has(sourceId)) return;
+        const setting = entity.setting || {};
+        const privacy = setting.privacy || [];
+        const hasPrivate = privacy.some(p => p.bucket === 'Private');
+        if (hasPrivate) return;
+        privacy.push({
+            bucket: 'Private',
+            settings: {
+                mask: false,
+                description: false,
+                banner: false,
+                avatar: false,
+                birthday: false,
+                pronouns: false,
+                metadata: false,
+                caution: false,
+                hidden: true
+            }
+        });
+        setting.privacy = privacy;
+        entity.setting = setting;
     };
 
     if (!system.alters) system.alters = { IDs: [], conditions: [] };
@@ -631,6 +727,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                 if (existingGroup && !options.replace) {
                     if (spGroup.desc) existingGroup.description = spGroup.desc;
                     if (spGroup.color) existingGroup.color = spGroup.color;
+                    await addPrivateBucket(existingGroup, spGroup.uid || spGroup.name, true);
                     await existingGroup.save();
                     result.groupsUpdated++;
                 } else {
@@ -647,6 +744,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             importedAt: new Date()
                         }
                     });
+                    await addPrivateBucket(newGroup, spGroup.uid || spGroup.name, true);
                     await utils.createAndLinkEntity(newGroup, system, 'group');
                     result.groupsImported++;
                 }
@@ -690,6 +788,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                     if (spMember.desc) existingState.description = spMember.desc;
                     if (spMember.pronouns) existingState.pronouns = [spMember.pronouns];
                     if (spMember.color) existingState.color = spMember.color;
+                    await addPrivateBucket(existingState, spMember.uid);
                     await existingState.save();
                     entity = existingState;
                     result.statesUpdated++;
@@ -712,6 +811,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             pluralKitId: spMember.pkId || undefined
                         }
                     });
+                    await addPrivateBucket(newState, spMember.uid);
                     await utils.createAndLinkEntity(newState, system, 'state');
                     entity = newState;
                     result.statesImported++;
@@ -736,6 +836,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                         existingAlter.metadata = existingAlter.metadata || {};
                         existingAlter.metadata.pluralKitId = spMember.pkId;
                     }
+                    await addPrivateBucket(existingAlter, spMember.uid);
                     await existingAlter.save();
                     entity = existingAlter;
                     result.membersUpdated++;
@@ -758,6 +859,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             pluralKitId: spMember.pkId || undefined
                         }
                     });
+                    await addPrivateBucket(newAlter, spMember.uid);
                     await utils.createAndLinkEntity(newAlter, system, 'alter');
                     entity = newAlter;
                     result.membersImported++;
@@ -864,6 +966,8 @@ async function importOctoconFile(system, user, fileData, options, onProgress) {
 
 async function processOctoconData(system, user, data, options, onProgress) {
     const emit = onProgress || (() => {});
+    const privateMemberIds = options.privateMemberIds || new Set();
+    const privateGroupIds = options.privateGroupIds || new Set();
     const result = {
         systemUpdated: false,
         membersImported: 0,
@@ -879,6 +983,32 @@ async function processOctoconData(system, user, data, options, onProgress) {
     };
 
     const alterIdMap = new Map();
+
+    // Helper to add Private bucket to entity
+    const addPrivateBucket = async (entity, sourceId, isGroup = false) => {
+        const privateIds = isGroup ? privateGroupIds : privateMemberIds;
+        if (!privateIds.has(sourceId)) return;
+        const setting = entity.setting || {};
+        const privacy = setting.privacy || [];
+        const hasPrivate = privacy.some(p => p.bucket === 'Private');
+        if (hasPrivate) return;
+        privacy.push({
+            bucket: 'Private',
+            settings: {
+                mask: false,
+                description: false,
+                banner: false,
+                avatar: false,
+                birthday: false,
+                pronouns: false,
+                metadata: false,
+                caution: false,
+                hidden: true
+            }
+        });
+        setting.privacy = privacy;
+        entity.setting = setting;
+    };
 
     // Update system info
     if (data.user) {
@@ -932,11 +1062,13 @@ async function processOctoconData(system, user, data, options, onProgress) {
 
                 if (existingGroup && !options.replace) {
                     updateGroupFromOctocon(existingGroup, tag);
+                    await addPrivateBucket(existingGroup, tag.id, true);
                     await existingGroup.save();
                     groupMembershipMap.set(existingGroup._id.toString(), tag.alters || []);
                     result.groupsUpdated++;
                 } else {
                     const newGroup = createGroupFromOctocon(tag);
+                    await addPrivateBucket(newGroup, tag.id, true);
                     await utils.createAndLinkEntity(newGroup, system, 'group');
                     groupMembershipMap.set(newGroup._id.toString(), tag.alters || []);
                     result.groupsImported++;
@@ -973,6 +1105,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
 
                 if (existingState && !options.replace) {
                     await updateStateFromOctocon(existingState, octoAlter, system, options.target);
+                    await addPrivateBucket(existingState, octoAlter.id);
                     await existingState.save();
                     alterIdMap.set(octoAlter.id, { id: existingState._id, type: 'state' });
                     entity = existingState;
@@ -982,6 +1115,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
                         ? createStateFromOctoconDiscord(octoAlter)
                         : createStateFromOctocon(octoAlter);
                     await filterConflictingProxies(newState, system);
+                    await addPrivateBucket(newState, octoAlter.id);
                     await utils.createAndLinkEntity(newState, system, 'state');
                     alterIdMap.set(octoAlter.id, { id: newState._id, type: 'state' });
                     entity = newState;
@@ -998,6 +1132,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
 
                 if (existingAlter && !options.replace) {
                     await updateAlterFromOctocon(existingAlter, octoAlter, system, options.target);
+                    await addPrivateBucket(existingAlter, octoAlter.id);
                     await existingAlter.save();
                     alterIdMap.set(octoAlter.id, { id: existingAlter._id, type: 'alter' });
                     entity = existingAlter;
@@ -1007,6 +1142,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
                         ? createAlterFromOctoconDiscord(octoAlter)
                         : createAlterFromOctocon(octoAlter);
                     await filterConflictingProxies(newAlter, system);
+                    await addPrivateBucket(newAlter, octoAlter.id);
                     await utils.createAndLinkEntity(newAlter, system, 'alter');
                     alterIdMap.set(octoAlter.id, { id: newAlter._id, type: 'alter' });
                     entity = newAlter;
@@ -1919,6 +2055,7 @@ async function previewPluralKitData(system, data) {
             proxy: (pkMember.proxy_tags || []).map(t => `${t.prefix || ''}text${t.suffix || ''}`).filter(p => p !== 'text'),
             action: existing ? 'update' : 'new',
             existingId: existing?._id?.toString() || null,
+            visibility: pkMember.visibility || 'public',
         });
     }
 
@@ -1933,6 +2070,7 @@ async function previewPluralKitData(system, data) {
             memberSourceIds: (pkGroup.members || []).map(m => typeof m === 'string' ? m : m.id),
             action: existingGroup ? 'update' : 'new',
             existingId: existingGroup?._id?.toString() || null,
+            visibility: pkGroup.visibility || 'public',
         });
     }
 
@@ -1956,6 +2094,7 @@ async function previewOctoconData(system, data) {
             proxy: (octoAlter.discord_proxies || []).filter(p => p && p.length > 0),
             action: existing ? 'update' : 'new',
             existingId: existing?._id?.toString() || null,
+            visibility: octoAlter.visible === false ? 'private' : 'public',
         });
     }
 
@@ -1970,6 +2109,7 @@ async function previewOctoconData(system, data) {
             memberSourceIds: tag.alters || [],
             action: existingGroup ? 'update' : 'new',
             existingId: existingGroup?._id?.toString() || null,
+            visibility: tag.visible === false ? 'private' : 'public',
         });
     }
 
@@ -2000,6 +2140,7 @@ async function previewTupperboxData(system, data) {
             groupSourceId: tupper.group_id || null,
             action: existingAlter ? 'update' : 'new',
             existingId: existingAlter?._id?.toString() || null,
+            visibility: 'public',
         });
     }
 
@@ -2025,6 +2166,7 @@ async function previewTupperboxData(system, data) {
             memberSourceIds,
             action: existingGroup ? 'update' : 'new',
             existingId: existingGroup?._id?.toString() || null,
+            visibility: 'public',
         });
     }
 
@@ -2064,6 +2206,7 @@ async function previewSimplyPluralData(system, data) {
             proxy: [],
             action: existing ? 'update' : 'new',
             existingId: existing?._id?.toString() || null,
+            visibility: 'public',
         });
     }
 
@@ -2085,6 +2228,7 @@ async function previewSimplyPluralData(system, data) {
             memberSourceIds: [],
             action: existingGroup ? 'update' : 'new',
             existingId: existingGroup?._id?.toString() || null,
+            visibility: 'public',
         });
     }
 
@@ -2206,6 +2350,48 @@ async function previewTupperboxFile(system, fileData) {
 // EXPORTS
 // ============================================
 
+
+/* Assign Private bucket to imported entities that were private in source */
+async function assignPrivateBuckets(system, entities) {
+    const { Alter, State, Group } = require('../../schemas/alter');
+    const StateModel = require('../../schemas/state');
+    const GroupModel = require('../../schemas/group');
+
+    for (const entity of entities) {
+        if (!entity.visibility || entity.visibility !== 'private') continue;
+
+        const isAlter = entity.entityType !== 'state';
+        const Model = isAlter ? require('../../schemas/alter') : require('../../schemas/state');
+        const existing = await Model.findOne({ _id: entity._id }).lean();
+        if (!existing) continue;
+
+        const setting = existing.setting || {};
+        const privacy = setting.privacy || [];
+        const hasPrivate = privacy.some(p => p.bucket === 'Private');
+        if (hasPrivate) continue;
+
+        privacy.push({
+            bucket: 'Private',
+            settings: {
+                mask: false,
+                description: false,
+                banner: false,
+                avatar: false,
+                birthday: false,
+                pronouns: false,
+                metadata: false,
+                caution: false,
+                hidden: true
+            }
+        });
+
+        await Model.updateOne(
+            { _id: existing._id },
+            { $set: { 'setting.privacy': privacy } }
+        );
+    }
+}
+
 module.exports = {
     // Constants
     PK_API_BASE,
@@ -2286,4 +2472,7 @@ module.exports = {
     previewOctoconAPI,
     previewOctoconFile,
     previewTupperboxFile,
+
+    // Private bucket assignment
+    assignPrivateBuckets
 };
