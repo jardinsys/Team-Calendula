@@ -13,6 +13,7 @@ const systemPrivacySchema = new mongoose.Schema({
     caution: Boolean,
     hidden: Boolean,
     list: Boolean,
+    front: Boolean,
 });
 
 //Group
