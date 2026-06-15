@@ -2,9 +2,9 @@
 // Re-exported through the `bot_utils` barrel so all consumers keep the same API.
 
 const { escapeRegex } = require('./constants');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
 
 /* Find an entity (alter/state/group) by name or ID (case-insensitive)
  * @param {string} identifier - Name, alias, or ID

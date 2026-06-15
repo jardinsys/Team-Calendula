@@ -1,9 +1,9 @@
 // Entity-System Linking Utilities
 // Bidirectional entity creation, linking, and management between entities and systems
 
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
 
 /**
  * Create an entity, set systemID, save, and push to system's IDs array.
@@ -46,7 +46,7 @@ function unlinkEntityFromSystem(entityId, system, entityType) {
  */
 function publishDeleteEvent(systemId, entityType, entityId) {
     try {
-        const { publishEvent } = require('../../redis');
+        const { publishEvent } = require('../../../redis');
         publishEvent(systemId, { type: 'entity:deleted', entityType, entityId: entityId.toString() });
     } catch (_) {}
 }

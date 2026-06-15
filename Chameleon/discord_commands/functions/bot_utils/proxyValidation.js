@@ -13,9 +13,9 @@ const {
     TextInputStyle,
 } = require('discord.js');
 
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
 
 const display = require('./display');
 const { getDisplayName, capitalize } = display;

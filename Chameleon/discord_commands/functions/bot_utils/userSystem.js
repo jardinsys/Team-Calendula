@@ -12,10 +12,9 @@ const { ENTITY_COLORS, DSM_TYPES, ICD_TYPES, DISORDER_MAP, DSM_DISORDER_OPTIONS,
 
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
-const User = require('../../schemas/user');
-const System = require('../../schemas/system');
-const PrivacyBucket = require('../../schemas/settings').PrivacyBucket;
-const Session = require('../../schemas/session');
+const User = require('../../../schemas/user');
+const System = require('../../../schemas/system');
+const PrivacyBucket = require('../../../schemas/settings').PrivacyBucket;
 const mongoose = require('mongoose');
 
 // Bot session manager for staged onboarding/import

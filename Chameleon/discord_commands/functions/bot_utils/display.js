@@ -2,7 +2,7 @@
 // Re-exported through the `bot_utils` barrel so all consumers keep the same API.
 
 const { INDEXABLE_NAME_REGEX } = require('./constants');
-const Guild = require('../../schemas/guild');
+const Guild = require('../../../schemas/guild');
 
 /* Get the display name for an entity, respecting closedChar settings
  * @param {Object} entity - Entity with name property

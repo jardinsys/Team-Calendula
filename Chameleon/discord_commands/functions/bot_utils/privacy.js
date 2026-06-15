@@ -1,8 +1,8 @@
 // Privacy and visibility extracted from `bot_utils/index.js`.
 // Re-exported through the `bot_utils` barrel so all consumers keep the same API.
 
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
+const System = require('../../../schemas/system');
+const User = require('../../../schemas/user');
 
 function getPrivacyBucket(system, viewerDiscordId, viewerFriendId) {
     if (!system?.privacyBuckets) return null;

@@ -1,7 +1,7 @@
 // Guild Logging Utilities
 // Discord guild log channel posting and log embed builders
 
-const Guild = require('../../schemas/guild');
+const Guild = require('../../../schemas/guild');
 const { EmbedBuilder } = require('discord.js');
 
 const constants = require('./constants');

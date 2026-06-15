@@ -1,7 +1,7 @@
 // Embed Color & Alter Display Utilities
 // System/entity embed color resolution and alter display merging with active states
 
-const State = require('../../schemas/state');
+const State = require('../../../schemas/state');
 const constants = require('./constants');
 const { ENTITY_COLORS } = constants;
 

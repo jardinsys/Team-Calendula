@@ -18,19 +18,19 @@ const https = require('https');
 const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 // Import schemas
-const System = require('../../schemas/system');
-const User = require('../../schemas/user');
+const System = require('../../../schemas/system');
+const User = require('../../../schemas/user');
 
 // Import notification manager
-const notificationManager = require('./notificationManager');
-const Alter = require('../../schemas/alter');
-const State = require('../../schemas/state');
-const Group = require('../../schemas/group');
-const Guild = require('../../schemas/guild');
-const { PrivacyBucket } = require('../../schemas/settings');
+const notificationManager = require('../notificationManager');
+const Alter = require('../../../schemas/alter');
+const State = require('../../../schemas/state');
+const Group = require('../../../schemas/group');
+const Guild = require('../../../schemas/guild');
+const { PrivacyBucket } = require('../../../schemas/settings');
 
 // Import config for R2
-const config = require('../../config.json');
+const config = require('../../../config.json');
 
 // R2 clients imported from r2Media.js when needed
 
@@ -645,7 +645,7 @@ module.exports = {
     sendGuildLog,
 
     // Staged onboarding/import sessions for bot + frontend flows
-    BotSessionManager: require('./BotSessionManager'),
+    BotSessionManager: require('../BotSessionManager'),
 
     // Misc helpers (extracted to helpers.js)
     ...require('./helpers')
