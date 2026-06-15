@@ -36,6 +36,7 @@ const config = require('../../../config.json');
 
 // ==== CONSTANTS =====
 // Re-exported from constants.js via spread at bottom
+const constants = require('./constants');
 
 // Session storage (for multi-step interactions)
 const sessions = require('./sessions');
@@ -44,26 +45,39 @@ const { activeSessions, sessionTimeouts } = sessions;
 // ==== SESSION MANAGEMENT ====
 // Re-exported from sessions.js via spread at bottom
 
+const args = require('./args');
 // ==== PREFIX COMMAND ARGUMENT PARSING ====
 // Re-exported from args.js via spread at bottom
 
+const userSystem = require('./userSystem');
 // ==== USER AND SYSTEM MANAGEMENT ====
 // Re-exported from userSystem.js via spread at bottom
 
+const entitySearch = require('./entitySearch');
 // ==== ENTITY SEARCH (CASE-INSENSITIVE) ====
 // Re-exported from entitySearch.js via spread at bottom
 
+const privacy = require('./privacy');
 // ==== PRIVACY AND VISIBILITY ====
 // Re-exported from privacy.js via spread at bottom
 
+const display = require('./display');
 // ==== DISPLAY HELPERS ====
 // Re-exported from display.js via spread at bottom
 
+const response = require('./response');
 // ============================================
 // PREFIX COMMAND RESPONSE HELPERS
 // Re-exported from response.js via spread at bottom
 // ============================================
 
+const formatting = require('./formatting');
+const proxyValidation = require('./proxyValidation');
+const entityLinking = require('./entityLinking');
+const r2Media = require('./r2Media');
+const embedColors = require('./embedColors');
+const logging = require('./logging');
+const helpers = require('./helpers');
 // ============================================
 // SETTINGS / PROXY UTILITIES
 // Re-exported from proxyValidation.js via spread at bottom
