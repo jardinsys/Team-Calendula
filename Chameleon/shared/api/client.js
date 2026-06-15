@@ -179,7 +179,14 @@ class ApiClient {
     async createSystem(data) {
         return this.request('/system', {
             method: 'POST',
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
+        })
+    }
+
+    async createSystemSession(data) {
+        return this.request('/system', {
+            method: 'POST',
+            body: JSON.stringify(data),
         })
     }
 

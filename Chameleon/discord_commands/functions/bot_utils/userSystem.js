@@ -18,6 +18,12 @@ const PrivacyBucket = require('../../schemas/settings').PrivacyBucket;
 const Session = require('../../schemas/session');
 const mongoose = require('mongoose');
 
+// Bot session manager for staged onboarding/import
+const BotSessionManager = require('../BotSessionManager');
+
+// Shared system creation from staged payload
+const { createSystemFromPayload } = require('../../../api/utils/createSystemFromPayload');
+
 /* Get or create user and system for an interaction or message
  * Works with both slash commands (interaction) and prefix commands (message)
  * @param {Interaction|Message} context - Discord interaction or message
@@ -132,13 +138,13 @@ async function createUser(discordId) {
  * @param {string} entityType - 'system', 'alter', 'state', or 'group'
  */
 async function handleNewUserFlow(interaction, entityType) {
-    const sessionId = generateSessionId(interaction.user.id);
+    const sessionId = BotSessionManager.start(interaction.user.id);
 
-    setSession(sessionId, {
-        type: 'new_user_onboarding',
-        step: 'category',
-        entityType,
-    });
+    const session = BotSessionManager.get(interaction.user.id);
+    session.type = 'new_user_onboarding';
+    session.step = 'category';
+    session.entityType = entityType;
+    BotSessionManager.set(sessionId, session);
 
     const embed = new EmbedBuilder()
         .setColor(ENTITY_COLORS.system)
@@ -725,6 +731,7 @@ async function finalizeOnboarding(interaction, sessionId, session, customName) {
         // If user already has a system, just complete
         let system = user.systemID ? await System.findById(user.systemID) : null;
         if (system) {
+            BotSessionManager.clear(interaction.user.id);
             return await interaction.editReply({
                 content: '✅ Profile already exists! You can update your type with `/system edit`.',
                 embeds: [],
@@ -732,99 +739,22 @@ async function finalizeOnboarding(interaction, sessionId, session, customName) {
             });
         }
 
-        // Build sys_type
-        const sysType = {
-            isSystem: session.resolvedIsSystem || false,
-            isFragmented: session.resolvedIsFragmented || false,
-            isDissociative: session.isDissociative || false,
-            dissociativeStateName: session.dissociativeStateName || 'Dissociated',
-            onboardingCompleted: true,
-        };
-
-        // Set name and dd from disorder selection
-        if (session.selectedDisorder && DISORDER_MAP[session.selectedDisorder]) {
-            const mapping = DISORDER_MAP[session.selectedDisorder];
-            sysType.name = customName || mapping.fullName;
-            sysType.dd = mapping.source === 'DSM'
-                ? { DSM: session.selectedDisorder }
-                : { ICD: session.selectedDisorder };
-        } else {
-            // Other or None path
-            sysType.name = customName || 'None';
-            sysType.dd = {};
+        // Apply custom name to session before commit
+        if (customName) {
+            session.systemName = customName;
         }
 
-        // Create privacy buckets
-        const strangersBucket = new PrivacyBucket({ name: 'Strangers', friends: [] });
-        const friendsBucket = new PrivacyBucket({ name: 'Friends', friends: [] });
-        await strangersBucket.save();
-        await friendsBucket.save();
-
-        // Seed default conditions based on system type
-        const alterConditions = [];
-        const stateConditions = [];
-        if (sysType.isSystem) {
-            alterConditions.push({ name: 'Dormant', settings: { hide_to_self: false, include_in_Count: true } });
-        }
-        if (sysType.isFragmented) {
-            stateConditions.push({ name: 'Remission', settings: { hide_to_self: false, include_in_Count: true } });
-        }
-
-        // Create system
-        system = new System({
-            users: [user._id],
-            metadata: { joinedAt: new Date() },
-            sys_type: sysType,
-            privacyBuckets: [strangersBucket._id, friendsBucket._id],
-            alters: { conditions: alterConditions, IDs: [] },
-            states: { conditions: stateConditions, IDs: [] },
-            groups: { conditions: [], IDs: [] },
-            setting: {
-                friendAutoBucket: 'Friends',
-                privacy: [
-                    {
-                        bucket: 'Strangers',
-                        settings: { mask: false, description: false, banner: false, avatar: false, birthday: false, pronouns: false, metadata: false, caution: false, hidden: true }
-                    },
-                    {
-                        bucket: 'Friends',
-                        settings: { mask: false, description: true, banner: true, avatar: true, birthday: false, pronouns: true, metadata: false, caution: false, hidden: false }
-                    }
-                ]
-            }
+        // Commit staged session using shared transactional creation
+        const result = await BotSessionManager.commit(interaction.user.id, async (payload) => {
+            return await createSystemFromPayload(user._id, payload);
         });
 
-        if (customName) {
-            const idx = customName.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
-            system.name = {
-                display: customName,
-                ...(idx && { indexable: idx }),
-            };
-        }
-
-        await system.save();
-        user.systemID = system._id;
-        await user.save();
-
-        // Auto-create dissociative state for dissociative users
-        if (session.isDissociative) {
-            const stateName = session.dissociativeStateName || 'Dissociated';
-            const stateIndexable = stateName.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
-            const dissociatedState = new State({
-                name: {
-                    display: stateName,
-                    ...(stateIndexable && { indexable: stateIndexable }),
-                },
-                description: `A ${stateName.toLowerCase()} state`,
-                proxy: [stateIndexable || stateName.toLowerCase()],
-            });
-            await createAndLinkEntity(dissociatedState, system, 'state');
-            await system.save();
-        }
-
-        deleteSession(sessionId);
+        system = result.system;
 
         // Build success message
+        const sysType = session.resolvedIsSystem || session.resolvedIsFragmented || session.isDissociative 
+            ? { isSystem: session.resolvedIsSystem, isFragmented: session.resolvedIsFragmented, isDissociative: session.isDissociative }
+            : {};
         const statusParts = [];
         if (session.resolvedIsSystem) statusParts.push('System');
         if (session.resolvedIsFragmented) statusParts.push('Fragmented');
@@ -840,9 +770,9 @@ async function finalizeOnboarding(interaction, sessionId, session, customName) {
             .setTitle('✅ Profile Created!')
             .setDescription(
                 `**Type:** ${statusParts.join(', ')}\n` +
-                (sysType.dd?.DSM || sysType.dd?.ICD
-                    ? `**Condition:** ${sysType.name}\n`
-                    : '') +
+                (session.selectedDisorder && DISORDER_MAP[session.selectedDisorder]
+                    ? `**Condition:** ${DISORDER_MAP[session.selectedDisorder].fullName}\n`
+                    : (session.otherName ? `**Condition:** ${session.otherName}\n` : '')) +
                 (session.isDissociative
                     ? `**Note:** A "${session.dissociativeStateName || 'Dissociated'}" state has been created for you.\n`
                     : '') +
