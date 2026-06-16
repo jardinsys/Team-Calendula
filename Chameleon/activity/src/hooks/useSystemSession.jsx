@@ -190,7 +190,7 @@ export function useSystemSession() {
       },
       privateEntityIDs: session.privateEntityIDs || { alters: [], states: [], groups: [] },
       front,
-    };
+    }}
 
     return payload
   }, [
