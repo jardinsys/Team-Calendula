@@ -3,6 +3,9 @@
 // Re-exported through the `bot_utils` barrel.
 
 const { activeSessions, generateSessionId, setSession, deleteSession, getSession } = require('./sessions');
+const path = require('path');
+const chameleonDir = path.resolve(__dirname, '../../../..');
+const { mergePrivacySettings } = require(path.join(chameleonDir, 'schemas/settings'));
 
 class BotSessionManager {
     static TTL_MS = 15 * 60 * 1000;
@@ -132,11 +135,11 @@ class BotSessionManager {
                 privacy: [
                     {
                         bucket: 'Strangers',
-                        settings: { mask: false, description: false, banner: false, avatar: false, birthday: false, pronouns: false, metadata: false, caution: false, hidden: true },
+                        settings: mergePrivacySettings('Strangers', 'system')
                     },
                     {
                         bucket: 'Friends',
-                        settings: { mask: false, description: true, banner: true, avatar: true, birthday: false, pronouns: true, metadata: false, caution: false, hidden: false },
+                        settings: mergePrivacySettings('Friends', 'system')
                     },
                 ],
             },

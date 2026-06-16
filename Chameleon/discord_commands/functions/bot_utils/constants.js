@@ -26,6 +26,10 @@ const ICD_TYPES = ['P-DID', 'Trance', 'DNSD', 'Possession Trance'];
 // DISORDER MAP (CommonJS version for Discord bot)
 // ═══════════════════════════════════════════
 
+function escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const DISORDER_MAP = {
     // DSM-5
     'DID':           { fullName: 'Dissociative Identity Disorder', source: 'DSM', isSystem: true, isFragmented: true, isDissociative: true },
@@ -110,4 +114,5 @@ module.exports = {
     NEUTRAL_TERMS,
     getSystemTerm,
     getAlterTerm,
+    escapeRegex
 };

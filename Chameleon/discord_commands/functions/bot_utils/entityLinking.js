@@ -4,10 +4,14 @@
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
+const path = require('path');
+const chameleonDir = path.resolve(__dirname, '../../../..');
+const { mergePrivacySettings } = require(path.join(chameleonDir, 'schemas/settings'));
 
 /**
  * Create an entity, set systemID, save, and push to system's IDs array.
  * Replaces the inline entity.save() + system.X.IDs.push() pattern.
+ * Initializes entity's privacy settings from system's bucket templates.
  * @param {Object} entity - Unsaved Mongoose entity document (Alter, State, or Group)
  * @param {Object} system - Loaded System document
  * @param {string} entityType - 'alter', 'state', or 'group'
@@ -15,6 +19,16 @@ const Group = require('../../../schemas/group');
  */
 async function createAndLinkEntity(entity, system, entityType) {
     entity.systemID = system._id.toString();
+    
+    // Initialize privacy settings from system's privacyBuckets
+    if (system.setting?.privacy && Array.isArray(system.setting.privacy)) {
+        entity.setting = entity.setting || {};
+        entity.setting.privacy = system.setting.privacy.map(b => ({
+            bucket: b.bucket,
+            settings: mergePrivacySettings(b.bucket, entityType === 'group' ? 'group' : 'alter')
+        }));
+    }
+    
     await entity.save();
     const key = entityType + 's'; // 'alters', 'states', 'groups'
     system[key] = system[key] || { IDs: [] };

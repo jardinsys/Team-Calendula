@@ -149,6 +149,14 @@ export function FriendsPage({ onNavigate, onOpenSettings }) {
                     )}
                     <button
                         className="btn btn-ghost btn-sm"
+                        onClick={() => onNavigate('settings', { section: 'privacy-buckets' })}
+                        title="Privacy Buckets"
+                        style={{ padding: '6px', minWidth: 'auto' }}
+                    >
+                        <Icon name="shield" size={16} />
+                    </button>
+                    <button
+                        className="btn btn-ghost btn-sm"
                         onClick={onOpenSettings}
                         title="Settings"
                         style={{ padding: '6px', minWidth: 'auto' }}

@@ -7,7 +7,6 @@ const DEFAULT_SESSION = () => ({
   privacyBuckets: {
     Strangers: { name: 'Strangers', friends: [] },
     Friends:   { name: 'Friends',   friends: [] },
-    Private:   { name: 'Private',   friends: [] },
   },
   alters:     { conditions: [], IDs: [] },
   states:     { conditions: [], IDs: [] },
@@ -101,7 +100,6 @@ export function useSystemSession() {
   const deriveFlags = useCallback((sysType = session.sysType) => {
     if (!sysType) return { isSystem: false, isFragmented: false, isDissociative: false }
     return {
-    markPrivateFromPreview,
       isSystem:      !!sysType.isSystem,
       isFragmented:  !!sysType.isFragmented,
       isDissociative:!!sysType.isDissociative,
@@ -113,7 +111,6 @@ export function useSystemSession() {
 
     if ((current.shiftHistory || []).length) {
       return {
-    markPrivateFromPreview,
         ...base,
         layers: [
           {
@@ -129,7 +126,6 @@ export function useSystemSession() {
     }
 
     return {
-    markPrivateFromPreview,
       ...base,
       layers: base.layers || [],
     }
@@ -155,7 +151,6 @@ export function useSystemSession() {
       privacyBuckets: [
         session.privacyBuckets?.Strangers?._id,
         session.privacyBuckets?.Friends?._id,
-        session.privacyBuckets?.Private?._id,
       ].filter(Boolean),
       alters: {
         conditions: (session.members || [])
@@ -191,18 +186,9 @@ export function useSystemSession() {
               birthday: false, pronouns: true, metadata: false, caution: false, hidden: false,
             },
           },
-          {
-            bucket: 'Private',
-            settings: {
-              mask: false, description: false, banner: false, avatar: false,
-              birthday: false, pronouns: false, metadata: false, caution: false, hidden: true,
-            },
-          },
         ],
       },
       privateEntityIDs: session.privateEntityIDs || { alters: [], states: [], groups: [] },
-      front,
-      },
       front,
     }
 
@@ -246,7 +232,6 @@ export function useSystemSession() {
     if (isDissociative) statusParts.push('Dissociative')
     if (!statusParts.length) statusParts.push('Basic')
     return {
-    markPrivateFromPreview,
       systemName: session.systemName,
       sysType: session.sysType,
       statusParts,

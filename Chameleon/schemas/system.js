@@ -211,7 +211,12 @@ const systemSchema = new mongoose.Schema({
         },
         privacy: [{
             bucket: String,
-            settings: systemPrivacySchema
+            settings: systemPrivacySchema,
+            defaults: {
+                alter: alterPrivacySchema,
+                state: alterPrivacySchema,
+                group: groupPrivacySchema
+            }
         }],
         friendAutoBucket: String
     },

@@ -12,6 +12,7 @@ const State = require('../../schemas/state');
 const Group = require('../../schemas/group');
 const { convertAltersToStates, convertStatesToAlters } = require('../../discord_commands/functions/convert_functions');
 const { PrivacyBucket } = require('../../schemas/settings');
+const { mergePrivacySettings, getBucketTemplate } = require('../../schemas/settings');
 const { uploadMiddleware } = require('../middleware/upload');
 const { handleSystemImageUpload, handleSystemImageDelete } = require('./avatar');
 const { deleteEntityR2Media, cleanUserReferences, deleteUserNotes, deleteUserMessages, deleteSystemData } = require('../utils/cascade');
@@ -469,6 +470,298 @@ router.delete('/avatar', async (req, res, next) => {
 });
 router.delete('/banner', async (req, res, next) => {
     try { await handleSystemImageDelete(req, res, 'theme.background.media'); } catch (err) { next(err); }
+});
+
+// ===========================================
+// PRIVACY BUCKET ROUTES
+// ===========================================
+
+/**
+ * GET /api/system/privacy-buckets
+ * Get all privacy buckets for the system with template info
+ */
+router.get('/privacy-buckets', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user?.systemID) return res.status(404).json({ error: 'Not registered' });
+
+        const system = await System.findById(user.systemID).populate('privacyBuckets');
+        if (!system) return res.status(404).json({ error: 'Not registered' });
+
+        const buckets = system.privacyBuckets || [];
+        const settings = system.setting?.privacy || [];
+
+        // Merge bucket metadata with settings and template info
+        const result = buckets.map(bucket => {
+            const setting = settings.find(s => s.bucket === bucket.name);
+            const template = getBucketTemplate(bucket.name, 'alter'); // Use alter as reference
+            return {
+                _id: bucket._id,
+                name: bucket.name,
+                friends: bucket.friends,
+                settings: setting?.settings || {},
+                template: template || null,
+                isDefault: ['Strangers', 'Friends'].includes(bucket.name)
+            };
+        });
+
+        res.json(result);
+    } catch (err) {
+        console.error('[PrivacyBuckets] Get error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/system/privacy-buckets
+ * Create a new privacy bucket
+ * Body: { name: string, template?: 'Strangers' | 'Friends' | 'custom', settings?: object }
+ */
+router.post('/privacy-buckets', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user?.systemID) return res.status(404).json({ error: 'Not registered' });
+
+        const system = await System.findById(user.systemID);
+        if (!system) return res.status(404).json({ error: 'Not registered' });
+
+        const { name, template = 'Friends', settings: customSettings } = req.body;
+
+        if (!name || typeof name !== 'string') {
+            return res.status(400).json({ error: 'Bucket name is required' });
+        }
+
+        // Check for duplicate name (case-insensitive)
+        const existing = system.privacyBuckets?.find(b => b.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+            return res.status(400).json({ error: 'Bucket with this name already exists' });
+        }
+
+        // Merge template with custom settings
+        const templateSettings = getBucketTemplate(template, 'alter') || getBucketTemplate('Friends', 'alter');
+        const finalSettings = { ...templateSettings, ...customSettings };
+
+        // Create PrivacyBucket doc
+        const bucket = new PrivacyBucket({ name, friends: [] });
+        await bucket.save();
+
+        // Add to system
+        system.privacyBuckets = system.privacyBuckets || [];
+        system.privacyBuckets.push(bucket._id);
+
+        // Add to system settings privacy array
+        system.setting = system.setting || {};
+        system.setting.privacy = system.setting.privacy || [];
+        system.setting.privacy.push({ bucket: name, settings: finalSettings });
+
+        await system.save();
+
+        // TODO: Propagate to all existing entities (alter/state/group)
+        // This could be a separate endpoint or done here
+
+        res.status(201).json({
+            _id: bucket._id,
+            name: bucket.name,
+            friends: bucket.friends,
+            settings: finalSettings,
+            template: templateSettings
+        });
+    } catch (err) {
+        console.error('[PrivacyBuckets] Create error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * PATCH /api/system/privacy-buckets/:bucketId
+ * Update a privacy bucket's settings
+ * Body: { name?: string, settings?: object }
+ */
+router.patch('/privacy-buckets/:bucketId', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user?.systemID) return res.status(404).json({ error: 'Not registered' });
+
+        const system = await System.findById(user.systemID).populate('privacyBuckets');
+        if (!system) return res.status(404).json({ error: 'Not registered' });
+
+        const { name, settings } = req.body;
+        const bucketId = req.params.bucketId;
+
+        // Find bucket in system
+        const bucket = system.privacyBuckets?.find(b => b._id.toString() === bucketId);
+        if (!bucket) {
+            return res.status(404).json({ error: 'Privacy bucket not found in system' });
+        }
+
+        // Prevent renaming default buckets
+        if (name && name !== bucket.name && ['Strangers', 'Friends'].includes(bucket.name)) {
+            return res.status(400).json({ error: 'Cannot rename default buckets (Strangers, Friends)' });
+        }
+
+        // Update bucket name if provided
+        if (name && name !== bucket.name) {
+            // Check for duplicate
+            const exists = system.privacyBuckets?.find(b => b.name.toLowerCase() === name.toLowerCase());
+            if (exists) {
+                return res.status(400).json({ error: 'Bucket with this name already exists' });
+            }
+            bucket.name = name;
+            await bucket.save();
+        }
+
+        // Update settings in system.setting.privacy
+        if (settings) {
+            system.setting = system.setting || {};
+            system.setting.privacy = system.setting.privacy || [];
+            const settingEntry = system.setting.privacy.find(s => s.bucket === (name || bucket.name));
+            if (settingEntry) {
+                settingEntry.settings = { ...settingEntry.settings, ...settings };
+                if (name && name !== bucket.name) {
+                    settingEntry.bucket = name;
+                }
+            }
+        }
+
+        await system.save();
+
+        // TODO: Propagate settings changes to entities that use this bucket
+        // This could be a separate endpoint
+
+        res.json({
+            _id: bucket._id,
+            name: bucket.name,
+            friends: bucket.friends,
+            settings: settings || system.setting.privacy.find(s => s.bucket === (name || bucket.name))?.settings
+        });
+    } catch (err) {
+        console.error('[PrivacyBuckets] Update error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * DELETE /api/system/privacy-buckets/:bucketId
+ * Delete a privacy bucket (cannot delete Strangers or Friends)
+ */
+router.delete('/privacy-buckets/:bucketId', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user?.systemID) return res.status(404).json({ error: 'Not registered' });
+
+        const system = await System.findById(user.systemID);
+        if (!system) return res.status(404).json({ error: 'Not registered' });
+
+        const bucketId = req.params.bucketId;
+
+        // Find bucket in system
+        const bucketIndex = system.privacyBuckets?.findIndex(b => b._id.toString() === bucketId);
+        if (bucketIndex === -1) {
+            return res.status(404).json({ error: 'Privacy bucket not found in system' });
+        }
+
+        const bucket = await PrivacyBucket.findById(bucketId);
+        if (!bucket) {
+            return res.status(404).json({ error: 'Privacy bucket not found' });
+        }
+
+        // Prevent deleting default buckets
+        if (['Strangers', 'Friends'].includes(bucket.name)) {
+            return res.status(400).json({ error: 'Cannot delete default buckets (Strangers, Friends)' });
+        }
+
+        // Remove from system
+        system.privacyBuckets.splice(bucketIndex, 1);
+
+        // Remove from settings
+        if (system.setting?.privacy) {
+            system.setting.privacy = system.setting.privacy.filter(s => s.bucket !== bucket.name);
+        }
+
+        await system.save();
+        await PrivacyBucket.findByIdAndDelete(bucketId);
+
+        // TODO: Clean up entities still referencing this bucket
+        // - Remove from entity.setting.privacy arrays
+        // - Reassign friends from this bucket to friendAutoBucket
+
+        res.json({ success: true, message: 'Privacy bucket deleted' });
+    } catch (err) {
+        console.error('[PrivacyBuckets] Delete error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/system/privacy-buckets/:bucketId/propagate
+ * Propagate bucket settings to all entities using this bucket
+ * Body: { entityTypes?: ['alter', 'state', 'group'], override?: boolean }
+ */
+router.post('/privacy-buckets/:bucketId/propagate', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user?.systemID) return res.status(404).json({ error: 'Not registered' });
+
+        const system = await System.findById(user.systemID).populate('privacyBuckets');
+        if (!system) return res.status(404).json({ error: 'Not registered' });
+
+        const { entityTypes = ['alter', 'state', 'group'], override = false } = req.body;
+        const bucketId = req.params.bucketId;
+
+        // Find bucket
+        const bucket = system.privacyBuckets?.find(b => b._id.toString() === bucketId);
+        if (!bucket) {
+            return res.status(404).json({ error: 'Privacy bucket not found in system' });
+        }
+
+        // Get bucket settings
+        const settingEntry = system.setting?.privacy?.find(s => s.bucket === bucket.name);
+        if (!settingEntry) {
+            return res.status(400).json({ error: 'Bucket settings not found in system' });
+        }
+
+        const bucketSettings = settingEntry.settings;
+        let updatedCount = { alters: 0, states: 0, groups: 0 };
+
+        const entityTypeMap = { alter: Alter, state: State, group: Group };
+        const entityTypeKeyMap = { alter: 'alters', state: 'states', group: 'groups' };
+
+        for (const entityType of entityTypes) {
+            const Model = entityTypeMap[entityType];
+            const key = entityTypeKeyMap[entityType];
+            const entityIds = system[key]?.IDs || [];
+
+            for (const entityId of entityIds) {
+                const entity = await Model.findById(entityId);
+                if (!entity) continue;
+
+                entity.setting = entity.setting || {};
+                entity.setting.privacy = entity.setting.privacy || [];
+
+                const existingIdx = entity.setting.privacy.findIndex(p => p.bucket === bucket.name);
+
+                if (existingIdx >= 0) {
+                    if (override) {
+                        entity.setting.privacy[existingIdx].settings = bucketSettings;
+                        await entity.save();
+                        updatedCount[`${entityType}s`]++;
+                    }
+                } else {
+                    // Add new bucket entry for this entity
+                    entity.setting.privacy.push({ bucket: bucket.name, settings: bucketSettings });
+                    await entity.save();
+                    updatedCount[`${entityType}s`]++;
+                }
+            }
+        }
+
+        console.log(`[PrivacyBuckets] Propagated ${bucket.name}:`, updatedCount);
+
+        res.json({ success: true, updated: updatedCount });
+    } catch (err) {
+        console.error('[PrivacyBuckets] Propagate error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 module.exports = router;

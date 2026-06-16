@@ -850,6 +850,41 @@ class ApiClient {
         promise.abort = () => controller.abort()
         return promise
     }
+
+    // ═══════════════════════════════════════════
+    // PRIVACY BUCKETS
+    // ═══════════════════════════════════════════
+
+    async getPrivacyBuckets() {
+        return this.request('/system/privacy-buckets')
+    }
+
+    async createPrivacyBucket(data) {
+        return this.request('/system/privacy-buckets', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        })
+    }
+
+    async updatePrivacyBucket(bucketId, data) {
+        return this.request(`/system/privacy-buckets/${bucketId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data)
+        })
+    }
+
+    async deletePrivacyBucket(bucketId) {
+        return this.request(`/system/privacy-buckets/${bucketId}`, {
+            method: 'DELETE'
+        })
+    }
+
+    async propagatePrivacyBucket(bucketId, options = {}) {
+        return this.request(`/system/privacy-buckets/${bucketId}/propagate`, {
+            method: 'POST',
+            body: JSON.stringify(options)
+        })
+    }
 }
 
 const api = new ApiClient()

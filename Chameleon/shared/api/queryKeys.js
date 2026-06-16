@@ -60,6 +60,12 @@ export const quickKeys = {
     notes: () => [...quickKeys.all, 'notes'],
 };
 
+export const privacyBucketKeys = {
+    all: ['system', 'privacy-buckets'],
+    list: () => [...privacyBucketKeys.all, 'list'],
+    detail: (id) => [...privacyBucketKeys.all, 'detail', id],
+};
+
 // ==========================================
 // EVENT → QUERY KEY MAPPING
 // Used by the WebSocket handler to invalidate
@@ -110,6 +116,11 @@ export function eventToKeys(event) {
         case 'friend:blocked':
         case 'friend:unblocked':
             return [friendKeys.lists(), friendKeys.blocked()];
+
+        case 'privacy-bucket:created':
+        case 'privacy-bucket:updated':
+        case 'privacy-bucket:deleted':
+            return [privacyBucketKeys.list()];
 
         case 'system:updated':
         case 'system:created':

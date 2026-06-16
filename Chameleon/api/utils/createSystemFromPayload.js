@@ -12,7 +12,7 @@ const User = require(path.join(chameleonDir, 'schemas/user'));
 const Alter = require(path.join(chameleonDir, 'schemas/alter'));
 const State = require(path.join(chameleonDir, 'schemas/state'));
 const Group = require(path.join(chameleonDir, 'schemas/group'));
-const { PrivacyBucket } = require(path.join(chameleonDir, 'schemas/settings'));
+const { PrivacyBucket, mergePrivacySettings } = require(path.join(chameleonDir, 'schemas/settings'));
 
 /**
  * Create a system from a staged payload (used by both API and bot)
@@ -38,7 +38,7 @@ async function createSystemFromPayload(userId, payload) {
         const isStagedPayload = payload.sys_type && payload.alters && payload.states && payload.groups;
         
         // --- Privacy Buckets ---
-        let strangersBucketId, friendsBucketId, privateBucketId;
+        let strangersBucketId, friendsBucketId;
         const privacyBuckets = payload.privacyBuckets || [];
 
         if (privacyBuckets.length >= 2 && typeof privacyBuckets[0] === 'object') {
@@ -54,21 +54,9 @@ async function createSystemFromPayload(userId, payload) {
             await friendsBucket.save({ session });
             strangersBucketId = strangersBucket._id;
             friendsBucketId = friendsBucket._id;
-
-            if (privacyBuckets.length >= 3 && privacyBuckets[2]) {
-                const privateBucket = new PrivacyBucket({ 
-                    name: privacyBuckets[2].name || 'Private', 
-                    friends: privacyBuckets[2].friends || [] 
-                });
-                await privateBucket.save({ session });
-                privateBucketId = privateBucket._id;
-            }
         } else if (privacyBuckets.length >= 2 && typeof privacyBuckets[0] === 'string') {
             strangersBucketId = new mongoose.Types.ObjectId(privacyBuckets[0]);
             friendsBucketId = new mongoose.Types.ObjectId(privacyBuckets[1]);
-            if (privacyBuckets.length >= 3) {
-                privateBucketId = new mongoose.Types.ObjectId(privacyBuckets[2]);
-            }
         } else {
             const strangersBucket = new PrivacyBucket({ name: 'Strangers', friends: [] });
             const friendsBucket = new PrivacyBucket({ name: 'Friends', friends: [] });
@@ -129,21 +117,16 @@ async function createSystemFromPayload(userId, payload) {
         const groupIds = (isStagedPayload && payload.groups?.IDs) ? payload.groups.IDs.map(id => new mongoose.Types.ObjectId(id)) : [];
         
         // --- Settings ---
-        const privateBucketSettings = { mask: false, description: false, banner: false, avatar: false, birthday: false, pronouns: false, metadata: false, caution: false, hidden: true };
         const setting = isStagedPayload && payload.setting ? payload.setting : {
             friendAutoBucket: 'Friends',
             privacy: [
                 {
                     bucket: 'Strangers',
-                    settings: { mask: false, description: false, banner: false, avatar: false, birthday: false, pronouns: false, metadata: false, caution: false, hidden: true }
+                    settings: mergePrivacySettings('Strangers', 'system')
                 },
                 {
                     bucket: 'Friends',
-                    settings: { mask: false, description: true, banner: true, avatar: true, birthday: false, pronouns: true, metadata: false, caution: false, hidden: false }
-                },
-                {
-                    bucket: 'Private',
-                    settings: privateBucketSettings
+                    settings: mergePrivacySettings('Friends', 'system')
                 }
             ]
         };
@@ -176,7 +159,7 @@ async function createSystemFromPayload(userId, payload) {
             },
             description: payload.description || '',
             sys_type: sysType,
-            privacyBuckets: [strangersBucketId, friendsBucketId, privateBucketId].filter(Boolean),
+            privacyBuckets: [strangersBucketId, friendsBucketId],
             alters: { conditions: alterConditions, IDs: alterIds },
             states: { conditions: stateConditions, IDs: stateIds },
             groups: { conditions: groupConditions, IDs: groupIds },
@@ -209,36 +192,6 @@ async function createSystemFromPayload(userId, payload) {
             );
         }
 
-        // --- Assign Private bucket to imported entities that were private in source ---
-        if (isStagedPayload && payload.privateEntityIDs && privateBucketId) {
-            const { alters: privateAlterIds = [], states: privateStateIds = [], groups: privateGroupIds = [] } = payload.privateEntityIDs;
-            
-            if (privateAlterIds.length > 0) {
-                const alterObjIds = privateAlterIds.map(id => new mongoose.Types.ObjectId(id));
-                await Alter.updateMany(
-                    { _id: { $in: alterObjIds } },
-                    { $addToSet: { "setting.privacy": { bucket: "Private", settings: privateBucketSettings } } },
-                    { session }
-                );
-            }
-            if (privateStateIds.length > 0) {
-                const stateObjIds = privateStateIds.map(id => new mongoose.Types.ObjectId(id));
-                await State.updateMany(
-                    { _id: { $in: stateObjIds } },
-                    { $addToSet: { "setting.privacy": { bucket: "Private", settings: privateBucketSettings } } },
-                    { session }
-                );
-            }
-            if (privateGroupIds.length > 0) {
-                const groupObjIds = privateGroupIds.map(id => new mongoose.Types.ObjectId(id));
-                await Group.updateMany(
-                    { _id: { $in: groupObjIds } },
-                    { $addToSet: { "setting.privacy": { bucket: "Private", settings: privateBucketSettings } } },
-                    { session }
-                );
-            }
-        }
-        
         // --- Update User ---
         user.systemID = system._id;
         await user.save({ session });
