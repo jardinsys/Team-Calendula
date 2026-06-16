@@ -5,8 +5,7 @@ const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const path = require('path');
-const chameleonDir = path.resolve(__dirname, '../../../..');
-const { mergePrivacySettings } = require(path.join(chameleonDir, 'schemas/settings'));
+const { mergePrivacySettings } = require('../../../schemas/settings');
 
 /**
  * Create an entity, set systemID, save, and push to system's IDs array.
