@@ -148,6 +148,7 @@ export function useSystemSession() {
         isSystem,
         isFragmented,
         isDissociative,
+      },
       privacyBuckets: [
         session.privacyBuckets?.Strangers?._id,
         session.privacyBuckets?.Friends?._id,
@@ -189,7 +190,7 @@ export function useSystemSession() {
         ],
       },
       privateEntityIDs: session.privateEntityIDs || { alters: [], states: [], groups: [] },
-      front
+      front: front
     }
 
     return payload
@@ -209,8 +210,6 @@ export function useSystemSession() {
     setError(null)
     try {
       if (overridePatch) setSession(prev => ({ ...prev, ...overridePatch }))
-      // Give React a tick to merge the staged patch if any was provided,
-      // then build from the freshest session state.
       await Promise.resolve()
       const data = buildPayload()
       const res = await api.createSystemSession(data)
