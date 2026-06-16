@@ -436,8 +436,8 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
                               onClick={() => {
                                 setEditingBucketId(bucket._id)
                                 setEditBucketName(bucket.name)
-                                setEditBucketSettings({ ...bucket.settings }}
-                              )}
+                                setEditBucketSettings({ ...bucket.settings })
+                              }}
                               disabled={isDefault || editingBucketId !== null}
                               style={{ height: '36px', padding: '0 16px', fontSize: '0.8rem' }}
                             >
@@ -475,8 +475,8 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
                               onClick={() => {
                                 setEditingBucketId(bucket._id)
                                 setEditBucketName(bucket.name)
-                                setEditBucketSettings({ ...bucket.settings }}
-                              )}
+                                setEditBucketSettings({ ...bucket.settings })
+                              }}
                               style={{ height: '36px', padding: '0 16px', fontSize: '0.8rem' }}
                             >
                               View Settings
