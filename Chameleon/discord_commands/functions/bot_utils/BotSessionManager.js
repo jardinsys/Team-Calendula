@@ -4,8 +4,7 @@
 
 const { activeSessions, generateSessionId, setSession, deleteSession, getSession } = require('./sessions');
 const path = require('path');
-const chameleonDir = path.resolve(__dirname, '../../../..');
-const { mergePrivacySettings } = require(path.join(chameleonDir, 'schemas/settings'));
+const { mergePrivacySettings } = require('../../../schemas/settings');
 
 class BotSessionManager {
     static TTL_MS = 15 * 60 * 1000;

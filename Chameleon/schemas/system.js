@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const sysDB = require("../database");
-const { PrivacyBucket, systemPrivacySchema } = require('./settings');
+const { PrivacyBucket, systemPrivacySchema, alterPrivacySchema, groupPrivacySchema } = require('./settings');
 const { layerSchema } = require('./front.js');
 const triggerSchema = require('../../TigerLily/schemas/trigger.js');
 const mediaSchema = require('../../media.js');
