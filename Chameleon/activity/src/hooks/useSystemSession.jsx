@@ -189,8 +189,8 @@ export function useSystemSession() {
         ],
       },
       privateEntityIDs: session.privateEntityIDs || { alters: [], states: [], groups: [] },
-      front,
-    }}
+      front
+    }
 
     return payload
   }, [

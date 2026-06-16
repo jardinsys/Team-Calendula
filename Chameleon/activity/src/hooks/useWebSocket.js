@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { eventToKeys } from '@chameleon/shared'
 
@@ -22,7 +22,7 @@ function sendRaw(data) {
   }
 }
 
-export function useWebSocket() {
+export function useWebSocket(enabled = true) {
   const queryClient = useQueryClient()
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
@@ -33,7 +33,12 @@ export function useWebSocket() {
   const [connected, setConnected] = useState(false)
   const [disconnected, setDisconnected] = useState(false)
 
+  // Only connect if enabled
+  const shouldConnect = useMemo(() => enabled && typeof window !== 'undefined', [enabled])
+
   const connect = useCallback(() => {
+    if (!shouldConnect) return
+    
     const token = getToken()
     if (!token) return
 
@@ -154,6 +159,18 @@ export function useWebSocket() {
       }
     }
   }, [connect])
+
+  // Close WebSocket when disabled
+  useEffect(() => {
+    if (!enabled && wsRef.current) {
+      wsRef.current.onclose = null
+      wsRef.current.close()
+      wsRef.current = null
+      globalWs = null
+      setConnected(false)
+      setDisconnected(true)
+    }
+  }, [enabled])
 
   return { connected, disconnected }
 }

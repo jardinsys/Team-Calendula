@@ -137,15 +137,23 @@ async function createSystemFromPayload(userId, payload) {
             front = {
                 status: payload.front.status || '',
                 caution: payload.front.caution || '',
-                layers: (payload.front.layers || []).map(layer => ({
-                    _id: layer._id ? new mongoose.Types.ObjectId(layer._id) : new mongoose.Types.ObjectId(),
-                    name: layer.name,
-                    color: layer.color || '#8b5cf6',
-                    shifts: (payload.front.shifts || []).map(shift => ({
-                        ...shift,
-                        timestamp: shift.timestamp ? new Date(shift.timestamp) : new Date()
-                    }))
-                }))
+                layers: (payload.front.layers || []).map(layer => {
+                    let layerId;
+                    if (layer._id && mongoose.Types.ObjectId.isValid(layer._id)) {
+                        layerId = new mongoose.Types.ObjectId(layer._id);
+                    } else {
+                        layerId = new mongoose.Types.ObjectId();
+                    }
+                    return {
+                        _id: layerId,
+                        name: layer.name,
+                        color: layer.color || '#8b5cf6',
+                        shifts: (payload.front.shifts || []).map(shift => ({
+                            ...shift,
+                            timestamp: shift.timestamp ? new Date(shift.timestamp) : new Date()
+                        }))
+                    };
+                })
             };
         }
         

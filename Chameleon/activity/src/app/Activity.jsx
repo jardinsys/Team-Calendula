@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useDiscordSdk } from '../hooks/useDiscordSdk'
 import { useApiAuth } from '../hooks/useApiAuth'
+import { useWebSocket } from '../hooks/useWebSocket'
 import { api, isSystemUser } from '@chameleon/shared'
 import { ArrowLeft } from 'lucide-react'
 import { LandingPage } from './pages/LandingPage'
@@ -17,6 +18,7 @@ import { RegisterPage } from './pages/RegisterPage'
 import { SwitchPage } from './pages/SwitchPage'
 import { EntityViewPage } from './pages/EntityViewPage'
 import { FrontHistoryPage } from './pages/FrontHistoryPage'
+import { ConnectionToast } from './ConnectionToast'
 import { SettingsPanel } from '@chameleon/shared/components/SettingsPanel.jsx'
 
 function getInitialPage() {
@@ -48,6 +50,10 @@ export function Activity() {
   const [hasSystem, setHasSystem] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [fromOnboarding, setFromOnboarding] = useState(false)
+
+  // Enable WebSocket only on pages that need real-time updates
+  const wsEnabled = ['friends', 'notes', 'system', 'switch'].includes(activePage || '')
+  const { disconnected } = useWebSocket(wsEnabled)
 
   useEffect(() => {
     if (authStatus !== 'READY') return
@@ -177,8 +183,6 @@ export function Activity() {
 
   const showBackButton = activePage && activePage !== 'what-is' && activePage !== 'register' && !fromOnboarding
 
-  const isStaticPage = !activePage || activePage === 'what-is'
-
   const handleBack = () => {
     setActivePage(null)
     setPageParams(null)
@@ -187,7 +191,7 @@ export function Activity() {
 
   return (
     <div className="app-container">
-      <main className={`app-content${isStaticPage ? ' app-content--no-scroll' : ''}`} style={{ position: 'relative', paddingTop: showBackButton ? '52px' : undefined }}>
+      <main className="app-content" style={{ position: 'relative', paddingTop: showBackButton ? '52px' : undefined }}>
         {showBackButton && (
           <button
             className="gradient-border-sm"
@@ -238,6 +242,8 @@ export function Activity() {
           onNavigate={handleNavigate}
         />
       )}
+
+      {wsEnabled && <ConnectionToast disconnected={disconnected} />}
     </div>
   )
 }

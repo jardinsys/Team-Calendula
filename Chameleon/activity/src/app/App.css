@@ -203,10 +203,7 @@ body {
   flex: 1; overflow-y: auto; padding: var(--space-md);
   padding-bottom: calc(var(--space-xl) + 72px);
 }
-.app-content--no-scroll {
-  overflow-y: hidden;
-  overscroll-behavior: none;
-}
+/* app-content--no-scroll removed: allow scrolling on all pages for now */
 
 /* ═══════════════════════════════════════════
    Bottom Tab Navigation — Glass
