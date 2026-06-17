@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { api, isSystemUser, isFragmentedUser, isDissociativeUser, Icon, getSystemTerm } from '@chameleon/shared'
+import { useFetchStatus } from '../../hooks/useFetchStatus';
 import { useSystemSession } from '../../hooks/useSystemSession.jsx';
 
 const SOURCES = [
@@ -81,6 +82,8 @@ export function ImportPage({ system, onNavigate }) {
     const [entityTypeMode, setEntityTypeMode] = useState('all_alters')
     const [searchQuery, setSearchQuery] = useState('')
 
+    const { status: fetchStatus, start: startFetch, complete: completeFetch, error: errorFetch, render: renderFetchStatus } = useFetchStatus()
+
     const [importQueue, setImportQueue] = useState([])
     const [importing, setImporting] = useState(false)
     const [progressLogs, setProgressLogs] = useState([])
@@ -147,9 +150,9 @@ export function ImportPage({ system, onNavigate }) {
         if (isApiImport && !token.trim()) { setError('Please enter a token or ID'); return }
         if (isFileImport && !fileData) { setError('Please select a file'); return }
 
-        setPreviewLoading(true)
         setError(null)
         setPreview(null)
+        startFetch(`Fetching preview from ${selectedSource?.label}...`)
 
         try {
             const res = await api.previewImport(source, token.trim() || null, fileData)
@@ -168,12 +171,12 @@ export function ImportPage({ system, onNavigate }) {
             if (res.preview) {
                 markPrivateFromPreview(res.preview, allMemberIds, allGroupIds);
             }
+            completeFetch(`Loaded ${res.preview.members.length} member${res.preview.members.length !== 1 ? 's' : ''}, ${res.preview.groups.length} group${res.preview.groups.length !== 1 ? 's' : ''}`)
         } catch (err) {
+            errorFetch(err.message || 'Failed to fetch preview')
             setError(err.message || 'Failed to fetch preview')
-        } finally {
-            setPreviewLoading(false)
         }
-    }, [source, selectedMethod, token, fileData, isApiImport, isFileImport, forceAsStates])
+    }, [source, selectedMethod, token, fileData, isApiImport, isFileImport, forceAsStates, selectedSource, startFetch, completeFetch, errorFetch])
 
     const handleToggleMember = useCallback((sourceId) => {
         setSelectedMemberIds(prev => {
@@ -645,10 +648,12 @@ export function ImportPage({ system, onNavigate }) {
                 </div>
             )}
 
+            {renderFetchStatus()}
+
             <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-                <button className="btn-gradient btn-gradient-primary" onClick={handleFetchPreview} disabled={previewLoading || (isApiImport && !token.trim()) || (isFileImport && !fileData)}
+                <button className="btn-gradient btn-gradient-primary" onClick={handleFetchPreview} disabled={!!fetchStatus || (isApiImport && !token.trim()) || (isFileImport && !fileData)}
                     style={{ height: '56px', padding: '0 32px', fontSize: '1rem' }}>
-                    {previewLoading ? 'Fetching...' : 'Preview Data'}
+                    {fetchStatus ? 'Fetching...' : 'Preview Data'}
                 </button>
             </div>
         </div>
