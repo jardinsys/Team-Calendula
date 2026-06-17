@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react'
 import { api, DISORDER_MAP, DISORDER_DEFINITIONS, DSM_OPTIONS, ICD_OPTIONS, Icon, resolveSysTypeFromDisorder, resolveSysTypeFromExtraAnswer, resolveSysTypeFromMultiAnswer } from '@chameleon/shared'
+import { useSystemSession } from '../hooks/useSystemSession'
 
 // ═══════════════════════════════════════════
 // Step 1: Category Selection
@@ -446,7 +447,7 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStar
         </button>
         <button
           className="btn-gradient btn-gradient-primary"
-          onClick={handleConfirm}
+          onClick={handleNameConfirm}
           style={{ flex: 2 }}
         >
           Create Profile
@@ -461,9 +462,8 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStar
 // Step 5: Import or New System (for isSystem conditions)
 // ═══════════════════════════════════════════
 
-function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate, refreshSystem }) {
+function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
   const [systemName, setSystemName] = useState('')
-  const [creating, setCreating] = useState(false)
 
   const handleNewSystem = () => {
     onComplete({
@@ -472,23 +472,9 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate, refr
     })
   }
 
-  const handleImport = async () => {
-    if (creating) return
-    setCreating(true)
-    try {
-      // Create the system first so ImportPage has something to import into
-      await api.createSystem({
-        name: systemName.trim() || null,
-        sys_type: sysType,
-      })
-      // Refresh system state in Activity.jsx
-      if (refreshSystem) await refreshSystem()
-      // Navigate to import
-      if (onNavigate) onNavigate('import')
-    } catch (err) {
-      console.error('[Register] Failed to create system for import:', err)
-      setCreating(false)
-    }
+  const handleImport = () => {
+    // Just navigate to ImportPage - data is already staged
+    if (onNavigate) onNavigate('import')
   }
 
   return (
@@ -502,10 +488,9 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate, refr
         <button
           className="import-option-btn"
           onClick={handleImport}
-          disabled={creating}
         >
-          <span className="import-option-title">{creating ? 'Creating profile...' : 'Import from Another Tool'}</span>
-          <span className="import-option-desc">{creating ? 'Setting up your profile for import' : 'Preview and import your existing alters and data'}</span>
+          <span className="import-option-title">Import from Another Tool</span>
+          <span className="import-option-desc">Preview and import your existing alters and data</span>
         </button>
 
         <button
@@ -546,7 +531,7 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate, refr
 // Step 6: Who's in Front? (for new isSystem)
 // ═══════════════════════════════════════════
 
-function FirstAlterStep({ systemName, onComplete, onBack, saving }) {
+function FirstAlterStep({ onComplete, onBack, saving }) {
   const [alterNames, setAlterNames] = useState([''])
   const [activeIndex, setActiveIndex] = useState(0)
 
@@ -637,18 +622,35 @@ function FirstAlterStep({ systemName, onComplete, onBack, saving }) {
 
 
 // ═══════════════════════════════════════════
-// Main Register Page
+// ═══════════════════════════════════════════
+// Main Register Page — Staged Flow
 // ═══════════════════════════════════════════
 
 export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordUser }) {
+  const {
+    session,
+    update,
+    setSystemName,
+    setSysType,
+    setMembers,
+    setFront,
+    commit,
+    committing,
+    error: sessionError,
+    reset,
+    deriveFlags,
+    buildPayload,
+  } = useSystemSession()
+
   const [step, setStep] = useState(1)
   const [category, setCategory] = useState(null)
   const [disorderKey, setDisorderKey] = useState(null)
   const [extraAnswer, setExtraAnswer] = useState(null)
-  const [resolvedSysType, setResolvedSysType] = useState(null)
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-  const [pendingSystemName, setPendingSystemName] = useState(null)
+
+  // Derive sysType from session
+  const resolvedSysType = session.sysType
+  const { isSystem, isFragmented, isDissociative } = deriveFlags(resolvedSysType)
 
   // Step 1 → Step 2 or Step 3
   const handleCategorySelect = (cat) => {
@@ -656,14 +658,15 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     if (cat === 'OTHER') {
       setStep(3)
     } else if (cat === 'NONE') {
-      setResolvedSysType({
+      const noneSysType = {
         name: 'None',
         dd: {},
         isSystem: false,
         isFragmented: false,
         isDissociative: false,
         onboardingCompleted: true,
-      })
+      }
+      update({ sysType: noneSysType })
       setStep(4)
     } else {
       setStep(2)
@@ -680,7 +683,6 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     let sysType
 
     if (mapping.extraQuestionMulti && Array.isArray(extraAns)) {
-      // Multi-select (UDD)
       sysType = resolveSysTypeFromMultiAnswer(key, extraAns)
     } else if (mapping.extraQuestion && extraAns !== null) {
       const result = extraAns ? mapping.extraQuestionYes : mapping.extraQuestionNo
@@ -708,11 +710,11 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
       }
     }
 
-    setResolvedSysType(sysType)
+    update({ sysType })
 
-    // If isSystem, go to import step (step 5) instead of name step
+    // If isSystem, go to name step first (step 4), then ImportStep (step 5)
     if (sysType.isSystem) {
-      setStep(5)
+      setStep(4)
     } else {
       setStep(4)
     }
@@ -720,166 +722,107 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
 
   // Step 3 → Step 4 (other resolved)
   const handleOtherResolve = (sysType) => {
-    setResolvedSysType(sysType)
-    // If isSystem, go to import step (step 5)
-    if (sysType.isSystem) {
-      setStep(5)
+    update({ sysType })
+    setStep(4)
+  }
+
+  // Step 4 (NameStep) — system name collected, then go to step 5 or 6
+  const handleNameConfirm = (finalSysType, systemName) => {
+    update({ sysType: finalSysType })
+    if (systemName) setSystemName(systemName)
+    if (finalSysType.isSystem) {
+      setStep(5) // ImportStep
     } else {
-      setStep(4)
+      setStep(6) // FirstAlterStep for non-system (optional alters) or direct to finish
     }
   }
 
-  // Step 5 → Step 6 (import/new system choice made)
-  const handleImportChoice = (choice) => {
-    setPendingSystemName(choice.systemName)
+  // Step 5 (ImportStep) — user chooses import or new system
+  const handleImportChoice = async (choice) => {
+    if (choice.systemName) setSystemName(choice.systemName)
+    
+    // Commit staged session to create minimal system
+    try {
+      await commit()
+    } catch (err) {
+      console.error('[Register] Failed to create base system:', err)
+      setError(err.message || 'Failed to create profile')
+      return
+    }
+
     if (choice.import) {
-      setStep(5)
-      setTimeout(() => {
-        const btn = document.querySelector('.import-option-btn')
-        if (btn) btn.click()
-      }, 0)
+      // Navigate to ImportPage - it will add entities to the existing system
+      if (onNavigate) onNavigate('import')
     } else {
+      // New system - go to FirstAlterStep
       setStep(6)
     }
   }
 
-  // Step 6 → Create system, then alters and front switch
-  const handleFirstAlterComplete = async (systemName, alterNames) => {
-    setSaving(true)
+  // Step 6 (FirstAlterStep) — collect first alters, then final commit
+  const handleFirstAlterComplete = async (alterNames) => {
     setError(null)
-
     try {
-      await api.createSystem({
-        name: systemName || pendingSystemName,
-        sys_type: resolvedSysType,
-      })
-
-      await createPresetLayers(resolvedSysType)
-
-      if (resolvedSysType?.isDissociative) {
-        const stateName = resolvedSysType.dissociativeStateName || 'Dissociated'
-        try {
-          await api.createState({
-            name: stateName,
-            description: `A ${stateName.toLowerCase()} state`,
-          })
-        } catch (stateErr) {
-          console.error(`[Register] Failed to create ${stateName} state:`, stateErr)
-        }
-      }
-
       if (alterNames && alterNames.length > 0) {
-        const createdAlters = []
-        for (const name of alterNames) {
-          try {
-            const alter = await api.createAlter({ name: name.trim() })
-            if (alter?._id) createdAlters.push(alter)
-          } catch (err) {
-            console.error('[Register] Failed to create alter:', name, err)
-            setError(prev => prev ? prev + `\nFailed to create "${name.trim()}"` : `Failed to create "${name.trim()}"`)
-          }
-        }
-
-        if (createdAlters.length > 0) {
-          try {
-            await api.quickSwitch([{ id: createdAlters[0]._id, type: 'alter' }])
-          } catch (err) {
-            console.error('[Register] Failed to set front:', err)
-          }
-        }
+        // Add first alters to staged session
+        const members = alterNames.filter(n => n.trim()).map((name, i) => ({
+          name: name.trim(),
+          entityType: 'alter',
+          _id: `temp_alter_${Date.now()}_${i}`,
+        }))
+        setMembers(members)
       }
 
-      setSaving(false)
-      onRegistered?.()
+      // Build front layers preset
+      const layers = buildPresetLayers(resolvedSysType)
+      if (layers.length > 0) {
+        setFront({ layers, status: '', caution: '' })
+      }
+
+      // Final commit - creates everything atomically
+      const result = await commit()
+      if (result?.system) {
+        if (resolvedSysType?.isDissociative) {
+          // Note: dissociative state is auto-created by createSystemFromPayload
+        }
+        if (onRegistered) onRegistered()
+      }
     } catch (err) {
       console.error('[Register] Error:', err)
       setError(err.message || 'Failed to create profile')
-      setSaving(false)
     }
   }
 
-  // Preset layers based on sys_type
-  const createPresetLayers = async (sysType) => {
+  // Preset layers based on sys_type (moved inside for closure access)
+  const buildPresetLayers = (sysType) => {
     const layers = []
-
     if (sysType.isDissociative && !sysType.isSystem && !sysType.isFragmented) {
-      layers.push({ name: 'Actively', color: '#8b5cf6' })
+      layers.push({ _id: `layer_${Date.now()}_1`, name: 'Actively', color: '#8b5cf6', shifts: [] })
     } else if (sysType.isFragmented && !sysType.isSystem) {
-      layers.push({ name: 'Primary States', color: '#8b5cf6' })
-      layers.push({ name: 'Secondary States', color: '#7c3aed' })
-      layers.push({ name: 'Tertiary States', color: '#6d28d9' })
+      layers.push({ _id: `layer_${Date.now()}_1`, name: 'Primary States', color: '#8b5cf6', shifts: [] })
+      layers.push({ _id: `layer_${Date.now()}_2`, name: 'Secondary States', color: '#7c3aed', shifts: [] })
+      layers.push({ _id: `layer_${Date.now()}_3`, name: 'Tertiary States', color: '#6d28d9', shifts: [] })
     } else if (sysType.isSystem && sysType.isFragmented) {
-      layers.push({ name: 'Primary Front', color: '#8b5cf6' })
-      layers.push({ name: 'Co-Front', color: '#7c3aed' })
-      layers.push({ name: 'Co-conscious', color: '#6d28d9' })
-      layers.push({ name: 'Back of Front', color: '#5b21b6' })
+      layers.push({ _id: `layer_${Date.now()}_1`, name: 'Primary Front', color: '#8b5cf6', shifts: [] })
+      layers.push({ _id: `layer_${Date.now()}_2`, name: 'Co-Front', color: '#7c3aed', shifts: [] })
+      layers.push({ _id: `layer_${Date.now()}_3`, name: 'Co-conscious', color: '#6d28d9', shifts: [] })
+      layers.push({ _id: `layer_${Date.now()}_4`, name: 'Back of Front', color: '#5b21b6', shifts: [] })
     }
-
-    if (layers.length > 0) {
-      try {
-        await api.createSystemLayers({ layers })
-      } catch (layerErr) {
-        console.error('[Register] Failed to create preset layers:', layerErr)
-      }
-    }
-  }
-
-  // Create system
-  const handleConfirm = async (finalSysType, systemName) => {
-    setSaving(true)
-    setError(null)
-
-    try {
-      await api.createSystem({
-        name: systemName,
-        sys_type: finalSysType,
-      })
-
-      // Create preset layers based on condition type
-      await createPresetLayers(finalSysType)
-
-      // If dissociative, auto-create the dissociative state
-      if (finalSysType.isDissociative) {
-        const stateName = finalSysType.dissociativeStateName || 'Dissociated'
-        try {
-          await api.createState({
-            name: stateName,
-            description: `A ${stateName.toLowerCase()} state`,
-          })
-        } catch (stateErr) {
-          console.error(`[Register] Failed to create ${stateName} state:`, stateErr)
-        }
-      }
-
-      onRegistered?.()
-    } catch (err) {
-      console.error('[Register] Error:', err)
-      setError(err.message || 'Failed to create profile')
-      setSaving(false)
-    }
+    return layers
   }
 
   // Back navigation
   const handleBack = () => {
-    if (step === 6) {
-      setStep(5)
-    } else if (step === 5) {
-      // Go back to step 4 (name step) - but need to check if we came from step 2 or 3
-      if (resolvedSysType?.dd?.DSM || resolvedSysType?.dd?.ICD) {
-        setStep(2)
-      } else {
-        setStep(3)
-      }
+    if (step === 6) setStep(5)
+    else if (step === 5) {
+      // Go back to name step
+      setStep(4)
     } else if (step === 4) {
       if (category === 'OTHER') setStep(3)
       else if (category === 'NONE') setStep(1)
       else setStep(2)
-    } else if (step === 3) {
-      setStep(1)
-    } else if (step === 2) {
-      setStep(1)
-      setCategory(null)
-    }
+    } else if (step === 3) setStep(1)
+    else if (step === 2) { setStep(1); setCategory(null) }
   }
 
   // Start over
@@ -887,9 +830,8 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     setStep(1)
     setCategory(null)
     setDisorderKey(null)
-    setResolvedSysType(null)
     setExtraAnswer(null)
-    setPendingSystemName(null)
+    reset()
   }
 
   return (
@@ -901,26 +843,23 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onSelect={handleDisorderSelect}
           onBack={handleBack}
           onStartOver={handleStartOver}
-        />
-      )}
+        />}
       {step === 3 && (
         <OtherStep
           onResolve={handleOtherResolve}
           onBack={handleBack}
           onStartOver={handleStartOver}
-        />
-      )}
+        />}
       {step === 4 && (
         <NameStep
           disorderKey={disorderKey}
           extraAnswer={extraAnswer}
           sysType={resolvedSysType}
-          onConfirm={handleConfirm}
+          onConfirm={handleNameConfirm}
           onBack={handleBack}
           onStartOver={handleStartOver}
           discordUser={discordUser}
-        />
-      )}
+        />}
       {step === 5 && (
         <ImportStep
           sysType={resolvedSysType}
@@ -929,24 +868,25 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onStartOver={handleStartOver}
           onNavigate={onNavigate}
           refreshSystem={refreshSystem}
-        />
-      )}
+        />}
       {step === 6 && (
         <FirstAlterStep
-          systemName={pendingSystemName}
+          systemName={session.systemName}
           onComplete={handleFirstAlterComplete}
           onBack={handleBack}
-          saving={saving}
-        />
-      )}
-
+          saving={committing}
+        />)}
       {error && (
         <p style={{ color: 'var(--color-error)', fontSize: '0.85rem', marginTop: 'var(--space-md)' }}>
           {error}
         </p>
       )}
-
-      {saving && (
+      {sessionError && (
+        <p style={{ color: 'var(--color-error)', fontSize: '0.85rem', marginTop: 'var(--space-md)' }}>
+          {sessionError}
+        </p>
+      )}
+      {committing && (
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 'var(--space-md)' }}>
           Creating your profile...
         </p>
