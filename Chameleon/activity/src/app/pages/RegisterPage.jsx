@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react'
 import { api, DISORDER_MAP, DISORDER_DEFINITIONS, DSM_OPTIONS, ICD_OPTIONS, Icon, resolveSysTypeFromDisorder, resolveSysTypeFromExtraAnswer, resolveSysTypeFromMultiAnswer } from '@chameleon/shared'
-import { useSystemSession } from '../hooks/useSystemSession'
+import { useSystemSession } from '../../hooks/useSystemSession'
 
 // ═══════════════════════════════════════════
 // Step 1: Category Selection

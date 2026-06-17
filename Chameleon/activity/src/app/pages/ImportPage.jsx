@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { api, isSystemUser, isFragmentedUser, isDissociativeUser, Icon, getSystemTerm } from '@chameleon/shared'
-import { useFetchStatus } from '../../hooks/useFetchStatus'
+import { useFetchStatus } from '../../hooks/useFetchStatus.jsx'
 import { useSystemSession } from '../../hooks/useSystemSession.jsx'
 
 const SOURCES = [
