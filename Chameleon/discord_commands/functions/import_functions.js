@@ -19,6 +19,146 @@ const TARGET_APP = 'app';
 const TARGET_DISCORD = 'discord';
 const IMPORT_COLOR = '#007bd8';
 
+// ============================================
+// R2 IMAGE SYNC HELPER (for imports)
+// ============================================
+
+const https = require('https');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const config = require('../../../config.json');
+
+const sysR2 = new S3Client({
+    region: 'auto',
+    endpoint: config.r2?.system?.app?.endpoint,
+    credentials: {
+        accessKeyId: config.r2?.system?.app?.accessKeyId,
+        secretAccessKey: config.r2?.system?.app?.secretAccessKey,
+    },
+});
+
+async function downloadFromUrl(url, redirects = 0) {
+    if (redirects > 5) throw new Error('Too many redirects');
+    return new Promise((resolve, reject) => {
+        https.get(url, (res) => {
+            if (res.statusCode === 301 || res.statusCode === 302) {
+                downloadFromUrl(res.headers.location, redirects + 1).then(resolve, reject);
+                return;
+            }
+            if (res.statusCode >= 400) return reject(new Error(`HTTP ${res.statusCode}`));
+            const chunks = [];
+            res.on('data', c => chunks.push(c));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+            res.on('error', reject);
+        }).on('error', reject).setTimeout(30000, () => reject(new Error('Timeout')));
+    });
+}
+
+async function uploadToR2(buffer, filename, mimeType, userId, entityType, field) {
+    const ext = (filename.split('.').pop() || 'png').toLowerCase();
+    const r2Key = `media/${entityType}/${userId}/${field}_${Date.now()}.${ext}`;
+    await sysR2.send(new PutObjectCommand({
+        Bucket: config.r2.system.app.bucketName,
+        Key: r2Key,
+        Body: buffer,
+        ContentType: mimeType,
+    }));
+    return {
+        r2Key,
+        bucket: 'app',
+        url: `${config.r2.system.app.publicURL}/${r2Key}`,
+        filename,
+        mimeType,
+        size: buffer.length,
+        uploadedAt: new Date(),
+    };
+}
+
+/**
+ * Download external image URL and re-upload to R2.
+ * Returns mediaSchema object or null if failed/disabled.
+ * @param {string} url - External image URL
+ * @param {string} userId - Discord user ID for R2 path
+ * @param {string} entityType - 'Alter' | 'State' | 'Group'
+ * @param {string} field - 'avatar' | 'banner' | 'proxyAvatar'
+ * @returns {Promise<Object|null>}
+ */
+async function syncImageToR2(url, userId, entityType, field) {
+    if (!url || !config.r2?.system?.app?.bucketName) return null;
+    try {
+        const buffer = await downloadFromUrl(url);
+        const ext = url.split('.').pop()?.split('?')[0]?.toLowerCase();
+        const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+        const mimeType = mimeMap[ext] || 'image/png';
+        const filename = `${field}_${Date.now()}.${ext || 'png'}`;
+        return await uploadToR2(buffer, filename, mimeType, userId, entityType, field);
+    } catch (err) {
+        console.warn(`[Import] Failed to sync image to R2 (${url}):`, err.message);
+        return null; // Silently fall back to external URL
+    }
+}
+
+/**
+ * Sync entity images (avatar, banner) to R2 after creation.
+ * Updates entity in-place with R2-backed mediaSchema objects.
+ * @param {Object} entity - The Alter/State/Group document (not yet saved)
+ * @param {Object} sourceData - Source data with avatar_url, banner, etc.
+ * @param {string} entityType - 'Alter' | 'State' | 'Group'
+ * @param {Object} system - System document (for userId)
+ * @param {string} target - 'app' | 'discord' (which profile)
+ */
+async function syncEntityImages(entity, sourceData, entityType, system, target) {
+    const userId = system.users?.[0] || system.discordId;
+    if (!userId) return;
+
+    // Extract avatar/banner from various source data formats
+    let avatarUrl = null;
+    let bannerUrl = null;
+
+    if (sourceData.avatar_url) {
+        avatarUrl = sourceData.avatar_url;
+    } else if (sourceData.avatarUrl) {
+        avatarUrl = sourceData.avatarUrl;
+    } else if (sourceData.icon) { // PluralKit group icon
+        avatarUrl = sourceData.icon;
+    }
+
+    if (sourceData.banner) {
+        bannerUrl = sourceData.banner;
+    } else if (sourceData.bannerUrl) {
+        bannerUrl = sourceData.bannerUrl;
+    }
+
+    // Sync avatar
+    if (avatarUrl) {
+        const media = await syncImageToR2(avatarUrl, userId, entityType, 'avatar');
+        if (media) {
+            if (target === TARGET_DISCORD) {
+                entity.discord = entity.discord || {};
+                entity.discord.image = entity.discord.image || {};
+                entity.discord.image.avatar = media;
+            } else {
+                entity.avatar = media;
+            }
+        }
+    }
+
+    // Sync banner
+    if (bannerUrl) {
+        const media = await syncImageToR2(bannerUrl, userId, entityType, 'banner');
+        if (media) {
+            if (target === TARGET_DISCORD) {
+                entity.discord = entity.discord || {};
+                entity.discord.image = entity.discord.image || {};
+                entity.discord.image.banner = media;
+            } else {
+                entity.banner = media;
+            }
+        }
+    }
+}
+
+
+
 // Filter out proxy patterns that conflict with existing entities
 async function filterConflictingProxies(entity, system) {
     if (!entity.proxy?.length) return;
@@ -203,9 +343,11 @@ async function processPluralKitData(system, user, data, options, onProgress) {
             if (options.target === TARGET_DISCORD) {
                 system.discord = system.discord || {};
                 system.discord.image = system.discord.image || {};
-                system.discord.image.avatar = { url: data.system.avatar_url };
+                const media = await syncImageToR2(data.system.avatar_url, system.users[0] || system.discordId, 'System', 'avatar');
+                system.discord.image.avatar = media || { url: data.system.avatar_url };
             } else {
-                system.avatar = { url: data.system.avatar_url };
+                const media = await syncImageToR2(data.system.avatar_url, system.users[0] || system.discordId, 'System', 'avatar');
+                system.avatar = media || { url: data.system.avatar_url };
             }
         }
         if (data.system.color) {
@@ -220,6 +362,18 @@ async function processPluralKitData(system, user, data, options, onProgress) {
             user.pronouns = [data.system.pronouns];
             await user.save();
             result.pronounsApplied = true;
+        }
+        // Sync system banner
+        if (data.system.banner_url) {
+            if (options.target === TARGET_DISCORD) {
+                system.discord = system.discord || {};
+                system.discord.image = system.discord.image || {};
+                const media = await syncImageToR2(data.system.banner_url, system.users[0] || system.discordId, 'System', 'banner');
+                system.discord.image.banner = media || { url: data.system.banner_url };
+            } else {
+                const media = await syncImageToR2(data.system.banner_url, system.users[0] || system.discordId, 'System', 'banner');
+                system.banner = media || { url: data.system.banner_url };
+            }
         }
         result.systemUpdated = true;
     }
@@ -252,7 +406,8 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                     result.groupsUpdated++;
                 } else {
                     const newGroup = createGroupFromPK(pkGroup);
-                                        await utils.createAndLinkEntity(newGroup, system, 'group');
+                    await syncEntityImages(newGroup, pkGroup, 'Group', system, options.target);
+                    await utils.createAndLinkEntity(newGroup, system, 'group');
                     groupMembershipMap.set(newGroup._id.toString(), (pkGroup.members || []).map(m => typeof m === 'string' ? m : m.id));
                     result.groupsImported++;
                 }
@@ -306,7 +461,8 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                         ? createStateFromPKDiscord(pkMember)
                         : createStateFromPK(pkMember);
                     await filterConflictingProxies(newState, system);
-                                        await utils.createAndLinkEntity(newState, system, 'state');
+                    await syncEntityImages(newState, pkMember, 'State', system, options.target);
+                    await utils.createAndLinkEntity(newState, system, 'state');
                     memberIdMap.set(pkMember.id, { id: newState._id, type: 'state' });
                     entity = newState;
                     result.statesImported++;
@@ -337,7 +493,8 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                         ? createAlterFromPKDiscord(pkMember)
                         : createAlterFromPK(pkMember);
                     await filterConflictingProxies(newAlter, system);
-                                        await utils.createAndLinkEntity(newAlter, system, 'alter');
+                    await syncEntityImages(newAlter, pkMember, 'Alter', system, options.target);
+                    await utils.createAndLinkEntity(newAlter, system, 'alter');
                     memberIdMap.set(pkMember.id, { id: newAlter._id, type: 'alter' });
                     entity = newAlter;
                     result.membersImported++;
@@ -443,7 +600,8 @@ async function processTupperboxData(system, data, options, onProgress) {
                             importedAt: new Date()
                         }
                     });
-                                        await utils.createAndLinkEntity(newGroup, system, 'group');
+                    await syncEntityImages(newGroup, tbGroup, 'Group', system, options.target);
+                    await utils.createAndLinkEntity(newGroup, system, 'group');
 
                     groupIdMap.set(tbGroup.id, newGroup._id);
                     result.groupsImported++;
@@ -518,7 +676,8 @@ async function processTupperboxData(system, data, options, onProgress) {
                         importedAt: new Date()
                     }
                 });
-                                await utils.createAndLinkEntity(newAlter, system, 'alter');
+                await syncEntityImages(newAlter, tupper, 'Alter', system, options.target);
+                await utils.createAndLinkEntity(newAlter, system, 'alter');
 
                 if (tupper.group_id && groupIdMap.has(tupper.group_id)) {
                     await utils.linkEntityToGroup(newAlter._id, groupIdMap.get(tupper.group_id), 'alter');
@@ -647,7 +806,8 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             importedAt: new Date()
                         }
                     });
-                                        await utils.createAndLinkEntity(newGroup, system, 'group');
+                    await syncEntityImages(newGroup, spGroup, 'Group', system, options.target);
+                    await utils.createAndLinkEntity(newGroup, system, 'group');
                     result.groupsImported++;
                 }
             } catch (err) {
@@ -712,7 +872,8 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             pluralKitId: spMember.pkId || undefined
                         }
                     });
-                                        await utils.createAndLinkEntity(newState, system, 'state');
+                    await syncEntityImages(newState, spMember, 'State', system, options.target);
+                    await utils.createAndLinkEntity(newState, system, 'state');
                     entity = newState;
                     result.statesImported++;
                 }
@@ -758,7 +919,8 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             pluralKitId: spMember.pkId || undefined
                         }
                     });
-                                        await utils.createAndLinkEntity(newAlter, system, 'alter');
+                    await syncEntityImages(newAlter, spMember, 'Alter', system, options.target);
+                    await utils.createAndLinkEntity(newAlter, system, 'alter');
                     entity = newAlter;
                     result.membersImported++;
                 }
@@ -892,9 +1054,11 @@ async function processOctoconData(system, user, data, options, onProgress) {
             if (options.target === TARGET_DISCORD) {
                 system.discord = system.discord || {};
                 system.discord.image = system.discord.image || {};
-                system.discord.image.avatar = { url: data.user.avatar_url };
+                const media = await syncImageToR2(data.user.avatar_url, system.users[0] || system.discordId, 'System', 'avatar');
+                system.discord.image.avatar = media || { url: data.user.avatar_url };
             } else {
-                system.avatar = { url: data.user.avatar_url };
+                const media = await syncImageToR2(data.user.avatar_url, system.users[0] || system.discordId, 'System', 'avatar');
+                system.avatar = media || { url: data.user.avatar_url };
             }
         }
         if (data.user.fields) {
@@ -904,6 +1068,18 @@ async function processOctoconData(system, user, data, options, onProgress) {
                     await user.save();
                     result.pronounsApplied = true;
                 }
+            }
+        }
+        // Sync system banner (Simply Plural)
+        if (data.user.bannerUrl) {
+            if (options.target === TARGET_DISCORD) {
+                system.discord = system.discord || {};
+                system.discord.image = system.discord.image || {};
+                const media = await syncImageToR2(data.user.bannerUrl, system.users[0] || system.discordId, 'System', 'banner');
+                system.discord.image.banner = media || { url: data.user.bannerUrl };
+            } else {
+                const media = await syncImageToR2(data.user.bannerUrl, system.users[0] || system.discordId, 'System', 'banner');
+                system.banner = media || { url: data.user.bannerUrl };
             }
         }
         result.systemUpdated = true;
@@ -937,7 +1113,8 @@ async function processOctoconData(system, user, data, options, onProgress) {
                     result.groupsUpdated++;
                 } else {
                     const newGroup = createGroupFromOctocon(tag);
-                                        await utils.createAndLinkEntity(newGroup, system, 'group');
+                    await syncEntityImages(newGroup, tag, 'Group', system, options.target);
+                    await utils.createAndLinkEntity(newGroup, system, 'group');
                     groupMembershipMap.set(newGroup._id.toString(), tag.alters || []);
                     result.groupsImported++;
                 }
@@ -982,7 +1159,8 @@ async function processOctoconData(system, user, data, options, onProgress) {
                         ? createStateFromOctoconDiscord(octoAlter)
                         : createStateFromOctocon(octoAlter);
                     await filterConflictingProxies(newState, system);
-                                        await utils.createAndLinkEntity(newState, system, 'state');
+                    await syncEntityImages(newState, octoAlter, 'State', system, options.target);
+                    await utils.createAndLinkEntity(newState, system, 'state');
                     alterIdMap.set(octoAlter.id, { id: newState._id, type: 'state' });
                     entity = newState;
                     result.statesImported++;
@@ -1007,7 +1185,8 @@ async function processOctoconData(system, user, data, options, onProgress) {
                         ? createAlterFromOctoconDiscord(octoAlter)
                         : createAlterFromOctocon(octoAlter);
                     await filterConflictingProxies(newAlter, system);
-                                        await utils.createAndLinkEntity(newAlter, system, 'alter');
+                    await syncEntityImages(newAlter, octoAlter, 'Alter', system, options.target);
+                    await utils.createAndLinkEntity(newAlter, system, 'alter');
                     alterIdMap.set(octoAlter.id, { id: newAlter._id, type: 'alter' });
                     entity = newAlter;
                     result.membersImported++;
