@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Flush R2 buckets for Chameleon test environment
+# Flush R2 buckets for Chameleon
+# Deletes all objects from the specified R2 bucket(s).
 # Usage: ./flush-r2.sh [--yes] [--bucket app|discord|both]
 
 set -euo pipefail
 
 FORCE=false
-TARGET_BUCKET="both"  # app, discord, or both
+TARGET_BUCKET="both"
 
 for arg in "$@"; do
     case "$arg" in
@@ -16,60 +17,80 @@ for arg in "$@"; do
     shift 2>/dev/null || true
 done
 
-# Load config
-CONFIG_FILE="$(dirname "$0")/config.json"
-if [[ ! -f "$CONFIG_FILE" ]]; then
-    echo "❌ config.json not found at $CONFIG_FILE"
-    exit 1
+if [[ "$FORCE" != true ]]; then
+    echo "⚠️  This will DELETE ALL OBJECTS from R2 bucket(s): $TARGET_BUCKET"
+    read -rp "Are you sure? Type 'yes' to confirm: " confirm
+    [[ "$confirm" == "yes" ]] || { echo "Aborted."; exit 1; }
 fi
 
-# Helper to extract JSON value
-get_config() {
-    local section="$1"
-    local key="$2"
-    # Extract section object, then get key
-    python3 -c "
-import json, sys
-with open('$CONFIG_FILE') as f:
-    config = json.load(f)
-val = config.get('r2', {}).get('system', {}).get('$section', {}).get('$key')
-if val:
-    print(val)
+node -e "
+const fs = require('fs');
+const path = require('path');
+const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
+
+const configPath = path.join(__dirname, 'config.json');
+if (!fs.existsSync(configPath)) {
+    console.error('❌ config.json not found at', configPath);
+    process.exit(1);
+}
+
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+const r2 = config?.r2?.system;
+if (!r2) {
+    console.error('❌ No r2.system config found');
+    process.exit(1);
+}
+
+const targets = '$TARGET_BUCKET' === 'both' ? ['app', 'discord'] : ['$TARGET_BUCKET'];
+
+(async () => {
+    for (const name of targets) {
+        const bucket = r2[name];
+        if (!bucket?.endpoint || !bucket?.bucketName || !bucket?.accessKeyId || !bucket?.secretAccessKey) {
+            console.log('⚠️  ' + name + ' bucket config incomplete, skipping.');
+            continue;
+        }
+
+        const client = new S3Client({
+            region: 'auto',
+            endpoint: bucket.endpoint,
+            credentials: {
+                accessKeyId: bucket.accessKeyId,
+                secretAccessKey: bucket.secretAccessKey,
+            },
+            tls: true,
+            forcePathStyle: true,
+        });
+
+        let totalDeleted = 0;
+        let continuationToken = undefined;
+
+        do {
+            const listResp = await client.send(new ListObjectsV2Command({
+                Bucket: bucket.bucketName,
+                ContinuationToken: continuationToken,
+            }));
+
+            const contents = listResp.Contents || [];
+            if (contents.length === 0) break;
+
+            const objects = contents.map(obj => ({ Key: obj.Key }));
+            await client.send(new DeleteObjectsCommand({
+                Bucket: bucket.bucketName,
+                Delete: { Objects: objects },
+            }));
+
+            totalDeleted += objects.length;
+            continuationToken = listResp.IsTruncated ? listResp.NextContinuationToken : undefined;
+        } while (continuationToken);
+
+        console.log('✅ ' + name + ' bucket (' + bucket.bucketName + '): deleted ' + totalDeleted + ' object(s)');
+    }
+
+    console.log('🎉 R2 flush complete.');
+    process.exit(0);
+})().catch(err => {
+    console.error('❌ Error:', err.message);
+    process.exit(1);
+});
 "
-}
-
-flush_bucket() {
-    local name="$1"
-    local endpoint bucket key_id secret
-
-    endpoint=$(get_config "$name" "endpoint")
-    bucket=$(get_config "$name" "bucketName")
-    key_id=$(get_config "$name" "accessKeyId")
-    secret=$(get_config "$name" "secretAccessKey")
-
-    if [[ -z "$endpoint" || -z "$bucket" || -z "$key_id" || -z "$secret" ]]; then
-        echo "⚠️  $name bucket config incomplete, skipping."
-        return
-    fi
-
-    if [[ "$FORCE" != true ]]; then
-        echo "⚠️  This will DELETE ALL OBJECTS in R2 bucket '$bucket' ($name bucket)"
-        read -rp "Are you sure? Type 'yes' to confirm: " confirm
-        [[ "$confirm" == "yes" ]] || { echo "Aborted."; exit 1; }
-    fi
-
-    echo "🧹 Flushing $name bucket: $bucket..."
-    AWS_ACCESS_KEY_ID="$key_id" AWS_SECRET_ACCESS_KEY="$secret" \
-    aws s3 rm "s3://$bucket/" --recursive --endpoint-url="$endpoint" --no-verify-ssl
-    echo "✅ $name bucket flushed."
-}
-
-if [[ "$TARGET_BUCKET" == "app" || "$TARGET_BUCKET" == "both" ]]; then
-    flush_bucket "app"
-fi
-
-if [[ "$TARGET_BUCKET" == "discord" || "$TARGET_BUCKET" == "both" ]]; then
-    flush_bucket "discord"
-fi
-
-echo "🎉 R2 flush complete."

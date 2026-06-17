@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Flush MongoDB test database — Chameleon
+# Flush MongoDB database — Chameleon
+# Drops all documents from every collection (schemas/code stay intact).
 # Usage: ./flush-db.sh [--yes] [--db test]
 
 set -euo pipefail
@@ -16,31 +17,54 @@ for arg in "$@"; do
     shift 2>/dev/null || true
 done
 
-# Load MongoDB URI from config.json if available
-CONFIG_FILE="$(dirname "$0")/config.json"
-if [[ -f "$CONFIG_FILE" ]]; then
-    MONGO_URI=$(grep -o '"mongodbURI"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | sed 's/.*: *"\([^"]*\)".*/\1/')
-    if [[ -n "$MONGO_URI" ]]; then
-        export MONGODB_URI="$MONGO_URI"
-    fi
-fi
-
-MONGODB_URI="${MONGODB_URI:-mongodb://localhost:27017}"
-
 if [[ "$FORCE" != true ]]; then
-    echo "⚠️  This will DROP the '$DB_NAME' database on: $MONGODB_URI"
+    echo "⚠️  This will DELETE ALL DATA from every collection in the '$DB_NAME' database."
     read -rp "Are you sure? Type 'yes' to confirm: " confirm
     [[ "$confirm" == "yes" ]] || { echo "Aborted."; exit 1; }
 fi
 
-echo "🧹 Dropping database: $DB_NAME..."
-mongosh "$MONGODB_URI/$DB_NAME" --eval "db.dropDatabase()" --quiet
+node -e "
+const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
 
-# Also drop the unique index if it was recreated (for layer _id issue)
-echo "🔄 Recreating clean connection..."
-mongosh "$MONGODB_URI/$DB_NAME" --eval "
-    try { db.systems.dropIndex('front.layers._id_1'); print('Dropped front.layers._id_1 index'); } catch(e) {}
-    try { db.front.dropIndex('layers._id_1'); print('Dropped front.layers._id_1 index'); } catch(e) {}
-" --quiet 2>/dev/null || true
+const dbName = '$DB_NAME';
 
-echo "✅ Database '$DB_NAME' flushed cleanly."
+// Load MongoDB URI from config.json
+let mongoUri = process.env.MONGODB_URI || '';
+if (!mongoUri) {
+    const configPath = path.join(__dirname, 'config.json');
+    if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        mongoUri = config?.mongoURIs?.system || config?.mongodbURI || '';
+    }
+}
+if (!mongoUri) {
+    console.error('❌ No MongoDB URI found. Set MONGODB_URI or check config.json');
+    process.exit(1);
+}
+
+(async () => {
+    await mongoose.connect(mongoUri + dbName);
+    const db = mongoose.connection.db;
+    const collections = await db.listCollections();
+    const collNames = collections.map(c => c.name);
+
+    if (collNames.length === 0) {
+        console.log('📭 No collections found — database is already empty.');
+    } else {
+        console.log('🗑️  Found ' + collNames.length + ' collection(s): ' + collNames.join(', '));
+        for (const name of collNames) {
+            const result = await db.collection(name).deleteMany({});
+            console.log('   ✓ ' + name + ': deleted ' + result.deletedCount + ' document(s)');
+        }
+    }
+
+    console.log('✅ Database \\'' + dbName + '\\' flushed. All collections and indexes preserved.');
+    await mongoose.disconnect();
+    process.exit(0);
+})().catch(err => {
+    console.error('❌ Error:', err.message);
+    process.exit(1);
+});
+"
