@@ -28,7 +28,7 @@ const shiftSchema = new mongoose.Schema({
 const Shift = sysDB.model('Shift', shiftSchema);
 
 const layerSchema = new mongoose.Schema({
-    _id: { type: mongoose.Schema.Types.ObjectId, unique: true },
+    _id: mongoose.Schema.Types.ObjectId,
     name: String,
     color: String,
     shifts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Shift' }],
