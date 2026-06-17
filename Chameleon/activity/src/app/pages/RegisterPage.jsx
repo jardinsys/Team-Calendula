@@ -843,13 +843,13 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onSelect={handleDisorderSelect}
           onBack={handleBack}
           onStartOver={handleStartOver}
-        />}
+        />)}
       {step === 3 && (
         <OtherStep
           onResolve={handleOtherResolve}
           onBack={handleBack}
           onStartOver={handleStartOver}
-        />}
+        />)}
       {step === 4 && (
         <NameStep
           disorderKey={disorderKey}
@@ -859,7 +859,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onBack={handleBack}
           onStartOver={handleStartOver}
           discordUser={discordUser}
-        />}
+        />)}
       {step === 5 && (
         <ImportStep
           sysType={resolvedSysType}
@@ -868,7 +868,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onStartOver={handleStartOver}
           onNavigate={onNavigate}
           refreshSystem={refreshSystem}
-        />}
+        />)}
       {step === 6 && (
         <FirstAlterStep
           systemName={session.systemName}
