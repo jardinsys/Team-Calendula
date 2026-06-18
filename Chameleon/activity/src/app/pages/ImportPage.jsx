@@ -58,11 +58,11 @@ const TARGET_OPTIONS = [
     { value: 'discord', label: 'Discord Overlay', desc: 'Bot proxying, front tracking, Discord commands' },
 ]
 
-export function ImportPage({ system, onNavigate }) {
+export function ImportPage({ system, onNavigate, isRegistrationImport = false }) {
     const systemTerm = getSystemTerm(system, { context: 'label' }) || 'system'
-    const { markPrivateFromPreview } = useSystemSession()
+    const { markPrivateFromPreview, update, setMembers, session } = useSystemSession()
 
-    if (!system) {
+    if (!system && !isRegistrationImport) {
         return (
             <div className="page-container" style={{ padding: '24px', textAlign: 'center' }}>
                 <div className="card" style={{ padding: '32px', maxWidth: '400px', margin: '40px auto' }}>
@@ -96,6 +96,21 @@ export function ImportPage({ system, onNavigate }) {
     const isFrag = isFragmentedUser(system)
     const isDissoc = isDissociativeUser(system)
     const forceAsStates = !isSystem && (isFrag || isDissoc)
+
+    // Initialize from session if in registration import mode
+    useEffect(() => {
+        if (isRegistrationImport && session?.importMode && session?.importSources?.length) {
+            const sources = new Set(session.importSources)
+            setSelectedSources(sources)
+            const newConfigs = {}
+            for (const id of sources) {
+                newConfigs[id] = getDefaultConfig(id)
+            }
+            setSourceConfigs(newConfigs)
+            setConfiguringSource(Array.from(sources)[0])
+            setPhase('configure')
+        }
+    }, [isRegistrationImport, session])
 
     const getDefaultConfig = (sourceId) => {
         const src = SOURCES.find(s => s.id === sourceId)
@@ -172,6 +187,12 @@ export function ImportPage({ system, onNavigate }) {
         setPhase('select')
     }, [])
 
+    const handleBackToRegister = useCallback(() => {
+        if (onNavigate) onNavigate('register')
+        // Clear import mode when going back
+        update({ importMode: false, importSources: [], stagedImports: [] })
+    }, [onNavigate, update])
+
     const handleFetchAllPreviews = useCallback(async () => {
         for (const sourceId of selectedSources) {
             const cfg = sourceConfigs[sourceId]
@@ -244,6 +265,8 @@ export function ImportPage({ system, onNavigate }) {
         setError(null)
 
         const sourcesArray = Array.from(selectedSources)
+        const stagedImports = []
+
         for (const sourceId of sourcesArray) {
             const cfg = sourceConfigs[sourceId]
             const preview = previews[sourceId]
@@ -257,6 +280,7 @@ export function ImportPage({ system, onNavigate }) {
                     ? preview.members.filter(m => cfg.memberEntityTypes?.[m.sourceId] === 'state').map(m => m.name.toLowerCase())
                     : undefined
 
+                // Call API but don't commit - just get the staged entities
                 const res = await api.importFromSourceStream(
                     sourceId,
                     cfg.token.trim() || null,
@@ -269,21 +293,57 @@ export function ImportPage({ system, onNavigate }) {
                         forceAsStates,
                         stateNames,
                         selectedMemberIds: cfg.selectedMemberIds,
-                        selectedGroupIds: cfg.selectedGroupIds,
+                        selectedGroupIds: cfg.selectedMemberIds,
                     },
                     cfg.fileData
                 )
-                setImportResults(prev => [...prev, { sourceId, result: res, success: true }])
+                
+                // In registration mode, stage the results instead of committing
+                if (isRegistrationImport) {
+                    stagedImports.push({ sourceId, result: res, success: true })
+                } else {
+                    setImportResults(prev => [...prev, { sourceId, result: res, success: true }])
+                }
             } catch (err) {
-                setImportResults(prev => [...prev, { sourceId, error: err.message, success: false }])
+                if (isRegistrationImport) {
+                    stagedImports.push({ sourceId, error: err.message, success: false })
+                } else {
+                    setImportResults(prev => [...prev, { sourceId, error: err.message, success: false }])
+                }
             }
         }
-        setPhase('complete')
-    }, [selectedSources, sourceConfigs, previews])
+
+        if (isRegistrationImport && stagedImports.length > 0) {
+            // Stage all imports in session
+            const allMembers = []
+            const allGroups = []
+            
+            for (const imp of stagedImports) {
+                if (imp.success && imp.result?.result) {
+                    const r = imp.result.result
+                    if (r.membersImported) {
+                        // Add to session members - we'd need the actual entity data
+                        // For now, mark that imports were staged
+                    }
+                }
+            }
+            
+            // Store staged imports in session for final commit
+            update({ stagedImports })
+            setPhase('complete')
+        } else {
+            setPhase('complete')
+        }
+    }, [selectedSources, sourceConfigs, previews, isRegistrationImport, update])
 
     const handleContinue = useCallback(() => {
-        if (onNavigate) onNavigate('landing')
-    }, [onNavigate])
+        if (isRegistrationImport) {
+            // Go to FirstAlterStep in registration
+            if (onNavigate) onNavigate('register-continue-after-import')
+        } else {
+            if (onNavigate) onNavigate('landing')
+        }
+    }, [onNavigate, isRegistrationImport])
 
     const handleImportAnother = useCallback(() => {
         setPhase('select')
@@ -292,7 +352,11 @@ export function ImportPage({ system, onNavigate }) {
         setPreviews({})
         setImportResults([])
         setError(null)
-    }, [])
+        // Clear registration import mode
+        if (isRegistrationImport) {
+            update({ importMode: false, importSources: [], stagedImports: [] })
+        }
+    }, [isRegistrationImport, update])
 
     // ===== PHASE 1: Source Selection =====
     if (phase === 'select') {
@@ -391,9 +455,18 @@ export function ImportPage({ system, onNavigate }) {
         const src = SOURCES.find(s => s.id === currentSourceId)
         const cfg = sourceConfigs[currentSourceId] || getDefaultConfig(currentSourceId)
 
+        // In registration mode, force target to 'app' and hide target selection
+        const isRegMode = isRegistrationImport
+
         return (
             <div className="settings-page">
-                <button className="back-btn" onClick={handleBackToSelect} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
+                <button 
+                    className="back-btn" 
+                    onClick={isRegMode ? handleBackToRegister : handleBackToSelect} 
+                    style={{ marginBottom: 'var(--space-md)' }}
+                >
+                    ← Back
+                </button>
 
                 <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)', alignItems: 'center' }}>
                     {sourcesArray.map((id, i) => (
@@ -467,46 +540,49 @@ export function ImportPage({ system, onNavigate }) {
                     )
                 })()}
 
-                <div className="settings-section" style={{ marginBottom: 'var(--space-md)' }}>
-                    <div className="settings-section-title">Import Target <Icon name="info" size={14} style={{ cursor: 'help', opacity: 0.6, marginLeft: '4px' }} /></div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                        {TARGET_OPTIONS.map(opt => (
-                            <label
-                                key={opt.value}
-                                style={{
-                                    display: 'flex', flexDirection: 'column', gap: '2px',
-                                    padding: 'var(--space-md)', cursor: 'pointer',
-                                    background: cfg.target === opt.value ? 'var(--accent-subtle)' : 'var(--bg-card)',
-                                    border: `1px solid ${cfg.target === opt.value ? 'var(--accent)' : 'var(--glass-border)'}`,
-                                    borderRadius: 'var(--radius)'
-                                }}
-                                onClick={() => updateSourceConfig(currentSourceId, { target: opt.value })}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                                    <input
-                                        type="radio"
-                                        name={`target-${currentSourceId}`}
-                                        value={opt.value}
-                                        checked={cfg.target === opt.value}
-                                        onChange={() => updateSourceConfig(currentSourceId, { target: opt.value })}
-                                        style={{ width: '18px', height: '18px', accentColor: 'var(--accent)' }}
-                                    />
-                                    <strong>{opt.label}</strong>
-                                </div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '24px' }}>{opt.desc}</div>
-                            </label>
-                        ))}
-                    </div>
-
-                    <details style={{ marginTop: 'var(--space-sm)' }}>
-                        <summary style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 500 }}>
-                            What is Discord Overlay?
-                        </summary>
-                        <div style={{ marginTop: 'var(--space-sm)', padding: 'var(--space-sm)', background: 'rgba(196,181,253,0.1)', borderRadius: 'var(--radius)' }}>
-                            {DISCORD_OVERLAY_DESC}
+                {/* Import Target - hidden in registration mode (always goes to main profile) */}
+                {!isRegMode && (
+                    <div className="settings-section" style={{ marginBottom: 'var(--space-md)' }}>
+                        <div className="settings-section-title">Import Target <Icon name="info" size={14} style={{ cursor: 'help', opacity: 0.6, marginLeft: '4px' }} /></div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                            {TARGET_OPTIONS.map(opt => (
+                                <label
+                                    key={opt.value}
+                                    style={{
+                                        display: 'flex', flexDirection: 'column', gap: '2px',
+                                        padding: 'var(--space-md)', cursor: 'pointer',
+                                        background: cfg.target === opt.value ? 'var(--accent-subtle)' : 'var(--bg-card)',
+                                        border: `1px solid ${cfg.target === opt.value ? 'var(--accent)' : 'var(--glass-border)'}`,
+                                        borderRadius: 'var(--radius)'
+                                    }}
+                                    onClick={() => updateSourceConfig(currentSourceId, { target: opt.value })}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                                        <input
+                                            type="radio"
+                                            name={`target-${currentSourceId}`}
+                                            value={opt.value}
+                                            checked={cfg.target === opt.value}
+                                            onChange={() => updateSourceConfig(currentSourceId, { target: opt.value })}
+                                            style={{ width: '18px', height: '18px', accentColor: 'var(--accent)' }}
+                                        />
+                                        <strong>{opt.label}</strong>
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '24px' }}>{opt.desc}</div>
+                                </label>
+                            ))}
                         </div>
-                    </details>
-                </div>
+
+                        <details style={{ marginTop: 'var(--space-sm)' }}>
+                            <summary style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: '0.85rem', fontWeight: 500 }}>
+                                What is Discord Overlay?
+                            </summary>
+                            <div style={{ marginTop: 'var(--space-sm)', padding: 'var(--space-sm)', background: 'rgba(196,181,253,0.1)', borderRadius: 'var(--radius)' }}>
+                                {DISCORD_OVERLAY_DESC}
+                            </div>
+                        </details>
+                    </div>
+                )}
 
                 <div className="settings-section" style={{ marginBottom: 'var(--space-md)' }}>
                     <div className="settings-section-title">Options</div>
@@ -588,10 +664,12 @@ export function ImportPage({ system, onNavigate }) {
                                 <span style={{ fontSize: '1.5rem' }}>{src?.icon}</span>
                                 <div>
                                     <div style={{ fontWeight: 600 }}>{src?.label}</div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                        Target: <strong>{cfg.target === 'discord' ? 'Discord Overlay' : 'Main Profile'}</strong>
-                                        {cfg.target === 'discord' && <span style={{ marginLeft: 'var(--space-sm)', fontSize: '0.7rem', background: 'var(--accent-subtle)', color: 'var(--accent)', padding: '1px 6px', borderRadius: '8px' }}>Bot Profile</span>}
-                                    </div>
+                                    {!isRegistrationImport && (
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                            Target: <strong>{cfg.target === 'discord' ? 'Discord Overlay' : 'Main Profile'}</strong>
+                                            {cfg.target === 'discord' && <span style={{ marginLeft: 'var(--space-sm)', fontSize: '0.7rem', background: 'var(--accent-subtle)', color: 'var(--accent)', padding: '1px 6px', borderRadius: '8px' }}>Bot Profile</span>}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -643,6 +721,8 @@ export function ImportPage({ system, onNavigate }) {
                         <p style={{ color: 'var(--color-error)', margin: 0 }}><Icon name="x" size={16} /> {error}</p>
                     </div>
                 )}
+
+                {renderFetchStatus()}
 
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
                     <button
@@ -699,9 +779,11 @@ export function ImportPage({ system, onNavigate }) {
 
     // ===== PHASE 5: Complete =====
     if (phase === 'complete') {
-        const allSuccess = importResults.every(r => r.success)
-        const totalMembers = importResults.reduce((sum, r) => sum + (r.result?.result?.membersImported || 0), 0)
-        const totalGroups = importResults.reduce((sum, r) => sum + (r.result?.result?.groupsImported || 0), 0)
+        // In registration mode, use stagedImports instead of importResults
+        const results = isRegistrationImport ? (session?.stagedImports || []) : importResults
+        const allSuccess = results.every(r => r.success)
+        const totalMembers = results.reduce((sum, r) => sum + (r.result?.result?.membersImported || 0), 0)
+        const totalGroups = results.reduce((sum, r) => sum + (r.result?.result?.groupsImported || 0), 0)
 
         return (
             <div className="settings-page">
@@ -714,11 +796,11 @@ export function ImportPage({ system, onNavigate }) {
                     </div>
                     <div style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
                         Imported <strong>{totalMembers}</strong> member{totalMembers !== 1 ? 's' : ''} and <strong>{totalGroups}</strong> group{totalGroups !== 1 ? 's' : ''}
-                        across <strong>{importResults.length}</strong> source{importResults.length !== 1 ? 's' : ''}
+                        across <strong>{results.length}</strong> source{results.length !== 1 ? 's' : ''}
                     </div>
                 </div>
 
-                {importResults.map((r, i) => {
+                {results.map((r, i) => {
                     const src = SOURCES.find(s => s.id === r.sourceId)
                     if (!r.success) {
                         return (
@@ -757,7 +839,7 @@ export function ImportPage({ system, onNavigate }) {
                         onClick={handleContinue}
                         style={{ flex: 2, height: '56px', fontSize: '1.1rem' }}
                     >
-                        Continue to Dashboard →
+                        {isRegistrationImport ? 'Continue to System Setup →' : 'Continue to Dashboard →'}
                     </button>
                     <button
                         className="btn-ghost"

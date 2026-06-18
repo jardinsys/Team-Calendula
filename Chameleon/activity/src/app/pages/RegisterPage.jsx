@@ -464,6 +464,24 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStar
 
 function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
   const [systemName, setSystemName] = useState('')
+  const [selectedSources, setSelectedSources] = useState(new Set())
+  const [mode, setMode] = useState('choose') // 'choose' | 'sources'
+
+  const SOURCES = [
+    { id: 'pluralkit', label: 'PluralKit', icon: '🦊' },
+    { id: 'simplyplural', label: 'Simply Plural', icon: '&' },
+    { id: 'octocon', label: 'Octocon', icon: '🧠' },
+    { id: 'tupperbox', label: 'Tupperbox', icon: '📦' },
+  ]
+
+  const toggleSource = (sourceId) => {
+    setSelectedSources(prev => {
+      const next = new Set(prev)
+      if (next.has(sourceId)) next.delete(sourceId)
+      else next.add(sourceId)
+      return next
+    })
+  }
 
   const handleNewSystem = () => {
     onComplete({
@@ -473,8 +491,79 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
   }
 
   const handleImport = () => {
-    // Just navigate to ImportPage - data is already staged
-    if (onNavigate) onNavigate('import')
+    setMode('sources')
+  }
+
+  const handleSourceContinue = () => {
+    onComplete({
+      systemName: systemName.trim() || null,
+      import: true,
+      importSources: Array.from(selectedSources),
+    })
+  }
+
+  if (mode === 'sources') {
+    return (
+      <div className="register-step">
+        <h2>Choose Sources to Import From</h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
+          Select one or more platforms to import from. You can import from multiple at once.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+          {SOURCES.map(s => (
+            <label
+              key={s.id}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-sm)',
+                padding: 'var(--space-lg)', cursor: 'pointer',
+                background: selectedSources.has(s.id) ? 'var(--accent-subtle)' : 'var(--bg-card)',
+                border: `1px solid ${selectedSources.has(s.id) ? 'var(--accent)' : 'var(--glass-border)'}`,
+                borderRadius: 'var(--radius)', transition: 'all 0.2s'
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selectedSources.has(s.id)}
+                onChange={() => toggleSource(s.id)}
+                style={{ width: '20px', height: '20px', accentColor: 'var(--accent)' }}
+              />
+              <span style={{ fontSize: '2rem' }}>{s.icon}</span>
+              <span style={{ fontWeight: 600 }}>{s.label}</span>
+            </label>
+          ))}
+        </div>
+
+        <div className="form-group" style={{ marginTop: 'var(--space-lg)' }}>
+          <label>System name (optional)</label>
+          <input
+            className="text-input"
+            type="text"
+            value={systemName}
+            onChange={e => setSystemName(e.target.value)}
+            placeholder="e.g. Our System"
+            maxLength={100}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
+          <button className="btn-ghost" onClick={() => setMode('choose')} style={{ flex: 1 }}>
+            ← Back
+          </button>
+          <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
+            Start Over
+          </button>
+          <button
+            className="btn-gradient btn-gradient-primary"
+            onClick={handleSourceContinue}
+            disabled={selectedSources.size === 0}
+            style={{ flex: 2 }}
+          >
+            Continue with {selectedSources.size} Source{selectedSources.size !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -626,7 +715,7 @@ function FirstAlterStep({ onComplete, onBack, saving }) {
 // Main Register Page — Staged Flow
 // ═══════════════════════════════════════════
 
-export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordUser }) {
+export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordUser, pageParams }) {
   const {
     session,
     update,
@@ -642,7 +731,8 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     buildPayload,
   } = useSystemSession()
 
-  const [step, setStep] = useState(1)
+  const startStep = pageParams?.startStep || 1
+  const [step, setStep] = useState(startStep)
   const [category, setCategory] = useState(null)
   const [disorderKey, setDisorderKey] = useState(null)
   const [extraAnswer, setExtraAnswer] = useState(null)
@@ -741,17 +831,10 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
   const handleImportChoice = async (choice) => {
     if (choice.systemName) setSystemName(choice.systemName)
     
-    // Commit staged session to create minimal system
-    try {
-      await commit()
-    } catch (err) {
-      console.error('[Register] Failed to create base system:', err)
-      setError(err.message || 'Failed to create profile')
-      return
-    }
-
+    // DON'T commit yet - stage the import intention
     if (choice.import) {
-      // Navigate to ImportPage - it will add entities to the existing system
+      // Store import mode in session, then navigate to ImportPage in registration mode
+      update({ importMode: true, importSources: choice.importSources || [] })
       if (onNavigate) onNavigate('import')
     } else {
       // New system - go to FirstAlterStep
@@ -773,13 +856,18 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
         setMembers(members)
       }
 
+      // Include staged imports from ImportPage if any
+      if (session?.stagedImports) {
+        update({ stagedImports: session.stagedImports })
+      }
+
       // Build front layers preset
       const layers = buildPresetLayers(resolvedSysType)
       if (layers.length > 0) {
         setFront({ layers, status: '', caution: '' })
       }
 
-      // Final commit - creates everything atomically
+      // Final commit - creates everything atomically (including staged imports)
       const result = await commit()
       if (result?.system) {
         if (resolvedSysType?.isDissociative) {

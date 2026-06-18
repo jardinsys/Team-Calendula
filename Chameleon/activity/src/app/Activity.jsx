@@ -52,7 +52,10 @@ export function Activity() {
   const [fromOnboarding, setFromOnboarding] = useState(false)
 
   // Enable WebSocket only on pages that need real-time updates
-  const wsEnabled = ['friends', 'notes', 'system', 'switch'].includes(activePage || '')
+  // Exclude registration and import (from onboarding) to avoid premature connections
+  const wsEnabled = ['friends', 'notes', 'crisis'].includes(activePage || '') && 
+                    activePage !== 'register' && 
+                    !(activePage === 'import' && fromOnboarding)
   const { disconnected } = useWebSocket(wsEnabled)
 
   useEffect(() => {
@@ -128,11 +131,14 @@ export function Activity() {
     // Track if navigating from onboarding (register) to hide back button
     if (activePage === 'register' && page === 'import') {
       setFromOnboarding(true)
+    } else if (page === 'register-continue-after-import') {
+      setFromOnboarding(true)
+      setPageParams({ startStep: 6 }) // Go directly to FirstAlterStep
     } else if (page !== 'import') {
       setFromOnboarding(false)
+      setPageParams(params || null)
     }
     setActivePage(page)
-    setPageParams(params || null)
   }, [activePage])
 
   const handleOpenSettings = useCallback(() => {
@@ -218,11 +224,11 @@ export function Activity() {
         ) : activePage === 'settings' ? (
           <SettingsPage system={system} onNavigate={handleNavigate} discordUser={discordUser} />
         ) : activePage === 'import' ? (
-          <ImportPage system={system} onNavigate={handleNavigate} />
+          <ImportPage system={system} onNavigate={handleNavigate} isRegistrationImport={fromOnboarding} />
         ) : activePage === 'activities' ? (
           <ActivitiesPage />
         ) : activePage === 'register' ? (
-          <RegisterPage onNavigate={handleNavigate} onRegistered={handleRegistered} refreshSystem={refreshSystem} discordUser={discordUser} />
+          <RegisterPage onNavigate={handleNavigate} onRegistered={handleRegistered} refreshSystem={refreshSystem} discordUser={discordUser} pageParams={pageParams} />
         ) : (
           <LandingPage
             onNavigate={handleNavigate}
