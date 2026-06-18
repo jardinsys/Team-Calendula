@@ -11,10 +11,6 @@
     "dev:activity": "cd Chameleon/activity; npm run dev",
     "dev:bot": "cd Chameleon; $env:REDIS_URL='redis://localhost:6379'; node bot.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.958.0",
     "axios": "^1.13.2",
