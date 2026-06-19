@@ -447,7 +447,7 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStar
         </button>
         <button
           className="btn-gradient btn-gradient-primary"
-          onClick={handleNameConfirm}
+          onClick={handleConfirm}
           style={{ flex: 2 }}
         >
           Create Profile
