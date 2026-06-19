@@ -2,7 +2,7 @@
 .SYNOPSIS
     Starts ALL bots + Chameleon stack (Redis, API, Chameleon Bot, Plum, Sugar, TigerLily/Trigin)
 .DESCRIPTION
-    Like docker compose up but running locally. Each component runs in a background job.
+    Like docker compose up but running locally. Each component runs in a separate window.
 #>
 
 Write-Host "🌸 Starting ALL Team-Calendula services..." -ForegroundColor Magenta
@@ -23,57 +23,25 @@ if (-not (Test-Path "Chameleon/activity/dist/index.html")) {
     cd ../..
 }
 
-$jobs = @()
+Write-Host "Starting services in separate windows..." -ForegroundColor Cyan
 
 # Chameleon API
-$jobs += Start-Job -ScriptBlock {
-    cd Chameleon
-    $env:REDIS_URL = 'redis://localhost:6379'
-    node webapp/server.js
-} -Name "Chameleon-API"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd Chameleon; `$env:REDIS_URL='redis://localhost:6379'; node webapp/server.js" -WindowStyle Normal
 
 # Chameleon Bot
-$jobs += Start-Job -ScriptBlock {
-    cd Chameleon
-    $env:REDIS_URL = 'redis://localhost:6379'
-    node bot.js
-} -Name "Chameleon-Bot"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd Chameleon; `$env:REDIS_URL='redis://localhost:6379'; node bot.js" -WindowStyle Normal
 
 # Plum Bot
-$jobs += Start-Job -ScriptBlock {
-    cd Plum
-    node bot.js
-} -Name "Plum-Bot"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd Plum; node bot.js" -WindowStyle Normal
 
 # Sugar Bot
-$jobs += Start-Job -ScriptBlock {
-    cd Sugar
-    node bot.js
-} -Name "Sugar-Bot"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd Sugar; node bot.js" -WindowStyle Normal
 
 # TigerLily (Trigin) Bot
-$jobs += Start-Job -ScriptBlock {
-    cd TigerLily
-    node bot.js
-} -Name "TigerLily-Bot"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd TigerLily; node bot.js" -WindowStyle Normal
 
 Write-Host ""
-Write-Host "✅ All services started!" -ForegroundColor Green
+Write-Host "✅ All services started in separate windows!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Chameleon API + Activity: http://localhost:3001/discord_activity?frame_id=test" -ForegroundColor Gray
 Write-Host "Chameleon API Health:     http://localhost:3001/api/health" -ForegroundColor Gray
-Write-Host ""
-Write-Host "Running jobs:" -ForegroundColor Cyan
-Get-Job -Name "*-Bot", "*-API" | Format-Table Name, State, HasMoreData -AutoSize
-
-Write-Host ""
-Write-Host "Press Ctrl+C to stop ALL..." -ForegroundColor Yellow
-
-try {
-    while ($true) { Start-Sleep 1 }
-} finally {
-    Write-Host "`n🛑 Stopping all services..." -ForegroundColor Yellow
-    Get-Job -Name "*-Bot", "*-API" | Stop-Job -ErrorAction SilentlyContinue
-    Get-Job -Name "*-Bot", "*-API" | Remove-Job -ErrorAction SilentlyContinue
-    Write-Host "All stopped." -ForegroundColor Green
-}
