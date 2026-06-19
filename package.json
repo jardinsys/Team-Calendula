@@ -8,8 +8,8 @@
     "dev:redis": "docker run -d --name redis -p 6379:6379 redis:7-alpine",
     "dev:redis:stop": "docker stop redis; docker rm redis",
     "dev:api": "cd Chameleon; $env:REDIS_URL='redis://localhost:6379'; node webapp/server.js",
-    "dev:activity": "cd Chameleon/activity; npm run dev",
-    "dev:bot": "cd Chameleon; $env:REDIS_URL='redis://localhost:6379'; node bot.js"
+    "dev:bot": "cd Chameleon; $env:REDIS_URL='redis://localhost:6379'; node bot.js",
+    "dev:activity": "cd Chameleon/activity; npx vite --config config/vite.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.958.0",
