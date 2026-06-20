@@ -9,5 +9,10 @@
         "@dnd-kit/sortable": "^10.0.0",
         "@dnd-kit/utilities": "^3.2.2",
         "ws": "^8.21.0"
+    },
+    "devDependencies": {
+        "@types/mongoose": "^5.11.96",
+        "@types/node": "^26.0.0",
+        "typescript": "^6.0.3"
     }
 }
