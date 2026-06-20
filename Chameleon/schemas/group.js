@@ -1,135 +1,18 @@
-const mongoose = require("mongoose");
 const sysDB = require("../database");
-const mediaSchema = require("../../media");
-const triggerSchema = require('../../TigerLily/schemas/trigger.js');
 const { groupPrivacySchema } = require("./settings");
-const Snowflake = require('snowflake-id').default;
-const snowflake = new Snowflake({
-    mid: 1,  // Machine ID
-    offset: 0
-});
+const { createEntitySchema, applyEntityDefaults } = require('./entityBase');
 
-const groupSchema = new mongoose.Schema({
-    id: {
-        type: String,
-        default: () => snowflake.generate(),
-        unique: true
-    },
-    systemID: String,
+const groupSchema = createEntitySchema({
     createdAt: { type: Date, default: Date.now },
-    syncWithApps: {
-        discord: { type: Boolean, default: true }
-    },
-    name: {
-        indexable: String,
-        display: String,
-        closedNameDisplay: String,
-        aliases: [String]
-    },
     type: {
         name: String,
-        canFront: { type: String, enum: ['yes', 'no'], default: 'yes' }
+        canFront: { type: String, enum: ['yes', 'no'], default: 'yes' },
     },
-    description: String,
-    color: String,
-    avatar: mediaSchema,
-    signoff: String,
     alterIDs: [String],
     stateIDs: [String],
-    mask: {
-        name: {
-            indexable: String,
-            display: String,
-            closedNameDisplay: String
-        },
-        description: String,
-        color: String,
-        avatar: mediaSchema,
-        discord: {
-            name: {
-                display: String,
-                openCharDisplay: String
-            },
-            description: String,
-            color: String,
-            image: {
-                avatar: mediaSchema,
-                banner: mediaSchema,
-                proxyAvatar: mediaSchema
-            },
-            pronounSeparator: String
-        }
-    },
-    discord: {
-        name: {
-            display: String,
-            openCharDisplay: String
-        },
-        description: String,
-        color: String,
-        image: {
-            avatar: mediaSchema,
-            banner: mediaSchema,
-            proxyAvatar: mediaSchema
-        },
-        pronounSeparator: String,
-        server: [{
-            id: String,
-            name: String,
-            description: String,
-            avatar: mediaSchema,
-            banner: mediaSchema,
-            proxyAvatar: mediaSchema,
-            pronounSeparator: String,
-        }],
-        metadata: {
-            messageCount: { type: Number, integer: true, default: 0 },
-            lastMessageTime: Date,
-        }
-    },
-    caution: {
-        c_type: String,
-        detail: String,
-        triggers: [triggerSchema],
-    },
-    condition: String,
-    proxy: [String],
-    metadata: {
-        addedAt: { type: Date, default: Date.now },
-    },
-    setting: {
-        allowPing: { type: Boolean, default: true },
-        default_status: String,
-        default_battery: Number,
-        mask: {
-            maskTo: [{
-                userFriendID: String,
-                discordUserID: String,
-                discordGuildID: String
-            }],
-            maskExclude: [{
-                userFriendID: String,
-                discordUserID: String,
-                discordGuildID: String
-            }],
-        },
-        privacy: [{
-            bucket: String,
-            settings: groupPrivacySchema
-        }]
-    }
-});
+}, groupPrivacySchema);
 
-groupSchema.index({ systemID: 1 });
-groupSchema.index({ systemID: 1, 'name.indexable': 1 });
-
-groupSchema.post('save', function (doc) {
-    try {
-        const { publishEvent } = require('../redis');
-        const eventType = this.$wasNew ? 'entity:created' : 'entity:edited';
-        publishEvent(doc.systemID, { type: eventType, entityType: 'group', entityId: doc._id.toString() });
-    } catch (_) {}
-});
+applyEntityDefaults(groupSchema, 'group');
 
 const Group = sysDB.model('Group', groupSchema);
 module.exports = Group;

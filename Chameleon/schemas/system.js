@@ -4,30 +4,27 @@ const { PrivacyBucket, systemPrivacySchema, alterPrivacySchema, groupPrivacySche
 const { layerSchema } = require('./front.js');
 const triggerSchema = require('../../TigerLily/schemas/trigger.js');
 const mediaSchema = require('../../media.js');
+const { maskSchema, maskDiscordSchema, entityDiscordSchema } = require('./entityBase');
 const Snowflake = require('snowflake-id').default;
-const snowflake = new Snowflake({
-    mid: 1,  // Machine ID
-    offset: 0
-});
+const snowflake = new Snowflake({ mid: 1, offset: 0 });
 
 const systemSchema = new mongoose.Schema({
     id: {
         type: String,
         default: () => snowflake.generate(),
-        unique: true
+        unique: true,
     },
     users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     metadata: {
         joinedAt: { type: Date, default: Date.now },
     },
-
     syncWithApps: {
-        discord: { type: Boolean, default: true }
+        discord: { type: Boolean, default: true },
     },
     name: {
         indexable: String,
         display: String,
-        closedNameDisplay: String
+        closedNameDisplay: String,
     },
     sys_type: {
         name: String,
@@ -35,146 +32,98 @@ const systemSchema = new mongoose.Schema({
             DSM: { type: String, enum: ["DID", "Amnesia", "Amnesia-Fugue", "Dereal/Depers", "OSDD-1A", "OSDD-1B", "OSDD-2", "OSDD-3", "OSDD-4", "UDD"] },
             ICD: { type: String, enum: ["P-DID", "Amnesia", "Amnesia-Fugue", "Trance", "DNSD", "Possession Trance", "Depersonalization-Derealization"] },
         },
-        isSystem: { type: Boolean, default: false }, // Alters, States, Groups
-        isFragmented: { type: Boolean, default: false }, // States + Groups
-        isDissociative: { type: Boolean, default: false }, // Tracking dissociative states
-        dissociativeStateName: { type: String, default: 'Dissociated' }, // Custom name for auto-created dissociative state
-        onboardingCompleted: { type: Boolean, default: false }
+        isSystem: { type: Boolean, default: false },
+        isFragmented: { type: Boolean, default: false },
+        isDissociative: { type: Boolean, default: false },
+        dissociativeStateName: { type: String, default: 'Dissociated' },
+        onboardingCompleted: { type: Boolean, default: false },
     },
     description: String,
     birthday: Date,
     timezone: String,
     color: String,
+
+    // ─── Theming ───────────────────────────────────────
     theme: {
         background: {
-            media: mediaSchema, // $$
-            colorTheme: {
-                colors: [String],
-            }
+            media: mediaSchema,
+            colorTheme: { colors: [String] },
         },
     },
     avatar: mediaSchema,
     alterSynonym: {
         singular: { type: String, default: "alter" },
-        plural: { type: String, default: "alters" }
+        plural: { type: String, default: "alters" },
     },
     systemSynonym: { type: String, default: "system" },
+
+    // ─── Entity registries ─────────────────────────────
     alters: {
-        conditions: [{
-            name: String,
-            settings: {
-                hide_to_self: Boolean,
-                include_in_Count: Boolean,
-            }
-        }],
-        IDs: [String]
+        conditions: [{ name: String, settings: { hide_to_self: Boolean, include_in_Count: Boolean } }],
+        IDs: [String],
     },
     states: {
-        conditions: [{
-            name: String,
-            settings: {
-                hide_to_self: Boolean,
-                include_in_Count: Boolean,
-            }
-        }],
-        IDs: [String]
+        conditions: [{ name: String, settings: { hide_to_self: Boolean, include_in_Count: Boolean } }],
+        IDs: [String],
     },
     groups: {
         types: [String],
-        conditions: [{
-            name: String,
-            settings: {
-                hide_to_self: Boolean,
-                include_in_Count: Boolean,
-            },
-        }],
-        IDs: [String]
+        conditions: [{ name: String, settings: { hide_to_self: Boolean, include_in_Count: Boolean } }],
+        IDs: [String],
     },
+
+    // ─── Mask mode (extends shared maskSchema) ─────────
     mask: {
-        name: {
-            indexable: String,
-            display: String,
-            closedNameDisplay: String
-        },
+        ...maskSchema,
         pronouns: String,
-        description: String,
-        color: String,
-        avatar: mediaSchema,
         theme: {
             background: {
-                media: mediaSchema, // $$
-                colorTheme: {
-                    colors: [String],
-                }
+                media: mediaSchema,
+                colorTheme: { colors: [String] },
             },
         },
         discord: {
-            name: {
-                display: String,
-                openCharDisplay: String
-            },
-            description: String,
-            color: String,
-            image: {
-                avatar: mediaSchema,
-                banner: mediaSchema,
-                proxyAvatar: mediaSchema,
-            },
+            ...maskDiscordSchema,
             tag: {
                 normal: [String],
-                openCharDisplay: [String]
+                openCharDisplay: [String],
             },
-            pronounSeparator: String
-        }
+        },
     },
+
+    // ─── Discord integration (extends shared entityDiscordSchema) ──
     discord: {
-        name: {
-            display: String,
-            openCharDisplay: String
-        },
-        description: String,
-        color: String,
-        image: {
-            avatar: mediaSchema,
-            banner: mediaSchema,
-            proxyAvatar: mediaSchema,
-        },
+        ...entityDiscordSchema,
         tag: {
             normal: [String],
-            openCharDisplay: [String]
+            openCharDisplay: [String],
         },
-        pronounSeparator: String,
         proxylayout: {
             alter: String,
             state: String,
-            group: String
+            group: String,
         },
         server: [{
-            id: String,
-            name: String,
-            description: String,
-            avatar: mediaSchema,
-            banner: mediaSchema,
-            proxyAvatar: mediaSchema,
+            ...entityDiscordSchema.server[0],
             tag: [String],
-            pronounSeparator: String,
             proxyStyle: { type: String, default: "off" },
-            replyStyle: String
-        }]
+            replyStyle: String,
+        }],
     },
+
+    // ─── Front ─────────────────────────────────────────
     front: {
         status: String,
         caution: String,
         layers: [layerSchema],
     },
-    battery: Number, // Social Battery
+
+    // ─── Caution ───────────────────────────────────────
+    battery: Number,
     caution: {
         c_type: String,
         detail: String,
-        default: {
-            c_type: String,
-            detail: String,
-        },
+        default: { c_type: String, detail: String },
         cautionAlgos: [{
             style: String,
             alters: [String],
@@ -184,6 +133,8 @@ const systemSchema = new mongoose.Schema({
         }],
         triggers: [triggerSchema],
     },
+
+    // ─── Proxy ─────────────────────────────────────────
     proxy: {
         layout: String,
         recentProxies: [String],
@@ -191,23 +142,17 @@ const systemSchema = new mongoose.Schema({
         break: Boolean,
         style: { type: String, default: "off" },
         caseSensitive: Boolean,
-        replyStyle: { type: String, default: "embed" }
+        replyStyle: { type: String, default: "embed" },
     },
+
+    // ─── Settings & Privacy ────────────────────────────
     setting: {
         autoshareNotestoUsers: { type: Boolean, default: false },
         proxyCoolDown: { type: Number, default: 3600 },
         noteAutoAttribution: { type: String, enum: ['topLayer', 'allFronters', 'off'], default: 'topLayer' },
         mask: {
-            maskTo: [{
-                userFriendID: String,
-                discordUserID: String,
-                discordGuildID: String
-            }],
-            maskExclude: [{
-                userFriendID: String,
-                discordUserID: String,
-                discordGuildID: String
-            }]
+            maskTo: [{ userFriendID: String, discordUserID: String, discordGuildID: String }],
+            maskExclude: [{ userFriendID: String, discordUserID: String, discordGuildID: String }],
         },
         privacy: [{
             bucket: String,
@@ -215,13 +160,13 @@ const systemSchema = new mongoose.Schema({
             defaults: {
                 alter: alterPrivacySchema,
                 state: alterPrivacySchema,
-                group: groupPrivacySchema
-            }
+                group: groupPrivacySchema,
+            },
         }],
-        friendAutoBucket: String
+        friendAutoBucket: String,
     },
     privacyBuckets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'PrivacyBucket' }],
-    affirmations: [String]
+    affirmations: [String],
 });
 
 systemSchema.post('save', function (doc) {
