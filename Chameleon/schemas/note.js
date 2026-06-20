@@ -1,11 +1,7 @@
 const mongoose = require("mongoose");
 const sysDB = require("../database");
 const mediaSchema = require('../../media.js');
-const Snowflake = require('snowflake-id').default;
-const snowflake = new Snowflake({
-    mid: 1,  // Machine ID
-    offset: 0
-});
+const { snowflake } = require('./snowflakeHelper');
 
 const noteSchema = new mongoose.Schema({
     id: { type: String, default: () => snowflake.generate(), unique: true },

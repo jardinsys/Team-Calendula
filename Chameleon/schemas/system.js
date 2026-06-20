@@ -5,8 +5,7 @@ const { layerSchema } = require('./front.js');
 const triggerSchema = require('../../TigerLily/schemas/trigger.js');
 const mediaSchema = require('../../media.js');
 const { maskSchema, maskDiscordSchema, entityDiscordSchema } = require('./entityBase');
-const Snowflake = require('snowflake-id').default;
-const snowflake = new Snowflake({ mid: 1, offset: 0 });
+const { snowflake } = require('./snowflakeHelper');
 
 const systemSchema = new mongoose.Schema({
     id: {

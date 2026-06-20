@@ -10,8 +10,7 @@
 const mongoose = require('mongoose');
 const mediaSchema = require('../../media');
 const triggerSchema = require('../../TigerLily/schemas/trigger.js');
-const Snowflake = require('snowflake-id').default;
-const snowflake = new Snowflake({ mid: 1, offset: 0 });
+const { snowflake } = require('./snowflakeHelper');
 
 // ─── Shared sub-schemas ───────────────────────────────────────
 
