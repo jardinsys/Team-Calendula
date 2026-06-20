@@ -13,6 +13,13 @@ const sysR2 = new S3Client({
     },
 });
 
+/**
+ * Download a file from an external URL, following redirects.
+ * @param {string} url - The URL to download from
+ * @param {number} [redirects=0] - Current redirect count (max 5)
+ * @returns {Promise<Buffer>} The downloaded file as a Buffer
+ * @throws {Error} If too many redirects, HTTP error, or timeout (30s)
+ */
 async function downloadFromUrl(url, redirects = 0) {
     if (redirects > 5) throw new Error('Too many redirects');
     return new Promise((resolve, reject) => {
@@ -30,6 +37,16 @@ async function downloadFromUrl(url, redirects = 0) {
     });
 }
 
+/**
+ * Upload a buffer to R2 storage and return a media schema object.
+ * @param {Buffer} buffer - The file content to upload
+ * @param {string} filename - Original filename (used for metadata)
+ * @param {string} mimeType - MIME type of the file
+ * @param {string} userId - Discord user ID (used in R2 path)
+ * @param {string} entityType - Entity type: 'Alter' | 'State' | 'Group'
+ * @param {string} field - Field name: 'avatar' | 'banner' | 'proxyAvatar'
+ * @returns {Promise<Object>} Media schema object with r2Key, url, metadata
+ */
 async function uploadToR2(buffer, filename, mimeType, userId, entityType, field) {
     const ext = (filename.split('.').pop() || 'png').toLowerCase();
     const r2Key = `media/${entityType}/${userId}/${field}_${Date.now()}.${ext}`;
