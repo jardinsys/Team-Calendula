@@ -12,7 +12,7 @@
  */
 
 const { EmbedBuilder } = require('discord.js');
-const proxyMessageHandler = require('../../../global/proxy-message');
+const proxyMessageHandler = require('../../global/proxy-message');
 const utils = require('./');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
