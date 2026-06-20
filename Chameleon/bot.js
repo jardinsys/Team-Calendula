@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { Client, Events, GatewayIntentBits, Collection, MessageFlags, EmbedBuilder } = require('discord.js');
+const { Client, Events, GatewayIntentBits, Collection, EmbedBuilder } = require('discord.js');
 const config = require('./config.json');
 const dbConnection = require('./database');
 const token = config.discordTokens.system;
@@ -163,357 +163,79 @@ client.on('guildCreate', async guild => {
 });
 
 // ==== INTERACTION HANDLING ====
+const router = require('./discord_commands/functions/bot_utils/interactionRouter');
 
 client.on(Events.InteractionCreate, async (interaction) => {
-	
-	// --- SLASH COMMAND HANDLING ----
+
+	// --- SLASH COMMAND HANDLING ---
 	if (interaction.isChatInputCommand()) {
 		const command = interaction.client.commands.get(interaction.commandName);
-
 		if (!command) {
 			console.error(`No command matching ${interaction.commandName} was found.`);
 			return;
 		}
-
 		try {
-			// Support both 'execute' and 'executeInteraction' method names
-			if (command.execute) {
-				await command.execute(interaction);
-			} else if (command.executeInteraction) {
-				await command.executeInteraction(interaction);
-			}
+			if (command.execute) await command.execute(interaction);
+			else if (command.executeInteraction) await command.executeInteraction(interaction);
 		} catch (error) {
 			console.error(`Error executing command ${interaction.commandName}:`, error);
-			
-			const errorMessage = {
-				content: 'There was an error while executing this command!',
-				flags: MessageFlags.Ephemeral,
-			};
-
-			if (interaction.replied || interaction.deferred) {
-				await interaction.followUp(errorMessage).catch(console.error);
-			} else {
-				await interaction.reply(errorMessage).catch(console.error);
-			}
+			await router.replyWithError(interaction, 'There was an error while executing this command!');
 		}
 		return;
 	}
 
-	// ---- BUTTON INTERACTION HANDLING ----
-	// Systemiser commands - route based on customId prefix
+	// --- BUTTON INTERACTIONS ---
 	if (interaction.isButton()) {
 		try {
-			const customId = interaction.customId;
-
-			// new_user_ buttons from any systemiser command
-			if (customId.startsWith('new_user_')) return await utils.handleNewUserButton(interaction);
-
-			// System command buttons
-			if (customId.startsWith('system_')) {
-				const cmd = interaction.client.commands.get('system');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Alter command buttons
-			if (customId.startsWith('alter_')) {
-				const cmd = interaction.client.commands.get('alter');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// State command buttons
-			if (customId.startsWith('state_')) {
-				const cmd = interaction.client.commands.get('state');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Group command buttons
-			if (customId.startsWith('group_')) {
-				const cmd = interaction.client.commands.get('group');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Front command buttons
-			if (customId.startsWith('front_')) {
-				const cmd = interaction.client.commands.get('front');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Message command buttons
-			if (customId.startsWith('message_')) {
-				const cmd = interaction.client.commands.get('message');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Profile command buttons
-			if (customId.startsWith('profile_')) {
-				const cmd = interaction.client.commands.get('profile');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Note command buttons
-			if (customId.startsWith('note_')) {
-				const cmd = interaction.client.commands.get('note');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Friend command buttons
-			if (customId.startsWith('friend_')) {
-				const cmd = interaction.client.commands.get('friend');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Settings command buttons
-			if (customId.startsWith('settings_')) {
-				const cmd = interaction.client.commands.get('settings');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Whois command buttons
-			if (customId.startsWith('whois_')) {
-				const cmd = interaction.client.commands.get('whois');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Import command buttons (token entry)
-			if (customId.startsWith('import_')) {
-				const cmd = interaction.client.prefixCommands.get('import');
-				if (cmd?.handleButtonInteraction) return await cmd.handleButtonInteraction(interaction);
-			}
-
-			// Add more button handlers here as needed...
-
+			await router.routeButtonInteraction(interaction);
 		} catch (error) {
 			console.error('Button interaction error:', error);
-			
-			const errorMessage = {
-				content: 'There was an error processing this button!',
-				flags: MessageFlags.Ephemeral,
-			};
-
-			if (interaction.replied || interaction.deferred) {
-				await interaction.followUp(errorMessage).catch(console.error);
-			} else {
-				await interaction.reply(errorMessage).catch(console.error);
-			}
+			await router.replyWithError(interaction, 'There was an error processing this button!');
 		}
 		return;
 	}
 
-	// ---- SELECT MENU INTERACTION HANDLING ----
+	// --- SELECT MENU INTERACTIONS ---
 	if (interaction.isStringSelectMenu()) {
 		try {
-			const customId = interaction.customId;
-
-			// System command select menus
-			if (customId.startsWith('system_')) {
-				const cmd = interaction.client.commands.get('system');
-				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
-			}
-
-			// new_user_ select menus (onboarding disorder selection)
-			if (customId.startsWith('new_user_disorder_')) return await utils.handleNewUserButton(interaction);
-
-			// Alter command select menus
-			if (customId.startsWith('alter_')) {
-				const cmd = interaction.client.commands.get('alter');
-				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
-			}
-
-			// State command select menus
-			if (customId.startsWith('state_')) {
-				const cmd = interaction.client.commands.get('state');
-				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
-			}
-
-			// Group command select menus
-			if (customId.startsWith('group_')) {
-				const cmd = interaction.client.commands.get('group');
-				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
-			}
-
-			// Front command select menus
-			if (customId.startsWith('front_')) {
-				const cmd = interaction.client.commands.get('front');
-				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
-			}
-
-			// Profile command select menus
-			if (customId.startsWith('profile_')) {
-				const cmd = interaction.client.commands.get('profile');
-				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
-			}
-
-			// Note command select menus
-			if (customId.startsWith('note_')) {
-				const cmd = interaction.client.commands.get('note');
-				if (cmd?.handleSelectMenu) {
-					return await cmd.handleSelectMenu(interaction);
-				}
-			}
-
-			// Friend command select menus
-			if (customId.startsWith('friend_')) {
-				const cmd = interaction.client.commands.get('friend');
-				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
-			}
-
-			// Settings command select menus
-			if (customId.startsWith('settings_')) {
-				const cmd = interaction.client.commands.get('settings');
-				if (cmd?.handleSelectMenu) return await cmd.handleSelectMenu(interaction);
-			}
-
-			// Import command select menus (states selection)
-			if (customId.startsWith('import_')) {
-				const cmd = interaction.client.prefixCommands.get('import');
-				if (cmd?.handleSelectMenuInteraction) return await cmd.handleSelectMenuInteraction(interaction);
-			}
-
-			// Add more select menu handlers here as needed...
-
+			await router.routeSelectInteraction(interaction);
 		} catch (error) {
 			console.error('Select menu interaction error:', error);
-			
-			const errorMessage = {
-				content: 'There was an error processing this selection!',
-				flags: MessageFlags.Ephemeral,
-			};
-
-			if (interaction.replied || interaction.deferred) {
-				await interaction.followUp(errorMessage).catch(console.error);
-			} else {
-				await interaction.reply(errorMessage).catch(console.error);
-			}
+			await router.replyWithError(interaction, 'There was an error processing this selection!');
 		}
 		return;
 	}
 
-	// ---- MODAL SUBMIT HANDLING ----
+	// --- MODAL SUBMIT ---
 	if (interaction.isModalSubmit()) {
 		try {
-			const customId = interaction.customId;
-
-			// System command modals
-			if (customId.startsWith('system_')) {
-				const cmd = interaction.client.commands.get('system');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// new_user_ modals (onboarding)
-			if (customId.startsWith('new_user_other_modal_')) return await utils.handleNewUserModal(interaction);
-			if (customId.startsWith('new_user_name_modal_')) return await utils.handleNewUserNameModal(interaction);
-
-			// Alter command modals
-			if (customId.startsWith('alter_')) {
-				const cmd = interaction.client.commands.get('alter');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// State command modals
-			if (customId.startsWith('state_')) {
-				const cmd = interaction.client.commands.get('state');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// Group command modals
-			if (customId.startsWith('group_')) {
-				const cmd = interaction.client.commands.get('group');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// Front command modals
-			if (customId.startsWith('front_')) {
-				const cmd = interaction.client.commands.get('front');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// Message command modals
-			if (customId.startsWith('message_')) {
-				const cmd = interaction.client.commands.get('message');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// Profile command modals
-			if (customId.startsWith('profile_')) {
-				const cmd = interaction.client.commands.get('profile');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// Note command modals
-			if (customId.startsWith('note_')) {
-				const cmd = interaction.client.commands.get('note');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// Friend command modals
-			if (customId.startsWith('friend_')) {
-				const cmd = interaction.client.commands.get('friend');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// Settings command modals
-			if (customId.startsWith('settings_')) {
-				const cmd = interaction.client.commands.get('settings');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// Import command modals (token submission)
-			if (customId.startsWith('import_')) {
-				const cmd = interaction.client.prefixCommands.get('import');
-				if (cmd?.handleModalSubmit) return await cmd.handleModalSubmit(interaction);
-			}
-
-			// Add more modal handlers here as needed...
-
+			await router.routeModalInteraction(interaction);
 		} catch (error) {
 			console.error('Modal submit error:', error);
-			
-			const errorMessage = {
-				content: 'There was an error processing this form!',
-				flags: MessageFlags.Ephemeral,
-			};
-
-			if (interaction.replied || interaction.deferred) {
-				await interaction.followUp(errorMessage).catch(console.error);
-			} else {
-				await interaction.reply(errorMessage).catch(console.error);
-			}
+			await router.replyWithError(interaction, 'There was an error processing this form!');
 		}
 		return;
 	}
 
-	// ---- AUTOCOMPLETE HANDLING (for future use) ----
+	// --- AUTOCOMPLETE ---
 	if (interaction.isAutocomplete()) {
 		try {
 			const command = interaction.client.commands.get(interaction.commandName);
-			
-			if (command?.autocomplete) {
-				await command.autocomplete(interaction);
-			}
+			if (command?.autocomplete) await command.autocomplete(interaction);
 		} catch (error) {
 			console.error('Autocomplete error:', error);
 		}
 		return;
 	}
 
-	// ---- CONTEXT MENU HANDLING (Right-click commands) ----
+	// --- CONTEXT MENUS ---
 	if (interaction.isMessageContextMenuCommand()) {
 		try {
 			const command = interaction.client.contextMenus.get(interaction.commandName);
 			if (command?.executeContextMenu) await command.executeContextMenu(interaction);
 		} catch (error) {
 			console.error('Context menu error:', error);
-			
-			const errorMessage = {
-				content: 'There was an error processing this action!',
-				flags: MessageFlags.Ephemeral,
-			};
-
-			if (interaction.replied || interaction.deferred) {
-				await interaction.followUp(errorMessage).catch(console.error);
-			} else {
-				await interaction.reply(errorMessage).catch(console.error);
-			}
+			await router.replyWithError(interaction, 'There was an error processing this action!');
 		}
 		return;
 	}
