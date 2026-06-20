@@ -1085,14 +1085,14 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onBack={handleBack}
           onStartOver={handleStartOver}
         />)}
-      {step === 3 && (sysType?.isSystem || sysType?.isFragmented) && (
+      {step === 3 && (resolvedSysType?.isSystem || resolvedSysType?.isFragmented) && (
         <ImportStep
           sysType={resolvedSysType}
           onComplete={handleImportStepComplete}
           onBack={handleBack}
           onStartOver={handleStartOver}
         />)}
-      {step === 3 && category === 'OTHER' && !sysType?.isSystem && !sysType?.isFragmented && (
+      {step === 3 && category === 'OTHER' && !resolvedSysType?.isSystem && !resolvedSysType?.isFragmented && (
         <OtherStep
           onResolve={handleOtherResolve}
           onBack={handleBack}
