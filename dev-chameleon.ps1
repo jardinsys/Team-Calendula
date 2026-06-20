@@ -6,7 +6,7 @@
     Activity is served by API at /discord_activity (built dist/).
 #>
 
-Write-Host "🌸 Chameleon Dev Launcher" -ForegroundColor Magenta
+Write-Host "🎡 Chameleon Dev Launcher" -ForegroundColor Magenta
 Write-Host "═════════════════════════" -ForegroundColor Magenta
 Write-Host ""
 Write-Host "Select what to start:" -ForegroundColor Cyan
