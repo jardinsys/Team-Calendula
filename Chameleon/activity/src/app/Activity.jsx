@@ -15,6 +15,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { ImportPage } from './pages/ImportPage'
 import { ActivitiesPage } from './pages/ActivitiesPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { RegistrationImportPage } from './pages/RegistrationImportPage'
 import { SwitchPage } from './pages/SwitchPage'
 import { EntityViewPage } from './pages/EntityViewPage'
 import { FrontHistoryPage } from './pages/FrontHistoryPage'
@@ -24,7 +25,7 @@ import { SettingsPanel } from '@chameleon/shared/components/SettingsPanel.jsx'
 function getInitialPage() {
     const params = new URLSearchParams(window.location.search)
     const page = params.get('page')
-    if (page && ['system', 'friends', 'notes', 'crisis', 'what-is', 'settings', 'import', 'activities', 'register', 'switch', 'entity'].includes(page)) return page
+    if (page && ['system', 'friends', 'notes', 'crisis', 'what-is', 'settings', 'import', 'register-import', 'activities', 'register', 'switch', 'entity'].includes(page)) return page
     return null
 }
 
@@ -111,13 +112,13 @@ export function Activity() {
       setHasSystem(true)
       setActivePage(null)
       setFromOnboarding(false)
+      setPageParams(null)
     } catch (err) {
       console.error('[Activity] Failed to fetch system after registration:', err)
     }
   }, [])
 
-  // Called by RegisterPage/ImportStep after creating a system during onboarding
-  const refreshSystem = useCallback(async () => {
+  const refreshSystemAfterSetup = useCallback(async () => {
     try {
       const data = await api.getSystemFull()
       setSystem(data)
@@ -128,13 +129,14 @@ export function Activity() {
   }, [])
 
   const handleNavigate = useCallback((page, params) => {
-    // Track if navigating from onboarding (register) to hide back button
-    if (activePage === 'register' && page === 'import') {
+    if ((page === 'import' && activePage === 'register-import') || page === 'register' || page === 'register-import') {
       setFromOnboarding(true)
-    } else if (page === 'register-continue-after-import') {
-      setFromOnboarding(true)
-      setPageParams({ startStep: 6 }) // Go directly to FirstAlterStep
-    } else if (page !== 'import') {
+      if (page === 'register' && params?.startStep) {
+        setPageParams({ startStep: params.startStep })
+      } else if (page !== 'register') {
+        setPageParams(params || null)
+      }
+    } else {
       setFromOnboarding(false)
       setPageParams(params || null)
     }
@@ -188,7 +190,6 @@ export function Activity() {
   const PageComponent = activePage ? PAGES[activePage] : null
 
   const showBackButton = activePage && activePage !== 'what-is' && activePage !== 'register' && !fromOnboarding
-
   const handleBack = () => {
     setActivePage(null)
     setPageParams(null)
@@ -223,12 +224,12 @@ export function Activity() {
           <WhatIsPage onNavigate={handleNavigate} />
         ) : activePage === 'settings' ? (
           <SettingsPage system={system} onNavigate={handleNavigate} discordUser={discordUser} />
-        ) : activePage === 'import' ? (
-          <ImportPage system={system} onNavigate={handleNavigate} isRegistrationImport={fromOnboarding} />
+        ) : activePage === 'import' || activePage === 'register-import' ? (
+          <RegistrationImportPage onNavigate={handleNavigate} />
         ) : activePage === 'activities' ? (
           <ActivitiesPage />
         ) : activePage === 'register' ? (
-          <RegisterPage onNavigate={handleNavigate} onRegistered={handleRegistered} refreshSystem={refreshSystem} discordUser={discordUser} pageParams={pageParams} />
+          <RegisterPage onNavigate={handleNavigate} onRegistered={handleRegistered} refreshSystem={refreshSystemAfterSetup} discordUser={discordUser} pageParams={pageParams} />
         ) : (
           <LandingPage
             onNavigate={handleNavigate}

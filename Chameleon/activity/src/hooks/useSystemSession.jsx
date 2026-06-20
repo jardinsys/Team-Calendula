@@ -40,6 +40,14 @@ export function useSystemSession() {
     setSession(prev => ({ ...prev, members }))
   }, [])
 
+  const setGroups = useCallback((groups) => {
+    setSession(prev => ({ ...prev, groups }))
+  }, [])
+
+  const setSwitches = useCallback((switches) => {
+    setSession(prev => ({ ...prev, switchHistory: switches }))
+  }, [])
+
   const setFront = useCallback((front) => {
     setSession(prev => ({ ...prev, front }))
   }, [])
@@ -246,6 +254,8 @@ export function useSystemSession() {
     setSystemName,
     setSysType,
     setMembers,
+    setGroups,
+    setSwitches,
     setFront,
     addShift,
     reset,

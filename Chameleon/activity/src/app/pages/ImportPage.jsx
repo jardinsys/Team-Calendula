@@ -93,24 +93,37 @@ export function ImportPage({ system, onNavigate, isRegistrationImport = false })
     const { status: fetchStatus, start: startFetch, complete: completeFetch, error: errorFetch, render: renderFetchStatus } = useFetchStatus()
 
     const isSystem = isSystemUser(system)
-    const isFrag = isFragmentedUser(system)
-    const isDissoc = isDissociativeUser(system)
-    const forceAsStates = !isSystem && (isFrag || isDissoc)
+        const isFrag = isFragmentedUser(system)
+        const isDissoc = isDissociativeUser(system)
+        const forceAsStates = !isSystem && (isFrag || isDissoc)
 
-    // Initialize from session if in registration import mode
-    useEffect(() => {
-        if (isRegistrationImport && session?.importMode && session?.importSources?.length) {
-            const sources = new Set(session.importSources)
-            setSelectedSources(sources)
-            const newConfigs = {}
-            for (const id of sources) {
-                newConfigs[id] = getDefaultConfig(id)
+        // Initialize from session if in registration import mode
+        useEffect(() => {
+            if (isRegistrationImport && session?.importMode && session?.importSources?.length) {
+                const sources = new Set(session.importSources)
+                setSelectedSources(sources)
+                const newConfigs = {}
+                const importEntityTypeMode = session.importEntityTypeMode // 'alters' | 'states' | 'mixed'
+                const importEntityTypeSelections = session.importEntityTypeSelections || {}
+            
+                for (const id of sources) {
+                    const cfg = getDefaultConfig(id)
+                    // Override entity type mode from registration step
+                    if (importEntityTypeMode) {
+                        cfg.entityTypeMode = importEntityTypeMode === 'alters' ? 'all_alters' : 
+                                           importEntityTypeMode === 'states' ? 'all_states' : 'mixed'
+                    }
+                    // Apply per-member selections if mixed mode
+                    if (importEntityTypeMode === 'mixed' && importEntityTypeSelections[id]) {
+                        cfg.memberEntityTypes = { ...cfg.memberEntityTypes, ...importEntityTypeSelections[id] }
+                    }
+                    newConfigs[id] = cfg
+                }
+                setSourceConfigs(newConfigs)
+                setConfiguringSource(Array.from(sources)[0])
+                setPhase('configure')
             }
-            setSourceConfigs(newConfigs)
-            setConfiguringSource(Array.from(sources)[0])
-            setPhase('configure')
-        }
-    }, [isRegistrationImport, session])
+        }, [isRegistrationImport, session])
 
     const getDefaultConfig = (sourceId) => {
         const src = SOURCES.find(s => s.id === sourceId)
@@ -211,39 +224,53 @@ export function ImportPage({ system, onNavigate, isRegistrationImport = false })
     }, [selectedSources, sourceConfigs])
 
     const fetchPreviewForSource = useCallback(async (sourceId) => {
-        const cfg = sourceConfigs[sourceId]
-        const src = SOURCES.find(s => s.id === sourceId)
-        setCurrentPreviewSource(sourceId)
-        startFetch(`Fetching preview from ${src?.label}...`)
+            const cfg = sourceConfigs[sourceId]
+            const src = SOURCES.find(s => s.id === sourceId)
+            setCurrentPreviewSource(sourceId)
+            startFetch(`Fetching preview from ${src?.label}...`)
 
-        try {
-            const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData)
-            setPreviews(prev => ({ ...prev, [sourceId]: res.preview }))
+            try {
+                const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData)
+                setPreviews(prev => ({ ...prev, [sourceId]: res.preview }))
 
-            const allMemberIds = new Set(res.preview.members.map(m => m.sourceId))
-            const allGroupIds = new Set(res.preview.groups.map(g => g.sourceId))
-            const types = {}
-            res.preview.members.forEach(m => { types[m.sourceId] = forceAsStates ? 'state' : 'alter' })
-
-            setSourceConfigs(prev => ({
-                ...prev,
-                [sourceId]: {
-                    ...prev[sourceId],
-                    selectedMemberIds: allMemberIds,
-                    selectedGroupIds: allGroupIds,
-                    memberEntityTypes: types,
-                    entityTypeMode: forceAsStates ? 'all_states' : 'all_alters',
+                const allMemberIds = new Set(res.preview.members.map(m => m.sourceId))
+                const allGroupIds = new Set(res.preview.groups.map(g => g.sourceId))
+                const types = {}
+            
+                // Use entityTypeMode from config (set by registration or default)
+                if (cfg.entityTypeMode === 'all_states') {
+                    res.preview.members.forEach(m => { types[m.sourceId] = 'state' })
+                } else if (cfg.entityTypeMode === 'all_alters') {
+                    res.preview.members.forEach(m => { types[m.sourceId] = 'alter' })
+                } else if (cfg.entityTypeMode === 'mixed') {
+                    // Use per-member selections from registration, default to alter
+                    res.preview.members.forEach(m => { 
+                        types[m.sourceId] = cfg.memberEntityTypes?.[m.sourceId] || 'alter' 
+                    })
+                } else {
+                    // Fallback to forceAsStates for non-registration imports
+                    res.preview.members.forEach(m => { types[m.sourceId] = forceAsStates ? 'state' : 'alter' })
                 }
-            }))
 
-            completeFetch(`Loaded ${res.preview.members.length} members, ${res.preview.groups.length} groups from ${src?.label}`)
-        } catch (err) {
-            errorFetch(err.message || 'Failed to fetch preview')
-            setError(`${src?.label}: ${err.message || 'Failed to fetch preview'}`)
-        } finally {
-            setCurrentPreviewSource(null)
-        }
-    }, [sourceConfigs, forceAsStates, startFetch, completeFetch, errorFetch])
+                setSourceConfigs(prev => ({
+                    ...prev,
+                    [sourceId]: {
+                        ...prev[sourceId],
+                        selectedMemberIds: allMemberIds,
+                        selectedGroupIds: allGroupIds,
+                        memberEntityTypes: types,
+                        entityTypeMode: cfg.entityTypeMode,
+                    }
+                }))
+
+                completeFetch(`Loaded ${res.preview.members.length} members, ${res.preview.groups.length} groups from ${src?.label}`)
+            } catch (err) {
+                errorFetch(err.message || 'Failed to fetch preview')
+                setError(`${src?.label}: ${err.message || 'Failed to fetch preview'}`)
+            } finally {
+                setCurrentPreviewSource(null)
+            }
+        }, [sourceConfigs, forceAsStates, startFetch, completeFetch, errorFetch])
 
     useEffect(() => {
         if (phase !== 'preview') return
@@ -585,24 +612,63 @@ export function ImportPage({ system, onNavigate, isRegistrationImport = false })
                 )}
 
                 <div className="settings-section" style={{ marginBottom: 'var(--space-md)' }}>
-                    <div className="settings-section-title">Options</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
-                            <input type="checkbox" checked={cfg.replace} onChange={e => updateSourceConfig(currentSourceId, { replace: e.target.checked })} style={{ width: '18px', height: '18px' }} />Replace existing data
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
-                            <input type="checkbox" checked={cfg.skipExisting} onChange={e => updateSourceConfig(currentSourceId, { skipExisting: e.target.checked })} style={{ width: '18px', height: '18px' }} />Skip existing members
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
-                            <input type="checkbox" checked={cfg.noGroups} onChange={e => updateSourceConfig(currentSourceId, { noGroups: e.target.checked })} style={{ width: '18px', height: '18px' }} />Don't import groups
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
-                            <input type="checkbox" checked={cfg.noSwitches} onChange={e => updateSourceConfig(currentSourceId, { noSwitches: e.target.checked })} style={{ width: '18px', height: '18px' }} />Don't import switch history
-                        </label>
-                    </div>
-                </div>
+                                    <div className="settings-section-title">Options</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={cfg.replace} onChange={e => updateSourceConfig(currentSourceId, { replace: e.target.checked })} style={{ width: '18px', height: '18px' }} />Replace existing data
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={cfg.skipExisting} onChange={e => updateSourceConfig(currentSourceId, { skipExisting: e.target.checked })} style={{ width: '18px', height: '18px' }} />Skip existing members
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={cfg.noGroups} onChange={e => updateSourceConfig(currentSourceId, { noGroups: e.target.checked })} style={{ width: '18px', height: '18px' }} />Don't import groups
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={cfg.noSwitches} onChange={e => updateSourceConfig(currentSourceId, { noSwitches: e.target.checked })} style={{ width: '18px', height: '18px' }} />Don't import switch history
+                                        </label>
+                                    </div>
+                                </div>
 
-                {error && (
+                                {/* Per-member entity type selection for mixed mode (registration import) */}
+                                                                {isRegMode && cfg.entityTypeMode === 'mixed' && (
+                                                                    <div className="settings-section" style={{ marginBottom: 'var(--space-md)' }}>
+                                                                        <div className="settings-section-title">Member Types</div>
+                                                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-sm)' }}>
+                                                                            Toggle each member between Alter and State. Default: Alter.
+                                                                        </p>
+                                        <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            {Object.entries(cfg.memberEntityTypes || {}).map(([sourceId, type]) => (
+                                                <label
+                                                    key={sourceId}
+                                                    style={{
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                        padding: 'var(--space-xs) var(--space-sm)', cursor: 'pointer',
+                                                        background: 'var(--bg-surface)', borderRadius: 'var(--radius)',
+                                                        border: '1px solid var(--glass-border)', fontSize: '0.85rem'
+                                                    }}
+                                                >
+                                                    <span>{sourceId}</span>
+                                                    <select
+                                                        value={type}
+                                                        onChange={e => updateSourceConfig(currentSourceId, {
+                                                            memberEntityTypes: { ...cfg.memberEntityTypes, [sourceId]: e.target.value }
+                                                        })}
+                                                        style={{
+                                                            padding: '4px 8px', fontSize: '0.8rem',
+                                                            background: 'var(--bg-card)', border: '1px solid var(--glass-border)',
+                                                            borderRadius: '4px', color: 'var(--text)'
+                                                        }}
+                                                    >
+                                                        <option value="alter">Alter</option>
+                                                        <option value="state">State</option>
+                                                    </select>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {error && (
                     <div className="settings-section" style={{ borderLeft: '3px solid var(--color-error)', marginBottom: 'var(--space-md)' }}>
                         <p style={{ color: 'var(--color-error)', margin: 0 }}><Icon name="x" size={16} /> {error}</p>
                     </div>
@@ -706,15 +772,45 @@ export function ImportPage({ system, onNavigate, isRegistrationImport = false })
                                         ))}
                                     </div>
                                     {cfg.entityTypeMode === 'mixed' && (
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'var(--space-xs)' }}>
-                                            Click the type chip on each member to toggle between alter/state
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )
-                })}
+                                                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'var(--space-xs)' }}>
+                                                                                Click the type chip on each member to toggle between alter/state
+                                                                            </div>
+                                                                        )}
+
+                                                                    {/* Per-member type chips for mixed mode */}
+                                                                    {cfg.entityTypeMode === 'mixed' && (
+                                                                        <div style={{ marginTop: 'var(--space-md)', maxHeight: '300px', overflowY: 'auto' }}>
+                                                                            <div className="settings-section-title" style={{ marginBottom: 'var(--space-xs)' }}>Member Types</div>
+                                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-xs)' }}>
+                                                                                {preview.members.map(m => (
+                                                                                    <span
+                                                                                        key={m.sourceId}
+                                                                                        onClick={() => updateSourceConfig(sourceId, {
+                                                                                            memberEntityTypes: { ...cfg.memberEntityTypes, [m.sourceId]: cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'alter' : 'state' }
+                                                                                        })}
+                                                                                        style={{
+                                                                                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                                                            padding: '4px 10px', borderRadius: '999px',
+                                                                                            background: cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'var(--color-success-subtle, rgba(34,197,94,0.15))' : 'var(--accent-subtle, rgba(196,181,253,0.15))',
+                                                                                            border: `1px solid ${cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'var(--color-success, #22c55e)' : 'var(--accent, #c4b5fd)'}`,
+                                                                                            color: cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'var(--color-success, #22c55e)' : 'var(--accent, #c4b5fd)',
+                                                                                            fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s'
+                                                                                        }}
+                                                                                    >
+                                                                                        {m.name || m.sourceId}
+                                                                                        <span style={{ textTransform: 'uppercase', fontSize: '0.65rem' }}>
+                                                                                            {cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'State' : 'Alter'}
+                                                                                        </span>
+                                                                                    </span>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
 
                 {error && (
                     <div className="settings-section" style={{ borderLeft: '3px solid var(--color-error)' }}>

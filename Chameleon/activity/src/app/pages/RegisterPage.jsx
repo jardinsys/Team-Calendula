@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { api, DISORDER_MAP, DISORDER_DEFINITIONS, DSM_OPTIONS, ICD_OPTIONS, Icon, resolveSysTypeFromDisorder, resolveSysTypeFromExtraAnswer, resolveSysTypeFromMultiAnswer } from '@chameleon/shared'
 import { useSystemSession } from '../../hooks/useSystemSession'
 
@@ -465,7 +465,15 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStar
 function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
   const [systemName, setSystemName] = useState('')
   const [selectedSources, setSelectedSources] = useState(new Set())
-  const [mode, setMode] = useState('choose') // 'choose' | 'sources'
+  const [mode, setMode] = useState('choose') // 'choose' | 'sources' | 'entity-types'
+  const [entityTypeMode, setEntityTypeMode] = useState(null) // 'alters' | 'states' | 'mixed'
+  const [entityTypeSelections, setEntityTypeSelections] = useState({}) // sourceId -> { memberSourceId: 'alter'|'state' }
+  const [previewData, setPreviewData] = useState({}) // sourceId -> { members: [...] }
+
+  // Determine available entity types based on sysType
+  const canImportAlters = sysType.isSystem
+  const canImportStates = sysType.isFragmented
+  const isMixed = canImportAlters && canImportStates
 
   const SOURCES = [
     { id: 'pluralkit', label: 'PluralKit', icon: '🦊' },
@@ -484,25 +492,114 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
   }
 
   const handleNewSystem = () => {
-    onComplete({
-      systemName: systemName.trim() || null,
-      import: false,
-    })
-  }
+      onComplete({
+        systemName: systemName.trim() || null,
+        import: false,
+      })
+    }
 
-  const handleImport = () => {
-    setMode('sources')
-  }
+    const handleImport = () => {
+      if (isMixed) {
+        setMode('entity-types')
+      } else {
+        // Single entity type - go directly to source selection
+        setEntityTypeMode(canImportAlters ? 'alters' : 'states')
+        setMode('sources')
+      }
+    }
 
-  const handleSourceContinue = () => {
-    onComplete({
-      systemName: systemName.trim() || null,
-      import: true,
-      importSources: Array.from(selectedSources),
-    })
-  }
+    const handleEntityTypeSelect = (mode) => {
+      setEntityTypeMode(mode)
+      setMode('sources')
+    }
 
-  if (mode === 'sources') {
+    const handleSourceContinue = () => {
+          const selections = {}
+          // For mixed mode, build selections from checkboxes
+          if (isMixed) {
+            for (const sourceId of selectedSources) {
+              selections[sourceId] = entityTypeSelections[sourceId] || {}
+            }
+          }
+          onComplete({
+            systemName: systemName.trim() || null,
+            import: true,
+            importSources: Array.from(selectedSources),
+            entityTypeMode: entityTypeMode,
+            entityTypeSelections: selections,
+          })
+        }
+
+      // Toggle member entity type selection (for mixed mode)
+      const toggleEntityType = (sourceId, memberSourceId, currentType) => {
+        setEntityTypeSelections(prev => ({
+          ...prev,
+          [sourceId]: {
+            ...(prev[sourceId] || {}),
+            [memberSourceId]: currentType === 'alter' ? 'state' : 'alter',
+          },
+        }))
+      }
+
+      // Entity type selection mode (for mixed isSystem + isFragmented)
+      if (mode === 'entity-types') {
+        return (
+          <div className="register-step">
+            <h2>What are you importing?</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
+              Your profile supports both alters and states. Choose what to import from each source.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+              <button
+                className={`import-option-btn ${entityTypeMode === 'alters' ? 'import-option-primary' : ''}`}
+                onClick={() => handleEntityTypeSelect('alters')}
+                style={{ textAlign: 'left' }}
+              >
+                <span className="import-option-title">Import as Alters</span>
+                <span className="import-option-desc">Distinct identity states (alters/parts) — for system profiles</span>
+              </button>
+
+              <button
+                className={`import-option-btn ${entityTypeMode === 'states' ? 'import-option-primary' : ''}`}
+                onClick={() => handleEntityTypeSelect('states')}
+                style={{ textAlign: 'left' }}
+              >
+                <span className="import-option-title">Import as States</span>
+                <span className="import-option-desc">Fragmented/emotional states — for fragmented profiles</span>
+              </button>
+
+              <button
+                className={`import-option-btn ${entityTypeMode === 'mixed' ? 'import-option-primary' : ''}`}
+                onClick={() => handleEntityTypeSelect('mixed')}
+                style={{ textAlign: 'left', borderColor: 'var(--accent)' }}
+              >
+                <span className="import-option-title">Choose Per-Member</span>
+                <span className="import-option-desc">Select individually for each imported member (checkboxes after preview)</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
+              <button className="btn-ghost" onClick={() => setMode('choose')} style={{ flex: 1 }}>
+                ← Back
+              </button>
+              <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
+                Start Over
+              </button>
+              <button
+                className="btn-gradient btn-gradient-primary"
+                onClick={() => handleEntityTypeSelect(entityTypeMode || 'alters')}
+                disabled={!entityTypeMode}
+                style={{ flex: 2 }}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )
+      }
+
+      if (mode === 'sources') {
     return (
       <div className="register-step">
         <h2>Choose Sources to Import From</h2>
@@ -532,9 +629,34 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
               <span style={{ fontWeight: 600 }}>{s.label}</span>
             </label>
           ))}
-        </div>
+                  </div>
 
-        <div className="form-group" style={{ marginTop: 'var(--space-lg)' }}>
+                  {/* Per-member entity type selection for mixed mode */}
+                  {isMixed && entityTypeMode === 'mixed' && selectedSources.size > 0 && (
+                    <div className="settings-section" style={{ marginTop: 'var(--space-lg)', padding: 'var(--space-md)' }}>
+                      <div className="settings-section-title">Member Types (choose per member)</div>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>
+                        Default: Alters. Toggle to States for fragmented/emotional parts.
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-md)' }}>
+                        {Array.from(selectedSources).map(sourceId => (
+                          <div key={sourceId} style={{ padding: 'var(--space-sm)', background: 'var(--bg-surface)', borderRadius: 'var(--radius)', border: '1px solid var(--glass-border)' }}>
+                            <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)', textTransform: 'capitalize' }}>
+                              {SOURCES.find(s => s.id === sourceId)?.label}
+                            </div>
+                            <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {/* Placeholder - actual members loaded in ImportPage preview */}
+                              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-sm)' }}>
+                                Member types configured in preview step
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="form-group" style={{ marginTop: 'var(--space-lg)' }}>
           <label>System name (optional)</label>
           <input
             className="text-input"
@@ -802,47 +924,72 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
 
     update({ sysType })
 
-    // If isSystem, go to name step first (step 4), then ImportStep (step 5)
-    if (sysType.isSystem) {
-      setStep(4)
-    } else {
-      setStep(4)
-    }
+    // If isSystem OR isFragmented, go to ImportStep (step 3) first, then NameStep (step 4)
+        if (sysType.isSystem || sysType.isFragmented) {
+          setStep(3)
+        } else {
+          setStep(4)
+        }
   }
 
   // Step 3 → Step 4 (other resolved)
   const handleOtherResolve = (sysType) => {
     update({ sysType })
-    setStep(4)
+    // If isSystem or isFragmented, route to ImportStep (same as DSM/ICD disorders)
+    if (sysType.isSystem || sysType.isFragmented) {
+      setStep(3) // Re-render step 3, now showing ImportStep
+    } else {
+      setStep(4)
+    }
   }
 
-  // Step 4 (NameStep) — system name collected, then go to step 5 or 6
+  // Step 3 (ImportStep) — user chooses import or new system
+    // Called when sysType has isSystem OR isFragmented (or both)
+    const handleImportStepComplete = (choice) => {
+      if (choice.systemName) setSystemName(choice.systemName)
+      if (choice.import) {
+        // Store import mode in session with entity type config, then navigate to RegistrationImportPage
+        update({
+          importMode: true,
+          importSources: choice.importSources || [],
+          importEntityTypeMode: choice.entityTypeMode, // 'alters' | 'states' | 'mixed'
+          importEntityTypeSelections: choice.entityTypeSelections || {}, // sourceId -> member sourceId -> 'alter'|'state'
+        })
+        if (onNavigate) onNavigate('register-import')
+      } else {
+        // New system - go to NameStep
+        setStep(4)
+      }
+    }
+
+  // Step 4 (NameStep) — system name collected, then go to FirstAlterStep or finish
   const handleNameConfirm = (finalSysType, systemName) => {
     update({ sysType: finalSysType })
     if (systemName) setSystemName(systemName)
+    // FirstAlterStep only for isSystem (alters). Others skip to auto-commit.
     if (finalSysType.isSystem) {
-      setStep(5) // ImportStep
+      setStep(5) // FirstAlterStep
     } else {
-      setStep(6) // FirstAlterStep for non-system (optional alters) or direct to finish
+      setStep(6) // Auto-commit (no alters to add)
     }
   }
 
   // Step 5 (ImportStep) — user chooses import or new system
   const handleImportChoice = async (choice) => {
     if (choice.systemName) setSystemName(choice.systemName)
-    
+
     // DON'T commit yet - stage the import intention
     if (choice.import) {
-      // Store import mode in session, then navigate to ImportPage in registration mode
+      // Store import mode in session, then navigate to RegistrationImportPage
       update({ importMode: true, importSources: choice.importSources || [] })
-      if (onNavigate) onNavigate('import')
+      if (onNavigate) onNavigate('register-import')
     } else {
       // New system - go to FirstAlterStep
       setStep(6)
     }
   }
 
-  // Step 6 (FirstAlterStep) — collect first alters, then final commit
+  // Step 5 (FirstAlterStep) — collect first alters, then final commit
   const handleFirstAlterComplete = async (alterNames) => {
     setError(null)
     try {
@@ -881,6 +1028,15 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     }
   }
 
+  // Step 7 (finish) — auto-commit when imported users land here
+  const hasFinishedRef = useRef(false)
+  useEffect(() => {
+    if (step >= 6 && !hasFinishedRef.current) {
+      hasFinishedRef.current = true
+      handleFirstAlterComplete([])
+    }
+  }, [step])
+
   // Preset layers based on sys_type (moved inside for closure access)
   const buildPresetLayers = (sysType) => {
     const layers = []
@@ -901,16 +1057,13 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
 
   // Back navigation
   const handleBack = () => {
-    if (step === 6) setStep(5)
-    else if (step === 5) {
-      // Go back to name step
-      setStep(4)
-    } else if (step === 4) {
-      if (category === 'OTHER') setStep(3)
+    if (step === 5) setStep(4)
+    else if (step === 4) setStep(3)
+    else if (step === 3) {
+      if (category === 'OTHER') setStep(1) // OTHER skips step 2
       else if (category === 'NONE') setStep(1)
       else setStep(2)
-    } else if (step === 3) setStep(1)
-    else if (step === 2) { setStep(1); setCategory(null) }
+    } else if (step === 2) { setStep(1); setCategory(null) }
   }
 
   // Start over
@@ -932,7 +1085,14 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onBack={handleBack}
           onStartOver={handleStartOver}
         />)}
-      {step === 3 && (
+      {step === 3 && (sysType?.isSystem || sysType?.isFragmented) && (
+        <ImportStep
+          sysType={resolvedSysType}
+          onComplete={handleImportStepComplete}
+          onBack={handleBack}
+          onStartOver={handleStartOver}
+        />)}
+      {step === 3 && category === 'OTHER' && !sysType?.isSystem && !sysType?.isFragmented && (
         <OtherStep
           onResolve={handleOtherResolve}
           onBack={handleBack}
@@ -949,21 +1109,21 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           discordUser={discordUser}
         />)}
       {step === 5 && (
-        <ImportStep
-          sysType={resolvedSysType}
-          onComplete={handleImportChoice}
-          onBack={handleBack}
-          onStartOver={handleStartOver}
-          onNavigate={onNavigate}
-          refreshSystem={refreshSystem}
-        />)}
-      {step === 6 && (
         <FirstAlterStep
           systemName={session.systemName}
           onComplete={handleFirstAlterComplete}
           onBack={handleBack}
           saving={committing}
         />)}
+      {step >= 6 && (
+        <div className="register-step">
+          <h2>Finishing your setup...</h2>
+          <div className="spinner" style={{ margin: 'var(--space-lg) auto' }} />
+          <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
+            Creating your profile with imported data...
+          </p>
+        </div>
+      )}
       {error && (
         <p style={{ color: 'var(--color-error)', fontSize: '0.85rem', marginTop: 'var(--space-md)' }}>
           {error}
