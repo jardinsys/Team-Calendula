@@ -38,16 +38,18 @@ async function createSystemFromPayload(userId, payload) {
         const isStagedPayload = payload.sys_type && payload.alters && payload.states && payload.groups;
         
         // --- Privacy Buckets ---
-        let strangersBucketId, friendsBucketId;
+        let strangersBucketId, friendsBucketId, strangersBucketName, friendsBucketName;
         const privacyBuckets = payload.privacyBuckets || [];
 
         if (privacyBuckets.length >= 2 && typeof privacyBuckets[0] === 'object') {
+            strangersBucketName = privacyBuckets[0].name || 'Strangers';
+            friendsBucketName = privacyBuckets[1].name || 'Friends';
             const strangersBucket = new PrivacyBucket({ 
-                name: privacyBuckets[0].name || 'Strangers', 
+                name: strangersBucketName,
                 friends: privacyBuckets[0].friends || [] 
             });
             const friendsBucket = new PrivacyBucket({ 
-                name: privacyBuckets[1].name || 'Friends', 
+                name: friendsBucketName,
                 friends: privacyBuckets[1].friends || [] 
             });
             await strangersBucket.save({ session });
@@ -57,9 +59,13 @@ async function createSystemFromPayload(userId, payload) {
         } else if (privacyBuckets.length >= 2 && typeof privacyBuckets[0] === 'string') {
             strangersBucketId = new mongoose.Types.ObjectId(privacyBuckets[0]);
             friendsBucketId = new mongoose.Types.ObjectId(privacyBuckets[1]);
+            strangersBucketName = 'Strangers';
+            friendsBucketName = 'Friends';
         } else {
-            const strangersBucket = new PrivacyBucket({ name: 'Strangers', friends: [] });
-            const friendsBucket = new PrivacyBucket({ name: 'Friends', friends: [] });
+            strangersBucketName = 'Strangers';
+            friendsBucketName = 'Friends';
+            const strangersBucket = new PrivacyBucket({ name: strangersBucketName, friends: [] });
+            const friendsBucket = new PrivacyBucket({ name: friendsBucketName, friends: [] });
             await strangersBucket.save({ session });
             await friendsBucket.save({ session });
             strangersBucketId = strangersBucket._id;
@@ -118,15 +124,15 @@ async function createSystemFromPayload(userId, payload) {
         
         // --- Settings ---
         const setting = isStagedPayload && payload.setting ? payload.setting : {
-            friendAutoBucket: 'Friends',
+            friendAutoBucket: friendsBucketName,
             privacy: [
                 {
-                    bucket: 'Strangers',
-                    settings: mergePrivacySettings('Strangers', 'system')
+                    bucket: strangersBucketName,
+                    settings: mergePrivacySettings(strangersBucketName, 'system')
                 },
                 {
-                    bucket: 'Friends',
-                    settings: mergePrivacySettings('Friends', 'system')
+                    bucket: friendsBucketName,
+                    settings: mergePrivacySettings(friendsBucketName, 'system')
                 }
             ]
         };
