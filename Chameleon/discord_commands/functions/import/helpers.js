@@ -1,5 +1,9 @@
-// Shared import helper functions
-// Extracted from import_functions.js — used by all source-specific import modules
+/**
+ * Shared import helper functions.
+ * Extracted from import_functions.js — used by all source-specific import modules.
+ *
+ * @module import/helpers
+ */
 
 const { TARGET_DISCORD } = require('./constants');
 const { syncImageToR2 } = require('./r2_sync');
@@ -11,11 +15,12 @@ const Group = require('../../../schemas/group');
 /**
  * Sync entity images (avatar, banner) to R2 after creation.
  * Updates entity in-place with R2-backed mediaSchema objects.
- * @param {Object} entity - The Alter/State/Group document (not yet saved)
- * @param {Object} sourceData - Source data with avatar_url, banner, etc.
- * @param {string} entityType - 'Alter' | 'State' | 'Group'
- * @param {Object} system - System document (for userId)
- * @param {string} target - 'app' | 'discord' (which profile)
+ * @param {import('../../../types').BaseEntity} entity - The Alter/State/Group document (not yet saved)
+ * @param {Record<string, any>} sourceData - Source data with avatar_url, banner, etc.
+ * @param {'Alter' | 'State' | 'Group'} entityType - Entity type
+ * @param {import('../../../types').System} system - System document (for userId)
+ * @param {'app' | 'discord'} target - Which profile to sync to
+ * @returns {Promise<void>}
  */
 async function syncEntityImages(entity, sourceData, entityType, system, target) {
     const userId = system.users?.[0] || system.discordId;

@@ -1,8 +1,15 @@
-// entityHandlers.js — Shared factory functions for entity field handlers
-// Eliminates copy-pasted handler code across alter.js, state.js, and group.js prefix commands.
-//
-// Every factory function returns an async function with signature: (message, parsed, entityName)
-// The `getter` signature is: async (message, entityName) => { entity, system }
+/**
+ * entityHandlers.js — Shared factory functions for entity field handlers
+ * Eliminates copy-pasted handler code across alter.js, state.js, and group.js prefix commands.
+ *
+ * Every factory function returns an async handler with signature:
+ *   (message: Message, parsed: ParsedCommand, entityName: string) => Promise<void>
+ *
+ * The `getter` signature is:
+ *   (message: Message, entityName: string) => Promise<{ entity: BaseEntity, system: System } | null>
+ *
+ * @module entityHandlers
+ */
 
 const { EmbedBuilder } = require('discord.js');
 const proxyMessageHandler = require('../../../global/proxy-message');
@@ -13,10 +20,13 @@ const utils = require('./');
 /**
  * Set a nested property on obj using a dot-separated path.
  * Creates intermediate objects as needed.
- * e.g. setNested(entity, 'setting.default_status', 'ok')
+ * @param {Record<string, any>} obj - Target object
+ * @param {string} dotPath - Dot-separated path (e.g. 'setting.default_status')
+ * @param {any} value - Value to set
+ * @example setNested(entity, 'setting.default_status', 'ok')
  */
-function setNested(obj, path, value) {
-    const keys = path.split('.');
+function setNested(obj, dotPath, value) {
+    const keys = dotPath.split('.');
     let cur = obj;
     for (let i = 0; i < keys.length - 1; i++) {
         if (cur[keys[i]] == null || typeof cur[keys[i]] !== 'object') {
@@ -30,9 +40,12 @@ function setNested(obj, path, value) {
 /**
  * Get a nested property from obj using a dot-separated path.
  * Returns undefined if any part of the path is missing.
+ * @param {Record<string, any>} obj - Source object
+ * @param {string} dotPath - Dot-separated path
+ * @returns {any | undefined}
  */
-function getNested(obj, path) {
-    const keys = path.split('.');
+function getNested(obj, dotPath) {
+    const keys = dotPath.split('.');
     let cur = obj;
     for (const key of keys) {
         if (cur == null) return undefined;
