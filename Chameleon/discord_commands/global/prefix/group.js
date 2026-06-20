@@ -34,6 +34,11 @@ const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 const proxyMessageHandler = require('../proxy-message');
+const {
+    nameField, simpleField, mediaField, booleanField,
+    nestedField, listField, proxyHandler, privacyHandler,
+    idHandler, maskHandler
+} = require('../../functions/bot_utils/entityHandlers');
 
 const { getSystemTerm } = utils;
 
@@ -58,32 +63,55 @@ module.exports = {
         const groupName = parsed._positional[0];
         const subcommand = parsed._positional[1]?.toLowerCase();
 
+        // Getter wrapper that returns { entity, system } for factory functions
+        const getGroupEntity = async (msg, name) => {
+            const { system: sys } = await utils.getOrCreateUserAndSystem(msg);
+            if (!sys) { await utils.error(msg, 'You don\'t have a system yet.'); return null; }
+            const result = await utils.findEntity(name, sys, 'group');
+            if (!result) { await utils.error(msg, `Group **${name}** not found.`); return null; }
+            return { entity: result.entity, system: sys };
+        };
+
         const handlers = {
-            'rename': handleRename, 'name': handleRename,
-            'displayname': handleDisplayName, 'dn': handleDisplayName,
-            'closedname': handleClosedName, 'cn': handleClosedName,
-            'description': handleDescription, 'desc': handleDescription,
-            'avatar': handleAvatar, 'icon': handleAvatar, 'av': handleAvatar,
-            'banner': handleBanner,
-            'color': handleColor, 'colour': handleColor,
-            'proxy': handleProxy,
-            'signoff': handleSignoff, 'sign': handleSignoff,
-            'aliases': handleAliases, 'alias': handleAliases,
+            'rename': nameField(getGroupEntity, 'indexable', 'Indexable name', { validateIndexable: true }),
+            'name': nameField(getGroupEntity, 'indexable', 'Indexable name', { validateIndexable: true }),
+            'displayname': nameField(getGroupEntity, 'display', 'Display name'),
+            'dn': nameField(getGroupEntity, 'display', 'Display name'),
+            'closedname': nameField(getGroupEntity, 'closedNameDisplay', 'Closed name display'),
+            'cn': nameField(getGroupEntity, 'closedNameDisplay', 'Closed name display'),
+            'description': simpleField(getGroupEntity, 'description', 'Description'),
+            'desc': simpleField(getGroupEntity, 'description', 'Description'),
+            'avatar': mediaField(getGroupEntity, 'avatar', 'Avatar', { entityType: 'Group', uploadFieldName: 'avatar' }),
+            'icon': mediaField(getGroupEntity, 'avatar', 'Avatar', { entityType: 'Group', uploadFieldName: 'avatar' }),
+            'av': mediaField(getGroupEntity, 'avatar', 'Avatar', { entityType: 'Group', uploadFieldName: 'avatar' }),
+            'banner': mediaField(getGroupEntity, 'discord.image.banner', 'Banner', { syncBucket: true, entityType: 'Group', uploadFieldName: 'banner' }),
+            'color': simpleField(getGroupEntity, 'color', 'Color'),
+            'colour': simpleField(getGroupEntity, 'color', 'Color'),
+            'proxy': proxyHandler(getGroupEntity),
+            'signoff': simpleField(getGroupEntity, 'signoff', 'Sign-offs'),
+            'sign': simpleField(getGroupEntity, 'signoff', 'Sign-offs'),
+            'aliases': listField(getGroupEntity, 'name.aliases', 'Aliases'),
+            'alias': listField(getGroupEntity, 'name.aliases', 'Aliases'),
             'add': handleAdd,
             'remove': handleRemove,
-            'members': handleMembers, 'list': handleMemberList,
+            'members': handleMembers,
+            'list': handleMemberList,
             'type': handleType,
-            'canfront': handleCanFront, 'cf': handleCanFront,
-            'caution': handleCaution,
-            'triggers': handleTriggers, 'trigger': handleTriggers,
-            'privacy': handlePrivacy,
-            'sync': handleSync,
-            'defaultstatus': handleDefaultStatus, 'ds': handleDefaultStatus,
-            'defaultbattery': handleDefaultBattery, 'db': handleDefaultBattery,
-            'mask': handleMask,
+            'canfront': handleCanFront,
+            'cf': handleCanFront,
+            'caution': simpleField(getGroupEntity, 'caution', 'Caution'),
+            'triggers': listField(getGroupEntity, 'caution.triggers', 'Triggers', { matchKey: 'text', itemFactory: (text) => ({ text }) }),
+            'trigger': listField(getGroupEntity, 'caution.triggers', 'Triggers', { matchKey: 'text', itemFactory: (text) => ({ text }) }),
+            'privacy': privacyHandler(getGroupEntity, 'group', ['description', 'avatar', 'banner', 'metadata', 'proxies', 'caution', 'hidden', 'aliases'], utils.ENTITY_COLORS.group),
+            'sync': booleanField(getGroupEntity, 'syncWithApps.discord', 'Discord sync'),
+            'defaultstatus': nestedField(getGroupEntity, 'setting', 'default_status', 'Default status'),
+            'ds': nestedField(getGroupEntity, 'setting', 'default_status', 'Default status'),
+            'defaultbattery': nestedField(getGroupEntity, 'setting', 'default_battery', 'Default battery', { parser: (v) => parseInt(v), validator: (v) => !isNaN(v) && v >= 0 && v <= 100, errorMsg: 'Please provide a battery level (0-100).' }),
+            'db': nestedField(getGroupEntity, 'setting', 'default_battery', 'Default battery', { parser: (v) => parseInt(v), validator: (v) => !isNaN(v) && v >= 0 && v <= 100, errorMsg: 'Please provide a battery level (0-100).' }),
+            'mask': maskHandler(getGroupEntity, 'group', utils.ENTITY_COLORS.group),
             'delete': handleDelete,
             'random': handleRandom,
-            'id': handleId
+            'id': idHandler(getGroupEntity)
         };
 
         if (handlers[subcommand]) return handlers[subcommand](message, parsed, groupName);
@@ -135,158 +163,9 @@ async function handleNew(message, parsed) {
     return message.reply({ embeds: [embed] });
 }
 
-async function handleRename(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    const newName = parsed._positional.slice(2).join(' ');
-    if (!newName) return utils.error(message, 'Please provide a new name.');
-    if (!utils.isValidIndexableName(newName)) return utils.error(message, 'Invalid indexable name format.');
-    group.name.indexable = newName;
-    await group.save();
-    await proxyMessageHandler.invalidateDisplayCache(group._id);
-    return utils.success(message, `Indexable name changed to **${newName}**`);
-}
-
-async function handleDisplayName(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    if (parsed.clear) { group.name.display = undefined; await group.save(); await proxyMessageHandler.invalidateDisplayCache(group._id); return utils.success(message, 'Display name cleared.'); }
-    const newName = parsed._positional.slice(2).join(' ');
-    if (!newName) return utils.error(message, 'Please provide a display name.');
-    group.name.display = newName;
-    await group.save();
-    await proxyMessageHandler.invalidateDisplayCache(group._id);
-    return utils.success(message, `Display name set to **${newName}**`);
-}
-
-async function handleDescription(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    if (parsed.clear) { group.description = undefined; await group.save(); return utils.success(message, 'Description cleared.'); }
-    const desc = parsed._positional.slice(2).join(' ');
-    if (!desc) return utils.error(message, 'Please provide a description.');
-    group.description = desc;
-    await group.save();
-    return utils.success(message, 'Description updated.');
-}
-
-async function handleAvatar(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    if (parsed.clear) { if (group.avatar?.r2Key) await utils.deleteFromR2(group.avatar.r2Key, group.avatar.bucket || 'app'); group.avatar = undefined; await group.save(); await proxyMessageHandler.invalidateDisplayCache(group._id); return utils.success(message, 'Avatar cleared.'); }
-    const attachment = message.attachments.first();
-    const urlArg = parsed._positional[2];
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'Group', message.author.id, 'app');
-    if (!result.success) return utils.error(message, result.message);
-    if (group.avatar?.r2Key) await utils.deleteFromR2(group.avatar.r2Key, group.avatar.bucket || 'app');
-    group.avatar = result.media;
-    await group.save();
-    await proxyMessageHandler.invalidateDisplayCache(group._id);
-    return utils.success(message, 'Avatar uploaded and updated.');
-}
-
-async function handleBanner(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    const syncWithDiscord = group.syncWithApps?.discord;
-    const bucket = utils.resolveUploadBucket(syncWithDiscord, 'discord');
-    if (parsed.clear) { if (group.discord?.image?.banner?.r2Key) await utils.deleteFromR2(group.discord.image.banner.r2Key, group.discord.image.banner.bucket || 'app'); if (group.discord?.image) group.discord.image.banner = undefined; await group.save(); await proxyMessageHandler.invalidateDisplayCache(group._id); return utils.success(message, 'Banner cleared.'); }
-    const attachment = message.attachments.first();
-    const urlArg = parsed._positional[2];
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'Group', message.author.id, bucket);
-    if (!result.success) return utils.error(message, result.message);
-    if (group.discord?.image?.banner?.r2Key) await utils.deleteFromR2(group.discord.image.banner.r2Key, group.discord.image.banner.bucket || 'app');
-    group.discord = group.discord || {}; group.discord.image = group.discord.image || {};
-    group.discord.image.banner = result.media;
-    await group.save();
-    await proxyMessageHandler.invalidateDisplayCache(group._id);
-    return utils.success(message, 'Banner uploaded and updated.');
-}
-
-async function handleColor(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    if (parsed.clear) { group.color = undefined; await group.save(); return utils.success(message, 'Color cleared.'); }
-    const color = utils.normalizeColor(parsed._positional[2]);
-    if (!color) return utils.error(message, 'Please provide a valid hex color.');
-    group.color = color;
-    await group.save();
-    return utils.success(message, `Color set to **${color}**`);
-}
-
-async function handleProxy(message, parsed, groupName) {
-    const { group, system } = await getGroup(message, groupName);
-    if (!group) return;
-    const action = parsed._positional[2]?.toLowerCase();
-    if (parsed.clear || action === 'clear') { group.proxy = []; await group.save(); return utils.success(message, 'Proxy tags cleared.'); }
-    if (action === 'add') {
-        const tag = parsed._positional.slice(3).join(' ');
-        if (!tag) return utils.error(message, 'Please provide a proxy tag.');
-        const { exists, entity, type } = await utils.checkProxyExists(tag, system, group._id.toString());
-        if (exists) return utils.error(message, `Proxy \`${tag}\` is already used by ${type} **${utils.getDisplayName(entity)}**.`);
-        group.proxy = group.proxy || []; group.proxy.push(tag); await group.save();
-        return utils.success(message, `Proxy tag \`${tag}\` added.`);
-    }
-    if (action === 'remove') {
-        const tag = parsed._positional.slice(3).join(' ');
-        group.proxy = group.proxy || [];
-        const idx = group.proxy.findIndex(p => p.toLowerCase() === tag.toLowerCase());
-        if (idx === -1) return utils.error(message, `Proxy tag not found.`);
-        group.proxy.splice(idx, 1); await group.save();
-        return utils.success(message, `Proxy tag removed.`);
-    }
-    const tag = parsed._positional.slice(2).join(' ');
-    if (!tag) {
-        const proxies = group.proxy || [];
-        return proxies.length ? utils.info(message, `Proxy tags: ${utils.formatProxies(proxies)}`) : utils.info(message, 'No proxy tags set.');
-    }
-    const { exists, entity, type } = await utils.checkProxyExists(tag, system, group._id.toString());
-    if (exists) return utils.error(message, `Proxy \`${tag}\` is already used by ${type} **${utils.getDisplayName(entity)}**.`);
-    const oldCount = group.proxy?.length || 0;
-    group.proxy = [tag]; await group.save();
-    return utils.success(message, oldCount > 0
-        ? `Proxy tag set to \`${tag}\` (replaced ${oldCount} previous proxy${oldCount > 1 ? 's' : ''}).`
-        : `Proxy tag set to \`${tag}\`.`);
-}
-
-async function handleSignoff(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    if (parsed.clear) { group.signoff = undefined; await group.save(); return utils.success(message, 'Sign-offs cleared.'); }
-    const input = parsed._positional.slice(2).join(' ');
-    if (!input) return utils.error(message, 'Please provide sign-offs.');
-    group.signoff = utils.parseList(input).join('\n');
-    await group.save();
-    return utils.success(message, 'Sign-offs updated.');
-}
-
-async function handleAliases(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    const action = parsed._positional[2]?.toLowerCase();
-    if (parsed.clear || action === 'clear') { group.name.aliases = []; await group.save(); return utils.success(message, 'Aliases cleared.'); }
-    if (action === 'add') {
-        const alias = parsed._positional.slice(3).join(' ');
-        if (!alias) return utils.error(message, 'Please provide an alias.');
-        group.name.aliases = group.name.aliases || []; group.name.aliases.push(alias); await group.save();
-        return utils.success(message, `Alias **${alias}** added.`);
-    }
-    if (action === 'remove') {
-        const alias = parsed._positional.slice(3).join(' ');
-        group.name.aliases = group.name.aliases || [];
-        const idx = group.name.aliases.findIndex(a => a.toLowerCase() === alias.toLowerCase());
-        if (idx === -1) return utils.error(message, 'Alias not found.');
-        group.name.aliases.splice(idx, 1); await group.save();
-        return utils.success(message, 'Alias removed.');
-    }
-    const aliases = group.name?.aliases || [];
-    return aliases.length ? utils.info(message, `Aliases: ${aliases.join(', ')}`) : utils.info(message, 'No aliases set.');
-}
-
 async function handleAdd(message, parsed, groupName) {
     const { group, system } = await getGroup(message, groupName);
     if (!group) return;
-    // Can add multiple members: sys!group mygroup add luna stella
     const memberNames = parsed._positional.slice(2);
     if (!memberNames.length) return utils.error(message, 'Please provide member name(s): `sys!group <group> add <member> [member2] ...`');
     
@@ -294,7 +173,7 @@ async function handleAdd(message, parsed, groupName) {
     const failed = [];
     
     for (const memberName of memberNames) {
-        const result = await utils.findEntity(memberName, system); // Can be alter, state, or group
+        const result = await utils.findEntity(memberName, system);
         if (!result) { failed.push(memberName); continue; }
         
         group.memberIDs = group.memberIDs || [];
@@ -302,7 +181,6 @@ async function handleAdd(message, parsed, groupName) {
         
         group.memberIDs.push(result.entity._id);
         
-        // Also update the entity's groups
         if (result.type === 'alter') {
             result.entity.groupsIDs = result.entity.groupsIDs || [];
             if (!result.entity.groupsIDs.includes(group._id)) {
@@ -348,7 +226,6 @@ async function handleRemove(message, parsed, groupName) {
         
         group.memberIDs.splice(idx, 1);
         
-        // Also update the entity's groups
         if (result.type === 'alter') {
             result.entity.groupsIDs = result.entity.groupsIDs?.filter(id => id !== group._id) || [];
             await result.entity.save();
@@ -380,7 +257,6 @@ async function handleMemberList(message, parsed, groupName) {
     const memberIDs = group.memberIDs || [];
     if (!memberIDs.length) return utils.info(message, 'No members in this group.');
     
-    // Fetch all possible member types
     const alters = await Alter.find({ _id: { $in: memberIDs } });
     const states = await State.find({ _id: { $in: memberIDs } });
     const subgroups = await Group.find({ _id: { $in: memberIDs } });
@@ -428,206 +304,6 @@ async function handleCanFront(message, parsed, groupName) {
     return utils.success(message, `Group can front: **${group.type.canFront}**`);
 }
 
-async function handleCaution(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    if (parsed.clear) { group.caution = undefined; await group.save(); return utils.success(message, 'Caution cleared.'); }
-    const type = parsed._positional[2];
-    const detail = parsed._positional.slice(3).join(' ');
-    if (!type) return utils.error(message, 'Please provide a caution type.');
-    group.caution = { c_type: type, detail: detail || undefined }; await group.save();
-    return utils.success(message, `Caution set to **${type}**`);
-}
-
-async function handleClosedName(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    if (parsed.clear) { group.name.closedNameDisplay = undefined; await group.save(); await proxyMessageHandler.invalidateDisplayCache(group._id); return utils.success(message, 'Closed name display cleared.'); }
-    const newName = parsed._positional.slice(2).join(' ');
-    if (!newName) return utils.error(message, 'Please provide a closed name display.');
-    group.name.closedNameDisplay = newName;
-    await group.save();
-    await proxyMessageHandler.invalidateDisplayCache(group._id);
-    return utils.success(message, `Closed name display set to **${newName}**`);
-}
-
-async function handleSync(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    const val = parsed._positional[2]?.toLowerCase();
-    if (!val || !['true', 'false', 'on', 'off', 'yes', 'no'].includes(val)) return utils.error(message, 'Specify `true` or `false`.');
-    group.syncWithApps = group.syncWithApps || {};
-    group.syncWithApps.discord = ['true', 'on', 'yes'].includes(val);
-    await group.save();
-    return utils.success(message, `Discord sync is now **${group.syncWithApps.discord ? 'enabled' : 'disabled'}**`);
-}
-
-async function handleDefaultStatus(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    if (parsed.clear) { group.setting = group.setting || {}; group.setting.default_status = undefined; await group.save(); return utils.success(message, 'Default status cleared.'); }
-    const status = parsed._positional.slice(2).join(' ');
-    if (!status) return utils.error(message, 'Please provide a default status.');
-    group.setting = group.setting || {};
-    group.setting.default_status = status;
-    await group.save();
-    return utils.success(message, `Default status set to **${status}**`);
-}
-
-async function handleDefaultBattery(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    if (parsed.clear) { group.setting = group.setting || {}; group.setting.default_battery = undefined; await group.save(); return utils.success(message, 'Default battery cleared.'); }
-    const val = parseInt(parsed._positional[2]);
-    if (isNaN(val) || val < 0 || val > 100) return utils.error(message, 'Please provide a battery level (0-100).');
-    group.setting = group.setting || {};
-    group.setting.default_battery = val;
-    await group.save();
-    return utils.success(message, `Default battery set to **${val}**`);
-}
-
-async function handleTriggers(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    const action = parsed._positional[2]?.toLowerCase();
-    if (action === 'add') {
-        const trigger = parsed._positional.slice(3).join(' ');
-        if (!trigger) return utils.error(message, 'Please provide a trigger.');
-        group.caution = group.caution || {};
-        group.caution.triggers = group.caution.triggers || [];
-        group.caution.triggers.push({ text: trigger });
-        await group.save();
-        return utils.success(message, `Trigger \`${trigger}\` added.`);
-    }
-    if (action === 'remove') {
-        const trigger = parsed._positional.slice(3).join(' ');
-        if (!trigger) return utils.error(message, 'Please provide a trigger to remove.');
-        group.caution = group.caution || {};
-        group.caution.triggers = group.caution.triggers || [];
-        const idx = group.caution.triggers.findIndex(t => t.text?.toLowerCase() === trigger.toLowerCase());
-        if (idx === -1) return utils.error(message, `Trigger \`${trigger}\` not found.`);
-        group.caution.triggers.splice(idx, 1);
-        await group.save();
-        return utils.success(message, `Trigger \`${trigger}\` removed.`);
-    }
-    if (action === 'clear') {
-        group.caution = group.caution || {};
-        group.caution.triggers = [];
-        await group.save();
-        return utils.success(message, 'All triggers cleared.');
-    }
-    const triggers = group.caution?.triggers || [];
-    if (!triggers.length) return utils.info(message, 'No caution triggers set.');
-    return utils.info(message, `Triggers: ${triggers.map(t => t.text || t).join(', ')}`);
-}
-
-async function handleMask(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    const field = parsed._positional[2]?.toLowerCase();
-    if (!field) {
-        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.group).setTitle('🎭 Mask Settings')
-            .setDescription(`Use \`sys!group <n> mask <field> <value>\`\nFields: name, displayname (dn), description, color, avatar, banner, proxyavatar (pav)`)
-            .addFields(
-                { name: 'Current Mask', value: `Name: ${group.mask?.name?.display || group.mask?.name?.indexable || '*not set*'}\nColor: ${group.mask?.color || '*not set*'}\nDescription: ${group.mask?.description || '*not set*'}`, inline: false }
-            );
-        return message.reply({ embeds: [embed] });
-    }
-    group.mask = group.mask || {};
-    if (field === 'name') {
-        const val = parsed._positional.slice(3).join(' ');
-        if (!val) return utils.error(message, 'Please provide a mask name.');
-        group.mask.name = group.mask.name || {};
-        group.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
-        group.mask.name.display = val;
-        await group.save();
-        await proxyMessageHandler.invalidateDisplayCache(group._id);
-        return utils.success(message, `Mask name set to **${val}**`);
-    }
-    if (field === 'displayname' || field === 'dn') {
-        if (parsed.clear) { group.mask.name = group.mask.name || {}; group.mask.name.display = undefined; await group.save(); await proxyMessageHandler.invalidateDisplayCache(group._id); return utils.success(message, 'Mask display name cleared.'); }
-        const val = parsed._positional.slice(3).join(' ');
-        if (!val) return utils.error(message, 'Please provide a mask display name.');
-        group.mask.name = group.mask.name || {};
-        group.mask.name.display = val;
-        await group.save();
-        await proxyMessageHandler.invalidateDisplayCache(group._id);
-        return utils.success(message, `Mask display name set to **${val}**`);
-    }
-    if (field === 'description' || field === 'desc') {
-        if (parsed.clear) { group.mask.description = undefined; await group.save(); return utils.success(message, 'Mask description cleared.'); }
-        const val = parsed._positional.slice(3).join(' ');
-        if (!val) return utils.error(message, 'Please provide a mask description.');
-        group.mask.description = val;
-        await group.save();
-        return utils.success(message, 'Mask description updated.');
-    }
-    if (field === 'color' || field === 'colour') {
-        if (parsed.clear) { group.mask.color = undefined; await group.save(); return utils.success(message, 'Mask color cleared.'); }
-        const val = utils.normalizeColor(parsed._positional[3]);
-        if (!val) return utils.error(message, 'Please provide a valid hex color.');
-        group.mask.color = val;
-        await group.save();
-        return utils.success(message, `Mask color set to **${val}**`);
-    }
-    if (field === 'avatar' || field === 'icon' || field === 'av') {
-        if (parsed.clear) { group.mask.avatar = undefined; await group.save(); await proxyMessageHandler.invalidateDisplayCache(group._id); return utils.success(message, 'Mask avatar cleared.'); }
-        const url = message.attachments.first()?.url || parsed._positional[3];
-        if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
-        group.mask.avatar = { url };
-        await group.save();
-        await proxyMessageHandler.invalidateDisplayCache(group._id);
-        return utils.success(message, 'Mask avatar updated.');
-    }
-    if (field === 'banner') {
-        if (parsed.clear) { group.mask.discord = group.mask.discord || {}; group.mask.discord.image = group.mask.discord.image || {}; group.mask.discord.image.banner = undefined; await group.save(); await proxyMessageHandler.invalidateDisplayCache(group._id); return utils.success(message, 'Mask banner cleared.'); }
-        const url = message.attachments.first()?.url || parsed._positional[3];
-        if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
-        group.mask.discord = group.mask.discord || {};
-        group.mask.discord.image = group.mask.discord.image || {};
-        group.mask.discord.image.banner = { url };
-        await group.save();
-        await proxyMessageHandler.invalidateDisplayCache(group._id);
-        return utils.success(message, 'Mask banner updated.');
-    }
-    if (field === 'proxyavatar' || field === 'pav') {
-        if (parsed.clear) { group.mask.discord = group.mask.discord || {}; group.mask.discord.image = group.mask.discord.image || {}; group.mask.discord.image.proxyAvatar = undefined; await group.save(); await proxyMessageHandler.invalidateDisplayCache(group._id); return utils.success(message, 'Mask proxy avatar cleared.'); }
-        const url = message.attachments.first()?.url || parsed._positional[3];
-        if (!url) return utils.error(message, 'Please provide a URL.');
-        group.mask.discord = group.mask.discord || {};
-        group.mask.discord.image = group.mask.discord.image || {};
-        group.mask.discord.image.proxyAvatar = { url };
-        await group.save();
-        await proxyMessageHandler.invalidateDisplayCache(group._id);
-        return utils.success(message, 'Mask proxy avatar updated.');
-    }
-    return utils.error(message, `(no name) mask field: ${field}. Use: name, displayname, description, color, avatar, banner, proxyavatar`);
-}
-
-async function handlePrivacy(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    const bucketArg = parsed._positional[2]?.toLowerCase();
-    const field = parsed._positional[3]?.toLowerCase();
-    const value = parsed._positional[4]?.toLowerCase();
-    const validFields = ['description', 'avatar', 'banner', 'list', 'metadata', 'hidden', 'caution', 'aliases'];
-    if (!bucketArg || !validFields.includes(bucketArg)) {
-        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.group).setTitle('🔒 Group Privacy')
-            .setDescription(`Use \`sys!group <n> privacy <field> <public|private>\`\nor \`sys!group <n> privacy bucket:<name> <field> <public|private>\`\nFields: ${validFields.join(', ')}`);
-        return message.reply({ embeds: [embed] });
-    }
-    const bucketName = bucketArg.startsWith('bucket:') ? bucketArg.slice(7) : 'default';
-    const actualField = bucketArg.startsWith('bucket:') ? field : bucketArg;
-    const actualValue = bucketArg.startsWith('bucket:') ? value : field;
-    if (!validFields.includes(actualField)) return utils.error(message, 'Invalid field.');
-    if (!actualValue || !['public', 'private'].includes(actualValue)) return utils.error(message, 'Specify `public` or `private`.');
-    group.setting = group.setting || {}; group.setting.privacy = group.setting.privacy || [];
-    let priv = group.setting.privacy.find(p => p.bucket === bucketName);
-    if (!priv) { priv = { bucket: bucketName, settings: {} }; group.setting.privacy.push(priv); }
-    priv.settings[actualField] = actualValue === 'private'; await group.save();
-    return utils.success(message, `**${actualField}** is now **${actualValue}** in bucket **${bucketName}**`);
-}
-
 async function handleDelete(message, parsed, groupName) {
     const { group, system } = await getGroup(message, groupName);
     if (!group) return;
@@ -657,7 +333,6 @@ async function handleRandom(message, parsed, groupName) {
     
     const randomId = memberIDs[Math.floor(Math.random() * memberIDs.length)];
     
-    // Try to find the member
     let entity = await Alter.findById(randomId);
     let type = 'alter';
     if (!entity) { entity = await State.findById(randomId); type = 'state'; }
@@ -665,22 +340,14 @@ async function handleRandom(message, parsed, groupName) {
     
     if (!entity) return utils.error(message, 'Could not find random member.');
     
-    // Build appropriate embed based on type
     const embed = new EmbedBuilder()
         .setColor(entity.color || utils.ENTITY_COLORS[type])
         .setTitle(`🎲 ${entity.name?.display || entity.name?.indexable || '(no name)'}`)
         .setDescription(entity.description || '*No description*');
-        //.setFooter({ text: `Type: ${type} | ID: ${entity._id}` });
     
     if (entity.avatar?.url) embed.setThumbnail(entity.avatar.url);
     
     return message.reply({ embeds: [embed] });
-}
-
-async function handleId(message, parsed, groupName) {
-    const { group } = await getGroup(message, groupName);
-    if (!group) return;
-    return message.reply(`\`${group._id}\``);
 }
 
 async function handleList(message, parsed) {
@@ -742,7 +409,6 @@ async function buildGroupEmbed(group, system, fallbackName = null) {
     if (group.avatar?.url) embed.setThumbnail(group.avatar.url);
     if (group.discord?.image?.banner?.url) embed.setImage(group.discord.image.banner.url);
     
-    // Member count and sample
     const memberCount = group.memberIDs?.length || 0;
     let memberInfo = `**Members:** ${memberCount}`;
     if (memberCount > 0 && memberCount <= 10) {
@@ -757,6 +423,5 @@ async function buildGroupEmbed(group, system, fallbackName = null) {
     if (group.proxy?.length) embed.addFields({ name: '💬 Proxies', value: utils.formatProxies(group.proxy), inline: true });
     if (group.name?.aliases?.length) embed.addFields({ name: '📝 Aliases', value: group.name.aliases.join(', '), inline: true });
     
-    //embed.setFooter({ text: `ID: ${group._id}` });
     return embed;
 }

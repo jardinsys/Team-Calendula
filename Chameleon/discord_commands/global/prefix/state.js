@@ -30,6 +30,7 @@ const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const utils = require('../../functions/bot_utils');
 const proxyMessageHandler = require('../proxy-message');
+const { simpleField, nameField, mediaField, booleanField, nestedField, listField, proxyHandler, privacyHandler, idHandler, maskHandler } = require('../../functions/bot_utils/entityHandlers');
 
 const { getSystemTerm } = utils;
 
@@ -48,30 +49,51 @@ module.exports = {
         const stateName = parsed._positional[0];
         const subcommand = parsed._positional[1]?.toLowerCase();
 
+        // Getter wrapper: returns { entity, system } for factory functions
+        async function getStateEntity(message, name) {
+            const { state, system } = await getState(message, name || stateName);
+            if (!state) return null;
+            return { entity: state, system };
+        }
+
         const handlers = {
-            'rename': handleRename, 'name': handleRename,
-            'displayname': handleDisplayName, 'dn': handleDisplayName,
-            'closedname': handleClosedName, 'cn': handleClosedName,
-            'description': handleDescription, 'desc': handleDescription,
-            'avatar': handleAvatar, 'icon': handleAvatar, 'av': handleAvatar,
-            'banner': handleBanner,
-            'color': handleColor, 'colour': handleColor,
-            'proxy': handleProxy,
-            'signoff': handleSignoff, 'sign': handleSignoff,
-            'aliases': handleAliases, 'alias': handleAliases,
+            'rename': nameField(getStateEntity, 'indexable', 'Indexable name', { validateIndexable: true }),
+            'name': nameField(getStateEntity, 'indexable', 'Indexable name', { validateIndexable: true }),
+            'displayname': nameField(getStateEntity, 'display', 'Display name'),
+            'dn': nameField(getStateEntity, 'display', 'Display name'),
+            'closedname': nameField(getStateEntity, 'closedNameDisplay', 'Closed name display'),
+            'cn': nameField(getStateEntity, 'closedNameDisplay', 'Closed name display'),
+            'description': simpleField(getStateEntity, 'description', 'Description'),
+            'desc': simpleField(getStateEntity, 'description', 'Description'),
+            'avatar': mediaField(getStateEntity, 'avatar', 'Avatar', { entityType: 'State', uploadFieldName: 'avatar' }),
+            'icon': mediaField(getStateEntity, 'avatar', 'Avatar', { entityType: 'State', uploadFieldName: 'avatar' }),
+            'av': mediaField(getStateEntity, 'avatar', 'Avatar', { entityType: 'State', uploadFieldName: 'avatar' }),
+            'banner': mediaField(getStateEntity, 'discord.image.banner', 'Banner', { syncBucket: true, entityType: 'State', uploadFieldName: 'banner' }),
+            'color': simpleField(getStateEntity, 'color', 'Color'),
+            'colour': simpleField(getStateEntity, 'color', 'Color'),
+            'proxy': proxyHandler(getStateEntity),
+            'signoff': simpleField(getStateEntity, 'signoff', 'Sign-offs'),
+            'sign': simpleField(getStateEntity, 'signoff', 'Sign-offs'),
+            'aliases': listField(getStateEntity, 'name.aliases', 'Aliases'),
+            'alias': listField(getStateEntity, 'name.aliases', 'Aliases'),
+            'condition': simpleField(getStateEntity, 'condition', 'Condition', { entityType: 'state' }),
+            'cond': simpleField(getStateEntity, 'condition', 'Condition', { entityType: 'state' }),
+            'caution': simpleField(getStateEntity, 'caution', 'Caution'),
+            'triggers': listField(getStateEntity, 'caution.triggers', 'Triggers', { matchKey: 'text', itemFactory: (text) => ({ text }) }),
+            'trigger': listField(getStateEntity, 'caution.triggers', 'Triggers', { matchKey: 'text', itemFactory: (text) => ({ text }) }),
+            'privacy': privacyHandler(getStateEntity, 'state', ['description', 'avatar', 'banner', 'metadata', 'proxies', 'caution', 'hidden', 'aliases'], utils.ENTITY_COLORS.state),
+            'sync': booleanField(getStateEntity, 'syncWithApps.discord', 'Discord sync'),
+            'defaultstatus': nestedField(getStateEntity, 'setting', 'default_status', 'Default status'),
+            'ds': nestedField(getStateEntity, 'setting', 'default_status', 'Default status'),
+            'defaultbattery': nestedField(getStateEntity, 'setting', 'default_battery', 'Default battery', { parser: (v) => parseInt(v), validator: (v) => !isNaN(v) && v >= 0 && v <= 100, errorMsg: 'Please provide a battery level (0-100).' }),
+            'db': nestedField(getStateEntity, 'setting', 'default_battery', 'Default battery', { parser: (v) => parseInt(v), validator: (v) => !isNaN(v) && v >= 0 && v <= 100, errorMsg: 'Please provide a battery level (0-100).' }),
+            'mask': maskHandler(getStateEntity, 'state', utils.ENTITY_COLORS.state),
+            'id': idHandler(getStateEntity),
+            // Entity-specific handlers
             'groups': handleGroups, 'group': handleGroups,
             'alters': handleAlters, 'alter': handleAlters,
-            'condition': handleCondition, 'cond': handleCondition,
-            'caution': handleCaution,
-            'triggers': handleTriggers, 'trigger': handleTriggers,
-            'privacy': handlePrivacy,
-            'sync': handleSync,
-            'defaultstatus': handleDefaultStatus, 'ds': handleDefaultStatus,
-            'defaultbattery': handleDefaultBattery, 'db': handleDefaultBattery,
-            'mask': handleMask,
             'delete': handleDelete,
             'remission': handleRemission,
-            'id': handleId
         };
 
         if (handlers[subcommand]) {
@@ -114,7 +136,7 @@ async function handleNew(message, parsed) {
     }
     const name = parsed._positional.slice(1).join(' ');
     if (!name) return utils.error(message, 'Please provide a name: `sys!state new <n>`');
-    const indexable = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
+    const indexable = name.toLowerCase().replace(/[^a-z0-9\\-_]/g, '') || undefined;
 
     if (indexable) {
         const existing = await utils.findEntity(indexable, system, 'state');
@@ -133,154 +155,6 @@ async function handleNew(message, parsed) {
         .setDescription(`**${name}** has been created.`)
         .addFields({ name: 'ID', value: `\`${state._id}\``, inline: true });
     return message.reply({ embeds: [embed] });
-}
-
-async function handleRename(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    const newName = parsed._positional.slice(2).join(' ');
-    if (!newName) return utils.error(message, 'Please provide a new name.');
-    if (!utils.isValidIndexableName(newName)) return utils.error(message, 'Invalid indexable name format.');
-    state.name.indexable = newName;
-    await state.save();
-    await proxyMessageHandler.invalidateDisplayCache(state._id);
-    return utils.success(message, `Indexable name changed to **${newName}**`);
-}
-
-async function handleDisplayName(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    if (parsed.clear) { state.name.display = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Display name cleared.'); }
-    const newName = parsed._positional.slice(2).join(' ');
-    if (!newName) return utils.error(message, 'Please provide a display name.');
-    state.name.display = newName;
-    await state.save();
-    await proxyMessageHandler.invalidateDisplayCache(state._id);
-    return utils.success(message, `Display name set to **${newName}**`);
-}
-
-async function handleDescription(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    if (parsed.clear) { state.description = undefined; await state.save(); return utils.success(message, 'Description cleared.'); }
-    const desc = parsed._positional.slice(2).join(' ');
-    if (!desc) return utils.error(message, 'Please provide a description.');
-    state.description = desc;
-    await state.save();
-    return utils.success(message, 'Description updated.');
-}
-
-async function handleAvatar(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    if (parsed.clear) { if (state.avatar?.r2Key) await utils.deleteFromR2(state.avatar.r2Key, state.avatar.bucket || 'app'); state.avatar = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Avatar cleared.'); }
-    const attachment = message.attachments.first();
-    const urlArg = parsed._positional[2];
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'avatar', 'State', message.author.id, 'app');
-    if (!result.success) return utils.error(message, result.message);
-    if (state.avatar?.r2Key) await utils.deleteFromR2(state.avatar.r2Key, state.avatar.bucket || 'app');
-    state.avatar = result.media;
-    await state.save();
-    await proxyMessageHandler.invalidateDisplayCache(state._id);
-    return utils.success(message, 'Avatar uploaded and updated.');
-}
-
-async function handleBanner(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    const syncWithDiscord = state.syncWithApps?.discord;
-    const bucket = utils.resolveUploadBucket(syncWithDiscord, 'discord');
-    if (parsed.clear) { if (state.discord?.image?.banner?.r2Key) await utils.deleteFromR2(state.discord.image.banner.r2Key, state.discord.image.banner.bucket || 'app'); if (state.discord?.image) state.discord.image.banner = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Banner cleared.'); }
-    const attachment = message.attachments.first();
-    const urlArg = parsed._positional[2];
-    const result = await utils.handlePrefixMediaUpload(attachment, urlArg, 'banner', 'State', message.author.id, bucket);
-    if (!result.success) return utils.error(message, result.message);
-    if (state.discord?.image?.banner?.r2Key) await utils.deleteFromR2(state.discord.image.banner.r2Key, state.discord.image.banner.bucket || 'app');
-    state.discord = state.discord || {}; state.discord.image = state.discord.image || {};
-    state.discord.image.banner = result.media;
-    await state.save();
-    await proxyMessageHandler.invalidateDisplayCache(state._id);
-    return utils.success(message, 'Banner uploaded and updated.');
-}
-
-async function handleColor(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    if (parsed.clear) { state.color = undefined; await state.save(); return utils.success(message, 'Color cleared.'); }
-    const color = utils.normalizeColor(parsed._positional[2]);
-    if (!color) return utils.error(message, 'Please provide a valid hex color.');
-    state.color = color;
-    await state.save();
-    return utils.success(message, `Color set to **${color}**`);
-}
-
-async function handleProxy(message, parsed, stateName) {
-    const { state, system } = await getState(message, stateName);
-    if (!state) return;
-    const action = parsed._positional[2]?.toLowerCase();
-    if (parsed.clear || action === 'clear') { state.proxy = []; await state.save(); return utils.success(message, 'Proxy tags cleared.'); }
-    if (action === 'add') {
-        const tag = parsed._positional.slice(3).join(' ');
-        if (!tag) return utils.error(message, 'Please provide a proxy tag.');
-        const { exists, entity, type } = await utils.checkProxyExists(tag, system, state._id.toString());
-        if (exists) return utils.error(message, `Proxy \`${tag}\` is already used by ${type} **${utils.getDisplayName(entity)}**.`);
-        state.proxy = state.proxy || []; state.proxy.push(tag); await state.save();
-        return utils.success(message, `Proxy tag \`${tag}\` added.`);
-    }
-    if (action === 'remove') {
-        const tag = parsed._positional.slice(3).join(' ');
-        state.proxy = state.proxy || [];
-        const idx = state.proxy.findIndex(p => p.toLowerCase() === tag.toLowerCase());
-        if (idx === -1) return utils.error(message, `Proxy tag not found.`);
-        state.proxy.splice(idx, 1); await state.save();
-        return utils.success(message, `Proxy tag removed.`);
-    }
-    const tag = parsed._positional.slice(2).join(' ');
-    if (!tag) {
-        const proxies = state.proxy || [];
-        return proxies.length ? utils.info(message, `Proxy tags: ${utils.formatProxies(proxies)}`) : utils.info(message, 'No proxy tags set.');
-    }
-    const { exists, entity, type } = await utils.checkProxyExists(tag, system, state._id.toString());
-    if (exists) return utils.error(message, `Proxy \`${tag}\` is already used by ${type} **${utils.getDisplayName(entity)}**.`);
-    const oldCount = state.proxy?.length || 0;
-    state.proxy = [tag]; await state.save();
-    return utils.success(message, oldCount > 0
-        ? `Proxy tag set to \`${tag}\` (replaced ${oldCount} previous proxy${oldCount > 1 ? 's' : ''}).`
-        : `Proxy tag set to \`${tag}\`.`);
-}
-
-async function handleSignoff(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    if (parsed.clear) { state.signoff = undefined; await state.save(); return utils.success(message, 'Sign-offs cleared.'); }
-    const input = parsed._positional.slice(2).join(' ');
-    if (!input) return utils.error(message, 'Please provide sign-offs.');
-    state.signoff = utils.parseList(input).join('\n');
-    await state.save();
-    return utils.success(message, 'Sign-offs updated.');
-}
-
-async function handleAliases(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    const action = parsed._positional[2]?.toLowerCase();
-    if (parsed.clear || action === 'clear') { state.name.aliases = []; await state.save(); return utils.success(message, 'Aliases cleared.'); }
-    if (action === 'add') {
-        const alias = parsed._positional.slice(3).join(' ');
-        if (!alias) return utils.error(message, 'Please provide an alias.');
-        state.name.aliases = state.name.aliases || []; state.name.aliases.push(alias); await state.save();
-        return utils.success(message, `Alias **${alias}** added.`);
-    }
-    if (action === 'remove') {
-        const alias = parsed._positional.slice(3).join(' ');
-        state.name.aliases = state.name.aliases || [];
-        const idx = state.name.aliases.findIndex(a => a.toLowerCase() === alias.toLowerCase());
-        if (idx === -1) return utils.error(message, `Alias not found.`);
-        state.name.aliases.splice(idx, 1); await state.save();
-        return utils.success(message, `Alias removed.`);
-    }
-    const aliases = state.name?.aliases || [];
-    return aliases.length ? utils.info(message, `Aliases: ${aliases.join(', ')}`) : utils.info(message, 'No aliases set.');
 }
 
 async function handleGroups(message, parsed, stateName) {
@@ -370,217 +244,6 @@ async function handleAlters(message, parsed, stateName) {
     return alters.length ? utils.info(message, `Linked alters: ${alters.map(a => a.name?.display || a.name?.indexable).join(', ')}`) : utils.info(message, 'No linked alters.');
 }
 
-async function handleCondition(message, parsed, stateName) {
-    const { state, system } = await getState(message, stateName);
-    if (!state) return;
-    if (parsed.clear) { state.condition = undefined; await state.save(); return utils.success(message, 'Condition cleared.'); }
-    const cond = parsed._positional.slice(2).join(' ');
-    if (!cond) return utils.error(message, 'Please provide a condition.');
-    state.condition = cond; await state.save();
-    await utils.ensureConditionExists(system, 'state', cond);
-    return utils.success(message, `Condition set to **${cond}**`);
-}
-
-async function handleCaution(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    if (parsed.clear) { state.caution = undefined; await state.save(); return utils.success(message, 'Caution cleared.'); }
-    const type = parsed._positional[2];
-    const detail = parsed._positional.slice(3).join(' ');
-    if (!type) return utils.error(message, 'Please provide a caution type.');
-    state.caution = { c_type: type, detail: detail || undefined }; await state.save();
-    return utils.success(message, `Caution set to **${type}**`);
-}
-
-async function handleClosedName(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    if (parsed.clear) { state.name.closedNameDisplay = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Closed name display cleared.'); }
-    const newName = parsed._positional.slice(2).join(' ');
-    if (!newName) return utils.error(message, 'Please provide a closed name display.');
-    state.name.closedNameDisplay = newName;
-    await state.save();
-    await proxyMessageHandler.invalidateDisplayCache(state._id);
-    return utils.success(message, `Closed name display set to **${newName}**`);
-}
-
-async function handleSync(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    const val = parsed._positional[2]?.toLowerCase();
-    if (!val || !['true', 'false', 'on', 'off', 'yes', 'no'].includes(val)) return utils.error(message, 'Specify `true` or `false`.');
-    state.syncWithApps = state.syncWithApps || {};
-    state.syncWithApps.discord = ['true', 'on', 'yes'].includes(val);
-    await state.save();
-    return utils.success(message, `Discord sync is now **${state.syncWithApps.discord ? 'enabled' : 'disabled'}**`);
-}
-
-async function handleDefaultStatus(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    if (parsed.clear) { state.setting = state.setting || {}; state.setting.default_status = undefined; await state.save(); return utils.success(message, 'Default status cleared.'); }
-    const status = parsed._positional.slice(2).join(' ');
-    if (!status) return utils.error(message, 'Please provide a default status.');
-    state.setting = state.setting || {};
-    state.setting.default_status = status;
-    await state.save();
-    return utils.success(message, `Default status set to **${status}**`);
-}
-
-async function handleDefaultBattery(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    if (parsed.clear) { state.setting = state.setting || {}; state.setting.default_battery = undefined; await state.save(); return utils.success(message, 'Default battery cleared.'); }
-    const val = parseInt(parsed._positional[2]);
-    if (isNaN(val) || val < 0 || val > 100) return utils.error(message, 'Please provide a battery level (0-100).');
-    state.setting = state.setting || {};
-    state.setting.default_battery = val;
-    await state.save();
-    return utils.success(message, `Default battery set to **${val}**`);
-}
-
-async function handleTriggers(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    const action = parsed._positional[2]?.toLowerCase();
-    if (action === 'add') {
-        const trigger = parsed._positional.slice(3).join(' ');
-        if (!trigger) return utils.error(message, 'Please provide a trigger.');
-        state.caution = state.caution || {};
-        state.caution.triggers = state.caution.triggers || [];
-        state.caution.triggers.push({ text: trigger });
-        await state.save();
-        return utils.success(message, `Trigger \`${trigger}\` added.`);
-    }
-    if (action === 'remove') {
-        const trigger = parsed._positional.slice(3).join(' ');
-        if (!trigger) return utils.error(message, 'Please provide a trigger to remove.');
-        state.caution = state.caution || {};
-        state.caution.triggers = state.caution.triggers || [];
-        const idx = state.caution.triggers.findIndex(t => t.text?.toLowerCase() === trigger.toLowerCase());
-        if (idx === -1) return utils.error(message, `Trigger \`${trigger}\` not found.`);
-        state.caution.triggers.splice(idx, 1);
-        await state.save();
-        return utils.success(message, `Trigger \`${trigger}\` removed.`);
-    }
-    if (action === 'clear') {
-        state.caution = state.caution || {};
-        state.caution.triggers = [];
-        await state.save();
-        return utils.success(message, 'All triggers cleared.');
-    }
-    const triggers = state.caution?.triggers || [];
-    if (!triggers.length) return utils.info(message, 'No caution triggers set.');
-    return utils.info(message, `Triggers: ${triggers.map(t => t.text || t).join(', ')}`);
-}
-
-async function handleMask(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    const field = parsed._positional[2]?.toLowerCase();
-    if (!field) {
-        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.state).setTitle('🎭 Mask Settings')
-            .setDescription(`Use \`sys!state <n> mask <field> <value>\`\nFields: name, displayname (dn), description, color, avatar, banner, proxyavatar (pav)`)
-            .addFields(
-                { name: 'Current Mask', value: `Name: ${state.mask?.name?.display || state.mask?.name?.indexable || '*not set*'}\nColor: ${state.mask?.color || '*not set*'}\nDescription: ${state.mask?.description || '*not set*'}`, inline: false }
-            );
-        return message.reply({ embeds: [embed] });
-    }
-    state.mask = state.mask || {};
-    if (field === 'name') {
-        const val = parsed._positional.slice(3).join(' ');
-        if (!val) return utils.error(message, 'Please provide a mask name.');
-        state.mask.name = state.mask.name || {};
-        state.mask.name.indexable = val.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
-        state.mask.name.display = val;
-        await state.save();
-        await proxyMessageHandler.invalidateDisplayCache(state._id);
-        return utils.success(message, `Mask name set to **${val}**`);
-    }
-    if (field === 'displayname' || field === 'dn') {
-        if (parsed.clear) { state.mask.name = state.mask.name || {}; state.mask.name.display = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Mask display name cleared.'); }
-        const val = parsed._positional.slice(3).join(' ');
-        if (!val) return utils.error(message, 'Please provide a mask display name.');
-        state.mask.name = state.mask.name || {};
-        state.mask.name.display = val;
-        await state.save();
-        await proxyMessageHandler.invalidateDisplayCache(state._id);
-        return utils.success(message, `Mask display name set to **${val}**`);
-    }
-    if (field === 'description' || field === 'desc') {
-        if (parsed.clear) { state.mask.description = undefined; await state.save(); return utils.success(message, 'Mask description cleared.'); }
-        const val = parsed._positional.slice(3).join(' ');
-        if (!val) return utils.error(message, 'Please provide a mask description.');
-        state.mask.description = val;
-        await state.save();
-        return utils.success(message, 'Mask description updated.');
-    }
-    if (field === 'color' || field === 'colour') {
-        if (parsed.clear) { state.mask.color = undefined; await state.save(); return utils.success(message, 'Mask color cleared.'); }
-        const val = utils.normalizeColor(parsed._positional[3]);
-        if (!val) return utils.error(message, 'Please provide a valid hex color.');
-        state.mask.color = val;
-        await state.save();
-        return utils.success(message, `Mask color set to **${val}**`);
-    }
-    if (field === 'avatar' || field === 'icon' || field === 'av') {
-        if (parsed.clear) { state.mask.avatar = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Mask avatar cleared.'); }
-        const url = message.attachments.first()?.url || parsed._positional[3];
-        if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
-        state.mask.avatar = { url };
-        await state.save();
-        await proxyMessageHandler.invalidateDisplayCache(state._id);
-        return utils.success(message, 'Mask avatar updated.');
-    }
-    if (field === 'banner') {
-        if (parsed.clear) { state.mask.discord = state.mask.discord || {}; state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.banner = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Mask banner cleared.'); }
-        const url = message.attachments.first()?.url || parsed._positional[3];
-        if (!url) return utils.error(message, 'Please provide a URL or upload an image.');
-        state.mask.discord = state.mask.discord || {};
-        state.mask.discord.image = state.mask.discord.image || {};
-        state.mask.discord.image.banner = { url };
-        await state.save();
-        await proxyMessageHandler.invalidateDisplayCache(state._id);
-        return utils.success(message, 'Mask banner updated.');
-    }
-    if (field === 'proxyavatar' || field === 'pav') {
-        if (parsed.clear) { state.mask.discord = state.mask.discord || {}; state.mask.discord.image = state.mask.discord.image || {}; state.mask.discord.image.proxyAvatar = undefined; await state.save(); await proxyMessageHandler.invalidateDisplayCache(state._id); return utils.success(message, 'Mask proxy avatar cleared.'); }
-        const url = message.attachments.first()?.url || parsed._positional[3];
-        if (!url) return utils.error(message, 'Please provide a URL.');
-        state.mask.discord = state.mask.discord || {};
-        state.mask.discord.image = state.mask.discord.image || {};
-        state.mask.discord.image.proxyAvatar = { url };
-        await state.save();
-        await proxyMessageHandler.invalidateDisplayCache(state._id);
-        return utils.success(message, 'Mask proxy avatar updated.');
-    }
-    return utils.error(message, `Unknown mask field: ${field}. Use: name, displayname, description, color, avatar, banner, proxyavatar`);
-}
-
-async function handlePrivacy(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    const bucketArg = parsed._positional[2]?.toLowerCase();
-    const field = parsed._positional[3]?.toLowerCase();
-    const value = parsed._positional[4]?.toLowerCase();
-    const validFields = ['description', 'avatar', 'banner', 'metadata', 'proxies', 'caution', 'hidden', 'aliases'];
-    if (!bucketArg || !validFields.includes(bucketArg)) {
-        const embed = new EmbedBuilder().setColor(utils.ENTITY_COLORS.state).setTitle('🔒 State Privacy')
-            .setDescription(`Use \`sys!state <n> privacy <field> <public|private>\`\nor \`sys!state <n> privacy bucket:<name> <field> <public|private>\`\nFields: ${validFields.join(', ')}`);
-        return message.reply({ embeds: [embed] });
-    }
-    const bucketName = bucketArg.startsWith('bucket:') ? bucketArg.slice(7) : 'default';
-    const actualField = bucketArg.startsWith('bucket:') ? field : bucketArg;
-    const actualValue = bucketArg.startsWith('bucket:') ? value : field;
-    if (!validFields.includes(actualField)) return utils.error(message, `Invalid field.`);
-    if (!actualValue || !['public', 'private'].includes(actualValue)) return utils.error(message, 'Specify `public` or `private`.');
-    state.setting = state.setting || {}; state.setting.privacy = state.setting.privacy || [];
-    let priv = state.setting.privacy.find(p => p.bucket === bucketName);
-    if (!priv) { priv = { bucket: bucketName, settings: {} }; state.setting.privacy.push(priv); }
-    priv.settings[actualField] = actualValue === 'private'; await state.save();
-    return utils.success(message, `**${actualField}** is now **${actualValue}** in bucket **${bucketName}**`);
-}
-
 async function handleDelete(message, parsed, stateName) {
     const { state, system } = await getState(message, stateName);
     if (!state) return;
@@ -607,12 +270,6 @@ async function handleRemission(message, parsed, stateName) {
     if (!state) return;
     state.condition = 'Remission'; await state.save();
     return utils.success(message, `**${state.name?.display || stateName}** marked as in remission.`);
-}
-
-async function handleId(message, parsed, stateName) {
-    const { state } = await getState(message, stateName);
-    if (!state) return;
-    return message.reply(`\`${state._id}\``);
 }
 
 async function handleList(message, parsed) {
@@ -686,6 +343,5 @@ async function buildStateEmbed(state, system, fallbackName = null) {
     }
     if (state.name?.aliases?.length) embed.addFields({ name: '📝 Aliases', value: state.name.aliases.join(', '), inline: true });
     if (state.caution?.c_type) embed.addFields({ name: '⚠️ Caution', value: state.caution.c_type + (state.caution.detail ? `\n${state.caution.detail}` : ''), inline: false });
-    //embed.setFooter({ text: `ID: ${state._id}` });
     return embed;
 }
