@@ -93,6 +93,7 @@ async function createBackup(system, source) {
         timestamp: new Date(),
         expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days
         source,
+        // Member/group counts respecting include_in_Count on conditions
         memberCount: system.alters?.IDs?.length || 0,
         groupCount: system.groups?.IDs?.length || 0,
         snapshot: {

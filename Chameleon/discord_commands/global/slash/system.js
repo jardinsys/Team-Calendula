@@ -117,10 +117,31 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
     if (color) embed.setColor(color);
     if (description) embed.setDescription(description);
 
-    // Get counts
-    const alterCount = system.alters?.IDs?.length || 0;
-    const stateCount = system.states?.IDs?.length || 0;
-    const groupCount = system.groups?.IDs?.length || 0;
+    // Get counts — respect include_in_Count on conditions
+    // Build list of condition names that should NOT be counted
+    const excludedAlterConditions = (system.alters?.conditions || [])
+        .filter(c => !c.settings?.include_in_Count)
+        .map(c => c.name);
+    const excludedStateConditions = (system.states?.conditions || [])
+        .filter(c => !c.settings?.include_in_Count)
+        .map(c => c.name);
+    const excludedGroupConditions = (system.groups?.conditions || [])
+        .filter(c => !c.settings?.include_in_Count)
+        .map(c => c.name);
+
+    // Query actual entities, excluding those with "non-countable" conditions
+    const alterCount = await Alter.countDocuments({
+        systemID: system._id.toString(),
+        ...(excludedAlterConditions.length > 0 && { condition: { $nin: excludedAlterConditions } })
+    });
+    const stateCount = await State.countDocuments({
+        systemID: system._id.toString(),
+        ...(excludedStateConditions.length > 0 && { condition: { $nin: excludedStateConditions } })
+    });
+    const groupCount = await Group.countDocuments({
+        systemID: system._id.toString(),
+        ...(excludedGroupConditions.length > 0 && { condition: { $nin: excludedGroupConditions } })
+    });
 
     // Basic Info field
     let basicInfo = '';
