@@ -304,7 +304,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
     if (subPage === 'alters') {
         return (
             <div>
-                <button className="btn-ghost" onClick={() => { exitSelectionMode(); setSubPage(null) }} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
+                <button className="btn btn-back" onClick={() => { exitSelectionMode(); setSubPage(null) }} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
                 <div className="section-header">
@@ -401,7 +401,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
         }
         return (
             <div>
-                <button className="btn-ghost" onClick={() => { exitSelectionMode(); setSubPage(null) }} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
+                <button className="btn btn-back" onClick={() => { exitSelectionMode(); setSubPage(null) }} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
                 <div className="section-header">
@@ -495,7 +495,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
     if (subPage === 'groups') {
         return (
             <div>
-                <button className="btn-ghost" onClick={() => { exitSelectionMode(); setSubPage(null) }} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
+                <button className="btn btn-back" onClick={() => { exitSelectionMode(); setSubPage(null) }} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
                 <div className="section-header">
@@ -555,7 +555,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
     if (subPage === 'front') {
         return (
             <div>
-                <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
+                <button className="btn btn-back" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
                 <h2 className="section-title" style={{ marginBottom: '16px' }}>Current Front</h2>
@@ -576,7 +576,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
     if (subPage === 'edit') {
         return (
             <div>
-                <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
+                <button className="btn btn-back" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
                 <EditSystemSubPage system={system} onSaved={() => { queryClient.invalidateQueries({ queryKey: systemKeys.all }); setSubPage(null) }} />
@@ -601,7 +601,7 @@ export function SystemPage({ system: systemProp, onNavigate, onOpenSettings }) {
             {batchError && (
                 <div style={{ background: 'rgba(252, 165, 165, 0.1)', border: '1px solid var(--color-error)', borderRadius: 'var(--radius)', padding: '8px 12px', marginBottom: '12px', fontSize: '0.8rem', color: 'var(--color-error)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>{batchError}</span>
-                    <button className="btn-ghost btn-sm" onClick={() => setBatchError(null)} style={{ minWidth: 'auto', padding: '2px 6px' }}>×</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setBatchError(null)} style={{ minWidth: 'auto', padding: '2px 6px' }}>×</button>
                 </div>
             )}
 
@@ -717,7 +717,7 @@ function BatchActionBar({ selectedCount, totalCount, onSelectAll, onCondition, o
                     </button>
                 )}
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={onCancel} style={{ marginTop: '8px', width: '100%' }}>
+            <button className="btn btn-back btn-sm" onClick={onCancel} style={{ marginTop: '8px', width: '100%' }}>
                 Cancel
             </button>
         </div>
@@ -728,7 +728,7 @@ function BatchConditionMenu({ conditions, onSelect, onClear, onBack, loading, en
     return (
         <div className="batch-sub-menu">
             <div className="batch-sub-menu-header">
-                <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back</button>
+                <button className="btn btn-back btn-sm" onClick={onBack}>← Back</button>
                 <span>Set condition</span>
             </div>
             <div className="batch-sub-menu-options">
@@ -759,7 +759,7 @@ function BatchGroupMenu({ availableGroups, memberGroups, onAdd, onRemove, onBack
     return (
         <div className="batch-sub-menu">
             <div className="batch-sub-menu-header">
-                <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back</button>
+                <button className="btn btn-back btn-sm" onClick={onBack}>← Back</button>
                 <span>Manage groups</span>
             </div>
             {availableGroups.length > 0 && (
@@ -810,7 +810,7 @@ function BatchConvertMenu({ targetType, targetLabel, onConvert, onBack, loading,
     return (
         <div className="batch-sub-menu">
             <div className="batch-sub-menu-header">
-                <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back</button>
+                <button className="btn btn-back btn-sm" onClick={onBack}>← Back</button>
                 <span>Convert {count} entities</span>
             </div>
             {!confirm ? (
@@ -829,7 +829,7 @@ function BatchConvertMenu({ targetType, targetLabel, onConvert, onBack, loading,
                         <button className="btn btn-primary btn-sm" onClick={() => onConvert(targetType)} disabled={loading}>
                             {loading ? 'Converting...' : 'Confirm'}
                         </button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setConfirm(false)} disabled={loading}>
+                        <button className="btn btn-back btn-sm" onClick={() => setConfirm(false)} disabled={loading}>
                             Cancel
                         </button>
                     </div>
@@ -845,7 +845,7 @@ function BatchDeleteConfirm({ entities, onConfirm, onCancel, loading }) {
     return (
         <div className="batch-sub-menu">
             <div className="batch-sub-menu-header">
-                <button className="btn btn-ghost btn-sm" onClick={onCancel}>← Back</button>
+                <button className="btn btn-back btn-sm" onClick={onCancel}>← Back</button>
                 <span>Delete {entities.length} entities</span>
             </div>
             {!confirm ? (
@@ -856,7 +856,7 @@ function BatchDeleteConfirm({ entities, onConfirm, onCancel, loading }) {
                         <button className="btn btn-danger btn-sm" onClick={() => setConfirm(true)}>
                             Delete
                         </button>
-                        <button className="btn btn-ghost btn-sm" onClick={onCancel}>
+                        <button className="btn btn-back btn-sm" onClick={onCancel}>
                             Cancel
                         </button>
                     </div>
@@ -868,7 +868,7 @@ function BatchDeleteConfirm({ entities, onConfirm, onCancel, loading }) {
                         <button className="btn btn-danger btn-sm" onClick={onConfirm} disabled={loading}>
                             {loading ? 'Deleting...' : 'Yes, Delete'}
                         </button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setConfirm(false)} disabled={loading}>
+                        <button className="btn btn-back btn-sm" onClick={() => setConfirm(false)} disabled={loading}>
                             Cancel
                         </button>
                     </div>

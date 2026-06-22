@@ -677,7 +677,7 @@ export function ImportPage({ system, onNavigate, isRegistrationImport = false })
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
                     {currentIdx > 0 && (
                         <button
-                            className="btn-ghost"
+                            className="btn btn-ghost"
                             onClick={() => setConfiguringSource(sourcesArray[currentIdx - 1])}
                             style={{ flex: 1 }}
                         >
@@ -822,7 +822,7 @@ export function ImportPage({ system, onNavigate, isRegistrationImport = false })
 
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
                     <button
-                        className="btn-ghost"
+                        className="btn btn-ghost"
                         onClick={() => setPhase('configure')}
                         style={{ flex: 1 }}
                     >
@@ -938,7 +938,7 @@ export function ImportPage({ system, onNavigate, isRegistrationImport = false })
                         {isRegistrationImport ? 'Continue to System Setup →' : 'Continue to Dashboard →'}
                     </button>
                     <button
-                        className="btn-ghost"
+                        className="btn btn-ghost"
                         onClick={handleImportAnother}
                         style={{ flex: 1, height: '56px' }}
                     >

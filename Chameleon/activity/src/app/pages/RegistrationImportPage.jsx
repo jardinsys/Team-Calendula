@@ -12,6 +12,10 @@ const SOURCES = [
 
 const METHOD_ICONS = { api: '🔗', file: '📄' }
 
+const TARGET_LABELS = { app: 'Main App', overlay: 'Discord Overlay', both: 'Both' }
+
+const targetLabel = (target) => TARGET_LABELS[target] || target
+
 export function RegistrationImportPage({ onNavigate }) {
     const { session, update, setMembers, setGroups, setSwitches } = useSystemSession()
 
@@ -23,6 +27,9 @@ export function RegistrationImportPage({ onNavigate }) {
     const [currentPreviewSource, setCurrentPreviewSource] = useState(null)
     const [error, setError] = useState(null)
     const [configuringSource, setConfiguringSource] = useState(null)
+    const [importMode, setImportMode] = useState(null) // 'simple' | 'intermediate' | 'advanced'
+    const [sourceTargets, setSourceTargets] = useState({}) // sourceId -> 'app' | 'overlay' | 'both'
+    const [sourcePriority, setSourcePriority] = useState([]) // ordered sourceIds for main-app conflicts
 
     const { status: fetchStatus, start: startFetch, complete: completeFetch, error: errorFetch, render: renderFetchStatus } = useFetchStatus()
 
@@ -85,19 +92,85 @@ export function RegistrationImportPage({ onNavigate }) {
         }
         setSourceConfigs({ ...sourceConfigs, ...newConfigs })
         setConfiguringSource(Array.from(selectedSources)[0])
-        setPhase('configure')
+        if (selectedSources.size === 1) {
+          setImportMode('simple')
+          setSourceTargets({ [Array.from(selectedSources)[0]]: 'both' })
+          setPhase('configure')
+        } else {
+          setPhase('mode')
+        }
     }, [selectedSources, sourceConfigs])
 
+    const handleModeSelect = useCallback((mode) => {
+        setImportMode(mode)
+        const sourcesArray = Array.from(selectedSources)
+        if (mode === 'simple') {
+            const targets = {}
+            sourcesArray.forEach(id => { targets[id] = 'both' })
+            setSourceTargets(targets)
+            setSourcePriority(sourcesArray)
+            setPhase('configure')
+        } else if (mode === 'intermediate') {
+            const targets = {}
+            sourcesArray.forEach(id => { targets[id] = 'both' })
+            setSourceTargets(targets)
+            setSourcePriority([])
+            setPhase('assign')
+        } else if (mode === 'advanced') {
+            const targets = {}
+            sourcesArray.forEach(id => { targets[id] = 'both' })
+            setSourceTargets(targets)
+            setSourcePriority([])
+            setPhase('configure')
+        }
+    }, [selectedSources])
+
+    const moveSourceTarget = useCallback((sourceId, target) => {
+        setSourceTargets(prev => ({ ...prev, [sourceId]: target }))
+    }, [])
+
+    const movePriority = useCallback((sourceId, direction) => {
+        setSourcePriority(prev => {
+            const idx = prev.indexOf(sourceId)
+            if (idx < 0) return prev
+            const next = [...prev]
+            const swapIdx = idx + direction
+            if (swapIdx < 0 || swapIdx >= next.length) return prev
+            ;[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]]
+            return next
+        })
+    }, [])
+
+    const handleStartConfigureAfterAssign = useCallback(() => {
+        setPhase('configure')
+    }, [])
+
     const handleBack = useCallback(() => {
-        // Clear staged import state and go back to NameStep (step 4)
-        update({ importMode: false, importSources: [], importEntityTypeMode: null, importEntityTypeSelections: {}, stagedImports: [] })
-        setPhase('select')
-        setSelectedSources(new Set())
-        setSourceConfigs({})
-        setPreviews({})
-        setError(null)
-        onNavigate?.('register', { startStep: 4 })
-    }, [onNavigate, update])
+        if (phase === 'mode') setPhase('select')
+        else if (phase === 'assign') {
+            if (!Array.from(selectedSources).every(id => sourceTargets[id] === 'both')) {
+                setSourceTargets({})
+                setSourcePriority([])
+            }
+            setPhase('select')
+        }
+        else if (phase === 'configure') {
+            if (importMode === 'intermediate' && sourceTargets && Object.values(sourceTargets).some(t => t !== 'both')) {
+                setPhase('assign')
+            } else if (importMode === 'simple') {
+                setPhase('select')
+            } else {
+                setPhase('mode')
+            }
+        }
+        else if (phase === 'preview') {
+            setPhase('configure')
+        }
+        else {
+            onNavigate?.('register', { startStep: 3 })
+            update({ importMode: false, importSources: [], importEntityTypeMode: null, importEntityTypeSelections: {} })
+        }
+    }, [onNavigate, update, phase, selectedSources, sourceTargets, importMode])
 
     const handleFileChange = useCallback((sourceId, e) => {
         const file = e.target.files?.[0]
@@ -182,11 +255,13 @@ export function RegistrationImportPage({ onNavigate }) {
                     ? preview.members.filter(m => cfg.memberEntityTypes?.[m.sourceId] === 'state').map(m => m.name.toLowerCase())
                     : undefined
 
+                const assignedTarget = sourceTargets[sourceId] || 'app'
+
                 const res = await api.importFromSourceStream(
                     sourceId, cfg.token.trim() || null,
                     {
                         replace: false, skipExisting: true, noGroups: false, noSwitches: false,
-                        target: 'app', forceAsStates, stateNames,
+                        target: assignedTarget, forceAsStates, stateNames,
                         selectedMemberIds: Array.from(preview.members.map(m => m.sourceId)),
                         selectedGroupIds: Array.from(preview.groups.map(g => g.sourceId)),
                     },
@@ -245,7 +320,7 @@ export function RegistrationImportPage({ onNavigate }) {
     if (phase === 'select') {
         return (
             <div className="settings-page">
-                <button className="back-btn" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back to Name</button>
+                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back to Name</button>
                 <h1>Import Data for {systemName || 'your system'}</h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
                     Choose where to import your system data from.
@@ -297,6 +372,109 @@ export function RegistrationImportPage({ onNavigate }) {
         )
     }
 
+    // ===== PHASE 1b: Mode Picker (shown when multiple sources selected) =====
+    if (phase === 'mode') {
+        const sourcesArray = Array.from(selectedSources)
+        return (
+            <div className="settings-page">
+                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back to Sources</button>
+                <h1>Choose Import Mode</h1>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
+                    You selected {sourcesArray.length} sources. Pick how you want to organize the import.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+                    <button className="settings-section" onClick={() => handleModeSelect('simple')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}>
+                        <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>✨ Simple</div>
+                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>One-click import</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>All sources are imported together with default settings. Best when you just want the data.</div>
+                    </button>
+
+                    <button className="settings-section" onClick={() => handleModeSelect('intermediate')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}>
+                        <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>📋 Intermediate</div>
+                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Assign sources to Main / Discord</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Choose which sources go to your main profile vs Discord overlay. Set priority for duplicates.</div>
+                    </button>
+
+                    <button className="settings-section" onClick={() => handleModeSelect('advanced')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}>
+                        <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>🔍 Advanced</div>
+                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Resolve conflicts per member / group</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Full control: pick which source wins for each duplicate member or group, after preview.</div>
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
+    // ===== PHASE 1c: Intermediate Assignment =====
+    if (phase === 'assign') {
+        const sourcesArray = Array.from(selectedSources)
+        const mainSources = sourcePriority
+        const overlaySources = sourcesArray.filter(id => !mainSources.includes(id))
+
+        const setTarget = (id, t) => {
+            moveSourceTarget(id, t)
+            setSourcePriority(prev => {
+                const next = prev.filter(x => x !== id)
+                if (t === 'app') next.unshift(id)
+                return next
+            })
+        }
+
+        return (
+            <div className="settings-page">
+                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back to Sources</button>
+                <h1>Assign Import Targets</h1>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
+                    Choose where each source’s data should go. Sources in <strong>Main App</strong> can have priority order to resolve duplicates.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
+                    <div className="settings-section" style={{ minHeight: '200px', background: 'var(--bg-card)', border: '1px dashed var(--accent)' }}>
+                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-md)', color: 'var(--accent)' }}>Main App</div>
+                        {sourcesArray.map(id => {
+                            const src = SOURCES.find(s => s.id === id)
+                            if (!mainSources.includes(id)) return null
+                            const priorityIdx = mainSources.indexOf(id)
+                            return (
+                                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', padding: 'var(--space-sm)', background: 'var(--bg-surface)', borderRadius: 'var(--radius)', border: '1px solid var(--glass-border)', marginBottom: 'var(--space-sm)' }}>
+                                    <button onClick={() => movePriority(id, -1)} disabled={priorityIdx === 0} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem' }}>↑</button>
+                                    <button onClick={() => movePriority(id, 1)} disabled={priorityIdx === mainSources.length - 1} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem' }}>↓</button>
+                                    <span style={{ fontSize: '1.2rem' }}>{src?.icon}</span>
+                                    <span style={{ flex: 1, fontWeight: 600 }}>{src?.label}</span>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>#{priorityIdx + 1}</span>
+                                    <button onClick={() => setTarget(id, 'overlay')} style={{ background: 'none', border: 'none', color: 'var(--color-warning)', cursor: 'pointer', fontSize: '0.8rem' }}>Move to Overlay</button>
+                                </div>
+                            )
+                        })}
+                        {mainSources.length === 0 && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-md)' }}>None</div>}
+                    </div>
+
+                    <div className="settings-section" style={{ minHeight: '200px', background: 'var(--bg-card)', border: '1px dashed var(--glass-border)' }}>
+                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-md)', color: 'var(--text-secondary)' }}>Discord Overlay</div>
+                        {sourcesArray.map(id => {
+                            const src = SOURCES.find(s => s.id === id)
+                            if (!overlaySources.includes(id)) return null
+                            return (
+                                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', padding: 'var(--space-sm)', background: 'var(--bg-surface)', borderRadius: 'var(--radius)', border: '1px solid var(--glass-border)', marginBottom: 'var(--space-sm)' }}>
+                                    <span style={{ fontSize: '1.2rem' }}>{src?.icon}</span>
+                                    <span style={{ flex: 1, fontWeight: 600 }}>{src?.label}</span>
+                                    <button onClick={() => setTarget(id, 'app')} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.8rem' }}>Move to Main</button>
+                                </div>
+                            )
+                        })}
+                        {overlaySources.length === 0 && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-md)' }}>None</div>}
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
+                    <button className="btn btn-back" onClick={handleBack} style={{ flex: 1 }}>← Back</button>
+                    <button className="btn-gradient btn-gradient-primary" onClick={handleStartConfigureAfterAssign} style={{ flex: 2 }}>Continue →</button>
+                </div>
+            </div>
+        )
+    }
+
     // ===== PHASE 2: Configure =====
     if (phase === 'configure') {
         const sourcesArray = Array.from(selectedSources)
@@ -307,7 +485,7 @@ export function RegistrationImportPage({ onNavigate }) {
 
         return (
             <div className="settings-page">
-                <button className="back-btn" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back to Sources</button>
+                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back to Sources</button>
 
                 <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)', alignItems: 'center' }}>
                     {sourcesArray.map((id, i) => (
@@ -369,7 +547,7 @@ export function RegistrationImportPage({ onNavigate }) {
 
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
                     {currentIdx > 0 && (
-                        <button className="btn-ghost" onClick={() => setConfiguringSource(sourcesArray[currentIdx - 1])} style={{ flex: 1 }}>← Previous</button>
+                        <button className="btn btn-back" onClick={() => setConfiguringSource(sourcesArray[currentIdx - 1])} style={{ flex: 1 }}>← Previous</button>
                     )}
                     {currentIdx < sourcesArray.length - 1 ? (
                         <button className="btn-gradient btn-gradient-primary" onClick={() => setConfiguringSource(sourcesArray[currentIdx + 1])} style={{ flex: 1 }}>Next →</button>
@@ -387,7 +565,7 @@ export function RegistrationImportPage({ onNavigate }) {
 
         return (
             <div className="settings-page">
-                <button className="back-btn" onClick={() => setPhase('configure')} style={{ marginBottom: 'var(--space-md)' }}>← Back to Configure</button>
+                <button className="btn btn-back" onClick={() => setPhase('configure')} style={{ marginBottom: 'var(--space-md)' }}>← Back to Configure</button>
                 <h1>Preview Imports</h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>Review what will be imported. All members/groups are selected by default.</p>
 
@@ -405,7 +583,7 @@ export function RegistrationImportPage({ onNavigate }) {
                                 <span style={{ fontSize: '1.5rem' }}>{src?.icon}</span>
                                 <div>
                                     <div style={{ fontWeight: 600 }}>{src?.label}</div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Target: <strong>Main Profile</strong></div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Target: <strong>{targetLabel(sourceTargets[sourceId])}</strong></div>
                                 </div>
                             </div>
 
@@ -442,8 +620,12 @@ export function RegistrationImportPage({ onNavigate }) {
                     </div>
                 )}
 
+                {importMode === 'intermediate' && (
+                    <button className="btn btn-back" onClick={() => setPhase('assign')} style={{ marginBottom: 'var(--space-md)' }}>✎ Edit Assignment</button>
+                )}
+
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-                    <button className="btn-ghost" onClick={() => setPhase('configure')} style={{ flex: 1 }}>← Back</button>
+                    <button className="btn btn-back" onClick={() => setPhase('configure')} style={{ flex: 1 }}>← Back</button>
                     <button className="btn-gradient btn-gradient-primary" onClick={handleImportAll} style={{ flex: 2 }}>
                         Import and Continue →
                     </button>
@@ -492,7 +674,7 @@ export function RegistrationImportPage({ onNavigate }) {
                     <button className="btn-gradient btn-gradient-primary" onClick={handleContinueToNameStep} style={{ flex: 2, height: '56px', fontSize: '1.1rem' }}>
                         Continue to System Setup →
                     </button>
-                    <button className="btn-ghost" onClick={handleImportMore} style={{ flex: 1, height: '56px' }}>
+                    <button className="btn btn-ghost" onClick={handleImportMore} style={{ flex: 1, height: '56px' }}>
                         Import More
                     </button>
                 </div>

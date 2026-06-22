@@ -252,10 +252,10 @@ function DisorderStep({ category, onSelect, onBack, onStartOver }) {
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn-ghost" onClick={onBack} style={{ flex: 1 }}>
+        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
           ← Back
         </button>
-        <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
+        <button className="btn btn-back" onClick={onStartOver} style={{ flex: 1 }}>
           Start Over
         </button>
       </div>
@@ -352,10 +352,10 @@ function OtherStep({ onResolve, onBack, onStartOver }) {
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn-ghost" onClick={onBack} style={{ flex: 1 }}>
+        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
           ← Back
         </button>
-        <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
+        <button className="btn btn-back" onClick={onStartOver} style={{ flex: 1 }}>
           Start Over
         </button>
         <button
@@ -439,10 +439,10 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStar
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn-ghost" onClick={onBack} style={{ flex: 1 }}>
+        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
           ← Back
         </button>
-        <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
+        <button className="btn btn-back" onClick={onStartOver} style={{ flex: 1 }}>
           Start Over
         </button>
         <button
@@ -459,233 +459,16 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStar
 
 
 // ═══════════════════════════════════════════
-// Step 5: Import or New System (for isSystem conditions)
+// Step 3: Import decision → deferred to import page
 // ═══════════════════════════════════════════
 
 function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
-  const [systemName, setSystemName] = useState('')
-  const [selectedSources, setSelectedSources] = useState(new Set())
-  const [mode, setMode] = useState('choose') // 'choose' | 'sources' | 'entity-types'
-  const [entityTypeMode, setEntityTypeMode] = useState(null) // 'alters' | 'states' | 'mixed'
-  const [entityTypeSelections, setEntityTypeSelections] = useState({}) // sourceId -> { memberSourceId: 'alter'|'state' }
-  const [previewData, setPreviewData] = useState({}) // sourceId -> { members: [...] }
-
-  // Determine available entity types based on sysType
-  const canImportAlters = sysType.isSystem
-  const canImportStates = sysType.isFragmented
-  const isMixed = canImportAlters && canImportStates
-
-  const SOURCES = [
-    { id: 'pluralkit', label: 'PluralKit', icon: '🦊' },
-    { id: 'simplyplural', label: 'Simply Plural', icon: '&' },
-    { id: 'octocon', label: 'Octocon', icon: '🧠' },
-    { id: 'tupperbox', label: 'Tupperbox', icon: '📦' },
-  ]
-
-  const toggleSource = (sourceId) => {
-    setSelectedSources(prev => {
-      const next = new Set(prev)
-      if (next.has(sourceId)) next.delete(sourceId)
-      else next.add(sourceId)
-      return next
-    })
+  const handleNewSystem = () => {
+    onComplete({ systemName: '', import: false })
   }
 
-  const handleNewSystem = () => {
-      onComplete({
-        systemName: systemName.trim() || null,
-        import: false,
-      })
-    }
-
-    const handleImport = () => {
-      if (isMixed) {
-        setMode('entity-types')
-      } else {
-        // Single entity type - go directly to source selection
-        setEntityTypeMode(canImportAlters ? 'alters' : 'states')
-        setMode('sources')
-      }
-    }
-
-    const handleEntityTypeSelect = (mode) => {
-      setEntityTypeMode(mode)
-      setMode('sources')
-    }
-
-    const handleSourceContinue = () => {
-          const selections = {}
-          // For mixed mode, build selections from checkboxes
-          if (isMixed) {
-            for (const sourceId of selectedSources) {
-              selections[sourceId] = entityTypeSelections[sourceId] || {}
-            }
-          }
-          onComplete({
-            systemName: systemName.trim() || null,
-            import: true,
-            importSources: Array.from(selectedSources),
-            entityTypeMode: entityTypeMode,
-            entityTypeSelections: selections,
-          })
-        }
-
-      // Toggle member entity type selection (for mixed mode)
-      const toggleEntityType = (sourceId, memberSourceId, currentType) => {
-        setEntityTypeSelections(prev => ({
-          ...prev,
-          [sourceId]: {
-            ...(prev[sourceId] || {}),
-            [memberSourceId]: currentType === 'alter' ? 'state' : 'alter',
-          },
-        }))
-      }
-
-      // Entity type selection mode (for mixed isSystem + isFragmented)
-      if (mode === 'entity-types') {
-        return (
-          <div className="register-step">
-            <h2>What are you importing?</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
-              Your profile supports both alters and states. Choose what to import from each source.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
-              <button
-                className={`import-option-btn ${entityTypeMode === 'alters' ? 'import-option-primary' : ''}`}
-                onClick={() => handleEntityTypeSelect('alters')}
-                style={{ textAlign: 'left' }}
-              >
-                <span className="import-option-title">Import as Alters</span>
-                <span className="import-option-desc">Distinct identity states (alters/parts) — for system profiles</span>
-              </button>
-
-              <button
-                className={`import-option-btn ${entityTypeMode === 'states' ? 'import-option-primary' : ''}`}
-                onClick={() => handleEntityTypeSelect('states')}
-                style={{ textAlign: 'left' }}
-              >
-                <span className="import-option-title">Import as States</span>
-                <span className="import-option-desc">Fragmented/emotional states — for fragmented profiles</span>
-              </button>
-
-              <button
-                className={`import-option-btn ${entityTypeMode === 'mixed' ? 'import-option-primary' : ''}`}
-                onClick={() => handleEntityTypeSelect('mixed')}
-                style={{ textAlign: 'left', borderColor: 'var(--accent)' }}
-              >
-                <span className="import-option-title">Choose Per-Member</span>
-                <span className="import-option-desc">Select individually for each imported member (checkboxes after preview)</span>
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-              <button className="btn-ghost" onClick={() => setMode('choose')} style={{ flex: 1 }}>
-                ← Back
-              </button>
-              <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
-                Start Over
-              </button>
-              <button
-                className="btn-gradient btn-gradient-primary"
-                onClick={() => handleEntityTypeSelect(entityTypeMode || 'alters')}
-                disabled={!entityTypeMode}
-                style={{ flex: 2 }}
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        )
-      }
-
-      if (mode === 'sources') {
-    return (
-      <div className="register-step">
-        <h2>Choose Sources to Import From</h2>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
-          Select one or more platforms to import from. You can import from multiple at once.
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
-          {SOURCES.map(s => (
-            <label
-              key={s.id}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-sm)',
-                padding: 'var(--space-lg)', cursor: 'pointer',
-                background: selectedSources.has(s.id) ? 'var(--accent-subtle)' : 'var(--bg-card)',
-                border: `1px solid ${selectedSources.has(s.id) ? 'var(--accent)' : 'var(--glass-border)'}`,
-                borderRadius: 'var(--radius)', transition: 'all 0.2s'
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={selectedSources.has(s.id)}
-                onChange={() => toggleSource(s.id)}
-                style={{ width: '20px', height: '20px', accentColor: 'var(--accent)' }}
-              />
-              <span style={{ fontSize: '2rem' }}>{s.icon}</span>
-              <span style={{ fontWeight: 600 }}>{s.label}</span>
-            </label>
-          ))}
-                  </div>
-
-                  {/* Per-member entity type selection for mixed mode */}
-                  {isMixed && entityTypeMode === 'mixed' && selectedSources.size > 0 && (
-                    <div className="settings-section" style={{ marginTop: 'var(--space-lg)', padding: 'var(--space-md)' }}>
-                      <div className="settings-section-title">Member Types (choose per member)</div>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>
-                        Default: Alters. Toggle to States for fragmented/emotional parts.
-                      </p>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-md)' }}>
-                        {Array.from(selectedSources).map(sourceId => (
-                          <div key={sourceId} style={{ padding: 'var(--space-sm)', background: 'var(--bg-surface)', borderRadius: 'var(--radius)', border: '1px solid var(--glass-border)' }}>
-                            <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)', textTransform: 'capitalize' }}>
-                              {SOURCES.find(s => s.id === sourceId)?.label}
-                            </div>
-                            <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              {/* Placeholder - actual members loaded in ImportPage preview */}
-                              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-sm)' }}>
-                                Member types configured in preview step
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="form-group" style={{ marginTop: 'var(--space-lg)' }}>
-          <label>System name (optional)</label>
-          <input
-            className="text-input"
-            type="text"
-            value={systemName}
-            onChange={e => setSystemName(e.target.value)}
-            placeholder="e.g. Our System"
-            maxLength={100}
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-          <button className="btn-ghost" onClick={() => setMode('choose')} style={{ flex: 1 }}>
-            ← Back
-          </button>
-          <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
-            Start Over
-          </button>
-          <button
-            className="btn-gradient btn-gradient-primary"
-            onClick={handleSourceContinue}
-            disabled={selectedSources.size === 0}
-            style={{ flex: 2 }}
-          >
-            Continue with {selectedSources.size} Source{selectedSources.size !== 1 ? 's' : ''}
-          </button>
-        </div>
-      </div>
-    )
+  const handleImport = () => {
+    if (onNavigate) onNavigate('register-import')
   }
 
   return (
@@ -713,23 +496,11 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
         </button>
       </div>
 
-      <div className="form-group" style={{ marginTop: 'var(--space-lg)' }}>
-        <label>System name (optional)</label>
-        <input
-          className="text-input"
-          type="text"
-          value={systemName}
-          onChange={e => setSystemName(e.target.value)}
-          placeholder="e.g. Our System"
-          maxLength={100}
-        />
-      </div>
-
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn-ghost" onClick={onBack} style={{ flex: 1 }}>
+        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
           ← Back
         </button>
-        <button className="btn-ghost" onClick={onStartOver} style={{ flex: 1 }}>
+        <button className="btn btn-back" onClick={onStartOver} style={{ flex: 1 }}>
           Start Over
         </button>
       </div>
@@ -815,7 +586,10 @@ function FirstAlterStep({ onComplete, onBack, saving }) {
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn-ghost" onClick={handleSkip} style={{ flex: 1 }} disabled={saving}>
+        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
+          ← Back
+        </button>
+        <button className="btn btn-ghost" onClick={handleSkip} style={{ flex: 1 }} disabled={saving}>
           Skip for now
         </button>
         <button
@@ -971,21 +745,6 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
       setStep(5) // FirstAlterStep
     } else {
       setStep(6) // Auto-commit (no alters to add)
-    }
-  }
-
-  // Step 5 (ImportStep) — user chooses import or new system
-  const handleImportChoice = async (choice) => {
-    if (choice.systemName) setSystemName(choice.systemName)
-
-    // DON'T commit yet - stage the import intention
-    if (choice.import) {
-      // Store import mode in session, then navigate to RegistrationImportPage
-      update({ importMode: true, importSources: choice.importSources || [] })
-      if (onNavigate) onNavigate('register-import')
-    } else {
-      // New system - go to FirstAlterStep
-      setStep(6)
     }
   }
 

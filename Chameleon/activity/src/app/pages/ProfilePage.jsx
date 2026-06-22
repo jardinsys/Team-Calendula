@@ -123,7 +123,7 @@ export function ProfilePage({ system: systemProp }) {
         }
         return (
             <div>
-                <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
+                <button className="btn btn-back" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
                 <div className="section-header">
@@ -175,7 +175,7 @@ export function ProfilePage({ system: systemProp }) {
     if (subPage === 'front') {
         return (
             <div>
-                <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
+                <button className="btn btn-back" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
                 <h2 className="section-title" style={{ marginBottom: '16px' }}>Current Front</h2>
@@ -187,7 +187,7 @@ export function ProfilePage({ system: systemProp }) {
     if (subPage === 'notes') {
         return (
             <div>
-                <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
+                <button className="btn btn-back" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
                 <h2 className="section-title" style={{ marginBottom: '16px' }}>Notes</h2>
@@ -207,7 +207,7 @@ export function ProfilePage({ system: systemProp }) {
     if (subPage === 'edit') {
         return (
             <div>
-                <button className="btn-ghost" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
+                <button className="btn btn-back" onClick={() => setSubPage(null)} style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
                     ← Back
                 </button>
                 <EditProfileSubPage system={system} onSaved={() => { queryClient.invalidateQueries({ queryKey: systemKeys.all }); setSubPage(null) }} />
