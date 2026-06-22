@@ -850,6 +850,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onComplete={handleImportStepComplete}
           onBack={handleBack}
           onStartOver={handleStartOver}
+          onNavigate={onNavigate}
         />)}
       {step === 3 && category === 'OTHER' && !resolvedSysType?.isSystem && !resolvedSysType?.isFragmented && (
         <OtherStep
