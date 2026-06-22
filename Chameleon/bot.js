@@ -54,6 +54,8 @@ function loadCommandsFromDirectory(directory) {
 		const stat = fs.statSync(itemPath);
 
 		if (stat.isDirectory()) {
+			// Skip utility/helper directories — not deployable commands
+			if (item === 'functions') continue;
 			// Recursively search subdirectories
 			loadCommandsFromDirectory(itemPath);
 		} else if (item.endsWith('.js')) {
