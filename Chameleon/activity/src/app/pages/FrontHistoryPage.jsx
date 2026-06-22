@@ -343,17 +343,17 @@ export function FrontHistoryPage({ system, onNavigate }) {
                   {expandedId === shift._id && (
                     <div className="shift-expanded">
                       <div className="shift-actions">
-                        <button className="btn-ghost btn-sm" onClick={() => handleEdit(shift)}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => handleEdit(shift)}>
                           <Edit3 size={14} /> Edit
                         </button>
                         {deletingId === shift._id ? (
                           <div className="delete-confirm">
                             <span className="delete-warning">Delete this shift permanently?</span>
                             <button className="btn-danger btn-sm" onClick={() => handleDelete(shift._id)}>Delete</button>
-                            <button className="btn-ghost btn-sm" onClick={() => setDeletingId(null)}>Cancel</button>
+                            <button className="btn btn-back btn-sm" onClick={() => setDeletingId(null)}>Cancel</button>
                           </div>
                         ) : (
-                          <button className="btn-ghost btn-sm btn-danger-text" onClick={() => setDeletingId(shift._id)}>
+                          <button className="btn btn-ghost btn-sm btn-danger-text" onClick={() => setDeletingId(shift._id)}>
                             <Trash2 size={14} /> Delete
                           </button>
                         )}

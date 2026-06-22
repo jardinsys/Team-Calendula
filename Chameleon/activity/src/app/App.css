@@ -274,9 +274,40 @@ body {
   border-color: var(--glass-border-strong);
 }
 .btn-ghost {
-  background: none; color: var(--text-secondary);
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-accent);
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
-.btn-ghost:hover { color: var(--text); background: var(--bg-hover); }
+.btn-ghost:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+/* Cozy bubbly back/cancel button */
+.btn-back {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-md);
+  font-family: var(--font-accent);
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all var(--transition-smooth);
+}
+.btn-back:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.32);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+}
 .btn-icon {
   min-height: 44px; min-width: 44px; width: clamp(44px, 12vw, 48px); height: clamp(44px, 12vw, 48px); padding: 0; border-radius: 50%;
   background: var(--bg-surface);

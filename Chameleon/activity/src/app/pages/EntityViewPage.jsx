@@ -106,7 +106,7 @@ export function EntityViewPage({ system, onNavigate, entityId, entityType }) {
         return (
             <div className="entity-page">
                 <div className="entity-page-header">
-                    <button className="btn-ghost" onClick={() => setConfirmDelete(false)}>← Back</button>
+                    <button className="btn btn-back" onClick={() => setConfirmDelete(false)}>← Back</button>
                     <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Delete {typeLabel}</h2>
                     <div style={{ width: '60px' }} />
                 </div>
@@ -129,7 +129,7 @@ export function EntityViewPage({ system, onNavigate, entityId, entityType }) {
     return (
         <div className="entity-page">
             <div className="entity-page-header">
-                <button className="btn-ghost" onClick={() => onNavigate?.(null)}>← Back</button>
+                <button className="btn btn-back" onClick={() => onNavigate?.(null)}>← Back</button>
                 <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>{name}</h2>
                 {isOwner ? (
                     <div style={{ display: 'flex', gap: '8px' }}>
