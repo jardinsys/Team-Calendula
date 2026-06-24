@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useDiscordSdk } from '../hooks/useDiscordSdk'
 import { useApiAuth } from '../hooks/useApiAuth'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -128,7 +128,13 @@ export function Activity() {
     }
   }, [])
 
+  const [history, setHistory] = useState([])
+  const historyRef = useRef(history)
+
+  useEffect(() => { historyRef.current = history }, [history])
+
   const handleNavigate = useCallback((page, params) => {
+    setHistory(prev => [...prev, { page: activePage, params: pageParams }])
     if ((page === 'import' && activePage === 'register-import') || page === 'register' || page === 'register-import') {
       setFromOnboarding(true)
       if (page === 'register' && params?.startStep) {
@@ -141,15 +147,26 @@ export function Activity() {
       setPageParams(params || null)
     }
     setActivePage(page)
-  }, [activePage])
+  }, [activePage, pageParams])
 
-  const handleOpenSettings = useCallback(() => {
-    setShowSettings(true)
+  const handleExitOnboarding = useCallback(() => {
+    setFromOnboarding(false)
+    setHistory([])
   }, [])
 
-  const handleCloseSettings = useCallback(() => {
-    setShowSettings(false)
-  }, [])
+  const handleBack = useCallback(() => {
+    if (fromOnboarding && historyRef.current.length > 0) {
+      const prev = historyRef.current[historyRef.current.length - 1]
+      setHistory(prev => prev.slice(0, -1))
+      setActivePage(prev.page)
+      setPageParams(prev.params)
+      return
+    }
+    setActivePage(null)
+    setPageParams(null)
+    setFromOnboarding(false)
+    setHistory([])
+  }, [fromOnboarding])
 
   if (status === 'INITIALIZING') {
     return (
@@ -190,11 +207,6 @@ export function Activity() {
   const PageComponent = activePage ? PAGES[activePage] : null
 
   const showBackButton = activePage && activePage !== 'what-is' && activePage !== 'register' && !fromOnboarding
-  const handleBack = () => {
-    setActivePage(null)
-    setPageParams(null)
-    setFromOnboarding(false)
-  }
 
   return (
     <div className="app-container">
@@ -225,11 +237,11 @@ export function Activity() {
         ) : activePage === 'settings' ? (
           <SettingsPage system={system} onNavigate={handleNavigate} discordUser={discordUser} />
         ) : activePage === 'import' || activePage === 'register-import' ? (
-          <RegistrationImportPage onNavigate={handleNavigate} />
+          <RegistrationImportPage onNavigate={handleNavigate} onBack={handleBack} onExitOnboarding={handleExitOnboarding} />
         ) : activePage === 'activities' ? (
           <ActivitiesPage />
         ) : activePage === 'register' ? (
-          <RegisterPage onNavigate={handleNavigate} onRegistered={handleRegistered} refreshSystem={refreshSystemAfterSetup} discordUser={discordUser} pageParams={pageParams} />
+          <RegisterPage onNavigate={handleNavigate} onRegistered={handleRegistered} refreshSystem={refreshSystemAfterSetup} discordUser={discordUser} pageParams={pageParams} onBack={handleBack} />
         ) : (
           <LandingPage
             onNavigate={handleNavigate}

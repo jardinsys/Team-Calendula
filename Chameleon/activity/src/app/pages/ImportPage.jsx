@@ -197,8 +197,8 @@ export function ImportPage({ system, onNavigate, isRegistrationImport = false })
     }, [updateSourceConfig])
 
     const handleBackToSelect = useCallback(() => {
-        setPhase('select')
-    }, [])
+        onBack?.()
+    }, [onBack])
 
     const handleBackToRegister = useCallback(() => {
         if (onNavigate) onNavigate('register')

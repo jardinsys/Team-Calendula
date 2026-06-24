@@ -6,7 +6,7 @@ import { useSystemSession } from '../../hooks/useSystemSession'
 // Step 1: Category Selection
 // ═══════════════════════════════════════════
 
-function CategoryStep({ onSelect }) {
+function CategoryStep({ onSelect, onBack }) {
   return (
     <div className="register-step">
       <h2>Do you have a dissociative condition?</h2>
@@ -35,6 +35,12 @@ function CategoryStep({ onSelect }) {
           <span className="category-icon">—</span>
           <span className="category-label">None</span>
           <span className="category-desc">No specific condition</span>
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
+        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
+          ← Back
         </button>
       </div>
     </div>
@@ -129,8 +135,12 @@ function DisorderStep({ category, onSelect, onBack, onStartOver }) {
                 <label
                   key={i}
                   style={{
-                    display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer',
-                    padding: '10px 12px', borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    cursor: 'pointer',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
                     background: multiSelections.includes(i) ? 'var(--accent-subtle, rgba(196,181,253,0.12))' : 'var(--bg-card, rgba(26,26,40,0.55))',
                     border: `1px solid ${multiSelections.includes(i) ? 'var(--accent, #c4b5fd)' : 'var(--glass-border, rgba(255,255,255,0.07))'}`,
                     transition: 'all 0.15s',
@@ -158,7 +168,7 @@ function DisorderStep({ category, onSelect, onBack, onStartOver }) {
 
         <button
           className="btn-gradient btn-gradient-primary disorder-select-btn"
-          onClick={() => onSelect(key, mapping?.extraQuestionMulti ? multiSelections : extraAnswer, category)}
+          onClick={() => handleSelect(key)}
           disabled={(hasExtraQ && extraAnswer === null) || (hasMultiQ && multiSelections.length < (mapping.extraQuestionMin || 1))}
         >
           Select this
@@ -610,8 +620,9 @@ function FirstAlterStep({ onComplete, onBack, saving }) {
 // ═══════════════════════════════════════════
 // Main Register Page — Staged Flow
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
 
-export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordUser, pageParams }) {
+export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordUser, pageParams, onBack }) {
   const {
     session,
     update,
@@ -638,6 +649,20 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
   const resolvedSysType = session.sysType
   const { isSystem, isFragmented, isDissociative } = deriveFlags(resolvedSysType)
 
+  const handleStartOver = useCallback(() => {
+    if (step === 1) {
+      onBack?.()
+      return
+    }
+    setStep(1)
+    setCategory(null)
+    setDisorderKey(null)
+    setExtraAnswer(null)
+    setError(null)
+    update({ sysType: null, systemName: '', members: [], front: null, stagedImports: [] })
+    reset?.()
+  }, [step, setStep, setCategory, setDisorderKey, setExtraAnswer, setError, update, reset, onBack])
+
   // Step 1 → Step 2 or Step 3
   const handleCategorySelect = (cat) => {
     setCategory(cat)
@@ -645,8 +670,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
       setStep(3)
     } else if (cat === 'NONE') {
       const noneSysType = {
-        name: 'None',
-        dd: {},
+        name: 'None', dd: {},
         isSystem: false,
         isFragmented: false,
         isDissociative: false,
@@ -699,11 +723,11 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     update({ sysType })
 
     // If isSystem OR isFragmented, go to ImportStep (step 3) first, then NameStep (step 4)
-        if (sysType.isSystem || sysType.isFragmented) {
-          setStep(3)
-        } else {
-          setStep(4)
-        }
+    if (sysType.isSystem || sysType.isFragmented) {
+      setStep(3)
+    } else {
+      setStep(4)
+    }
   }
 
   // Step 3 → Step 4 (other resolved)
@@ -717,24 +741,26 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     }
   }
 
-  // Step 3 (ImportStep) — user chooses import or new system
-    // Called when sysType has isSystem OR isFragmented (or both)
-    const handleImportStepComplete = (choice) => {
-      if (choice.systemName) setSystemName(choice.systemName)
-      if (choice.import) {
-        // Store import mode in session with entity type config, then navigate to RegistrationImportPage
-        update({
-          importMode: true,
-          importSources: choice.importSources || [],
-          importEntityTypeMode: choice.entityTypeMode, // 'alters' | 'states' | 'mixed'
-          importEntityTypeSelections: choice.entityTypeSelections || {}, // sourceId -> member sourceId -> 'alter'|'state'
-        })
-        if (onNavigate) onNavigate('register-import')
-      } else {
-        // New system - go to NameStep
+  // Called when sysType has isSystem OR isFragmented (or both)
+  const handleImportStepComplete = (choice) => {
+    if (choice.systemName) setSystemName(choice.systemName)
+    if (choice.import) {
+      // Explicit guard: only allow import when system type supports alters or states
+      if (!resolvedSysType?.isSystem && !resolvedSysType?.isFragmented) {
         setStep(4)
+        return
       }
+      update({
+        importMode: true,
+        importSources: choice.importSources || [],
+        importEntityTypeMode: choice.entityTypeMode,
+        importEntityTypeSelections: choice.entityTypeSelections || {},
+      })
+      if (onNavigate) onNavigate('register-import')
+    } else {
+      setStep(4)
     }
+  }
 
   // Step 4 (NameStep) — system name collected, then go to FirstAlterStep or finish
   const handleNameConfirm = (finalSysType, systemName) => {
@@ -823,6 +849,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
       else if (category === 'NONE') setStep(1)
       else setStep(2)
     } else if (step === 2) { setStep(1); setCategory(null) }
+    else setStep(1)
   }
 
   // Start over
@@ -836,7 +863,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
 
   return (
     <div className="register-page">
-      {step === 1 && <CategoryStep onSelect={handleCategorySelect} />}
+      {step === 1 && <CategoryStep onSelect={handleCategorySelect} onBack={handleStartOver} />}
       {step === 2 && (
         <DisorderStep
           category={category}
@@ -885,14 +912,10 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
         </div>
       )}
       {error && (
-        <p style={{ color: 'var(--color-error)', fontSize: '0.85rem', marginTop: 'var(--space-md)' }}>
-          {error}
-        </p>
+        <p style={{ color: 'var(--color-error)', fontSize: '0.85rem', marginTop: 'var(--space-md)' }}>{error}</p>
       )}
       {sessionError && (
-        <p style={{ color: 'var(--color-error)', fontSize: '0.85rem', marginTop: 'var(--space-md)' }}>
-          {sessionError}
-        </p>
+        <p style={{ color: 'var(--color-error)', fontSize: '0.85rem', marginTop: 'var(--space-md)' }}>{sessionError}</p>
       )}
       {committing && (
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 'var(--space-md)' }}>

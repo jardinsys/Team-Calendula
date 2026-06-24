@@ -16,11 +16,29 @@ const TARGET_LABELS = { app: 'Main App', overlay: 'Discord Overlay', both: 'Both
 
 const targetLabel = (target) => TARGET_LABELS[target] || target
 
-export function RegistrationImportPage({ onNavigate }) {
+export function RegistrationImportPage({ onNavigate, onBack }) {
     const { session, update, setMembers, setGroups, setSwitches } = useSystemSession()
 
+    // Hard guard: import only works for systems/fragmented profiles
+    const canImport = session?.sysType?.isSystem || session?.sysType?.isFragmented
+    if (!canImport) {
+        return (
+            <div className="settings-page" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
+                <div style={{ fontSize: '2rem', marginBottom: 'var(--space-md)' }}>📦</div>
+                <h2>Import isn't available yet</h2>
+                <p style={{ color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto' }}>
+                    Data import works best when your profile includes alters or states.
+                    You can still finish setting up your system manually.
+                </p>
+                <button className="btn-gradient btn-gradient-primary" style={{ marginTop: 'var(--space-lg)' }} onClick={() => onNavigate?.('register', { startStep: 4 })}>
+                    Continue Setup
+                </button>
+            </div>
+        )
+    }
+
     // Import state - accumulated in memory until final confirm
-    const [phase, setPhase] = useState('select')
+    const [phase, setPhase] = useState('mode') // 'mode' | 'select' | 'configure' | 'preview' | 'importing' | 'complete'
     const [selectedSources, setSelectedSources] = useState(new Set())
     const [sourceConfigs, setSourceConfigs] = useState({})
     const [previews, setPreviews] = useState({})
@@ -86,20 +104,28 @@ export function RegistrationImportPage({ onNavigate }) {
 
     const handleStartConfigure = useCallback(() => {
         if (selectedSources.size === 0) return
+        if (!importMode) {
+          setPhase('mode')
+          return
+        }
         const newConfigs = {}
         for (const id of selectedSources) {
-            if (!sourceConfigs[id]) newConfigs[id] = getDefaultConfig(id)
+          if (!sourceConfigs[id]) newConfigs[id] = getDefaultConfig(id)
         }
         setSourceConfigs({ ...sourceConfigs, ...newConfigs })
         setConfiguringSource(Array.from(selectedSources)[0])
-        if (selectedSources.size === 1) {
-          setImportMode('simple')
+        if (selectedSources.size === 1 && importMode === 'simple') {
           setSourceTargets({ [Array.from(selectedSources)[0]]: 'both' })
           setPhase('configure')
+        } else if (selectedSources.size === 1 && importMode === 'advanced') {
+          setSourceTargets({ [Array.from(selectedSources)[0]]: 'both' })
+          setPhase('configure')
+        } else if (importMode === 'intermediate') {
+          setPhase('assign')
         } else {
           setPhase('mode')
         }
-    }, [selectedSources, sourceConfigs])
+    }, [selectedSources, sourceConfigs, importMode])
 
     const handleModeSelect = useCallback((mode) => {
         setImportMode(mode)
@@ -146,15 +172,22 @@ export function RegistrationImportPage({ onNavigate }) {
     }, [])
 
     const handleBack = useCallback(() => {
-        if (phase === 'mode') setPhase('select')
-        else if (phase === 'assign') {
+        if (phase === 'mode') {
+            setPhase('select')
+            setImportMode(null)
+            setSourceTargets({})
+            setSourcePriority([])
+            return
+        }
+        if (phase === 'assign') {
             if (!Array.from(selectedSources).every(id => sourceTargets[id] === 'both')) {
                 setSourceTargets({})
                 setSourcePriority([])
             }
             setPhase('select')
+            return
         }
-        else if (phase === 'configure') {
+        if (phase === 'configure') {
             if (importMode === 'intermediate' && sourceTargets && Object.values(sourceTargets).some(t => t !== 'both')) {
                 setPhase('assign')
             } else if (importMode === 'simple') {
@@ -162,15 +195,26 @@ export function RegistrationImportPage({ onNavigate }) {
             } else {
                 setPhase('mode')
             }
+            return
         }
-        else if (phase === 'preview') {
+        if (phase === 'preview') {
             setPhase('configure')
+            return
         }
-        else {
-            onNavigate?.('register', { startStep: 3 })
-            update({ importMode: false, importSources: [], importEntityTypeMode: null, importEntityTypeSelections: {} })
+        if (phase === 'complete') {
+            onBack?.()
+            return
         }
-    }, [onNavigate, update, phase, selectedSources, sourceTargets, importMode])
+        onNavigate?.('register', { startStep: 3 })
+        update({ importMode: false, importSources: [], importEntityTypeMode: null, importEntityTypeSelections: {} })
+        setPhase('mode')
+        setSelectedSources(new Set())
+        setSourceConfigs({})
+        setPreviews({})
+        setSourceTargets({})
+        setSourcePriority([])
+        setError(null)
+    }, [onNavigate, update, onBack, phase, selectedSources, sourceTargets, importMode])
 
     const handleFileChange = useCallback((sourceId, e) => {
         const file = e.target.files?.[0]
