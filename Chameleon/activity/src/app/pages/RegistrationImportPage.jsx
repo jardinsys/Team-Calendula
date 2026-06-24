@@ -19,24 +19,6 @@ const targetLabel = (target) => TARGET_LABELS[target] || target
 export function RegistrationImportPage({ onNavigate, onBack }) {
     const { session, update, setMembers, setGroups, setSwitches } = useSystemSession()
 
-    // Hard guard: import only works for systems/fragmented profiles
-    const canImport = session?.sysType?.isSystem || session?.sysType?.isFragmented
-    if (!canImport) {
-        return (
-            <div className="settings-page" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
-                <div style={{ fontSize: '2rem', marginBottom: 'var(--space-md)' }}>📦</div>
-                <h2>Import isn't available yet</h2>
-                <p style={{ color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto' }}>
-                    Data import works best when your profile includes alters or states.
-                    You can still finish setting up your system manually.
-                </p>
-                <button className="btn-gradient btn-gradient-primary" style={{ marginTop: 'var(--space-lg)' }} onClick={() => onNavigate?.('register', { startStep: 4 })}>
-                    Continue Setup
-                </button>
-            </div>
-        )
-    }
-
     // Import state - accumulated in memory until final confirm
     const [phase, setPhase] = useState('mode') // 'mode' | 'select' | 'configure' | 'preview' | 'importing' | 'complete'
     const [selectedSources, setSelectedSources] = useState(new Set())
