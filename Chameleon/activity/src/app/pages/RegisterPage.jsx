@@ -845,20 +845,11 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     if (step === 5) setStep(4)
     else if (step === 4) setStep(3)
     else if (step === 3) {
-      if (category === 'OTHER') setStep(1) // OTHER skips step 2
+      if (category === 'OTHER') setStep(1)
       else if (category === 'NONE') setStep(1)
       else setStep(2)
-    } else if (step === 2) { setStep(1); setCategory(null) }
-    else setStep(1)
-  }
-
-  // Start over
-  const handleStartOver = () => {
-    setStep(1)
-    setCategory(null)
-    setDisorderKey(null)
-    setExtraAnswer(null)
-    reset()
+    } else if (step === 2) { setStep(1) }
+    else onBack?.()
   }
 
   return (
