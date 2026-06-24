@@ -683,6 +683,26 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     }
   }
 
+  // Step 1 → Step 2 or Step 3
+  const handleCategorySelect = (cat) => {
+    setCategory(cat)
+    if (cat === 'OTHER') {
+      setStep(3)
+    } else if (cat === 'NONE') {
+      const noneSysType = {
+        name: 'None', dd: {},
+        isSystem: false,
+        isFragmented: false,
+        isDissociative: false,
+        onboardingCompleted: true,
+      }
+      update({ sysType: noneSysType })
+      setStep(4)
+    } else {
+      setStep(2)
+    }
+  }
+
   // Step 2 → Step 4 (disorder selected)
   const handleDisorderSelect = (key, extraAns, sourceCategory) => {
     setDisorderKey(key)
@@ -856,19 +876,6 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     else onBack?.()
   }
 
-  const handleStartOver = useCallback(() => {
-    if (step === 1) {
-      onBack?.()
-      return
-    }
-    setStep(1)
-    setCategory(null)
-    setDisorderKey(null)
-    setExtraAnswer(null)
-    setError(null)
-    update({ sysType: null, systemName: '', members: [], front: null, stagedImports: [] })
-    reset?.()
-  }, [step, setStep, setCategory, setDisorderKey, setExtraAnswer, setError, update, reset, onBack])
 
   return (
     <div className="register-page">
