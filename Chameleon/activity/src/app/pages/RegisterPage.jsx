@@ -641,6 +641,13 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
   const startStep = pageParams?.startStep || 1
   const [step, setStep] = useState(startStep)
   const [category, setCategory] = useState(null)
+
+  // Sync step when returning from registration import with a target step
+  useEffect(() => {
+    if (pageParams?.startStep) {
+      setStep(pageParams.startStep)
+    }
+  }, [pageParams?.startStep])
   const [disorderKey, setDisorderKey] = useState(null)
   const [extraAnswer, setExtraAnswer] = useState(null)
   const [error, setError] = useState(null)

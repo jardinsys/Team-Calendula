@@ -134,7 +134,18 @@ export function Activity() {
   useEffect(() => { historyRef.current = history }, [history])
 
   const handleNavigate = useCallback((page, params) => {
-    setHistory(prev => [...prev, { page: activePage, params: pageParams }])
+    setHistory(prev => {
+      if (
+        page === 'register' &&
+        prev.length > 0 &&
+        prev[prev.length - 1].page === 'register-import'
+      ) {
+        const next = [...prev]
+        next[next.length - 1] = { page, params }
+        return next
+      }
+      return [...prev, { page: activePage, params: pageParams }]
+    })
     if ((page === 'register-import') || page === 'register' || page === 'register-import') {
       setFromOnboarding(true)
       if (page === 'register' && params?.startStep) {

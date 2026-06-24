@@ -346,7 +346,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
     if (phase === 'select') {
         return (
             <div className="settings-page">
-                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back to Name</button>
+                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
                 <h1>Import Data for {systemName || 'your system'}</h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
                     Choose where to import your system data from.
@@ -403,7 +403,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         const sourcesArray = Array.from(selectedSources)
         return (
             <div className="settings-page">
-                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back to Sources</button>
+                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
                 <h1>Choose Import Mode</h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
                     You selected {sourcesArray.length} sources. Pick how you want to organize the import.
@@ -449,7 +449,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
         return (
             <div className="settings-page">
-                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back to Sources</button>
+                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
                 <h1>Assign Import Targets</h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
                     Choose where each source’s data should go. Sources in <strong>Main App</strong> can have priority order to resolve duplicates.
@@ -511,7 +511,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
         return (
             <div className="settings-page">
-                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back to Sources</button>
+                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
 
                 <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)', alignItems: 'center' }}>
                     {sourcesArray.map((id, i) => (
@@ -591,7 +591,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
         return (
             <div className="settings-page">
-                <button className="btn btn-back" onClick={() => setPhase('configure')} style={{ marginBottom: 'var(--space-md)' }}>← Back to Configure</button>
+                <button className="btn btn-back" onClick={() => setPhase('configure')} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
                 <h1>Preview Imports</h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>Review what will be imported. All members/groups are selected by default.</p>
 
