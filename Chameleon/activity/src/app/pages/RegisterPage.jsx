@@ -843,7 +843,11 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
   // Back navigation
   const handleBack = () => {
     if (step === 5) setStep(4)
-    else if (step === 4) setStep(3)
+    else if (step === 4) {
+      // Skip blank step 3 for NONE category
+      if (category === 'NONE') setStep(2)
+      else setStep(3)
+    }
     else if (step === 3) {
       if (category === 'OTHER') setStep(1)
       else if (category === 'NONE') setStep(1)
@@ -851,6 +855,20 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     } else if (step === 2) { setStep(1) }
     else onBack?.()
   }
+
+  const handleStartOver = useCallback(() => {
+    if (step === 1) {
+      onBack?.()
+      return
+    }
+    setStep(1)
+    setCategory(null)
+    setDisorderKey(null)
+    setExtraAnswer(null)
+    setError(null)
+    update({ sysType: null, systemName: '', members: [], front: null, stagedImports: [] })
+    reset?.()
+  }, [step, setStep, setCategory, setDisorderKey, setExtraAnswer, setError, update, reset, onBack])
 
   return (
     <div className="register-page">
@@ -916,5 +934,6 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     </div>
   )
 }
+
 
 export default RegisterPage

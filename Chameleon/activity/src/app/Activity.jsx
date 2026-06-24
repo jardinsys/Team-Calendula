@@ -25,7 +25,7 @@ import { SettingsPanel } from '@chameleon/shared/components/SettingsPanel.jsx'
 function getInitialPage() {
     const params = new URLSearchParams(window.location.search)
     const page = params.get('page')
-    if (page && ['system', 'friends', 'notes', 'crisis', 'what-is', 'settings', 'import', 'register-import', 'activities', 'register', 'switch', 'entity'].includes(page)) return page
+    if (page && ['system', 'friends', 'notes', 'crisis', 'what-is', 'settings', 'register-import', 'activities', 'register', 'switch', 'entity'].includes(page)) return page
     return null
 }
 
@@ -56,7 +56,7 @@ export function Activity() {
   // Exclude registration and import (from onboarding) to avoid premature connections
   const wsEnabled = ['friends', 'notes', 'crisis'].includes(activePage || '') && 
                     activePage !== 'register' && 
-                    !(activePage === 'import' && fromOnboarding)
+                    !(activePage === 'register-import')
   const { disconnected } = useWebSocket(wsEnabled)
 
   useEffect(() => {
@@ -135,7 +135,7 @@ export function Activity() {
 
   const handleNavigate = useCallback((page, params) => {
     setHistory(prev => [...prev, { page: activePage, params: pageParams }])
-    if ((page === 'import' && activePage === 'register-import') || page === 'register' || page === 'register-import') {
+    if ((page === 'register-import') || page === 'register' || page === 'register-import') {
       setFromOnboarding(true)
       if (page === 'register' && params?.startStep) {
         setPageParams({ startStep: params.startStep })
