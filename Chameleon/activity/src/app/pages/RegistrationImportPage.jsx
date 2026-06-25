@@ -12,24 +12,29 @@ const SOURCES = [
 
 const METHOD_ICONS = { api: '🔗', file: '📄' }
 
-const TARGET_LABELS = { app: 'Main App', overlay: 'Discord Overlay', both: 'Both' }
-
+const TARGET_LABELS = { app: 'Main Profile', overlay: 'Discord Overlay' }
 const targetLabel = (target) => TARGET_LABELS[target] || target
 
-export function RegistrationImportPage({ onNavigate, onBack }) {
-    const { session, update, setMembers, setGroups, setSwitches } = useSystemSession()
+const SOURCE_HAS_PRIVACY_BUCKETS = { simplyplural: true }
 
-    // Import state - accumulated in memory until final confirm
-    const [phase, setPhase] = useState('mode') // 'mode' | 'select' | 'configure' | 'preview' | 'importing' | 'complete'
+const SOURCE_PRIVACY_LABEL = {
+    simplyplural: 'import privacy buckets',
+    octocon: 'import groups (Octocon tags)',
+}
+
+const PRIVACY_BUCKET_WARNING = (<div><strong>SimplyPlural Friends buckets will be removed.</strong> Friends cannot be reconnected to buckets at this time.</div>)
+
+export function RegistrationImportPage({ onNavigate, onBack }) {
+    const { session, update, setMembers, setGroups } = useSystemSession()
+
+    const [phase, setPhase] = useState('mode')
     const [selectedSources, setSelectedSources] = useState(new Set())
     const [sourceConfigs, setSourceConfigs] = useState({})
     const [previews, setPreviews] = useState({})
     const [currentPreviewSource, setCurrentPreviewSource] = useState(null)
     const [error, setError] = useState(null)
     const [configuringSource, setConfiguringSource] = useState(null)
-    const [importMode, setImportMode] = useState(null) // 'simple' | 'intermediate' | 'advanced'
-    const [sourceTargets, setSourceTargets] = useState({}) // sourceId -> 'app' | 'overlay' | 'both'
-    const [sourcePriority, setSourcePriority] = useState([]) // ordered sourceIds for main-app conflicts
+    const [importMode, setImportMode] = useState(null)
 
     const { status: fetchStatus, start: startFetch, complete: completeFetch, error: errorFetch, render: renderFetchStatus } = useFetchStatus()
 
@@ -37,36 +42,29 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
     const entityTypeMode = session.importEntityTypeMode || 'mixed'
     const entityTypeSelections = session.importEntityTypeSelections || {}
 
-    // When phase is 'configure', initialize config from selections
+    const getDefaultConfig = (sourceId) => ({
+        method: SOURCES.find(s => s.id === sourceId)?.methods[0]?.id || 'file',
+        token: '', fileData: null, fileName: '',
+        target: 'app',
+        includeSwitches: true,
+        includeGroups: true,
+        importPrivacyBuckets: false,
+        selectedGroupIds: new Set(),
+        memberEntityTypes: entityTypeMode === 'mixed' && entityTypeSelections[sourceId]
+            ? { ...entityTypeSelections[sourceId] }
+            : {},
+    })
+
     useEffect(() => {
         if (phase === 'configure' && selectedSources.size > 0 && Object.keys(sourceConfigs).length === 0) {
             const newConfigs = {}
             for (const id of selectedSources) {
-                const cfg = {
-                    method: SOURCES.find(s => s.id === id)?.methods[0]?.id || 'file',
-                    token: '', fileData: null, fileName: '',
-                    entityTypeMode,
-                    memberEntityTypes: {},
-                }
-                // Apply per-member selections
-                if (entityTypeMode === 'mixed' && entityTypeSelections[id]) {
-                    cfg.memberEntityTypes = { ...entityTypeSelections[id] }
-                }
-                newConfigs[id] = cfg
+                newConfigs[id] = getDefaultConfig(id)
             }
             setSourceConfigs(newConfigs)
             setConfiguringSource(Array.from(selectedSources)[0])
         }
     }, [phase])
-
-    const getDefaultConfig = (sourceId) => ({
-        method: SOURCES.find(s => s.id === sourceId)?.methods[0]?.id || 'file',
-        token: '', fileData: null, fileName: '',
-        entityTypeMode,
-        memberEntityTypes: entityTypeMode === 'mixed' && entityTypeSelections[sourceId]
-            ? { ...entityTypeSelections[sourceId] }
-            : {},
-    })
 
     const updateSourceConfig = useCallback((sourceId, patch) => {
         setSourceConfigs(prev => ({
@@ -84,99 +82,48 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         })
     }, [])
 
-    const handleStartConfigure = useCallback(() => {
-        if (selectedSources.size === 0) return
-        if (!importMode) {
-          setPhase('mode')
-          return
-        }
-        const newConfigs = {}
-        for (const id of selectedSources) {
-          if (!sourceConfigs[id]) newConfigs[id] = getDefaultConfig(id)
-        }
-        setSourceConfigs({ ...sourceConfigs, ...newConfigs })
-        setConfiguringSource(Array.from(selectedSources)[0])
-        if (selectedSources.size === 1 && importMode === 'simple') {
-          setSourceTargets({ [Array.from(selectedSources)[0]]: 'both' })
-          setPhase('configure')
-        } else if (selectedSources.size === 1 && importMode === 'advanced') {
-          setSourceTargets({ [Array.from(selectedSources)[0]]: 'both' })
-          setPhase('configure')
-        } else if (importMode === 'intermediate') {
-          setPhase('assign')
-        } else {
-          setPhase('mode')
-        }
-    }, [selectedSources, sourceConfigs, importMode])
-
     const handleModeSelect = useCallback((mode) => {
         setImportMode(mode)
-        const sourcesArray = Array.from(selectedSources)
-        if (mode === 'simple') {
-            const targets = {}
-            sourcesArray.forEach(id => { targets[id] = 'both' })
-            setSourceTargets(targets)
-            setSourcePriority(sourcesArray)
+        setPhase('select')
+    }, [])
+
+    const handleStartConfigure = useCallback(() => {
+        if (selectedSources.size === 0) return
+
+        if (importMode === 'simple') {
+            const only = Array.from(selectedSources)[0]
+            setSourceConfigs({ [only]: getDefaultConfig(only) })
+            setConfiguringSource(only)
             setPhase('configure')
-        } else if (mode === 'intermediate') {
-            const targets = {}
-            sourcesArray.forEach(id => { targets[id] = 'both' })
-            setSourceTargets(targets)
-            setSourcePriority([])
-            setPhase('assign')
-        } else if (mode === 'advanced') {
-            const targets = {}
-            sourcesArray.forEach(id => { targets[id] = 'both' })
-            setSourceTargets(targets)
-            setSourcePriority([])
-            setPhase('configure')
+            return
         }
-    }, [selectedSources])
 
-    const moveSourceTarget = useCallback((sourceId, target) => {
-        setSourceTargets(prev => ({ ...prev, [sourceId]: target }))
-    }, [])
+        if (importMode === 'intermediate' && selectedSources.size !== 1 && selectedSources.size !== 2) {
+            setError('Intermediate mode supports exactly 1–2 sources.')
+            return
+        }
+        if (importMode === 'advanced' && selectedSources.size > 4) {
+            setError('Select at most 4 sources for Advanced mode.')
+            return
+        }
 
-    const movePriority = useCallback((sourceId, direction) => {
-        setSourcePriority(prev => {
-            const idx = prev.indexOf(sourceId)
-            if (idx < 0) return prev
-            const next = [...prev]
-            const swapIdx = idx + direction
-            if (swapIdx < 0 || swapIdx >= next.length) return prev
-            ;[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]]
-            return next
-        })
-    }, [])
-
-    const handleStartConfigureAfterAssign = useCallback(() => {
         setPhase('configure')
-    }, [])
+    }, [selectedSources, importMode])
 
     const handleBack = useCallback(() => {
         if (phase === 'mode') {
-            setPhase('select')
-            setImportMode(null)
-            setSourceTargets({})
-            setSourcePriority([])
+            onNavigate?.('register', { startStep: 3 })
+            update({ importMode: false, importSources: [], importEntityTypeMode: null, importEntityTypeSelections: {} })
             return
         }
-        if (phase === 'assign') {
-            if (!Array.from(selectedSources).every(id => sourceTargets[id] === 'both')) {
-                setSourceTargets({})
-                setSourcePriority([])
-            }
-            setPhase('select')
+        if (phase === 'select') {
+            setPhase('mode')
+            setSelectedSources(new Set())
             return
         }
         if (phase === 'configure') {
-            if (importMode === 'intermediate' && sourceTargets && Object.values(sourceTargets).some(t => t !== 'both')) {
-                setPhase('assign')
-            } else if (importMode === 'simple') {
-                setPhase('select')
-            } else {
-                setPhase('mode')
-            }
+            setConfiguringSource(null)
+            setPhase('select')
             return
         }
         if (phase === 'preview') {
@@ -189,14 +136,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         }
         onNavigate?.('register', { startStep: 3 })
         update({ importMode: false, importSources: [], importEntityTypeMode: null, importEntityTypeSelections: {} })
-        setPhase('mode')
-        setSelectedSources(new Set())
-        setSourceConfigs({})
-        setPreviews({})
-        setSourceTargets({})
-        setSourcePriority([])
-        setError(null)
-    }, [onNavigate, update, onBack, phase, selectedSources, sourceTargets, importMode])
+    }, [phase, onNavigate, update, onBack])
 
     const handleFileChange = useCallback((sourceId, e) => {
         const file = e.target.files?.[0]
@@ -224,14 +164,15 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
             const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData)
             setPreviews(prev => ({ ...prev, [sourceId]: res.preview }))
 
-            // Apply entity type mode to all members
             const types = {}
             if (cfg.entityTypeMode === 'all_states') {
                 res.preview.members.forEach(m => { types[m.sourceId] = 'state' })
             } else if (cfg.entityTypeMode === 'all_alters') {
                 res.preview.members.forEach(m => { types[m.sourceId] = 'alter' })
             } else {
-                res.preview.members.forEach(m => { types[m.sourceId] = cfg.memberEntityTypes?.[m.sourceId] || 'alter' })
+                res.preview.members.forEach(m => {
+                    types[m.sourceId] = cfg.memberEntityTypes?.[m.sourceId] || 'alter'
+                })
             }
 
             setSourceConfigs(prev => ({
@@ -277,19 +218,26 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                 const forceAsStates = cfg.entityTypeMode === 'all_states' ||
                     (cfg.entityTypeMode === 'mixed' && Object.values(cfg.memberEntityTypes || {}).every(t => t === 'state'))
 
-                const stateNames = cfg.entityTypeMode === 'mixed'
+                const stateNames = cfg.entityTypeMode === 'mixed' && forceAsStates
                     ? preview.members.filter(m => cfg.memberEntityTypes?.[m.sourceId] === 'state').map(m => m.name.toLowerCase())
                     : undefined
 
-                const assignedTarget = sourceTargets[sourceId] || 'app'
+                const selectedMemberIds = Array.from(
+                    cfg.entityTypeMode === 'mixed'
+                        ? preview.members.filter(m => cfg.memberEntityTypes?.[m.sourceId] === 'alter' || cfg.memberEntityTypes?.[m.sourceId] === 'state').map(m => m.sourceId)
+                        : preview.members.map(m => m.sourceId)
+                )
+                const selectedGroupIds = importMode === 'advanced'
+                    ? Array.from(cfg.selectedGroupIds || [])
+                    : Array.from(preview.groups.map(g => g.sourceId))
 
                 const res = await api.importFromSourceStream(
                     sourceId, cfg.token.trim() || null,
                     {
-                        replace: false, skipExisting: true, noGroups: false, noSwitches: false,
-                        target: assignedTarget, forceAsStates, stateNames,
-                        selectedMemberIds: Array.from(preview.members.map(m => m.sourceId)),
-                        selectedGroupIds: Array.from(preview.groups.map(g => g.sourceId)),
+                        replace: false, skipExisting: true,
+                        noGroups: !cfg.includeGroups, noSwitches: !cfg.includeSwitches,
+                        target: cfg.target, forceAsStates, stateNames,
+                        selectedMemberIds, selectedGroupIds,
                     },
                     cfg.fileData
                 )
@@ -299,21 +247,15 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
             }
         }
 
-        // Store staged import results in session
         update({ stagedImports })
 
-        // Also merge member/group entity data into staged session
         const allMembers = []
         const allGroups = []
         for (const imp of stagedImports) {
             if (imp.success && imp.result?.result) {
                 const r = imp.result.result
-                if (r.membersImported && r.importedMembers) {
-                    allMembers.push(...r.importedMembers)
-                }
-                if (r.groupsImported && r.importedGroups) {
-                    allGroups.push(...r.importedGroups)
-                }
+                if (r.membersImported && r.importedMembers) allMembers.push(...r.importedMembers)
+                if (r.groupsImported && r.importedGroups) allGroups.push(...r.importedGroups)
             }
         }
 
@@ -321,11 +263,10 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         if (allGroups.length > 0) setGroups(allGroups)
 
         setPhase('complete')
-    }, [selectedSources, sourceConfigs, previews, update, setMembers, setGroups])
+    }, [selectedSources, sourceConfigs, previews, importMode, update, setMembers, setGroups])
 
-    const handleContinueToNameStep = useCallback(async () => {
+    const handleContinueToNameStep = useCallback(() => {
         update({ importMode: false, importSources: [], importEntityTypeMode: null, importEntityTypeSelections: {} })
-        // If imports provided members/groups, skip FirstAlterStep and commit now
         const hasImportedEntities = (session.members?.length || 0) > 0 || (session.groups?.length || 0) > 0
         if (hasImportedEntities) {
             onNavigate?.('register', { startStep: 7 })
@@ -339,175 +280,113 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         setSelectedSources(new Set())
         setSourceConfigs({})
         setPreviews({})
+        setCurrentPreviewSource(null)
+        setConfiguringSource(null)
         setError(null)
     }, [])
 
-    // ===== PHASE 1: Source Selection =====
-    if (phase === 'select') {
-        return (
-            <div className="settings-page">
-                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
-                <h1>Import Data for {systemName || 'your system'}</h1>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
-                    Choose where to import your system data from.
-                </p>
-
-                <div style={{ marginBottom: 'var(--space-xl)' }}>
-                    <div className="settings-section" style={{ border: '1px dashed var(--glass-border)', background: 'rgba(196,181,253,0.05)' }}>
-                        <div style={{ marginBottom: 'var(--space-md)', fontWeight: 600 }}>Quick Import</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-sm)' }}>
-                            {SOURCES.map(s => (
-                                <button key={s.id} className="settings-section" style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-md)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--glass-border)'; e.currentTarget.style.transform = 'none' }}
-                                    onClick={() => { setSelectedSources(new Set([s.id])); setSourceConfigs({ [s.id]: getDefaultConfig(s.id) }); setConfiguringSource(s.id); setPhase('configure') }}
-                                >
-                                    <div style={{ fontSize: '1.5rem', marginBottom: 'var(--space-xs)' }}>{s.icon}</div>
-                                    <div style={{ fontWeight: 600 }}>{s.label}</div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--accent)', marginTop: '2px' }}>Quick import</div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="settings-section" style={{ border: '1px dashed var(--glass-border)', background: 'rgba(196,181,253,0.05)' }}>
-                    <div style={{ marginBottom: 'var(--space-md)', fontWeight: 600 }}>Import from Multiple Sources</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
-                        {SOURCES.map(s => (
-                            <label key={s.id} style={{
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
-                                padding: 'var(--space-sm) var(--space-md)', cursor: 'pointer',
-                                background: selectedSources.has(s.id) ? 'var(--accent-subtle)' : 'var(--bg-surface)',
-                                border: `1px solid ${selectedSources.has(s.id) ? 'var(--accent)' : 'var(--glass-border)'}`,
-                                borderRadius: 'var(--radius)'
-                            }}>
-                                <input type="checkbox" checked={selectedSources.has(s.id)} onChange={() => toggleSource(s.id)} style={{ width: '18px', height: '18px' }} />
-                                <span style={{ fontSize: '1.2rem' }}>{s.icon}</span>
-                                <span style={{ fontWeight: 500 }}>{s.label}</span>
-                            </label>
-                        ))}
-                    </div>
-                    {selectedSources.size > 0 && (
-                        <button className="btn-gradient btn-gradient-primary" onClick={handleStartConfigure} style={{ width: '100%', height: '48px' }}>
-                            Configure {selectedSources.size} Source{selectedSources.size !== 1 ? 's' : ''} →
-                        </button>
-                    )}
-                </div>
-            </div>
-        )
-    }
-
-    // ===== PHASE 1b: Mode Picker (shown when multiple sources selected) =====
+    // ===== PHASE 1a: Mode Picker =====
     if (phase === 'mode') {
-        const sourcesArray = Array.from(selectedSources)
         return (
             <div className="settings-page">
                 <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
                 <h1>Choose Import Mode</h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
-                    You selected {sourcesArray.length} sources. Pick how you want to organize the import.
+                    Pick how much control you want over your import.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
                     <button className="settings-section" onClick={() => handleModeSelect('simple')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}>
                         <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>✨ Simple</div>
                         <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>One-click import</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>All sources are imported together with default settings. Best when you just want the data.</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>One source only. Everything imported together with sensible defaults.</div>
                     </button>
 
                     <button className="settings-section" onClick={() => handleModeSelect('intermediate')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}>
                         <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>📋 Intermediate</div>
-                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Assign sources to Main / Discord</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Choose which sources go to your main profile vs Discord overlay. Set priority for duplicates.</div>
+                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Choose source targets</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>1–2 sources. Pick each source’s target (Main Profile or Discord Overlay).</div>
                     </button>
 
                     <button className="settings-section" onClick={() => handleModeSelect('advanced')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}>
                         <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>🔍 Advanced</div>
-                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Resolve conflicts per member / group</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Full control: pick which source wins for each duplicate member or group, after preview.</div>
+                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Full control</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>1–4 sources. Pick targets, toggle switches/groups, and assign per-entity types.</div>
                     </button>
                 </div>
             </div>
         )
     }
 
-    // ===== PHASE 1c: Intermediate Assignment =====
-    if (phase === 'assign') {
-        const sourcesArray = Array.from(selectedSources)
-        const mainSources = sourcePriority
-        const overlaySources = sourcesArray.filter(id => !mainSources.includes(id))
-
-        const setTarget = (id, t) => {
-            moveSourceTarget(id, t)
-            setSourcePriority(prev => {
-                const next = prev.filter(x => x !== id)
-                if (t === 'app') next.unshift(id)
-                return next
-            })
-        }
-
+    // ===== PHASE 1b: Choose Sources =====
+    if (phase === 'select') {
         return (
             <div className="settings-page">
                 <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
-                <h1>Assign Import Targets</h1>
+                <h1>Choose Sources</h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
-                    Choose where each source’s data should go. Sources in <strong>Main App</strong> can have priority order to resolve duplicates.
+                    {importMode === 'simple'
+                        ? 'Pick the one source you want to import.'
+                        : `Pick 1–${importMode === 'intermediate' ? '2' : '4'} sources to import.`}
                 </p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
-                    <div className="settings-section" style={{ minHeight: '200px', background: 'var(--bg-card)', border: '1px dashed var(--accent)' }}>
-                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-md)', color: 'var(--accent)' }}>Main App</div>
-                        {sourcesArray.map(id => {
-                            const src = SOURCES.find(s => s.id === id)
-                            if (!mainSources.includes(id)) return null
-                            const priorityIdx = mainSources.indexOf(id)
-                            return (
-                                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', padding: 'var(--space-sm)', background: 'var(--bg-surface)', borderRadius: 'var(--radius)', border: '1px solid var(--glass-border)', marginBottom: 'var(--space-sm)' }}>
-                                    <button onClick={() => movePriority(id, -1)} disabled={priorityIdx === 0} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem' }}>↑</button>
-                                    <button onClick={() => movePriority(id, 1)} disabled={priorityIdx === mainSources.length - 1} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1rem' }}>↓</button>
-                                    <span style={{ fontSize: '1.2rem' }}>{src?.icon}</span>
-                                    <span style={{ flex: 1, fontWeight: 600 }}>{src?.label}</span>
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>#{priorityIdx + 1}</span>
-                                    <button onClick={() => setTarget(id, 'overlay')} style={{ background: 'none', border: 'none', color: 'var(--color-warning)', cursor: 'pointer', fontSize: '0.8rem' }}>Move to Overlay</button>
-                                </div>
-                            )
-                        })}
-                        {mainSources.length === 0 && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-md)' }}>None</div>}
+                {importMode !== 'simple' && (
+                    <div style={{ marginBottom: 'var(--space-xl)' }}>
+                        <div className="settings-section" style={{ border: '1px dashed var(--glass-border)', background: 'rgba(196,181,253,0.05)' }}>
+                            <div style={{ marginBottom: 'var(--space-md)', fontWeight: 600 }}>Select Sources</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
+                                {SOURCES.map(s => (
+                                    <label key={s.id} style={{
+                                        display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
+                                        padding: 'var(--space-sm) var(--space-md)', cursor: 'pointer',
+                                        background: selectedSources.has(s.id) ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+                                        border: `1px solid ${selectedSources.has(s.id) ? 'var(--accent)' : 'var(--glass-border)'}`,
+                                        borderRadius: 'var(--radius)',
+                                    }}>
+                                        <input type="checkbox" checked={selectedSources.has(s.id)} onChange={() => toggleSource(s.id)} style={{ width: '18px', height: '18px' }} />
+                                        <span style={{ fontSize: '1.2rem' }}>{s.icon}</span>
+                                        <span style={{ fontWeight: 500 }}>{s.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
                     </div>
+                )}
 
-                    <div className="settings-section" style={{ minHeight: '200px', background: 'var(--bg-card)', border: '1px dashed var(--glass-border)' }}>
-                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-md)', color: 'var(--text-secondary)' }}>Discord Overlay</div>
-                        {sourcesArray.map(id => {
-                            const src = SOURCES.find(s => s.id === id)
-                            if (!overlaySources.includes(id)) return null
-                            return (
-                                <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', padding: 'var(--space-sm)', background: 'var(--bg-surface)', borderRadius: 'var(--radius)', border: '1px solid var(--glass-border)', marginBottom: 'var(--space-sm)' }}>
-                                    <span style={{ fontSize: '1.2rem' }}>{src?.icon}</span>
-                                    <span style={{ flex: 1, fontWeight: 600 }}>{src?.label}</span>
-                                    <button onClick={() => setTarget(id, 'app')} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.8rem' }}>Move to Main</button>
-                                </div>
-                            )
-                        })}
-                        {overlaySources.length === 0 && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-md)' }}>None</div>}
+                {importMode === 'simple' && (
+                    <div style={{ marginBottom: 'var(--space-xl)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-md)' }}>
+                            {SOURCES.map(s => (
+                                <button key={s.id} onClick={() => { setSelectedSources(new Set([s.id])); setSourceConfigs({ [s.id]: getDefaultConfig(s.id) }); setConfiguringSource(s.id); setPhase('configure') }}
+                                    style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', transition: 'border-color 0.2s, transform 0.1s' }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--glass-border)'; e.currentTarget.style.transform = 'none' }}>
+                                    <div style={{ fontSize: '2rem', marginBottom: 'var(--space-sm)' }}>{s.icon}</div>
+                                    <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>{s.label}</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--accent)', marginTop: 'var(--space-xs)', fontWeight: 500 }}>Select and continue →</div>
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                </div>
+                )}
 
-                <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-                    <button className="btn btn-back" onClick={handleBack} style={{ flex: 1 }}>← Back</button>
-                    <button className="btn-gradient btn-gradient-primary" onClick={handleStartConfigureAfterAssign} style={{ flex: 2 }}>Continue →</button>
-                </div>
+                {importMode !== 'simple' && (
+                    <button className="btn-gradient btn-gradient-primary" onClick={handleStartConfigure} style={{ width: '100%', height: '48px' }} disabled={selectedSources.size === 0}>
+                        Configure {selectedSources.size} Source{selectedSources.size !== 1 ? 's' : ''} →
+                    </button>
+                )}
             </div>
         )
     }
 
-    // ===== PHASE 2: Configure =====
+    // ===== PHASE 2: Configure (per-source, mode-specific) =====
     if (phase === 'configure') {
         const sourcesArray = Array.from(selectedSources)
         const currentIdx = sourcesArray.indexOf(configuringSource)
         const currentSourceId = sourcesArray[currentIdx] || sourcesArray[0]
         const src = SOURCES.find(s => s.id === currentSourceId)
         const cfg = sourceConfigs[currentSourceId] || getDefaultConfig(currentSourceId)
+        const hasPrivacyBuckets = SOURCE_HAS_PRIVACY_BUCKETS[currentSourceId]
 
         return (
             <div className="settings-page">
@@ -538,9 +417,9 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                     flex: 1, padding: 'var(--space-md)', cursor: 'pointer', textAlign: 'center',
                                     background: cfg.method === m.id ? 'var(--accent-subtle)' : 'var(--bg-card)',
                                     border: `1px solid ${cfg.method === m.id ? 'var(--accent)' : 'var(--glass-border)'}`,
-                                    borderRadius: 'var(--radius)'
+                                    borderRadius: 'var(--radius)', transition: 'all 0.2s'
                                 }}>
-                                <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{METHOD_ICONS[m.id]}</div>
+                                <div style={{ fontSize: '1.5rem', marginBottom: 'var(--space-xs)' }}>{METHOD_ICONS[m.id]}</div>
                                 <div style={{ fontWeight: 600 }}>{m.label}</div>
                             </button>
                         ))}
@@ -549,21 +428,63 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
                 <div className="settings-section" style={{ marginBottom: 'var(--space-md)' }}>
                     {cfg.method === 'api' ? (
-                        <div>
-                            <label style={{ fontWeight: 500 }}>{src?.methods.find(m => m.id === cfg.method)?.tokenLabel}</label>
-                            <input className="text-input" value={cfg.token} onChange={e => updateSourceConfig(currentSourceId, { token: e.target.value })}
+                        <div className="form-group">
+                            <label>{src?.methods.find(m => m.id === cfg.method)?.tokenLabel}</label>
+                            <input className="text-input" type="text" value={cfg.token} onChange={e => updateSourceConfig(currentSourceId, { token: e.target.value })}
                                 placeholder={src?.methods.find(m => m.id === cfg.method)?.tokenPlaceholder} />
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{src?.methods.find(m => m.id === cfg.method)?.help}</div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'var(--space-xs)' }}>{src?.methods.find(m => m.id === cfg.method)?.help}</div>
                         </div>
                     ) : (
-                        <div>
-                            <label style={{ fontWeight: 500 }}>Export File (JSON)</label>
+                        <div className="form-group">
+                            <label>Export File (JSON)</label>
                             <input type="file" accept=".json" onChange={e => handleFileChange(currentSourceId, e)} style={{ color: 'var(--text)' }} />
-                            {cfg.fileName && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Selected: {cfg.fileName}</div>}
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{src?.methods.find(m => m.id === cfg.method)?.help}</div>
+                            {cfg.fileName && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 'var(--space-xs)' }}>Selected: {cfg.fileName}</div>}
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'var(--space-sm)' }}>{src?.methods.find(m => m.id === cfg.method)?.help}</div>
                         </div>
                     )}
                 </div>
+
+                <div className="settings-section" style={{ marginBottom: 'var(--space-md)' }}>
+                    <div className="settings-section-title">Import Target</div>
+                    <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
+                        {Object.entries(TARGET_LABELS).map(([value, label]) => (
+                            <button key={value} onClick={() => updateSourceConfig(currentSourceId, { target: value })}
+                                style={{
+                                    flex: 1, padding: 'var(--space-md)', cursor: 'pointer', textAlign: 'center',
+                                    background: cfg.target === value ? 'var(--accent-subtle)' : 'var(--bg-card)',
+                                    border: `1px solid ${cfg.target === value ? 'var(--accent)' : 'var(--glass-border)'}`,
+                                    borderRadius: 'var(--radius)', transition: 'all 0.2s'
+                                }}>
+                                <div style={{ fontWeight: 600 }}>{label}</div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {(importMode === 'advanced' || importMode === 'intermediate') && (
+                    <div className="settings-section" style={{ marginBottom: 'var(--space-md)' }}>
+                        <div className="settings-section-title">Options</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+                                <input type="checkbox" checked={cfg.includeGroups} onChange={e => updateSourceConfig(currentSourceId, { includeGroups: e.target.checked })} style={{ width: '18px', height: '18px' }} />
+                                Include groups
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+                                <input type="checkbox" checked={cfg.includeSwitches} onChange={e => updateSourceConfig(currentSourceId, { includeSwitches: e.target.checked })} style={{ width: '18px', height: '18px' }} />
+                                Include switch history
+                            </label>
+                        </div>
+                    </div>
+                )}
+
+                {importMode === 'simple' && (
+                    <div className="settings-section" style={{ marginBottom: 'var(--space-md)', background: 'rgba(196,181,253,0.08)', border: '1px solid var(--glass-border)' }}>
+                        <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Simple mode defaults</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                            Target: <strong>Main Profile</strong> · All members/groups/switches will be imported automatically.
+                        </div>
+                    </div>
+                )}
 
                 {error && (
                     <div className="settings-section" style={{ borderLeft: '3px solid var(--color-error)', marginBottom: 'var(--space-md)' }}>
@@ -573,12 +494,18 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
                     {currentIdx > 0 && (
-                        <button className="btn btn-back" onClick={() => setConfiguringSource(sourcesArray[currentIdx - 1])} style={{ flex: 1 }}>← Previous</button>
+                        <button className="btn btn-ghost" onClick={() => setConfiguringSource(sourcesArray[currentIdx - 1])} style={{ flex: 1 }}>
+                            ← Previous
+                        </button>
                     )}
                     {currentIdx < sourcesArray.length - 1 ? (
-                        <button className="btn-gradient btn-gradient-primary" onClick={() => setConfiguringSource(sourcesArray[currentIdx + 1])} style={{ flex: 1 }}>Next →</button>
+                        <button className="btn-gradient btn-gradient-primary" onClick={() => setConfiguringSource(sourcesArray[currentIdx + 1])} style={{ flex: 1 }}>
+                            Next →
+                        </button>
                     ) : (
-                        <button className="btn-gradient btn-gradient-primary" onClick={() => setPhase('preview')} style={{ flex: 1 }}>Fetch Previews →</button>
+                        <button className="btn-gradient btn-gradient-primary" onClick={() => setPhase('preview')} style={{ flex: 1 }}>
+                            Review Preview →
+                        </button>
                     )}
                 </div>
             </div>
@@ -592,8 +519,13 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         return (
             <div className="settings-page">
                 <button className="btn btn-back" onClick={() => setPhase('configure')} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
-                <h1>Preview Imports</h1>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>Review what will be imported. All members/groups are selected by default.</p>
+                <h1>Review Import</h1>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
+                    {importMode === 'simple' ? 'Confirm before importing.'
+                        : importMode === 'intermediate'
+                            ? 'Review targets for each source.'
+                            : 'Review each source and its settings.'}
+                </p>
 
                 {renderFetchStatus()}
 
@@ -601,15 +533,29 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                     const preview = previews[sourceId]
                     const cfg = sourceConfigs[sourceId]
                     const src = SOURCES.find(s => s.id === sourceId)
+                    const hasPrivacyBuckets = SOURCE_HAS_PRIVACY_BUCKETS[sourceId]
                     if (!preview) return null
 
                     return (
                         <div key={sourceId} className="settings-section" style={{ marginBottom: 'var(--space-lg)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
                             <div style={{ padding: 'var(--space-md)', background: 'var(--bg-card)', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
                                 <span style={{ fontSize: '1.5rem' }}>{src?.icon}</span>
-                                <div>
+                                <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: 600 }}>{src?.label}</div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Target: <strong>{targetLabel(sourceTargets[sourceId])}</strong></div>
+                                    {importMode !== 'simple' && (
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                            Target: <strong>{targetLabel(cfg.target)}</strong>
+                                        </div>
+                                    )}
+                                    {hasPrivacyBuckets && (
+                                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: cfg.importPrivacyBuckets ? 'var(--color-warning)' : 'var(--text-muted)', marginTop: '2px', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={cfg.importPrivacyBuckets} onChange={() => updateSourceConfig(sourceId, { importPrivacyBuckets: !cfg.importPrivacyBuckets })} style={{ width: '16px', height: '16px' }} />
+                                            {cfg.importPrivacyBuckets ? (SOURCE_PRIVACY_LABEL[sourceId] || 'import privacy buckets') : 'skip'}
+                                        </label>
+                                    )}
+                                    {!hasPrivacyBuckets && cfg.importPrivacyBuckets && (
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Privacy buckets not available for this source</div>
+                                    )}
                                 </div>
                             </div>
 
@@ -617,41 +563,104 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                 <div style={{ display: 'flex', gap: 'var(--space-lg)', flexWrap: 'wrap', fontSize: '0.9rem', marginBottom: 'var(--space-md)' }}>
                                     <span>Found <strong>{preview.members.length}</strong> member{preview.members.length !== 1 ? 's' : ''}</span>
                                     <span>Found <strong>{preview.groups.length}</strong> group{preview.groups.length !== 1 ? 's' : ''}</span>
+                                    <span style={{ color: 'var(--color-success)' }}><strong>{preview.members.filter(m => m.action === 'new').length}</strong> new</span>
+                                    <span style={{ color: 'var(--color-warning)' }}><strong>{preview.members.filter(m => m.action === 'update').length}</strong> will update</span>
                                 </div>
 
-                                <div style={{ marginBottom: 'var(--space-md)' }}>
-                                    <div style={{ fontWeight: 500, marginBottom: 'var(--space-xs)' }}>Member Types</div>
-                                    {cfg.entityTypeMode === 'mixed' && (
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-xs)' }}>
-                                            {preview.members.map(m => (
-                                                <span key={m.sourceId} onClick={() => updateSourceConfig(sourceId, { memberEntityTypes: { ...cfg.memberEntityTypes, [m.sourceId]: cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'alter' : 'state' } })}
-                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
-                                                        background: cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'var(--color-success-subtle, rgba(34,197,94,0.15))' : 'var(--accent-subtle, rgba(196,181,253,0.15))',
-                                                        border: `1px solid ${cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'var(--color-success, #22c55e)' : 'var(--accent, #c4b5fd)'}`,
-                                                        color: cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'var(--color-success, #22c55e)' : 'var(--accent, #c4b5fd)' }}>
-                                                    {m.name || m.sourceId} <span style={{ textTransform: 'uppercase', fontSize: '0.65rem' }}>{cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'State' : 'Alter'}</span>
-                                                </span>
+                                {importMode === 'advanced' && (
+                                    <div>
+                                        <div style={{ fontWeight: 500, marginBottom: 'var(--space-xs)' }}>Import As</div>
+                                        <div style={{ display: 'flex', gap: 'var(--space-xs)', marginBottom: 'var(--space-sm)' }}>
+                                            {[
+                                                { id: 'all_alters', label: 'All Alters' },
+                                                { id: 'mixed', label: 'Mixed' },
+                                                { id: 'all_states', label: 'All States' },
+                                            ].map(opt => (
+                                                <button key={opt.id} onClick={() => {
+                                                    const types = {}
+                                                    if (opt.id === 'all_states') preview.members.forEach(m => { types[m.sourceId] = 'state' })
+                                                    else if (opt.id === 'all_alters') preview.members.forEach(m => { types[m.sourceId] = 'alter' })
+                                                    else preview.members.forEach(m => { types[m.sourceId] = cfg.memberEntityTypes?.[m.sourceId] || 'alter' })
+                                                    updateSourceConfig(sourceId, { entityTypeMode: opt.id, memberEntityTypes: types })
+                                                }} style={{
+                                                    flex: 1, padding: 'var(--space-sm)',
+                                                    border: `1px solid ${cfg.entityTypeMode === opt.id ? 'var(--accent)' : 'var(--glass-border)'}`,
+                                                    background: cfg.entityTypeMode === opt.id ? 'var(--accent-subtle)' : 'var(--bg-card)',
+                                                    borderRadius: 'var(--radius)',
+                                                    color: cfg.entityTypeMode === opt.id ? 'var(--accent)' : 'var(--text-secondary)',
+                                                    cursor: 'pointer', fontSize: '0.85rem', fontWeight: cfg.entityTypeMode === opt.id ? 600 : 400
+                                                }}>
+                                                    {opt.label}
+                                                </button>
                                             ))}
                                         </div>
-                                    )}
-                                </div>
+
+                                        {cfg.entityTypeMode === 'mixed' && (
+                                            <div style={{ marginTop: 'var(--space-md)', maxHeight: '300px', overflowY: 'auto' }}>
+                                                <div className="settings-section-title" style={{ marginBottom: 'var(--space-xs)' }}>Member Types</div>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-xs)' }}>
+                                                    {preview.members.map(m => (
+                                                        <span key={m.sourceId} onClick={() => updateSourceConfig(sourceId, {
+                                                            memberEntityTypes: { ...cfg.memberEntityTypes, [m.sourceId]: cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'alter' : 'state' }
+                                                        })} style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                            padding: '4px 10px', borderRadius: '999px',
+                                                            background: cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'var(--color-success-subtle, rgba(34,197,94,0.15))' : 'var(--accent-subtle, rgba(196,181,253,0.15))',
+                                                            border: `1px solid ${cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'var(--color-success, #22c55e)' : 'var(--accent, #c4b5fd)'}`,
+                                                            color: cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'var(--color-success, #22c55e)' : 'var(--accent, #c4b5fd)',
+                                                            fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s'
+                                                        }}>
+                                                            {m.name || m.sourceId} <span style={{ textTransform: 'uppercase', fontSize: '0.65rem' }}>
+                                                                {cfg.memberEntityTypes?.[m.sourceId] === 'state' ? 'State' : 'Alter'}
+                                                            </span>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {preview.groups.length > 0 && (
+                                            <div style={{ marginTop: 'var(--space-md)' }}>
+                                                <div className="settings-section-title" style={{ marginBottom: 'var(--space-xs)' }}>Groups to Import</div>
+                                                <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                    {preview.groups.map(g => {
+                                                        const selected = (cfg.selectedGroupIds || new Set()).has(g.sourceId)
+                                                        return (
+                                                            <label key={g.sourceId} style={{
+                                                                display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
+                                                                padding: 'var(--space-xs) var(--space-sm)', cursor: 'pointer',
+                                                                background: selected ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+                                                                border: `1px solid ${selected ? 'var(--accent)' : 'var(--glass-border)'}`,
+                                                                borderRadius: 'var(--radius)', fontSize: '0.85rem'
+                                                            }}>
+                                                                <input type="checkbox" checked={selected} onChange={() => {
+                                                                    const next = new Set(cfg.selectedGroupIds || preview.groups.map(x => x.sourceId))
+                                                                    if (next.has(g.sourceId)) next.delete(g.sourceId)
+                                                                    else next.add(g.sourceId)
+                                                                    updateSourceConfig(sourceId, { selectedGroupIds: next })
+                                                                }} style={{ width: '18px', height: '18px' }} />
+                                                                <span>{g.name || g.sourceId}</span>
+                                                            </label>
+                                                        )
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )
                 })}
 
                 {error && (
-                    <div className="settings-section" style={{ borderLeft: '3px solid var(--color-error)', marginBottom: 'var(--space-md)' }}>
+                    <div className="settings-section" style={{ borderLeft: '3px solid var(--color-error)' }}>
                         <p style={{ color: 'var(--color-error)', margin: 0 }}><Icon name="x" size={16} /> {error}</p>
                     </div>
                 )}
 
-                {importMode === 'intermediate' && (
-                    <button className="btn btn-back" onClick={() => setPhase('assign')} style={{ marginBottom: 'var(--space-md)' }}>✎ Edit Assignment</button>
-                )}
-
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-                    <button className="btn btn-back" onClick={() => setPhase('configure')} style={{ flex: 1 }}>← Back</button>
+                    <button className="btn btn-ghost" onClick={() => setPhase('configure')} style={{ flex: 1 }}>← Back</button>
                     <button className="btn-gradient btn-gradient-primary" onClick={handleImportAll} style={{ flex: 2 }}>
                         Import and Continue →
                     </button>
@@ -665,10 +674,13 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         return (
             <div className="settings-page" style={{ position: 'relative' }}>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13, 13, 20, 0.85)', backdropFilter: 'blur(8px)' }}>
-                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', padding: 'var(--space-xl) var(--space-2xl)', textAlign: 'center', maxWidth: '420px', width: '100%' }}>
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', padding: 'var(--space-xl) var(--space-2xl)', textAlign: 'center', maxWidth: '420px', width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
                         <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-sm)' }}>📥</div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: 'var(--space-xs)' }}>Importing {selectedSources.size} Source{selectedSources.size !== 1 ? 's' : ''}</div>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Please wait...</div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>Please don't close this window</div>
+                        <div style={{ flex: 1, overflowY: 'auto', textAlign: 'left', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius)', padding: 'var(--space-sm)', fontSize: '0.8rem', fontFamily: 'var(--font-body)', color: 'var(--text-secondary)', maxHeight: '300px' }}>
+                            {renderFetchStatus()}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -692,9 +704,43 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                         {allSuccess ? 'All imports successful!' : 'Some imports had issues'}
                     </div>
                     <div style={{ color: 'var(--text-secondary)' }}>
-                        Imported <strong>{totalMembers}</strong> member{totalMembers !== 1 ? 's' : ''} and <strong>{totalGroups}</strong> group{totalGroups.length !== 1 ? 's' : ''}
+                        Imported <strong>{totalMembers}</strong> member{totalMembers !== 1 ? 's' : ''} and <strong>{totalGroups}</strong> group{totalGroups !== 1 ? 's' : ''}
+                        {' '}across <strong>{results.length}</strong> source{results.length !== 1 ? 's' : ''}
                     </div>
                 </div>
+
+                {results.map((r, i) => {
+                    const src = SOURCES.find(s => s.id === r.sourceId)
+                    if (!r.success) {
+                        return (
+                            <div key={i} className="settings-section" style={{ borderLeft: '3px solid var(--color-error)' }}>
+                                <p style={{ color: 'var(--color-error)', margin: 0, fontWeight: 600 }}><Icon name="x" size={16} /> {src?.label} failed</p>
+                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 'var(--space-xs) 0 0' }}>{r.error}</p>
+                            </div>
+                        )
+                    }
+                    const res = r.result?.result || {}
+                    return (
+                        <div key={i} className="settings-section">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
+                                <span style={{ fontSize: '1.2rem' }}>{src?.icon}</span>
+                                <strong>{src?.label}</strong>
+                                <span style={{ fontSize: '0.7rem', background: 'var(--color-success)', color: 'var(--bg)', padding: '1px 6px', borderRadius: '8px' }}>Success</span>
+                                <span style={{ fontSize: '0.7rem', marginLeft: 'auto', color: 'var(--text-secondary)' }}>
+                                    Target: {targetLabel(res.target)}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.85rem' }}>
+                                <div>Alters imported: <strong>{res.membersImported || 0}</strong></div>
+                                {res.membersUpdated > 0 && <div>Alters updated: <strong>{res.membersUpdated}</strong></div>}
+                                {res.membersSkipped > 0 && <div>Alters skipped: <strong>{res.membersSkipped}</strong></div>}
+                                {(res.statesImported > 0 || res.statesUpdated > 0) && <div>States imported: <strong>{res.statesImported || 0}</strong></div>}
+                                {(res.groupsImported > 0 || res.groupsUpdated > 0) && <div>Groups imported: <strong>{res.groupsImported || 0}</strong></div>}
+                                {res.switchesImported > 0 && <div>Switches imported: <strong>{res.switchesImported}</strong></div>}
+                            </div>
+                        </div>
+                    )
+                })}
 
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-xl)' }}>
                     <button className="btn-gradient btn-gradient-primary" onClick={handleContinueToNameStep} style={{ flex: 2, height: '56px', fontSize: '1.1rem' }}>
