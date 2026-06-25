@@ -45,7 +45,7 @@ const app = express();
 // ===========================================
 
 app.use(cors({
-    origin: config.webapp?.origin || 'http://localhost:5173',
+    origin: [config.webapp?.origin, 'https://systemise.teamcalendula.net'].filter(Boolean),
     credentials: true
 }));
 app.use(express.json());
