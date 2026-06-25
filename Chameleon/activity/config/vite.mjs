@@ -53,8 +53,9 @@ export default defineConfig({
   server: {
     allowedHosts: true,
     proxy: {
-      '/api/notes': { target: 'http://localhost:3001', changeOrigin: true },
-      '/api/auth': { target: 'http://localhost:3001', changeOrigin: true }
+      '/api/notes':    { target: 'http://localhost:3001', changeOrigin: true },
+      '/api/auth':     { target: 'http://localhost:3001', changeOrigin: true },
+      '/api/import':   { target: 'http://localhost:3001', changeOrigin: true }
     }
   },
   optimizeDeps: {
