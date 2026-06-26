@@ -8,6 +8,7 @@ const passport = require("passport");
 const DiscordStrategy = require("passport-discord").Strategy;
 const jwt = require("jsonwebtoken");
 const mongoose = require('mongoose');
+const path = require('path');
 
 // MongoDB - reuse existing connection from Chameleon
 require("../database");
@@ -157,6 +158,25 @@ app.get('/api/activity/pending-page', authenticateToken, async (req, res) => {
         console.error('[Activity] Pending page error:', err);
         res.json({ page: null });
     }
+});
+
+// ===========================================
+// ACTIVITY (Embedded App) STATIC FILES
+// ===========================================
+
+const activityDist = path.join(__dirname, '../../activity/dist');
+
+app.use('/systemiser/assets', express.static(path.join(activityDist, 'assets'), {
+    maxAge: '1y',
+    immutable: true,
+}));
+
+app.use('/systemiser', express.static(activityDist, {
+    maxAge: '5m',
+}));
+
+app.get('/systemiser/*', (req, res) => {
+    res.sendFile(path.join(activityDist, 'index.html'));
 });
 
 // Error handling middleware
