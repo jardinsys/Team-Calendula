@@ -48,7 +48,6 @@ export function DiscordContextProvider({ children, authenticate = false, scope =
           setStatus('READY')
 
           if (authenticate) {
-            const baseUrl = process.env.VITE_API_BASE || '/api'
             const cacheKey = `discord_access_token_${process.env.VITE_DISCORD_CLIENT_ID}`
             const cached = localStorage.getItem(cacheKey)
 
@@ -77,7 +76,7 @@ export function DiscordContextProvider({ children, authenticate = false, scope =
                 scope,
               })
 
-              const tokenRes = await fetch(`${baseUrl}/auth/activity/exchange`, {
+              const tokenRes = await fetch('/api/auth/activity/exchange', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code }),

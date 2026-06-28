@@ -14,8 +14,7 @@ export function useApiAuth() {
     if (status !== 'AUTHENTICATED') return
 
     if (isMock) {
-      const baseUrl = process.env.VITE_API_BASE || '/api'
-      api.setBaseUrl(baseUrl)
+      api.setBaseUrl('/api')
       setAuthStatus('READY')
       return
     }
@@ -32,8 +31,7 @@ export function useApiAuth() {
     let cancelled = false
 
     async function exchange() {
-      const baseUrl = process.env.VITE_API_BASE || '/api'
-      api.setBaseUrl(baseUrl)
+      api.setBaseUrl('/api')
 
       try {
         const res = await fetch(`${baseUrl}/auth/activity/token`, {

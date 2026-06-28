@@ -15,8 +15,7 @@ const isDev = process.env.NODE_ENV !== 'production'
 
 export default defineConfig({
   define: {
-    'process.env.VITE_DISCORD_CLIENT_ID': JSON.stringify(clientId),
-    'process.env.VITE_API_BASE': JSON.stringify(apiUrl)
+    'process.env.VITE_DISCORD_CLIENT_ID': JSON.stringify(clientId)
   },
   plugins: [react(), isDev && DiscordProxy.Vite()].filter(Boolean),
   resolve: {
