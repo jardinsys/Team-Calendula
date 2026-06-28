@@ -34,7 +34,7 @@ export function useApiAuth() {
       api.setBaseUrl('/api')
 
       try {
-        const res = await fetch(`${baseUrl}/auth/activity/token`, {
+        const res = await fetch('/api/auth/activity/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
