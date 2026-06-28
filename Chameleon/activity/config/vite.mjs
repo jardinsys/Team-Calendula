@@ -6,7 +6,7 @@ import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const config = JSON.parse(readFileSync(resolve(__dirname, '../config.json'), 'utf-8'))
+const config = JSON.parse(readFileSync(resolve(__dirname, '../../config.json'), 'utf-8'))
 
 const clientId = config.discordClientIDs?.system
 const apiUrl = config.activity?.apiUrl || '/api'
