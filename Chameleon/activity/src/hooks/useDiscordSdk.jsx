@@ -34,8 +34,10 @@ export function DiscordContextProvider({ children, authenticate = false, scope =
       try {
         const params = new URLSearchParams(window.location.search)
         const frameId = params.get('frame_id')
+        const instanceId = params.get('instance_id')
+        const channelId = instanceId || frameId
 
-        if (frameId) {
+        if (channelId) {
           sdk = new DiscordSDK(process.env.VITE_DISCORD_CLIENT_ID)
 
           await Promise.race([

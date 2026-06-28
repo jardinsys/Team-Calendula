@@ -124,6 +124,7 @@ passport.deserializeUser(async (id, done) => {
 // ROUTES
 // ===========================================
 
+// Legacy prefixed mounts (keep while callers migrate)
 app.use('/api/auth', authRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/alters', altersRoutes);
@@ -138,14 +139,24 @@ app.use('/api/user', userRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/convert', convertRoutes);
 
+// Normalized root mounts for same-origin or downstream host usage
+app.use('/auth', authRoutes);
+app.use('/system', systemRoutes);
+app.use('/alters', altersRoutes);
+app.use('/states', statesRoutes);
+app.use('/groups', groupsRoutes);
+app.use('/notes', notesRoutes);
+app.use('/front', frontRoutes);
+app.use('/friends', friendsRoutes);
+app.use('/quick', quickRoutes);
+app.use('/import', importRoutes);
+app.use('/user', userRoutes);
+app.use('/public', publicRoutes);
+app.use('/convert', convertRoutes);
+
 // Health check
-app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        timestamp: new Date(),
-        service: 'Systemiser API'
-    });
-});
+app.get('/api/health', (req, res) => { res.json({ status: 'ok', timestamp: new Date(), service: 'Systemiser API' }); });
+app.get('/health', (req, res) => { res.json({ status: 'ok', timestamp: new Date(), service: 'Systemiser API' }); });
 
 // Activity pending page — reads + clears Redis key set by bot commands
 const redis = require('../redis');
@@ -153,10 +164,7 @@ app.get('/api/activity/pending-page', authenticateToken, async (req, res) => {
     try {
         const key = `pendingActivity:${req.user._id}`;
         const page = await redis.get(key);
-        if (page) {
-            await redis.del(key);
-            return res.json({ page });
-        }
+        if (page) { await redis.del(key); return res.json({ page }); }
         res.json({ page: null });
     } catch (err) {
         console.error('[Activity] Pending page error:', err);
