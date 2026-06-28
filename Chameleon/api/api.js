@@ -46,7 +46,11 @@ const app = express();
 // ===========================================
 
 app.use(cors({
-    origin: [config.webapp?.origin, 'https://systemise.teamcalendula.net'].filter(Boolean),
+    origin: [
+        config.webapp?.origin,
+        'https://systemise.teamcalendula.net',
+        'https://1453103517249179719.discordsays.com'
+    ].filter(Boolean),
     credentials: true
 }));
 app.use(express.json());
