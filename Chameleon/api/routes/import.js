@@ -21,6 +21,7 @@ const {
     previewOctoconFile,
     previewTupperboxFile,
 } = importFunctions;
+const authActivity = require('../routes/auth');
 
 // POST /api/import — Import from external source
 router.post('/', async (req, res) => {
