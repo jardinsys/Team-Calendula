@@ -6,6 +6,9 @@
   "scripts": {
     "test": "cross-env NODE_ENV=test jest --forceExit"
   },
+  "jest": {
+    "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"]
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

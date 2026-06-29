@@ -178,6 +178,7 @@ app.get('/api/activity/pending-page', authenticateToken, async (req, res) => {
 
 const activityDist = path.join(__dirname, '../../activity/dist');
 
+// Backward-compat for old /systemiser URLs
 app.use('/systemiser/assets', express.static(path.join(activityDist, 'assets'), {
     maxAge: '1y',
     immutable: true,
@@ -188,6 +189,20 @@ app.use('/systemiser', express.static(activityDist, {
 }));
 
 app.get('/systemiser/*', (req, res) => {
+    res.sendFile(path.join(activityDist, 'index.html'));
+});
+
+// Serve activity assets and entry point at root for tunnel / same-origin
+app.use('/assets', express.static(path.join(activityDist, 'assets'), {
+    maxAge: '1y',
+    immutable: true,
+}));
+
+app.use(express.static(activityDist, {
+    maxAge: '5m',
+}));
+
+app.get('/', (req, res) => {
     res.sendFile(path.join(activityDist, 'index.html'));
 });
 
