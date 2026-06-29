@@ -161,7 +161,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         startFetch(`Fetching preview from ${src?.label}...`)
 
         try {
-            const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData)
+            const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData, session ? { systemConfig: session.buildPayload() } : {})
             setPreviews(prev => ({ ...prev, [sourceId]: res.preview }))
 
             const types = {}
