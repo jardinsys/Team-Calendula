@@ -1711,7 +1711,7 @@ The Switch Page (`SwitchPage.jsx`) is a full-page redesign of the front manageme
 
 ---
 
-## Settings Panel
+### Settings Panel
 
 All pages have a gear button (bottom-right) that opens a full-screen settings overlay.
 
@@ -1732,7 +1732,53 @@ All pages have a gear button (bottom-right) that opens a full-screen settings ov
 
 ---
 
-## Switch Notifications (`switchNotifications.js`)
+## Staged Onboarding & Import Flow (Activity App)
+
+### Overview
+The activity app's onboarding and import flows use a **staged, in-memory pattern** — all data accumulates in React state (`useSystemSession`) until the final "commit" step, where everything is atomically written to MongoDB via `POST /api/system` (which calls `createSystemFromPayload`). No partial data is ever written to the database during the flow.
+
+### Onboarding Steps (RegisterPage.jsx → RegistrationImportPage.jsx)
+
+1. **Type selection** — User picks DSM-5 / ICD-11 / Other / None → sets `sysType` in session
+2. **System name** — Optional display name
+3. **Import decision** — If `isSystem` or `isFragmented` is true, user can import or start fresh
+4. **Import configuration** (RegistrationImportPage):
+   - **Mode**: Simple (1 source, auto) / Intermediate (1-2 sources, either/or) / Advanced (up to 4 sources, per-entity + group checklist)
+   - **Source selection** — PluralKit, Simply Plural, Octocon, Tupperbox
+   - **Per-source config** — API token or file upload, entity type mode (alters/states/mixed), privacy/group options
+5. **Preview** — For each selected source, `POST /api/import/preview` with `options.systemConfig` (staged payload from `session.buildPayload()`). Backend uses in-memory data to generate preview without DB lookups.
+6. **Confirm & commit** — User reviews preview, adjusts entity types/groups, then clicks Import → `POST /api/import/stream` (SSE) with same `systemConfig` → backend streams progress, writes all entities in transaction
+7. **Complete** — `useSystemSession.commit()` calls `api.createSystemSession(data)` → `POST /api/system` with full payload → `createSystemFromPayload` creates User+System+entities atomically in MongoDB transaction
+
+### Key Implementation Files
+
+| File | Role |
+|------|------|
+| `activity/src/hooks/useSystemSession.jsx` | In-memory session state + `buildPayload()` + `commit()` |
+| `activity/src/app/pages/RegisterPage.jsx` | Steps 1-3 (type, name, import decision) |
+| `activity/src/app/pages/RegistrationImportPage.jsx` | Steps 4-6 (import config, preview, stream) |
+| `activity/src/app/pages/ImportPage.jsx` | Standalone import (same logic, re-used) |
+| `shared/api/client.js` | `previewImport()`, `importFromSourceStream()` accept `options.systemConfig` |
+| `api/routes/import.js` | `POST /preview`, `POST /stream` read `options.systemConfig` to skip DB lookups |
+| `api/routes/system.js` | `POST /` calls `createSystemFromPayload(req.user._id, req.body)` |
+| `api/utils/createSystemFromPayload.js` | Atomic transaction: System + User + entities + privacy buckets |
+
+### Import Preview Fix (June 2026)
+**Problem**: During onboarding, `User` and `System` don't exist in MongoDB yet. The import preview/stream routes did `User.findById(req.user._id)` → `System.findById(user.systemID)` → 404 "No system found".
+
+**Solution**: Backend routes now accept `options.systemConfig` in the request body. If present, they skip the DB lookup and use the in-memory staged data for preview/stream operations.
+
+**Frontend change**: All four call sites in `ImportPage.jsx` and `RegistrationImportPage.jsx` now pass:
+```javascript
+api.previewImport(sourceId, token, fileData, { systemConfig: session.buildPayload() })
+api.importFromSourceStream(sourceId, token, options, fileData, onProgress, { systemConfig: session.buildPayload() })
+```
+
+### Why This Matters
+- No partial/broken systems in DB if user cancels or errors mid-flow
+- Preview works instantly without waiting for DB writes
+- Import stream can create hundreds of entities in one atomic transaction
+- Same pattern works for both embedded app and future webapp onboarding
 
 ### Overview
 `Chameleon/discord_commands/functions/switchNotifications.js` handles debounced, privacy-filtered, DM-first delivery of switch notifications to friends.
