@@ -123,7 +123,7 @@ router.post('/', async (req, res) => {
 // POST /api/import/preview — Preview import data without writing
 router.post('/preview', async (req, res) => {
     try {
-        const { source, tokenOrId, fileData } = req.body;
+        const { source, tokenOrId, fileData, options = {} } = req.body;
 
         if (!source) return res.status(400).json({ error: 'Missing required field: source' });
 
@@ -132,11 +132,16 @@ router.post('/preview', async (req, res) => {
             return res.status(400).json({ error: `Invalid source. Must be one of: ${validSources.join(', ')}` });
         }
 
-        const user = await User.findById(req.user._id);
-        if (!user || !user.systemID) return res.status(404).json({ error: 'No system found.' });
-
-        const system = await System.findById(user.systemID);
-        if (!system) return res.status(404).json({ error: 'System not found.' });
+        // Prefer in-memory systemConfig from onboarding; fall back to DB for normal auth
+        let system;
+        if (options.systemConfig) {
+            system = options.systemConfig;
+        } else {
+            const user = await User.findById(req.user._id);
+            if (!user || !user.systemID) return res.status(404).json({ error: 'No system found.' });
+            system = await System.findById(user.systemID);
+            if (!system) return res.status(404).json({ error: 'System not found.' });
+        }
 
         let preview;
         switch (source) {

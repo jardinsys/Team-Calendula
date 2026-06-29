@@ -9,17 +9,10 @@ const tb = require('./import/import_tupperbox');
 const sp = require('./import/import_simplyplural');
 const oc = require('./import/import_octocon');
 const auto = require('./import/import_autodetect');
-
 module.exports = {
-    // Constants
-    ...constants,
-    // Shared helpers
-    ...r2_sync,
-    ...helpers,
-    // Source-specific
-    ...pk,
-    ...tb,
-    ...sp,
-    ...oc,
-    ...auto,
+  ...auto,
+  ...pk,
+  ...tb,
+  ...sp,
+  ...oc,
 };
