@@ -59,7 +59,8 @@ async function importPluralKitAPI(system, user, token, options, onProgress) {
     // Fetch groups if not disabled (returns Map, convert to Array)
     let pkGroups = [];
     if (!options.noGroups) {
-        pkGroups = Array.from((await api.getGroups({ token })).values());
+        const raw = await api.getGroups({ token });
+        pkGroups = raw instanceof Map ? Array.from(raw.values()) : (Array.isArray(raw) ? raw : []);
     }
 
     emit({ phase: 'fetching', message: `Found ${pkGroups.length} group${pkGroups.length !== 1 ? 's' : ''}. Fetching switch history...` });
@@ -198,7 +199,7 @@ async function processPluralKitData(system, user, data, options, onProgress) {
 
     if (!options.noGroups && data.groups) {
         let groupIdx = 0;
-        for (const pkGroup of data.groups) {
+        for (const pkGroup of (Array.isArray(data.groups) ? data.groups : [])) {
             groupIdx++;
             try {
                 emit({ phase: 'groups', current: groupIdx, total: data.groups.length, entityName: pkGroup.display_name || pkGroup.name, message: `Importing group ${groupIdx}/${data.groups.length}: ${pkGroup.display_name || pkGroup.name}` });
@@ -232,7 +233,7 @@ async function processPluralKitData(system, user, data, options, onProgress) {
 
     // MEMBERS: import as alters or states, link to groups
     let memberIdx = 0;
-    for (const pkMember of data.members) {
+    for (const pkMember of (Array.isArray(data.members) ? data.members : [])) {
         memberIdx++;
         try {
             emit({ phase: 'members', current: memberIdx, total: data.members.length, entityName: pkMember.display_name || pkMember.name, message: `Importing member ${memberIdx}/${data.members.length}: ${pkMember.display_name || pkMember.name}` });
@@ -768,7 +769,7 @@ function updateGroupFromPK(group, pkGroup) {
 
 async function previewPluralKitData(system, data) {
     const members = [];
-    for (const pkMember of (data.members || [])) {
+    for (const pkMember of (Array.isArray(data.members) ? data.members : [])) {
         const existingAlter = await findExistingAlter(system, pkMember);
         const existingState = await findExistingState(system, pkMember);
         const existing = existingAlter || existingState;
@@ -788,7 +789,7 @@ async function previewPluralKitData(system, data) {
     }
 
     const groups = [];
-    for (const pkGroup of (data.groups || [])) {
+    for (const pkGroup of (Array.isArray(data.groups) ? data.groups : [])) {
         const existingGroup = await findExistingGroup(system, pkGroup);
         groups.push({
             sourceId: pkGroup.id,
@@ -812,7 +813,10 @@ async function previewPluralKitAPI(system, token) {
     const pkSystem = await api.getSystem({ token });
     const pkMembers = Array.from((await api.getMembers({ token })).values());
     let pkGroups = [];
-    try { pkGroups = Array.from((await api.getGroups({ token })).values()); } catch {}
+    try {
+        const raw = await api.getGroups({ token });
+        pkGroups = raw instanceof Map ? Array.from(raw.values()) : (Array.isArray(raw) ? raw : []);
+    } catch {}
 
     const preview = await previewPluralKitData(system, {
         system: pkSystem, members: pkMembers, groups: pkGroups

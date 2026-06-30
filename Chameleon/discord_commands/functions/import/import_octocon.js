@@ -150,7 +150,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
                 system.avatar = media || { url: data.user.avatar_url };
             }
         }
-        if (data.user.fields) {
+        if (Array.isArray(data.user.fields)) {
             for (const field of data.user.fields) {
                 if (field.name?.toLowerCase() === 'pronouns' && field.value && options.applyPronouns && user) {
                     user.pronouns = [field.value];
@@ -181,7 +181,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
     // GROUPS FIRST: create/update tags as groups, build membership map
     const groupMembershipMap = new Map();
 
-    if (!options.noGroups && data.tags) {
+    if (!options.noGroups && Array.isArray(data.tags)) {
         let tagIdx = 0;
         for (const tag of data.tags) {
             tagIdx++;
@@ -217,7 +217,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
 
     // ALTERS: import as alters or states, link to groups
     let alterIdx = 0;
-    for (const octoAlter of (data.alters || [])) {
+    for (const octoAlter of (Array.isArray(data.alters) ? data.alters : [])) {
         alterIdx++;
         try {
             emit({ phase: 'members', current: alterIdx, total: (data.alters || []).length, entityName: octoAlter.name, message: `Importing alter ${alterIdx}/${(data.alters || []).length}: ${octoAlter.name}` });
@@ -707,7 +707,7 @@ async function fetchOctoconAlters(systemId) {
 
 async function previewOctoconData(system, data) {
     const members = [];
-    for (const octoAlter of (data.alters || [])) {
+    for (const octoAlter of (Array.isArray(data.alters) ? data.alters : [])) {
         const existingAlter = await findExistingAlterOctocon(system, octoAlter);
         const existingState = await findExistingStateOctocon(system, octoAlter);
         const existing = existingAlter || existingState;
@@ -727,7 +727,7 @@ async function previewOctoconData(system, data) {
     }
 
     const groups = [];
-    for (const tag of (data.tags || [])) {
+    for (const tag of (Array.isArray(data.tags) ? data.tags : [])) {
         const existingGroup = await findExistingGroupOctocon(system, tag);
         groups.push({
             sourceId: tag.id,

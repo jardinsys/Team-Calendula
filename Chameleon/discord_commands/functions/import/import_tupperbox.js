@@ -65,7 +65,7 @@ async function processTupperboxData(system, data, options, onProgress) {
     if (!system.groups) system.groups = { IDs: [], types: [], conditions: [] };
 
     // Import groups first (if present)
-    if (!options.noGroups && data.groups) {
+    if (!options.noGroups && Array.isArray(data.groups)) {
         let groupIdx = 0;
         for (const tbGroup of data.groups) {
             groupIdx++;
@@ -115,7 +115,7 @@ async function processTupperboxData(system, data, options, onProgress) {
 
     // Import tuppers as alters
     let tupperIdx = 0;
-    for (const tupper of data.tuppers) {
+    for (const tupper of (Array.isArray(data.tuppers) ? data.tuppers : [])) {
         tupperIdx++;
         try {
             emit({ phase: 'members', current: tupperIdx, total: data.tuppers.length, entityName: tupper.nick || tupper.name, message: `Importing tupper ${tupperIdx}/${data.tuppers.length}: ${tupper.nick || tupper.name}` });
@@ -214,7 +214,7 @@ async function processTupperboxData(system, data, options, onProgress) {
 
 async function previewTupperboxData(system, data) {
     const members = [];
-    for (const tupper of (data.tuppers || [])) {
+    for (const tupper of (Array.isArray(data.tuppers) ? data.tuppers : [])) {
         let existingAlter = null;
         try {
             existingAlter = await Alter.findOne({
@@ -241,7 +241,7 @@ async function previewTupperboxData(system, data) {
     }
 
     const groups = [];
-    for (const tbGroup of (data.groups || [])) {
+    for (const tbGroup of (Array.isArray(data.groups) ? data.groups : [])) {
         let existingGroup = null;
         try {
             existingGroup = await Group.findOne({

@@ -162,7 +162,10 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
         try {
             const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData, { systemConfig: buildPayload() })
-            setPreviews(prev => ({ ...prev, [sourceId]: res.preview }))
+            const preview = res.preview || {}
+            if (!Array.isArray(preview.members)) preview.members = []
+            if (!Array.isArray(preview.groups)) preview.groups = []
+            setPreviews(prev => ({ ...prev, [sourceId]: preview }))
 
             const types = {}
             if (cfg.entityTypeMode === 'all_states') {
