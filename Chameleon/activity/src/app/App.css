@@ -90,6 +90,7 @@
 
   /* ── Text ── */
   --text: #ffffff;
+  --text-primary: #ffffff;
   --text-secondary: #9898a8;
   --text-muted: #6b6b80;
 
@@ -811,6 +812,28 @@ body {
 .text-input::placeholder { color: var(--text-muted); }
 textarea.text-input { resize: vertical; min-height: 120px; }
 
+/* ── Native form elements — force light text on dark bg ── */
+input[type="file"] { color: var(--text); }
+input[type="file"]::file-selector-button {
+  background: var(--bg-surface);
+  color: var(--text);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  font-family: var(--font-accent);
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color var(--transition-smooth);
+}
+input[type="file"]::file-selector-button:hover {
+  border-color: var(--accent);
+}
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+}
+
 /* Select */
 select.text-input {
   appearance: none;
@@ -1382,6 +1405,22 @@ select.text-input {
 .btn-gradient:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.btn-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  padding: clamp(8px, 2vw, 12px) clamp(12px, 3vw, 16px);
+  font-family: var(--font-accent);
+  font-size: clamp(0.75rem, 2.4vw, 0.85rem);
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: wait;
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 /* Primary Button — gradient fill, no border */
