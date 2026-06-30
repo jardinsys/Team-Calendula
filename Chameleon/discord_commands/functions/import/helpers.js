@@ -22,7 +22,8 @@ const Group = require('../../../schemas/group');
  * @param {'app' | 'discord'} target - Which profile to sync to
  * @returns {Promise<void>}
  */
-async function syncEntityImages(entity, sourceData, entityType, system, target) {
+async function syncEntityImages(entity, sourceData, entityType, system, target, dryRun) {
+    if (dryRun) return; // Skip R2 uploads during dryRun — images won't be referenced
     const userId = system.users?.[0] || system.discordId;
     if (!userId) return;
 
@@ -89,6 +90,9 @@ async function filterConflictingProxies(entity, system) {
 // ============================================
 
 async function createBackup(system, source) {
+    // Skip backup for in-memory systems (no _id means plain JSON from systemConfig)
+    if (!system?._id) return null;
+
     const backup = {
         timestamp: new Date(),
         expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days
@@ -126,36 +130,37 @@ async function createBackup(system, source) {
 // ============================================
 
 function getSourceEntityTerm(source) {
-    const terms = { pluralkit: 'alters', simplyplural: 'members', octocon: 'alters', tupperbox: 'tuppers' };
-    return terms[source] || 'members';
+    const terms = { pluralkit: 'members', simplyplural: 'members', octocon: 'alters', tupperbox: 'tuppers' };
+    return terms[source] || 'entities';
 }
 
 // ============================================
 // GROUP LINKING HELPER
 // ============================================
 
-async function addEntityToGroup(entity, group, entityType) {
+async function addEntityToGroup(entity, group, entityType, options = {}) {
+    const dryRun = options.dryRun;
     if (entityType === 'alter') {
         group.alterIDs = group.alterIDs || [];
         if (!group.alterIDs.includes(entity._id)) {
             group.alterIDs.push(entity._id);
-            await group.save();
+            if (!dryRun) await group.save();
         }
         entity.groupsIDs = entity.groupsIDs || [];
         if (!entity.groupsIDs.includes(group._id)) {
             entity.groupsIDs.push(group._id);
-            await entity.save();
+            if (!dryRun) await entity.save();
         }
     } else if (entityType === 'state') {
         group.stateIDs = group.stateIDs || [];
         if (!group.stateIDs.includes(entity._id)) {
             group.stateIDs.push(entity._id);
-            await group.save();
+            if (!dryRun) await group.save();
         }
         entity.groupIDs = entity.groupIDs || [];
         if (!entity.groupIDs.includes(group._id)) {
             entity.groupIDs.push(group._id);
-            await entity.save();
+            if (!dryRun) await entity.save();
         }
     }
 }
@@ -166,7 +171,9 @@ async function addEntityToGroup(entity, group, entityType) {
 
 function isMemberSelected(sourceId, options) {
     if (!options.selectedMemberIds) return true;
-    return options.selectedMemberIds.has(sourceId);
+    if (options.selectedMemberIds instanceof Set) return options.selectedMemberIds.has(sourceId);
+    if (Array.isArray(options.selectedMemberIds)) return options.selectedMemberIds.includes(sourceId);
+    return true;
 }
 
 // ============================================

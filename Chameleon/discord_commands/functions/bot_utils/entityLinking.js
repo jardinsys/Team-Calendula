@@ -16,9 +16,12 @@ const { mergePrivacySettings } = require('../../../schemas/settings');
  * @param {string} entityType - 'alter', 'state', or 'group'
  * @returns {Object} The saved entity
  */
-async function createAndLinkEntity(entity, system, entityType) {
-    entity.systemID = system._id.toString();
-    
+async function createAndLinkEntity(entity, system, entityType, options = {}) {
+    const dryRun = options.dryRun || !system?._id;
+    if (!dryRun) {
+        entity.systemID = system._id.toString();
+    }
+
     // Initialize privacy settings from system's privacyBuckets
     if (system.setting?.privacy && Array.isArray(system.setting.privacy)) {
         entity.setting = entity.setting || {};
@@ -27,14 +30,18 @@ async function createAndLinkEntity(entity, system, entityType) {
             settings: mergePrivacySettings(b.bucket, entityType === 'group' ? 'group' : 'alter')
         }));
     }
-    
-    await entity.save();
+
+    if (!dryRun) {
+        await entity.save();
+    }
     const key = entityType + 's'; // 'alters', 'states', 'groups'
     system[key] = system[key] || { IDs: [] };
     if (!system[key].IDs.includes(entity._id)) {
         system[key].IDs.push(entity._id);
     }
-    await system.save();
+    if (!dryRun) {
+        await system.save();
+    }
     return entity;
 }
 
@@ -71,7 +78,14 @@ function publishDeleteEvent(systemId, entityType, entityId) {
  * @param {string|ObjectId} groupId - The group _id
  * @param {string} entityType - 'alter' or 'state' (default: 'alter')
  */
-async function linkEntityToGroup(entityId, groupId, entityType = 'alter') {
+async function linkEntityToGroup(entityId, groupId, entityType = 'alter', options = {}) {
+    const dryRun = options.dryRun;
+    if (dryRun) {
+        // In dryRun mode, entities aren't in MongoDB yet — just track the mapping
+        // The caller's groupMembershipMap already handles this
+        return;
+    }
+
     const group = await Group.findById(groupId);
     if (!group) return;
 

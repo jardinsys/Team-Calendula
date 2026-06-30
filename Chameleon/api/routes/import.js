@@ -270,6 +270,9 @@ router.post('/stream', async (req, res) => {
             stateNames: options.stateNames || [],
             target: options.target || 'app',
             forceAsStates: options.forceAsStates || false,
+            selectedMemberIds: options.selectedMemberIds ? new Set(options.selectedMemberIds) : undefined,
+            selectedGroupIds: options.selectedGroupIds ? new Set(options.selectedGroupIds) : undefined,
+            dryRun: !!options.systemConfig,
             onProgress,
         };
 

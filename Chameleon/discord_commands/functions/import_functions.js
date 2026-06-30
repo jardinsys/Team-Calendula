@@ -10,6 +10,9 @@ const sp = require('./import/import_simplyplural');
 const oc = require('./import/import_octocon');
 const auto = require('./import/import_autodetect');
 module.exports = {
+  ...constants,
+  ...helpers,
+  ...r2_sync,
   ...auto,
   ...pk,
   ...tb,

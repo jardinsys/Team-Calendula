@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { api, Icon } from '@chameleon/shared'
 import { useFetchStatus } from '../../hooks/useFetchStatus.jsx'
 import { useSystemSession } from '../../hooks/useSystemSession.jsx'
@@ -25,7 +25,7 @@ const SOURCE_PRIVACY_LABEL = {
 const PRIVACY_BUCKET_WARNING = (<div><strong>SimplyPlural Friends buckets will be removed.</strong> Friends cannot be reconnected to buckets at this time.</div>)
 
 export function RegistrationImportPage({ onNavigate, onBack }) {
-    const { session, update, setMembers, setGroups, buildPayload } = useSystemSession()
+    const { session, update, setMembers, setGroups, setSwitches, buildPayload } = useSystemSession()
 
     const [phase, setPhase] = useState('mode')
     const [selectedSources, setSelectedSources] = useState(new Set())
@@ -36,7 +36,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
     const [configuringSource, setConfiguringSource] = useState(null)
     const [importMode, setImportMode] = useState(null)
 
-    const { status: fetchStatus, start: startFetch, complete: completeFetch, error: errorFetch, render: renderFetchStatus } = useFetchStatus()
+    const { status: fetchStatus, start: startFetch, complete: completeFetch, error: errorFetch } = useFetchStatus()
 
     const systemName = session.systemName || session.sysType?.name || ''
     const entityTypeMode = session.importEntityTypeMode || 'mixed'
@@ -250,19 +250,36 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
         const allMembers = []
         const allGroups = []
+        const allShifts = []
         for (const imp of stagedImports) {
             if (imp.success && imp.result?.result) {
                 const r = imp.result.result
-                if (r.membersImported && r.importedMembers) allMembers.push(...r.importedMembers)
-                if (r.groupsImported && r.importedGroups) allGroups.push(...r.importedGroups)
+                if (r.importedMembers) allMembers.push(...r.importedMembers)
+                if (r.importedGroups) allGroups.push(...r.importedGroups)
+                if (r.importedShifts) allShifts.push(...r.importedShifts)
             }
         }
 
-        if (allMembers.length > 0) setMembers(allMembers)
-        if (allGroups.length > 0) setGroups(allGroups)
+        // Map Mongoose documents to session format (buildPayload expects { id, name, entityType })
+        if (allMembers.length > 0) {
+            setMembers(allMembers.map(m => ({
+                id: m._id?.toString?.() || m._id,
+                name: m.name?.display || m.name?.indexable || m.name || 'Unknown',
+                entityType: m.entityType || 'alter',
+                _raw: m,
+            })))
+        }
+        if (allGroups.length > 0) {
+            setGroups(allGroups.map(g => ({
+                id: g._id?.toString?.() || g._id,
+                name: g.name?.display || g.name?.indexable || g.name || 'Unknown',
+                _raw: g,
+            })))
+        }
+        if (allShifts.length > 0) setSwitches(allShifts)
 
         setPhase('complete')
-    }, [selectedSources, sourceConfigs, previews, importMode, update, setMembers, setGroups])
+    }, [selectedSources, sourceConfigs, previews, importMode, update, setMembers, setGroups, setSwitches])
 
     const handleContinueToNameStep = useCallback(() => {
         update({ importMode: false, importSources: [], importEntityTypeMode: null, importEntityTypeSelections: {} })
@@ -273,22 +290,6 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
             onNavigate?.('register', { startStep: 5 })
         }
     }, [onNavigate, update, session.members, session.groups])
-
-    const handleImportMore = useCallback(() => {
-        setPhase('select')
-        setSelectedSources(new Set())
-        setSourceConfigs({})
-        setPreviews({})
-        setCurrentPreviewSource(null)
-        setConfiguringSource(null)
-        setError(null)
-    }, [])
-
-    const completionActions = useMemo(() => {
-        if (phase !== 'complete') return null
-        if (importMode === 'simple') return 'single'
-        return 'full'
-    }, [phase, importMode])
 
     // ===== PHASE 1a: Mode Picker =====
     if (phase === 'mode') {
@@ -533,7 +534,12 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                             : 'Review each source and its settings.'}
                 </p>
 
-                {!hasAnyPreview && <div className="settings-section">{renderFetchStatus()}</div>}
+                {!hasAnyPreview && fetchStatus?.phase === 'fetching' && (
+                    <div className="settings-section" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', padding: 'var(--space-lg)' }}>
+                        <div className="spinner" style={{ width: 20, height: 20, border: '2px solid var(--glass-border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                        <span style={{ color: 'var(--text-secondary)' }}>{fetchStatus.label || 'Loading...'}</span>
+                    </div>
+                )}
 
                 {sourcesArray.map(sourceId => {
                     const preview = previews[sourceId]
@@ -779,11 +785,6 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                     <button className="btn-gradient btn-gradient-primary" onClick={handleContinueToNameStep} style={{ flex: 1, minWidth: '200px', height: '56px', fontSize: '1.1rem' }}>
                         Continue to System Setup →
                     </button>
-                    {completionActions === 'full' && (
-                        <button className="btn btn-ghost" onClick={handleImportMore} style={{ flex: 1, minWidth: '200px', height: '56px' }}>
-                            Import More
-                        </button>
-                    )}
                 </div>
             </div>
         )

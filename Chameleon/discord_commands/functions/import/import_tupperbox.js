@@ -54,7 +54,9 @@ async function processTupperboxData(system, data, options, onProgress) {
         groupsImported: 0,
         groupsUpdated: 0,
         switchesImported: 0,
-        errors: []
+        errors: [],
+        importedMembers: [],
+        importedGroups: []
     };
 
     const groupIdMap = new Map();
@@ -79,11 +81,12 @@ async function processTupperboxData(system, data, options, onProgress) {
                     continue;
                 }
 
-                if (existingGroup && !options.replace) {
+                if (existingGroup) {
                     if (tbGroup.tag) existingGroup.signoff = tbGroup.tag;
                     await existingGroup.save();
                     groupIdMap.set(tbGroup.id, existingGroup._id);
                     result.groupsUpdated++;
+                    result.importedGroups.push(existingGroup);
                 } else {
                     const newGroup = new Group({
                         name: {
@@ -97,11 +100,12 @@ async function processTupperboxData(system, data, options, onProgress) {
                             importedAt: new Date()
                         }
                     });
-                    await syncEntityImages(newGroup, tbGroup, 'Group', system, options.target);
-                    await utils.createAndLinkEntity(newGroup, system, 'group');
+                    await syncEntityImages(newGroup, tbGroup, 'Group', system, options.target, options.dryRun);
+                    await utils.createAndLinkEntity(newGroup, system, 'group', options);
 
                     groupIdMap.set(tbGroup.id, newGroup._id);
                     result.groupsImported++;
+                    result.importedGroups.push(newGroup);
                 }
             } catch (err) {
                 result.errors.push(`Group "${tbGroup.name}": ${err.message}`);
@@ -130,7 +134,7 @@ async function processTupperboxData(system, data, options, onProgress) {
 
             const proxy = convertTBBracketsToProxy(tupper.brackets);
 
-            if (existingAlter && !options.replace) {
+            if (existingAlter) {
                 if (tupper.avatar_url) existingAlter.avatar = { url: tupper.avatar_url };
                 if (tupper.nick) existingAlter.name.display = tupper.nick;
                 if (tupper.description) existingAlter.description = tupper.description;
@@ -146,10 +150,11 @@ async function processTupperboxData(system, data, options, onProgress) {
                 await existingAlter.save();
 
                 if (tupper.group_id && groupIdMap.has(tupper.group_id)) {
-                    await utils.linkEntityToGroup(existingAlter._id, groupIdMap.get(tupper.group_id), 'alter');
+                    await utils.linkEntityToGroup(existingAlter._id, groupIdMap.get(tupper.group_id), 'alter', options);
                 }
 
                 result.membersUpdated++;
+                result.importedMembers.push(existingAlter);
             } else {
                 // Check if proxy conflicts with existing entities
                 let proxyBlocked = false;
@@ -173,14 +178,15 @@ async function processTupperboxData(system, data, options, onProgress) {
                         importedAt: new Date()
                     }
                 });
-                await syncEntityImages(newAlter, tupper, 'Alter', system, options.target);
-                await utils.createAndLinkEntity(newAlter, system, 'alter');
+                await syncEntityImages(newAlter, tupper, 'Alter', system, options.target, options.dryRun);
+                await utils.createAndLinkEntity(newAlter, system, 'alter', options);
 
                 if (tupper.group_id && groupIdMap.has(tupper.group_id)) {
-                    await utils.linkEntityToGroup(newAlter._id, groupIdMap.get(tupper.group_id), 'alter');
+                    await utils.linkEntityToGroup(newAlter._id, groupIdMap.get(tupper.group_id), 'alter', options);
                 }
 
                 result.membersImported++;
+                result.importedMembers.push(newAlter);
             }
         } catch (err) {
             result.errors.push(`Tupper "${tupper.name}": ${err.message}`);
@@ -188,7 +194,17 @@ async function processTupperboxData(system, data, options, onProgress) {
     }
 
     emit({ phase: 'saving', message: 'Saving system...' });
-    await system.save();
+    if (!options.dryRun) await system.save();
+
+    // Normalize: convert Mongoose docs to plain objects with entityType tagged
+    const stateIds = new Set((system.states?.IDs || []).map(id => id.toString()));
+    result.importedMembers = result.importedMembers.map(m => {
+        const plain = m.toJSON ? m.toJSON() : { ...m };
+        plain.entityType = stateIds.has(m._id?.toString()) ? 'state' : 'alter';
+        return plain;
+    });
+    result.importedGroups = result.importedGroups.map(g => g.toJSON ? g.toJSON() : { ...g });
+
     return result;
 }
 

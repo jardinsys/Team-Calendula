@@ -129,7 +129,10 @@ async function processPluralKitData(system, user, data, options, onProgress) {
         groupsUpdated: 0,
         switchesImported: 0,
         pronounsApplied: false,
-        errors: []
+        errors: [],
+        importedMembers: [],
+        importedGroups: [],
+        importedShifts: [],
     };
 
     const memberIdMap = new Map();
@@ -212,12 +215,14 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                     await existingGroup.save();
                     groupMembershipMap.set(existingGroup._id.toString(), (pkGroup.members || []).map(m => typeof m === 'string' ? m : m.id));
                     result.groupsUpdated++;
+                    result.importedGroups.push(existingGroup);
                 } else {
                     const newGroup = createGroupFromPK(pkGroup);
-                    await syncEntityImages(newGroup, pkGroup, 'Group', system, options.target);
+                    await syncEntityImages(newGroup, pkGroup, 'Group', system, options.target, options.dryRun);
                     await utils.createAndLinkEntity(newGroup, system, 'group');
                     groupMembershipMap.set(newGroup._id.toString(), (pkGroup.members || []).map(m => typeof m === 'string' ? m : m.id));
                     result.groupsImported++;
+                    result.importedGroups.push(newGroup);
                 }
             } catch (err) {
                 result.errors.push(`Group "${pkGroup.name}": ${err.message}`);
@@ -252,28 +257,25 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                     continue;
                 }
 
-                if (existingState && !options.replace) {
+                if (existingState) {
+                    // Update existing entity (both default merge and -replace)
                     await updateStateFromPK(existingState, pkMember, system, options.target);
                     await existingState.save();
                     memberIdMap.set(pkMember.id, { id: existingState._id, type: 'state' });
                     entity = existingState;
                     result.statesUpdated++;
-                } else if (existingState && options.target === TARGET_DISCORD) {
-                    await updateStateFromPK(existingState, pkMember, system, options.target);
-                    await existingState.save();
-                    memberIdMap.set(pkMember.id, { id: existingState._id, type: 'state' });
-                    entity = existingState;
-                    result.statesUpdated++;
+                    result.importedMembers.push(existingState);
                 } else {
                     const newState = options.target === TARGET_DISCORD
                         ? createStateFromPKDiscord(pkMember)
                         : createStateFromPK(pkMember);
                     await filterConflictingProxies(newState, system);
-                    await syncEntityImages(newState, pkMember, 'State', system, options.target);
-                    await utils.createAndLinkEntity(newState, system, 'state');
+                    await syncEntityImages(newState, pkMember, 'State', system, options.target, options.dryRun);
+                    await utils.createAndLinkEntity(newState, system, 'state', options);
                     memberIdMap.set(pkMember.id, { id: newState._id, type: 'state' });
                     entity = newState;
                     result.statesImported++;
+                    result.importedMembers.push(newState);
                 }
             } else {
                 let existingAlter = await findExistingAlter(system, pkMember);
@@ -284,28 +286,25 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                     continue;
                 }
 
-                if (existingAlter && !options.replace) {
+                if (existingAlter) {
+                    // Update existing entity (both default merge and -replace)
                     await updateAlterFromPK(existingAlter, pkMember, system, options.target);
                     await existingAlter.save();
                     memberIdMap.set(pkMember.id, { id: existingAlter._id, type: 'alter' });
                     entity = existingAlter;
                     result.membersUpdated++;
-                } else if (existingAlter && options.target === TARGET_DISCORD) {
-                    await updateAlterFromPK(existingAlter, pkMember, system, options.target);
-                    await existingAlter.save();
-                    memberIdMap.set(pkMember.id, { id: existingAlter._id, type: 'alter' });
-                    entity = existingAlter;
-                    result.membersUpdated++;
+                    result.importedMembers.push(existingAlter);
                 } else {
                     const newAlter = options.target === TARGET_DISCORD
                         ? createAlterFromPKDiscord(pkMember)
                         : createAlterFromPK(pkMember);
                     await filterConflictingProxies(newAlter, system);
-                    await syncEntityImages(newAlter, pkMember, 'Alter', system, options.target);
-                    await utils.createAndLinkEntity(newAlter, system, 'alter');
+                    await syncEntityImages(newAlter, pkMember, 'Alter', system, options.target, options.dryRun);
+                    await utils.createAndLinkEntity(newAlter, system, 'alter', options);
                     memberIdMap.set(pkMember.id, { id: newAlter._id, type: 'alter' });
                     entity = newAlter;
                     result.membersImported++;
+                    result.importedMembers.push(newAlter);
                 }
             }
 
@@ -313,7 +312,7 @@ async function processPluralKitData(system, user, data, options, onProgress) {
             if (entity) {
                 for (const [groupId, sourceMemberIds] of groupMembershipMap) {
                     if (sourceMemberIds.includes(pkMember.id)) {
-                        await utils.linkEntityToGroup(entity._id, groupId, entityType);
+                        await utils.linkEntityToGroup(entity._id, groupId, entityType, options);
                     }
                 }
             }
@@ -325,12 +324,25 @@ async function processPluralKitData(system, user, data, options, onProgress) {
     // Switches
     if (!options.noSwitches && data.switches && data.switches.length > 0) {
         emit({ phase: 'switches', current: 0, total: data.switches.length, message: `Importing ${data.switches.length} switch ${data.switches.length !== 1 ? 'entries' : 'entry'}...` });
-        const importedShifts = await importSwitches(system, data.switches, memberIdMap, options, onProgress);
-        result.switchesImported = importedShifts;
+        const switchResult = await importSwitches(system, data.switches, memberIdMap, options, onProgress);
+        result.switchesImported = switchResult.count;
+        if (switchResult.shifts?.length) result.importedShifts = switchResult.shifts;
     }
 
     emit({ phase: 'saving', message: 'Saving system...' });
-    await system.save();
+    if (!options.dryRun) {
+        await system.save();
+    }
+
+    // Normalize: convert Mongoose docs to plain objects with entityType tagged
+    const stateIds = new Set((system.states?.IDs || []).map(id => id.toString()));
+    result.importedMembers = result.importedMembers.map(m => {
+        const plain = m.toJSON ? m.toJSON() : { ...m };
+        plain.entityType = stateIds.has(m._id?.toString()) ? 'state' : 'alter';
+        return plain;
+    });
+    result.importedGroups = result.importedGroups.map(g => g.toJSON ? g.toJSON() : { ...g });
+
     return result;
 }
 
@@ -350,6 +362,7 @@ async function fetchPKMembers(token) {
 
 async function importSwitches(system, pkSwitches, memberIdMap, options, onProgress) {
     const emit = onProgress || (() => {});
+    const dryRun = options.dryRun || !system?._id;
     if (!system.front) system.front = {};
     if (!system.front.layers || system.front.layers.length === 0) {
         system.front.layers = [{
@@ -367,7 +380,6 @@ async function importSwitches(system, pkSwitches, memberIdMap, options, onProgre
     );
 
     let imported = 0;
-
     for (let i = 0; i < sorted.length; i++) {
         const pkSwitch = sorted[i];
         emit({ phase: 'switches', current: i + 1, total: sorted.length, message: `Importing switch ${i + 1}/${sorted.length}...` });
@@ -384,18 +396,30 @@ async function importSwitches(system, pkSwitches, memberIdMap, options, onProgre
         // Determine entity types for each member
         const members = [];
         for (const memberId of memberIds) {
-            const alter = await Alter.findById(memberId);
-            const state = alter ? null : await State.findById(memberId);
-            members.push({
-                s_type: alter ? 'alter' : 'state',
-                ID: memberId,
-                type_name: (alter || state)?.name?.display || 'Unknown'
-            });
+            let s_type = 'alter';
+            let type_name = 'Unknown';
+            if (dryRun) {
+                // In dryRun, entities aren't in MongoDB — use memberIdMap to determine type
+                for (const [, mapped] of memberIdMap) {
+                    if (mapped.id.toString() === memberId.toString()) {
+                        s_type = mapped.type;
+                        break;
+                    }
+                }
+            } else {
+                const alter = await Alter.findById(memberId);
+                const state = alter ? null : await State.findById(memberId);
+                s_type = alter ? 'alter' : 'state';
+                type_name = (alter || state)?.name?.display || 'Unknown';
+            }
+            members.push({ s_type, ID: memberId, type_name });
         }
 
-        const shift = new Shift({
+        const shiftId = new mongoose.Types.ObjectId();
+        const shiftData = {
+            _id: shiftId,
             s_type: 'alter',
-            ID: system._id,
+            ID: dryRun ? shiftId : system._id,
             type_name: system.name?.display || 'System',
             startTime: new Date(pkSwitch.timestamp),
             endTime: i < sorted.length - 1
@@ -408,15 +432,22 @@ async function importSwitches(system, pkSwitches, memberIdMap, options, onProgre
                     : null,
                 layerID: targetLayer._id
             }]
-        });
+        };
 
-        await shift.save();
-        targetLayer.shifts.push(shift._id);
+        if (dryRun) {
+            targetLayer.shifts.push(shiftData);
+        } else {
+            const shift = new Shift(shiftData);
+            await shift.save();
+            targetLayer.shifts.push(shift._id);
+        }
         imported++;
     }
 
-    await system.save();
-    return imported;
+    if (!dryRun) {
+        await system.save();
+    }
+    return { count: imported, shifts: dryRun ? targetLayer.shifts : [] };
 }
 
 // ============================================

@@ -37,7 +37,7 @@ const PHASE_ICONS = { fetching: '🔍', members: '👤', groups: '📦', switche
 
 function getSourceTerm(source) {
     const terms = { pluralkit: 'members', simplyplural: 'members', octocon: 'alters', tupperbox: 'tuppers' }
-    return terms[source] || 'members'
+    return terms[source] || 'entities'
 }
 
 const DISCORD_OVERLAY_DESC = (

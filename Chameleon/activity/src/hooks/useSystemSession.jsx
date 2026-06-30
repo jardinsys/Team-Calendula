@@ -126,7 +126,7 @@ export function useSystemSession() {
             name: 'Active',
             shifts: current.shiftHistory.map(s => ({
               ...s,
-              timestamp: s.timestamp ? new Date(s.timestamp) : new Date(),
+              timestamp: s.startTime ? new Date(s.startTime) : s.timestamp ? new Date(s.timestamp) : new Date(),
             })),
           },
         ],
@@ -139,11 +139,11 @@ export function useSystemSession() {
     }
   }, [])
 
-  const buildPayload = useCallback(() => {
-    const { isSystem, isFragmented, isDissociative } = deriveFlags()
-    const name = session.systemName || ''
+  const buildPayloadFromSession = useCallback((sess) => {
+    const { isSystem, isFragmented, isDissociative } = deriveFlags(sess.sysType)
+    const name = sess.systemName || ''
     const sysIdx = name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined
-    const front = buildFront(session)
+    const front = buildFront(sess)
 
     const payload = {
       name: {
@@ -151,33 +151,36 @@ export function useSystemSession() {
         ...(sysIdx && { indexable: sysIdx }),
       },
       sys_type: {
-        name: session.sysType?.name || 'None',
-        dd: session.sysType?.dd || {},
+        name: sess.sysType?.name || 'None',
+        dd: sess.sysType?.dd || {},
         isSystem,
         isFragmented,
         isDissociative,
       },
       privacyBuckets: [
-        session.privacyBuckets?.Strangers?._id,
-        session.privacyBuckets?.Friends?._id,
+        sess.privacyBuckets?.Strangers?._id,
+        sess.privacyBuckets?.Friends?._id,
       ].filter(Boolean),
       alters: {
-        conditions: (session.members || [])
+        conditions: (sess.members || [])
           .filter(m => !isSystem || m.entityType !== 'state')
           .map(m => ({ name: m.name, settings: { hide_to_self: false, include_in_Count: true } })),
-        IDs: (session.members || [])
+        IDs: (sess.members || [])
           .filter(m => !isSystem || m.entityType !== 'state')
           .map(m => m.id),
       },
       states: {
-        conditions: (session.members || [])
+        conditions: (sess.members || [])
           .filter(m => m.entityType === 'state')
           .map(m => ({ name: m.name, settings: { hide_to_self: false, include_in_Count: true } })),
-        IDs: (session.members || [])
+        IDs: (sess.members || [])
           .filter(m => m.entityType === 'state')
           .map(m => m.id),
       },
-      groups: { conditions: [], IDs: [] },
+      groups: {
+        conditions: (sess.groups || []).map(g => ({ name: g.name, settings: { hide_to_self: false, include_in_Count: true } })),
+        IDs: (sess.groups || []).map(g => g.id),
+      },
       setting: {
         friendAutoBucket: 'Friends',
         privacy: [
@@ -197,7 +200,7 @@ export function useSystemSession() {
           },
         ],
       },
-      privateEntityIDs: session.privateEntityIDs || { alters: [], states: [], groups: [] },
+      privateEntityIDs: sess.privateEntityIDs || { alters: [], states: [], groups: [] },
       front: front
     }
 
@@ -213,13 +216,17 @@ export function useSystemSession() {
     buildFront,
   ])
 
+  // Convenience wrapper: builds payload from current session state
+  const buildPayload = useCallback(() => buildPayloadFromSession(session), [session, buildPayloadFromSession])
+
   const commit = useCallback(async (overridePatch) => {
     setCommitting(true)
     setError(null)
     try {
+      // Apply patch to session (for any listeners) and build payload from patched state
       if (overridePatch) setSession(prev => ({ ...prev, ...overridePatch }))
-      await Promise.resolve()
-      const data = buildPayload()
+      const patchedSession = overridePatch ? { ...session, ...overridePatch } : session
+      const data = buildPayloadFromSession(patchedSession)
       const res = await api.createSystemSession(data)
       setResult(res)
       return res
@@ -229,7 +236,7 @@ export function useSystemSession() {
     } finally {
       setCommitting(false)
     }
-  }, [buildPayload])
+  }, [session, buildPayload])
 
   const summary = useMemo(() => {
     const { isSystem, isFragmented, isDissociative } = deriveFlags()

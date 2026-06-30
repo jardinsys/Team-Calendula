@@ -123,7 +123,10 @@ async function processOctoconData(system, user, data, options, onProgress) {
         groupsUpdated: 0,
         switchesImported: 0,
         pronounsApplied: false,
-        errors: []
+        errors: [],
+        importedMembers: [],
+        importedGroups: [],
+        importedShifts: [],
     };
 
     const alterIdMap = new Map();
@@ -192,17 +195,19 @@ async function processOctoconData(system, user, data, options, onProgress) {
                     continue;
                 }
 
-                if (existingGroup && !options.replace) {
+                if (existingGroup) {
                     updateGroupFromOctocon(existingGroup, tag);
                                         await existingGroup.save();
                     groupMembershipMap.set(existingGroup._id.toString(), tag.alters || []);
                     result.groupsUpdated++;
+                    result.importedGroups.push(existingGroup);
                 } else {
                     const newGroup = createGroupFromOctocon(tag);
-                    await syncEntityImages(newGroup, tag, 'Group', system, options.target);
-                    await utils.createAndLinkEntity(newGroup, system, 'group');
+                    await syncEntityImages(newGroup, tag, 'Group', system, options.target, options.dryRun);
+                    await utils.createAndLinkEntity(newGroup, system, 'group', options);
                     groupMembershipMap.set(newGroup._id.toString(), tag.alters || []);
                     result.groupsImported++;
+                    result.importedGroups.push(newGroup);
                 }
             } catch (err) {
                 result.errors.push(`Tag "${tag.name}": ${err.message}`);
@@ -234,22 +239,24 @@ async function processOctoconData(system, user, data, options, onProgress) {
                     continue;
                 }
 
-                if (existingState && !options.replace) {
+                if (existingState) {
                     await updateStateFromOctocon(existingState, octoAlter, system, options.target);
                                         await existingState.save();
                     alterIdMap.set(octoAlter.id, { id: existingState._id, type: 'state' });
                     entity = existingState;
                     result.statesUpdated++;
+                    result.importedMembers.push(existingState);
                 } else {
                     const newState = options.target === TARGET_DISCORD
                         ? createStateFromOctoconDiscord(octoAlter)
                         : createStateFromOctocon(octoAlter);
                     await filterConflictingProxies(newState, system);
-                    await syncEntityImages(newState, octoAlter, 'State', system, options.target);
-                    await utils.createAndLinkEntity(newState, system, 'state');
+                    await syncEntityImages(newState, octoAlter, 'State', system, options.target, options.dryRun);
+                    await utils.createAndLinkEntity(newState, system, 'state', options);
                     alterIdMap.set(octoAlter.id, { id: newState._id, type: 'state' });
                     entity = newState;
                     result.statesImported++;
+                    result.importedMembers.push(newState);
                 }
             } else {
                 let existingAlter = await findExistingAlterOctocon(system, octoAlter);
@@ -260,22 +267,24 @@ async function processOctoconData(system, user, data, options, onProgress) {
                     continue;
                 }
 
-                if (existingAlter && !options.replace) {
+                if (existingAlter) {
                     await updateAlterFromOctocon(existingAlter, octoAlter, system, options.target);
                                         await existingAlter.save();
                     alterIdMap.set(octoAlter.id, { id: existingAlter._id, type: 'alter' });
                     entity = existingAlter;
                     result.membersUpdated++;
+                    result.importedMembers.push(existingAlter);
                 } else {
                     const newAlter = options.target === TARGET_DISCORD
                         ? createAlterFromOctoconDiscord(octoAlter)
                         : createAlterFromOctocon(octoAlter);
                     await filterConflictingProxies(newAlter, system);
-                    await syncEntityImages(newAlter, octoAlter, 'Alter', system, options.target);
-                    await utils.createAndLinkEntity(newAlter, system, 'alter');
+                    await syncEntityImages(newAlter, octoAlter, 'Alter', system, options.target, options.dryRun);
+                    await utils.createAndLinkEntity(newAlter, system, 'alter', options);
                     alterIdMap.set(octoAlter.id, { id: newAlter._id, type: 'alter' });
                     entity = newAlter;
                     result.membersImported++;
+                    result.importedMembers.push(newAlter);
                 }
             }
 
@@ -283,7 +292,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
             if (entity) {
                 for (const [groupId, sourceAlterIds] of groupMembershipMap) {
                     if (sourceAlterIds.includes(octoAlter.id)) {
-                        await utils.linkEntityToGroup(entity._id, groupId, entityType);
+                        await utils.linkEntityToGroup(entity._id, groupId, entityType, options);
                     }
                 }
             }
@@ -295,12 +304,25 @@ async function processOctoconData(system, user, data, options, onProgress) {
     // Fronts
     if (!options.noSwitches && data.fronts && data.fronts.length > 0) {
         emit({ phase: 'switches', current: 0, total: data.fronts.length, message: `Importing ${data.fronts.length} front ${data.fronts.length !== 1 ? 'entries' : 'entry'}...` });
-        const importedShifts = await importOctoconFronts(system, data.fronts, alterIdMap, options);
-        result.switchesImported = importedShifts;
+        const switchResult = await importOctoconFronts(system, data.fronts, alterIdMap, options);
+        result.switchesImported = switchResult.count;
+        if (switchResult.shifts?.length) result.importedShifts = switchResult.shifts;
     }
 
-    emit({ phase: 'saving', message: 'Saving system...' });
-    await system.save();
+    if (!options.dryRun) {
+        emit({ phase: 'saving', message: 'Saving system...' });
+        await system.save();
+    }
+
+    // Normalize: convert Mongoose docs to plain objects with entityType tagged
+    const stateIds = new Set((system.states?.IDs || []).map(id => id.toString()));
+    result.importedMembers = result.importedMembers.map(m => {
+        const plain = m.toJSON ? m.toJSON() : { ...m };
+        plain.entityType = stateIds.has(m._id?.toString()) ? 'state' : 'alter';
+        return plain;
+    });
+    result.importedGroups = result.importedGroups.map(g => g.toJSON ? g.toJSON() : { ...g });
+
     return result;
 }
 
@@ -310,6 +332,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
 
 async function importOctoconFronts(system, fronts, alterIdMap, options, onProgress) {
     const emit = onProgress || (() => {});
+    const dryRun = options.dryRun || !system?._id;
     if (!system.front) system.front = {};
     if (!system.front.layers || system.front.layers.length === 0) {
         system.front.layers = [{
@@ -365,19 +388,23 @@ async function importOctoconFronts(system, fronts, alterIdMap, options, onProgre
             const mapped = alterIdMap.get(alterId);
             if (!mapped) continue;
 
-            const alter = await Alter.findById(mapped.id);
-            const state = alter ? null : await State.findById(mapped.id);
-            members.push({
-                s_type: alter ? 'alter' : 'state',
-                ID: mapped.id,
-                type_name: (alter || state)?.name?.display || 'Unknown'
-            });
+            let s_type = 'alter';
+            let type_name = 'Unknown';
+            if (dryRun) {
+                s_type = mapped.type || 'alter';
+            } else {
+                const alter = await Alter.findById(mapped.id);
+                const state = alter ? null : await State.findById(mapped.id);
+                s_type = alter ? 'alter' : 'state';
+                type_name = (alter || state)?.name?.display || 'Unknown';
+            }
+            members.push({ s_type, ID: mapped.id, type_name });
         }
 
         if (members.length === 0) continue;
 
         for (const member of members) {
-            const shift = new Shift({
+            const shiftData = {
                 s_type: member.s_type,
                 ID: member.ID,
                 type_name: member.type_name,
@@ -388,16 +415,23 @@ async function importOctoconFronts(system, fronts, alterIdMap, options, onProgre
                     endTime: group.endTime,
                     layerID: targetLayer._id
                 }]
-            });
+            };
 
-            await shift.save();
-            targetLayer.shifts.push(shift._id);
+            if (dryRun) {
+                targetLayer.shifts.push(shiftData);
+            } else {
+                const shift = new Shift(shiftData);
+                await shift.save();
+                targetLayer.shifts.push(shift._id);
+            }
         }
         imported++;
     }
 
-    await system.save();
-    return imported;
+    if (!dryRun) {
+        await system.save();
+    }
+    return { count: imported, shifts: dryRun ? targetLayer.shifts : [] };
 }
 
 // ============================================

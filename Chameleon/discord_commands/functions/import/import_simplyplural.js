@@ -80,7 +80,9 @@ async function processSimplyPluralData(system, data, options, onProgress) {
         groupsImported: 0,
         groupsUpdated: 0,
         switchesImported: 0,
-        errors: []
+        errors: [],
+        importedMembers: [],
+        importedGroups: [],
     };
 
     if (!system.alters) system.alters = { IDs: [], conditions: [] };
@@ -107,11 +109,12 @@ async function processSimplyPluralData(system, data, options, onProgress) {
 
                 if (existingGroup && options.skipExisting) continue;
 
-                if (existingGroup && !options.replace) {
+                if (existingGroup) {
                     if (spGroup.desc) existingGroup.description = spGroup.desc;
                     if (spGroup.color) existingGroup.color = spGroup.color;
                                         await existingGroup.save();
                     result.groupsUpdated++;
+                    result.importedGroups.push(existingGroup);
                 } else {
                     const newGroup = new Group({
                         name: {
@@ -126,9 +129,10 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             importedAt: new Date()
                         }
                     });
-                    await syncEntityImages(newGroup, spGroup, 'Group', system, options.target);
-                    await utils.createAndLinkEntity(newGroup, system, 'group');
+                    await syncEntityImages(newGroup, spGroup, 'Group', system, options.target, options.dryRun);
+                    await utils.createAndLinkEntity(newGroup, system, 'group', options);
                     result.groupsImported++;
+                    result.importedGroups.push(newGroup);
                 }
             } catch (err) {
                 result.errors.push(`Group "${spGroup.name}": ${err.message}`);
@@ -165,7 +169,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                     continue;
                 }
 
-                if (existingState && !options.replace) {
+                if (existingState) {
                     if (spMember.avatarUrl) existingState.avatar = { url: spMember.avatarUrl };
                     if (spMember.desc) existingState.description = spMember.desc;
                     if (spMember.pronouns) existingState.pronouns = [spMember.pronouns];
@@ -173,6 +177,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                                         await existingState.save();
                     entity = existingState;
                     result.statesUpdated++;
+                    result.importedMembers.push(existingState);
                 } else {
                     const newState = new State({
                         name: {
@@ -192,10 +197,11 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             pluralKitId: spMember.pkId || undefined
                         }
                     });
-                    await syncEntityImages(newState, spMember, 'State', system, options.target);
-                    await utils.createAndLinkEntity(newState, system, 'state');
+                    await syncEntityImages(newState, spMember, 'State', system, options.target, options.dryRun);
+                    await utils.createAndLinkEntity(newState, system, 'state', options);
                     entity = newState;
                     result.statesImported++;
+                    result.importedMembers.push(newState);
                 }
             } else {
                 let existingAlter = await Alter.findOne({
@@ -208,7 +214,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                     continue;
                 }
 
-                if (existingAlter && !options.replace) {
+                if (existingAlter) {
                     if (spMember.avatarUrl) existingAlter.avatar = { url: spMember.avatarUrl };
                     if (spMember.desc) existingAlter.description = spMember.desc;
                     if (spMember.pronouns) existingAlter.pronouns = [spMember.pronouns];
@@ -220,6 +226,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                                         await existingAlter.save();
                     entity = existingAlter;
                     result.membersUpdated++;
+                    result.importedMembers.push(existingAlter);
                 } else {
                     const newAlter = new Alter({
                         name: {
@@ -239,10 +246,11 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             pluralKitId: spMember.pkId || undefined
                         }
                     });
-                    await syncEntityImages(newAlter, spMember, 'Alter', system, options.target);
-                    await utils.createAndLinkEntity(newAlter, system, 'alter');
+                    await syncEntityImages(newAlter, spMember, 'Alter', system, options.target, options.dryRun);
+                    await utils.createAndLinkEntity(newAlter, system, 'alter', options);
                     entity = newAlter;
                     result.membersImported++;
+                    result.importedMembers.push(newAlter);
                 }
             }
 
@@ -250,7 +258,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
             if (entity) {
                 for (const [groupId, sourceMemberIds] of groupMembershipMap) {
                     if (sourceMemberIds.includes(spMember.uid)) {
-                        await utils.linkEntityToGroup(entity._id, groupId, entityType);
+                        await utils.linkEntityToGroup(entity._id, groupId, entityType, options);
                     }
                 }
             }
@@ -260,7 +268,19 @@ async function processSimplyPluralData(system, data, options, onProgress) {
     }
 
     emit({ phase: 'saving', message: 'Saving system...' });
-    await system.save();
+    if (!options.dryRun) {
+        await system.save();
+    }
+
+    // Normalize: convert Mongoose docs to plain objects with entityType tagged
+    const stateIds = new Set((system.states?.IDs || []).map(id => id.toString()));
+    result.importedMembers = result.importedMembers.map(m => {
+        const plain = m.toJSON ? m.toJSON() : { ...m };
+        plain.entityType = stateIds.has(m._id?.toString()) ? 'state' : 'alter';
+        return plain;
+    });
+    result.importedGroups = result.importedGroups.map(g => g.toJSON ? g.toJSON() : { ...g });
+
     return result;
 }
 

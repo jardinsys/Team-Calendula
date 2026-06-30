@@ -16,6 +16,7 @@
 //   -skipexisting                        - Skip members that already exist
 //   -nogroups                            - Don't import groups
 //   -noswitches                          - Don't import switch history
+//   -applypronouns                       - Apply source pronouns to your user profile
 //   -states:<name1,name2,name3>          - Import these members as states instead of alters
 //   -target:app                          - Import to main/app fields (default)
 //   -target:discord                      - Import to Discord-specific fields
@@ -98,6 +99,7 @@ module.exports = {
             skipExisting: parsed.skipexisting || false,
             noGroups: parsed.nogroups || false,
             noSwitches: parsed.noswitches || false,
+            applyPronouns: parsed.applypronouns || false,
             stateNames: parsed.states ? parsed.states.split(',').map(n => n.trim().toLowerCase()) : [],
             target: targetMode
         };
@@ -466,6 +468,7 @@ async function runImportDirect(interaction, session, sessionId) {
         await interaction.editReply({ embeds: [resultEmbed], components: [] });
     } catch (error) {
         console.error('Import execution error:', error);
+        utils.deleteSession(sessionId);
         await interaction.editReply({
             embeds: [new EmbedBuilder()
                 .setColor(utils.ENTITY_COLORS.error)
