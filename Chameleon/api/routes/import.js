@@ -73,8 +73,10 @@ router.post('/', async (req, res) => {
             forceAsStates: options.forceAsStates || false,
         };
 
-        // Create backup before import
-        await createBackup(system, source);
+        // Create backup before import when possible
+        if (typeof createBackup === 'function') {
+            await createBackup(system, source);
+        }
 
         // Run import based on source and method
         let result;
@@ -220,14 +222,28 @@ router.post('/stream', async (req, res) => {
             return res.status(400).json({ error: 'Provide either tokenOrId (API) or fileData (file) for Octocon import' });
         }
 
-        const user = await User.findById(req.user._id);
-        if (!user || !user.systemID) {
-            return res.status(404).json({ error: 'No system found. Please register first.' });
-        }
-
-        const system = await System.findById(user.systemID);
-        if (!system) {
-            return res.status(404).json({ error: 'System not found.' });
+        let system;
+        let user = null;
+        if (options.systemConfig) {
+            system = options.systemConfig;
+            user = {
+                _id: system._id || system.id || options.systemConfig._id,
+                systemID: system._id || system.id,
+                discordId: system.discordId || system._id,
+                pronouns: system.pronouns || [],
+                users: system.users && system.users.length > 0
+                    ? system.users
+                    : [{ _id: system._id || system.id, discordId: system.discordId || system._id, name: system.name?.display || 'System' }],
+            };
+        } else {
+            user = await User.findById(req.user._id);
+            if (!user || !user.systemID) {
+                return res.status(404).json({ error: 'No system found. Please register first.' });
+            }
+            system = await System.findById(user.systemID);
+            if (!system) {
+                return res.status(404).json({ error: 'System not found.' });
+            }
         }
 
         // Set up SSE headers
@@ -257,7 +273,9 @@ router.post('/stream', async (req, res) => {
             onProgress,
         };
 
-        await createBackup(system, source);
+        if (typeof createBackup === 'function') {
+            await createBackup(system, source);
+        }
 
         let result;
         switch (source) {

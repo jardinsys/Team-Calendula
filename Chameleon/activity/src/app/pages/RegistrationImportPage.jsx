@@ -25,7 +25,7 @@ const SOURCE_PRIVACY_LABEL = {
 const PRIVACY_BUCKET_WARNING = (<div><strong>SimplyPlural Friends buckets will be removed.</strong> Friends cannot be reconnected to buckets at this time.</div>)
 
 export function RegistrationImportPage({ onNavigate, onBack }) {
-    const { session, update, setMembers, setGroups } = useSystemSession()
+    const { session, update, setMembers, setGroups, buildPayload } = useSystemSession()
 
     const [phase, setPhase] = useState('mode')
     const [selectedSources, setSelectedSources] = useState(new Set())
@@ -161,7 +161,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         startFetch(`Fetching preview from ${src?.label}...`)
 
         try {
-            const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData, session ? { systemConfig: session.buildPayload() } : {})
+            const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData, { systemConfig: buildPayload() })
             setPreviews(prev => ({ ...prev, [sourceId]: res.preview }))
 
             const types = {}
@@ -203,8 +203,6 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
     }, [phase, selectedSources, fetchPreviewForSource])
 
     const handleImportAll = useCallback(async () => {
-        setPhase('importing')
-        setError(null)
 
         const sourcesArray = Array.from(selectedSources)
         const stagedImports = []
@@ -238,6 +236,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                         noGroups: !cfg.includeGroups, noSwitches: !cfg.includeSwitches,
                         target: cfg.target, forceAsStates, stateNames,
                         selectedMemberIds, selectedGroupIds,
+                        systemConfig: buildPayload(),
                     },
                     cfg.fileData
                 )
@@ -284,6 +283,12 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         setConfiguringSource(null)
         setError(null)
     }, [])
+
+    const completionActions = useMemo(() => {
+        if (phase !== 'complete') return null
+        if (importMode === 'simple') return 'single'
+        return 'full'
+    }, [phase, importMode])
 
     // ===== PHASE 1a: Mode Picker =====
     if (phase === 'mode') {
@@ -515,6 +520,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
     // ===== PHASE 3: Preview & Import =====
     if (phase === 'preview') {
         const sourcesArray = Array.from(selectedSources)
+        const hasAnyPreview = sourcesArray.some(id => previews[id])
 
         return (
             <div className="settings-page">
@@ -527,7 +533,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                             : 'Review each source and its settings.'}
                 </p>
 
-                {renderFetchStatus()}
+                {!hasAnyPreview && <div className="settings-section">{renderFetchStatus()}</div>}
 
                 {sourcesArray.map(sourceId => {
                     const preview = previews[sourceId]
@@ -560,11 +566,29 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                             </div>
 
                             <div style={{ padding: 'var(--space-md)' }}>
-                                <div style={{ display: 'flex', gap: 'var(--space-lg)', flexWrap: 'wrap', fontSize: '0.9rem', marginBottom: 'var(--space-md)' }}>
-                                    <span>Found <strong>{preview.members.length}</strong> member{preview.members.length !== 1 ? 's' : ''}</span>
-                                    <span>Found <strong>{preview.groups.length}</strong> group{preview.groups.length !== 1 ? 's' : ''}</span>
-                                    <span style={{ color: 'var(--color-success)' }}><strong>{preview.members.filter(m => m.action === 'new').length}</strong> new</span>
-                                    <span style={{ color: 'var(--color-warning)' }}><strong>{preview.members.filter(m => m.action === 'update').length}</strong> will update</span>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-sm)', fontSize: '0.9rem', marginBottom: 'var(--space-md)' }}>
+                                    <div className="settings-section" style={{ padding: 'var(--space-sm)' }}>
+                                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '2px' }}>Members</div>
+                                        <div style={{ fontWeight: 600 }}>{preview.members.length}</div>
+                                    </div>
+                                    <div className="settings-section" style={{ padding: 'var(--space-sm)' }}>
+                                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '2px' }}>Groups</div>
+                                        <div style={{ fontWeight: 600 }}>{preview.groups.length}</div>
+                                    </div>
+                                    <div className="settings-section" style={{ padding: 'var(--space-sm)', borderLeft: '3px solid var(--color-success)' }}>
+                                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '2px' }}>New</div>
+                                        <div style={{ color: 'var(--color-success)', fontWeight: 700 }}>{preview.members.filter(m => m.action === 'new').length}</div>
+                                    </div>
+                                    <div className="settings-section" style={{ padding: 'var(--space-sm)', borderLeft: '3px solid var(--color-warning)' }}>
+                                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '2px' }}>Will update</div>
+                                        <div style={{ color: 'var(--color-warning)', fontWeight: 700 }}>{preview.members.filter(m => m.action === 'update').length}</div>
+                                    </div>
+                                    {preview.switches && (
+                                        <div className="settings-section" style={{ padding: 'var(--space-sm)', borderLeft: '3px solid var(--accent)', gridColumn: 'span 2' }}>
+                                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '2px' }}>Switch / fronting history</div>
+                                            <div style={{ fontWeight: 600 }}>{preview.switches.length} events</div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {importMode === 'advanced' && (
@@ -660,9 +684,8 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                 )}
 
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-                    <button className="btn btn-ghost" onClick={() => setPhase('configure')} style={{ flex: 1 }}>← Back</button>
-                    <button className="btn-gradient btn-gradient-primary" onClick={handleImportAll} style={{ flex: 2 }}>
-                        Import and Continue →
+                    <button className={`${fetchStatus?.phase === 'fetching' ? 'btn-loading' : 'btn-gradient'} btn-gradient-primary`} onClick={handleImportAll} disabled={fetchStatus?.phase === 'fetching'} style={{ flex: 2 }}>
+                        {fetchStatus?.phase === 'fetching' ? 'Fetching preview...' : 'Import and Continue →'}
                     </button>
                 </div>
             </div>
@@ -671,26 +694,69 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
     // ===== PHASE 4: Importing =====
     if (phase === 'importing') {
+        const sourcesArray = Array.from(selectedSources);
+        const stagedResults = (session?.stagedImports || []).slice();
+        const completedSourceIds = new Set(stagedResults.map(r => r.sourceId));
+        const activeSourceId = sourcesArray.find(id => !completedSourceIds.has(id)) || null;
+        const activeSource = activeSourceId ? SOURCES.find(s => s.id === activeSourceId) : null;
+
         return (
             <div className="settings-page" style={{ position: 'relative' }}>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13, 13, 20, 0.85)', backdropFilter: 'blur(8px)' }}>
-                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', padding: 'var(--space-xl) var(--space-2xl)', textAlign: 'center', maxWidth: '420px', width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', padding: 'var(--space-xl) var(--space-2xl)', textAlign: 'center', maxWidth: '480px', width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
                         <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-sm)' }}>📥</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: 'var(--space-xs)' }}>Importing {selectedSources.size} Source{selectedSources.size !== 1 ? 's' : ''}</div>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>Please don't close this window</div>
-                        <div style={{ flex: 1, overflowY: 'auto', textAlign: 'left', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius)', padding: 'var(--space-sm)', fontSize: '0.8rem', fontFamily: 'var(--font-body)', color: 'var(--text-secondary)', maxHeight: '300px' }}>
-                            {renderFetchStatus()}
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: 'var(--space-xs)' }}>
+                            Importing {sourcesArray.length} source{sourcesArray.length !== 1 ? 's' : ''}
                         </div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>
+                            Please don't close this window
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', padding: 'var(--space-sm)', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius)', marginBottom: 'var(--space-md)', textAlign: 'left' }}>
+                            <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                                {activeSource ? `Importing from ${activeSource.label}` : 'Finishing up...'}
+                            </div>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                                {activeSource ? 'This may take a moment while we fetch and sync members, groups, and history.' : 'Wrapping up the last details.'}
+                            </div>
+                            {stagedResults.filter(r => r.success).length > 0 && (
+                                <div style={{ color: 'var(--color-success)', fontSize: '0.8rem', marginTop: 'var(--space-xs)' }}>
+                                    Imported {stagedResults.filter(r => r.success).length} of {sourcesArray.length} sources
+                                </div>
+                            )}
+                        </div>
+
+                        {!!stagedResults.length && (
+                            <div style={{ flex: 1, overflowY: 'auto', textAlign: 'left', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius)', padding: 'var(--space-sm)', fontSize: '0.8rem', fontFamily: 'var(--font-body)', color: 'var(--text-secondary)', maxHeight: '260px' }}>
+                                {stagedResults.map((r, i) => {
+                                    const src = SOURCES.find(s => s.id === r.sourceId);
+                                    return (
+                                        <div key={i} style={{ padding: 'var(--space-xs) 0', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                                            <span style={{ fontSize: '1rem' }}>{src?.icon}</span>
+                                            <span style={{ color: r.success ? 'var(--color-success)' : 'var(--color-error)' }}>
+                                                {r.success ? 'Imported' : 'Failed'}: {src?.label || r.sourceId}
+                                            </span>
+                                            {r.success && r.result ? (
+                                                <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                                                    {r.result?.result?.membersImported ?? 0} members, {r.result?.result?.groupsImported ?? 0} groups
+                                                </span>
+                                            ) : null}
+                                            {!r.success ? <span style={{ opacity: 0.8 }}>{r.error}</span> : null}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
-        )
+        );
     }
 
     // ===== PHASE 5: Complete =====
     if (phase === 'complete') {
         const results = session?.stagedImports || []
-        const allSuccess = results.every(r => r.success)
+        const allSuccess = results.length > 0 && results.every(r => r.success)
         const totalMembers = results.reduce((sum, r) => sum + (r.result?.result?.membersImported || 0), 0)
         const totalGroups = results.reduce((sum, r) => sum + (r.result?.result?.groupsImported || 0), 0)
 
@@ -701,7 +767,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                 <div className="settings-section" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
                     <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>{allSuccess ? '✅' : '⚠️'}</div>
                     <div style={{ fontWeight: 600, fontSize: '1.2rem', marginBottom: 'var(--space-sm)', color: allSuccess ? 'var(--color-success)' : 'var(--color-warning)' }}>
-                        {allSuccess ? 'All imports successful!' : 'Some imports had issues'}
+                        {allSuccess ? 'Your import is ready' : 'Some parts of the import need attention'}
                     </div>
                     <div style={{ color: 'var(--text-secondary)' }}>
                         Imported <strong>{totalMembers}</strong> member{totalMembers !== 1 ? 's' : ''} and <strong>{totalGroups}</strong> group{totalGroups !== 1 ? 's' : ''}
@@ -709,46 +775,15 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                     </div>
                 </div>
 
-                {results.map((r, i) => {
-                    const src = SOURCES.find(s => s.id === r.sourceId)
-                    if (!r.success) {
-                        return (
-                            <div key={i} className="settings-section" style={{ borderLeft: '3px solid var(--color-error)' }}>
-                                <p style={{ color: 'var(--color-error)', margin: 0, fontWeight: 600 }}><Icon name="x" size={16} /> {src?.label} failed</p>
-                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 'var(--space-xs) 0 0' }}>{r.error}</p>
-                            </div>
-                        )
-                    }
-                    const res = r.result?.result || {}
-                    return (
-                        <div key={i} className="settings-section">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
-                                <span style={{ fontSize: '1.2rem' }}>{src?.icon}</span>
-                                <strong>{src?.label}</strong>
-                                <span style={{ fontSize: '0.7rem', background: 'var(--color-success)', color: 'var(--bg)', padding: '1px 6px', borderRadius: '8px' }}>Success</span>
-                                <span style={{ fontSize: '0.7rem', marginLeft: 'auto', color: 'var(--text-secondary)' }}>
-                                    Target: {targetLabel(res.target)}
-                                </span>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.85rem' }}>
-                                <div>Alters imported: <strong>{res.membersImported || 0}</strong></div>
-                                {res.membersUpdated > 0 && <div>Alters updated: <strong>{res.membersUpdated}</strong></div>}
-                                {res.membersSkipped > 0 && <div>Alters skipped: <strong>{res.membersSkipped}</strong></div>}
-                                {(res.statesImported > 0 || res.statesUpdated > 0) && <div>States imported: <strong>{res.statesImported || 0}</strong></div>}
-                                {(res.groupsImported > 0 || res.groupsUpdated > 0) && <div>Groups imported: <strong>{res.groupsImported || 0}</strong></div>}
-                                {res.switchesImported > 0 && <div>Switches imported: <strong>{res.switchesImported}</strong></div>}
-                            </div>
-                        </div>
-                    )
-                })}
-
-                <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-xl)' }}>
-                    <button className="btn-gradient btn-gradient-primary" onClick={handleContinueToNameStep} style={{ flex: 2, height: '56px', fontSize: '1.1rem' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)', flexWrap: 'wrap' }}>
+                    <button className="btn-gradient btn-gradient-primary" onClick={handleContinueToNameStep} style={{ flex: 1, minWidth: '200px', height: '56px', fontSize: '1.1rem' }}>
                         Continue to System Setup →
                     </button>
-                    <button className="btn btn-ghost" onClick={handleImportMore} style={{ flex: 1, height: '56px' }}>
-                        Import More
-                    </button>
+                    {completionActions === 'full' && (
+                        <button className="btn btn-ghost" onClick={handleImportMore} style={{ flex: 1, minWidth: '200px', height: '56px' }}>
+                            Import More
+                        </button>
+                    )}
                 </div>
             </div>
         )

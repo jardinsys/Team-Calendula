@@ -59,6 +59,7 @@ const TARGET_OPTIONS = [
 ]
 
 export function ImportPage({ system, onNavigate }) {
+    const { buildPayload } = useSystemSession()
     const systemTerm = getSystemTerm(system, { context: 'label' }) || 'system'
 
     const [phase, setPhase] = useState('select')
@@ -185,7 +186,7 @@ export function ImportPage({ system, onNavigate }) {
         startFetch(`Fetching preview from ${src?.label}...`)
 
         try {
-            const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData, session ? { systemConfig: session.buildPayload() } : {})
+            const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData, { systemConfig: buildPayload() })
             setPreviews(prev => ({ ...prev, [sourceId]: res.preview }))
 
             const types = {}
@@ -264,7 +265,7 @@ export function ImportPage({ system, onNavigate }) {
                         stateNames,
                         selectedMemberIds,
                         selectedGroupIds,
-                        ...(session ? { systemConfig: session.buildPayload() } : {}),
+                        systemConfig: buildPayload(),
                     },
                     cfg.fileData
                 )
@@ -696,34 +697,62 @@ export function ImportPage({ system, onNavigate }) {
 
     // ===== PHASE 4: Importing =====
     if (phase === 'importing') {
+        const sourcesArray = Array.from(selectedSources);
+        const completedSourceIds = new Set(importResults.map(r => r.sourceId));
+        const activeSourceId = sourcesArray.find(id => !completedSourceIds.has(id)) || null;
+        const activeSource = activeSourceId ? SOURCES.find(s => s.id === activeSourceId) : null;
+
         return (
             <div className="settings-page" style={{ position: 'relative' }}>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13, 13, 20, 0.85)', backdropFilter: 'blur(8px)' }}>
-                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', padding: 'var(--space-xl) var(--space-2xl)', textAlign: 'center', maxWidth: '420px', width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', padding: 'var(--space-xl) var(--space-2xl)', textAlign: 'center', maxWidth: '480px', width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
                         <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-sm)' }}>📥</div>
-                        <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: 'var(--space-xs)' }}>Importing {selectedSources.size} Source{selectedSources.size !== 1 ? 's' : ''}</div>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>Please don't close this window</div>
-
-                        <div style={{ flex: 1, overflowY: 'auto', textAlign: 'left', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius)', padding: 'var(--space-sm)', fontSize: '0.8rem', fontFamily: 'var(--font-body)', color: 'var(--text-secondary)', maxHeight: '300px' }}>
-                            {importResults.map((r, i) => {
-                                const src = SOURCES.find(s => s.id === r.sourceId)
-                                return (
-                                    <div key={i} style={{ padding: 'var(--space-xs) 0', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                                        <span style={{ fontSize: '1rem' }}>{src?.icon}</span>
-                                        <span style={{ flex: 1, fontWeight: 500 }}>{src?.label}</span>
-                                        <span style={{ color: r.success ? 'var(--color-success)' : 'var(--color-error)' }}>
-                                            {r.success ? '✅' : '❌'}
-                                        </span>
-                                    </div>
-                                )
-                            })}
+                        <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: 'var(--space-xs)' }}>
+                            Importing {sourcesArray.length} source{sourcesArray.length !== 1 ? 's' : ''}
                         </div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>
+                            Please don't close this window
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', padding: 'var(--space-sm)', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius)', marginBottom: 'var(--space-md)', textAlign: 'left' }}>
+                            <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                                {activeSource ? `Importing from ${activeSource.label}` : 'Finishing up...'}
+                            </div>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                                {activeSource ? 'This may take a moment while we fetch and sync members, groups, and history.' : 'Wrapping up the last details.'}
+                            </div>
+                            {importResults.filter(r => r.success).length > 0 && (
+                                <div style={{ color: 'var(--color-success)', fontSize: '0.8rem', marginTop: 'var(--space-xs)' }}>
+                                    Imported {importResults.filter(r => r.success).length} of {sourcesArray.length} sources
+                                </div>
+                            )}
+                        </div>
+
+                        {!!importResults.length && (
+                            <div style={{ flex: 1, overflowY: 'auto', textAlign: 'left', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius)', padding: 'var(--space-sm)', fontSize: '0.8rem', fontFamily: 'var(--font-body)', color: 'var(--text-secondary)', maxHeight: '260px' }}>
+                                {importResults.map((r, i) => {
+                                    const src = SOURCES.find(s => s.id === r.sourceId);
+                                    return (
+                                        <div key={i} style={{ padding: 'var(--space-xs) 0', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                                            <span style={{ fontSize: '1rem' }}>{src?.icon}</span>
+                                            <span style={{ color: r.success ? 'var(--color-success)' : 'var(--color-error)' }}>
+                                                {r.success ? 'Imported' : 'Failed'}: {src?.label || r.sourceId}
+                                            </span>
+                                            {r.success && r.result ? (
+                                                <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                                                    {r.result.membersImported ?? 0} members, {r.result.groupsImported ?? 0} groups
+                                                </span>
+                                            ) : null}
+                                            {!r.success ? <span style={{ opacity: 0.8 }}>{r.error}</span> : null}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
-                <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
             </div>
-        )
-    }
+    )}
 
     // ===== PHASE 5: Complete =====
     if (phase === 'complete') {
