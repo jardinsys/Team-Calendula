@@ -140,10 +140,10 @@ async function processOctoconData(system, user, data, options, onProgress) {
             if (options.target === TARGET_DISCORD) {
                 system.discord = system.discord || {};
                 system.discord.image = system.discord.image || {};
-                const media = await syncImageToR2(data.user.avatar_url, system.users[0] || system.discordId, 'System', 'avatar');
+                const media = await syncImageToR2(data.user.avatar_url, system.users?.[0] || system.discordId, 'System', 'avatar');
                 system.discord.image.avatar = media || { url: data.user.avatar_url };
             } else {
-                const media = await syncImageToR2(data.user.avatar_url, system.users[0] || system.discordId, 'System', 'avatar');
+                const media = await syncImageToR2(data.user.avatar_url, system.users?.[0] || system.discordId, 'System', 'avatar');
                 system.avatar = media || { url: data.user.avatar_url };
             }
         }
@@ -161,10 +161,10 @@ async function processOctoconData(system, user, data, options, onProgress) {
             if (options.target === TARGET_DISCORD) {
                 system.discord = system.discord || {};
                 system.discord.image = system.discord.image || {};
-                const media = await syncImageToR2(data.user.bannerUrl, system.users[0] || system.discordId, 'System', 'banner');
+                const media = await syncImageToR2(data.user.bannerUrl, system.users?.[0] || system.discordId, 'System', 'banner');
                 system.discord.image.banner = media || { url: data.user.bannerUrl };
             } else {
-                const media = await syncImageToR2(data.user.bannerUrl, system.users[0] || system.discordId, 'System', 'banner');
+                const media = await syncImageToR2(data.user.bannerUrl, system.users?.[0] || system.discordId, 'System', 'banner');
                 system.banner = media || { url: data.user.bannerUrl };
             }
         }

@@ -151,10 +151,10 @@ async function processPluralKitData(system, user, data, options, onProgress) {
             if (options.target === TARGET_DISCORD) {
                 system.discord = system.discord || {};
                 system.discord.image = system.discord.image || {};
-                const media = await syncImageToR2(data.system.avatar_url, system.users[0] || system.discordId, 'System', 'avatar');
+                const media = await syncImageToR2(data.system.avatar_url, system.users?.[0] || system.discordId, 'System', 'avatar');
                 system.discord.image.avatar = media || { url: data.system.avatar_url };
             } else {
-                const media = await syncImageToR2(data.system.avatar_url, system.users[0] || system.discordId, 'System', 'avatar');
+                const media = await syncImageToR2(data.system.avatar_url, system.users?.[0] || system.discordId, 'System', 'avatar');
                 system.avatar = media || { url: data.system.avatar_url };
             }
         }
@@ -176,10 +176,10 @@ async function processPluralKitData(system, user, data, options, onProgress) {
             if (options.target === TARGET_DISCORD) {
                 system.discord = system.discord || {};
                 system.discord.image = system.discord.image || {};
-                const media = await syncImageToR2(data.system.banner_url, system.users[0] || system.discordId, 'System', 'banner');
+                const media = await syncImageToR2(data.system.banner_url, system.users?.[0] || system.discordId, 'System', 'banner');
                 system.discord.image.banner = media || { url: data.system.banner_url };
             } else {
-                const media = await syncImageToR2(data.system.banner_url, system.users[0] || system.discordId, 'System', 'banner');
+                const media = await syncImageToR2(data.system.banner_url, system.users?.[0] || system.discordId, 'System', 'banner');
                 system.banner = media || { url: data.system.banner_url };
             }
         }
