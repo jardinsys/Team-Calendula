@@ -89,6 +89,11 @@ async function processSimplyPluralData(system, data, options, onProgress) {
     if (!system.states) system.states = { IDs: [], conditions: [] };
     if (!system.groups) system.groups = { IDs: [], types: [], conditions: [] };
 
+    // System metadata
+    system.metadata = system.metadata || {};
+    system.metadata.importedFrom = 'simplyplural';
+    system.metadata.importedAt = new Date();
+
     // GROUPS FIRST
     // Note: SP API does not provide member references in group objects,
     // so groupMembershipMap will be empty. Infrastructure is ready if SP adds this.
@@ -123,6 +128,8 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                         },
                         description: spGroup.desc || undefined,
                         color: spGroup.color || undefined,
+                        avatar: spGroup.icon ? { url: spGroup.icon } : undefined,
+                        banner: spGroup.bannerUrl ? { url: spGroup.bannerUrl } : undefined,
                         alterIDs: [],
                         metadata: {
                             importedFrom: 'simplyplural',
@@ -171,6 +178,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
 
                 if (existingState) {
                     if (spMember.avatarUrl) existingState.avatar = { url: spMember.avatarUrl };
+                    if (spMember.bannerUrl) existingState.banner = { url: spMember.bannerUrl };
                     if (spMember.desc) existingState.description = spMember.desc;
                     if (spMember.pronouns) existingState.pronouns = [spMember.pronouns];
                     if (spMember.color) existingState.color = spMember.color;
@@ -185,6 +193,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             display: spMember.name
                         },
                         avatar: spMember.avatarUrl ? { url: spMember.avatarUrl } : undefined,
+                        banner: spMember.bannerUrl ? { url: spMember.bannerUrl } : undefined,
                         description: spMember.desc || undefined,
                         pronouns: spMember.pronouns ? [spMember.pronouns] : [],
                         color: spMember.color || undefined,
@@ -194,7 +203,10 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             importedFrom: 'simplyplural',
                             importedAt: new Date(),
                             simplyPluralId: spMember.uid,
-                            pluralKitId: spMember.pkId || undefined
+                            pluralKitId: spMember.pkId || undefined,
+                            addedAt: spMember.createdAt ? new Date(spMember.createdAt) : new Date(),
+                            sourceCreatedAt: spMember.createdAt ? new Date(spMember.createdAt) : undefined,
+                            sourceVisibility: spMember.private ? 'private' : 'public',
                         }
                     });
                     await syncEntityImages(newState, spMember, 'State', system, options.target, options.dryRun);
@@ -216,6 +228,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
 
                 if (existingAlter) {
                     if (spMember.avatarUrl) existingAlter.avatar = { url: spMember.avatarUrl };
+                    if (spMember.bannerUrl) existingAlter.banner = { url: spMember.bannerUrl };
                     if (spMember.desc) existingAlter.description = spMember.desc;
                     if (spMember.pronouns) existingAlter.pronouns = [spMember.pronouns];
                     if (spMember.color) existingAlter.color = spMember.color;
@@ -234,6 +247,7 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             display: spMember.name
                         },
                         avatar: spMember.avatarUrl ? { url: spMember.avatarUrl } : undefined,
+                        banner: spMember.bannerUrl ? { url: spMember.bannerUrl } : undefined,
                         description: spMember.desc || undefined,
                         pronouns: spMember.pronouns ? [spMember.pronouns] : [],
                         color: spMember.color || undefined,
@@ -243,7 +257,10 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                             importedFrom: 'simplyplural',
                             importedAt: new Date(),
                             simplyPluralId: spMember.uid,
-                            pluralKitId: spMember.pkId || undefined
+                            pluralKitId: spMember.pkId || undefined,
+                            addedAt: spMember.createdAt ? new Date(spMember.createdAt) : new Date(),
+                            sourceCreatedAt: spMember.createdAt ? new Date(spMember.createdAt) : undefined,
+                            sourceVisibility: spMember.private ? 'private' : 'public',
                         }
                     });
                     await syncEntityImages(newAlter, spMember, 'Alter', system, options.target, options.dryRun);
@@ -339,6 +356,7 @@ async function previewSimplyPluralData(system, data) {
             action: existing ? 'update' : 'new',
             existingId: existing?._id?.toString() || null,
             visibility: 'public',
+            banner: spMember.bannerUrl || null,
         });
     }
 

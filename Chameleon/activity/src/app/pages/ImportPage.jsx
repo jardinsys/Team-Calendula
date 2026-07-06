@@ -15,6 +15,7 @@ const SOURCES = [
         id: 'simplyplural', label: 'Simply Plural', icon: '&',
         methods: [
             { id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'Your SP API token', help: 'Settings → Developer → Add Token', privacyNote: null },
+            { id: 'file', label: 'File Import', help: 'Settings → Account → Export Data → Download. Upload the JSON file + avatar folder.', privacyNote: 'Your export file may contain private data (descriptions, pronouns, avatar URLs, proxy patterns, front history). This data will only be stored in your system\'s database.' },
         ],
     },
     {
@@ -38,6 +39,16 @@ const PHASE_ICONS = { fetching: '🔍', members: '👤', groups: '📦', switche
 function getSourceTerm(source) {
     const terms = { pluralkit: 'members', simplyplural: 'members', octocon: 'alters', tupperbox: 'tuppers' }
     return terms[source] || 'entities'
+}
+
+// Ensure preview always has array members/groups (PK API can return objects)
+function normalizePreview(p) {
+    if (!p) return { members: [], groups: [] }
+    return {
+        ...p,
+        members: Array.isArray(p.members) ? p.members : [],
+        groups: Array.isArray(p.groups) ? p.groups : [],
+    }
 }
 
 const DISCORD_OVERLAY_DESC = (
@@ -187,31 +198,29 @@ export function ImportPage({ system, onNavigate }) {
 
         try {
             const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData, { systemConfig: buildPayload() })
-            const preview = res.preview || {}
-            if (!Array.isArray(preview.members)) preview.members = []
-            if (!Array.isArray(preview.groups)) preview.groups = []
+            const preview = normalizePreview(res.preview)
             setPreviews(prev => ({ ...prev, [sourceId]: preview }))
 
             const types = {}
             if (cfg.entityTypeMode === 'all_states') {
-                res.preview.members.forEach(m => { types[m.sourceId] = 'state' })
+                preview.members.forEach(m => { types[m.sourceId] = 'state' })
             } else if (cfg.entityTypeMode === 'all_alters') {
-                res.preview.members.forEach(m => { types[m.sourceId] = 'alter' })
+                preview.members.forEach(m => { types[m.sourceId] = 'alter' })
             } else {
-                res.preview.members.forEach(m => { types[m.sourceId] = 'alter' })
+                preview.members.forEach(m => { types[m.sourceId] = 'alter' })
             }
 
             setSourceConfigs(prev => ({
                 ...prev,
                 [sourceId]: {
                     ...prev[sourceId],
-                    selectedMemberIds: new Set(res.preview.members.map(m => m.sourceId)),
-                    selectedGroupIds: new Set(res.preview.groups.map(g => g.sourceId)),
+                    selectedMemberIds: new Set(preview.members.map(m => m.sourceId)),
+                    selectedGroupIds: new Set(preview.groups.map(g => g.sourceId)),
                     memberEntityTypes: types,
                 }
             }))
 
-            completeFetch(`Loaded ${res.preview.members.length} members, ${res.preview.groups.length} groups from ${src?.label}`)
+            completeFetch(`Loaded ${preview.members.length} members, ${preview.groups.length} groups from ${src?.label}`)
         } catch (err) {
             errorFetch(err.message || 'Failed to fetch preview')
             setError(`${src?.label}: ${err.message || 'Failed to fetch preview'}`)

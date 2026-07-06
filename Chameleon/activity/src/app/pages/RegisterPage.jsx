@@ -832,13 +832,13 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
   // Preset layers based on sys_type (moved inside for closure access)
   const buildPresetLayers = (sysType) => {
     const layers = []
-    if (sysType.isDissociative && !sysType.isSystem && !sysType.isFragmented) {
+    if (sysType?.isDissociative && !sysType?.isSystem && !sysType?.isFragmented) {
       layers.push({ _id: `layer_${Date.now()}_1`, name: 'Actively', color: '#8b5cf6', shifts: [] })
-    } else if (sysType.isFragmented && !sysType.isSystem) {
+    } else if (sysType?.isFragmented && !sysType?.isSystem) {
       layers.push({ _id: `layer_${Date.now()}_1`, name: 'Primary States', color: '#8b5cf6', shifts: [] })
       layers.push({ _id: `layer_${Date.now()}_2`, name: 'Secondary States', color: '#7c3aed', shifts: [] })
       layers.push({ _id: `layer_${Date.now()}_3`, name: 'Tertiary States', color: '#6d28d9', shifts: [] })
-    } else if (sysType.isSystem && sysType.isFragmented) {
+    } else if (sysType?.isSystem && sysType?.isFragmented) {
       layers.push({ _id: `layer_${Date.now()}_1`, name: 'Primary Front', color: '#8b5cf6', shifts: [] })
       layers.push({ _id: `layer_${Date.now()}_2`, name: 'Co-Front', color: '#7c3aed', shifts: [] })
       layers.push({ _id: `layer_${Date.now()}_3`, name: 'Co-conscious', color: '#6d28d9', shifts: [] })

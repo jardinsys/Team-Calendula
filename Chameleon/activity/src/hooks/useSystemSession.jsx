@@ -117,14 +117,14 @@ export function useSystemSession() {
   const buildFront = useCallback((current) => {
     const base = current.front || { status: '', caution: '' }
 
-    if ((current.shiftHistory || []).length) {
+    if ((Array.isArray(current.shiftHistory) ? current.shiftHistory : []).length) {
       return {
         ...base,
         layers: [
           {
             _id: `layer_${Date.now()}`,
             name: 'Active',
-            shifts: current.shiftHistory.map(s => ({
+            shifts: (Array.isArray(current.shiftHistory) ? current.shiftHistory : []).map(s => ({
               ...s,
               timestamp: s.startTime ? new Date(s.startTime) : s.timestamp ? new Date(s.timestamp) : new Date(),
             })),
@@ -178,8 +178,8 @@ export function useSystemSession() {
           .map(m => m.id),
       },
       groups: {
-        conditions: (sess.groups || []).map(g => ({ name: g.name, settings: { hide_to_self: false, include_in_Count: true } })),
-        IDs: (sess.groups || []).map(g => g.id),
+        conditions: (Array.isArray(sess.groups) ? sess.groups : []).map(g => ({ name: g.name, settings: { hide_to_self: false, include_in_Count: true } })),
+        IDs: (Array.isArray(sess.groups) ? sess.groups : []).map(g => g.id),
       },
       setting: {
         friendAutoBucket: 'Friends',

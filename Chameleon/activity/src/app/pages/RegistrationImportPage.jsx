@@ -5,7 +5,10 @@ import { useSystemSession } from '../../hooks/useSystemSession.jsx'
 
 const SOURCES = [
     { id: 'pluralkit', label: 'PluralKit', icon: '🦊', methods: [{ id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'Your PluralKit token', help: 'DM PluralKit: pk;token' }] },
-    { id: 'simplyplural', label: 'Simply Plural', icon: '&', methods: [{ id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'SP API token', help: 'Settings → Developer → Add Token' }] },
+    { id: 'simplyplural', label: 'Simply Plural', icon: '&', methods: [
+        { id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'SP API token', help: 'Settings → Developer → Add Token' },
+        { id: 'file', label: 'File Import', help: 'Settings → Account → Export Data → Download. Upload the JSON file + avatar folder.' },
+    ] },
     { id: 'octocon', label: 'Octocon', icon: '🧠', methods: [{ id: 'api', label: 'API Import', tokenLabel: 'System ID', tokenPlaceholder: '7-char ID', help: 'octocon.app/u/yourid' }, { id: 'file', label: 'File Import', help: 'octocon.app → Settings → Export' }] },
     { id: 'tupperbox', label: 'Tupperbox', icon: '📦', methods: [{ id: 'file', label: 'File Import', help: 'tul!export' }] },
 ]
@@ -24,6 +27,16 @@ const SOURCE_PRIVACY_LABEL = {
 
 const PRIVACY_BUCKET_WARNING = (<div><strong>SimplyPlural Friends buckets will be removed.</strong> Friends cannot be reconnected to buckets at this time.</div>)
 
+// Ensure preview always has array members/groups (PK API can return objects)
+function normalizePreview(p) {
+    if (!p) return { members: [], groups: [] }
+    return {
+        ...p,
+        members: Array.isArray(p.members) ? p.members : [],
+        groups: Array.isArray(p.groups) ? p.groups : [],
+    }
+}
+
 export function RegistrationImportPage({ onNavigate, onBack }) {
     const { session, update, setMembers, setGroups, setSwitches, buildPayload } = useSystemSession()
 
@@ -35,6 +48,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
     const [error, setError] = useState(null)
     const [configuringSource, setConfiguringSource] = useState(null)
     const [importMode, setImportMode] = useState(null)
+    const [importing, setImporting] = useState(false)
 
     const { status: fetchStatus, start: startFetch, complete: completeFetch, error: errorFetch } = useFetchStatus()
 
@@ -162,18 +176,16 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
         try {
             const res = await api.previewImport(sourceId, cfg.token.trim() || null, cfg.fileData, { systemConfig: buildPayload() })
-            const preview = res.preview || {}
-            if (!Array.isArray(preview.members)) preview.members = []
-            if (!Array.isArray(preview.groups)) preview.groups = []
+            const preview = normalizePreview(res.preview)
             setPreviews(prev => ({ ...prev, [sourceId]: preview }))
 
             const types = {}
             if (cfg.entityTypeMode === 'all_states') {
-                res.preview.members.forEach(m => { types[m.sourceId] = 'state' })
+                preview.members.forEach(m => { types[m.sourceId] = 'state' })
             } else if (cfg.entityTypeMode === 'all_alters') {
-                res.preview.members.forEach(m => { types[m.sourceId] = 'alter' })
+                preview.members.forEach(m => { types[m.sourceId] = 'alter' })
             } else {
-                res.preview.members.forEach(m => {
+                preview.members.forEach(m => {
                     types[m.sourceId] = cfg.memberEntityTypes?.[m.sourceId] || 'alter'
                 })
             }
@@ -183,7 +195,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                 [sourceId]: { ...prev[sourceId], memberEntityTypes: types }
             }))
 
-            completeFetch(`Loaded ${res.preview.members.length} members, ${res.preview.groups.length} groups from ${src?.label}`)
+            completeFetch(`Loaded ${preview.members.length} members, ${preview.groups.length} groups from ${src?.label}`)
         } catch (err) {
             errorFetch(err.message || 'Failed to fetch preview')
             setError(`${src?.label}: ${err.message || 'Failed to fetch preview'}`)
@@ -206,9 +218,10 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
     }, [phase, selectedSources, fetchPreviewForSource])
 
     const handleImportAll = useCallback(async () => {
-
+        setImporting(true)
+        try {
         const sourcesArray = Array.from(selectedSources)
-        const stagedImports = []
+            const stagedImports = []
 
         for (const sourceId of sourcesArray) {
             const cfg = sourceConfigs[sourceId]
@@ -282,6 +295,9 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         if (allShifts.length > 0) setSwitches(allShifts)
 
         setPhase('complete')
+        } finally {
+            setImporting(false)
+        }
     }, [selectedSources, sourceConfigs, previews, importMode, update, setMembers, setGroups, setSwitches])
 
     const handleContinueToNameStep = useCallback(() => {
@@ -693,8 +709,8 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                 )}
 
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-                    <button className={`${fetchStatus?.phase === 'fetching' ? 'btn-loading' : 'btn-gradient'} btn-gradient-primary`} onClick={handleImportAll} disabled={fetchStatus?.phase === 'fetching'} style={{ flex: 2 }}>
-                        {fetchStatus?.phase === 'fetching' ? 'Fetching preview...' : 'Import and Continue →'}
+                    <button className={`${importing ? 'btn-loading' : 'btn-gradient'} btn-gradient-primary`} onClick={handleImportAll} disabled={importing || fetchStatus?.phase === 'fetching'} style={{ flex: 2 }}>
+                        {importing ? 'Importing...' : fetchStatus?.phase === 'fetching' ? 'Fetching preview...' : 'Import and Continue →'}
                     </button>
                 </div>
             </div>
@@ -776,7 +792,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                 <div className="settings-section" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
                     <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>{allSuccess ? '✅' : '⚠️'}</div>
                     <div style={{ fontWeight: 600, fontSize: '1.2rem', marginBottom: 'var(--space-sm)', color: allSuccess ? 'var(--color-success)' : 'var(--color-warning)' }}>
-                        {allSuccess ? 'Your import is ready' : 'Some parts of the import need attention'}
+                        {allSuccess ? 'Your import is done! Welcome to Systemiser!' : 'Some parts of the import need attention'}
                     </div>
                     <div style={{ color: 'var(--text-secondary)' }}>
                         Imported <strong>{totalMembers}</strong> member{totalMembers !== 1 ? 's' : ''} and <strong>{totalGroups}</strong> group{totalGroups !== 1 ? 's' : ''}

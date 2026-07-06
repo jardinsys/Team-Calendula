@@ -21,6 +21,7 @@ const {
     previewOctoconFile,
     previewTupperboxFile,
 } = importFunctions;
+const { importSimplyPluralFile, previewSimplyPluralFile } = require('../../discord_commands/functions/import/import_simplyplural_file');
 const authActivity = require('../routes/auth');
 
 // POST /api/import — Import from external source
@@ -38,8 +39,8 @@ router.post('/', async (req, res) => {
         }
 
         // Validate required fields per source
-        if (source === 'simplyplural' && !tokenOrId) {
-            return res.status(400).json({ error: 'Missing required field: tokenOrId for Simply Plural import' });
+        if (source === 'simplyplural' && !tokenOrId && !fileData) {
+            return res.status(400).json({ error: 'Provide either tokenOrId (API) or fileData (file) for Simply Plural import' });
         }
         if (source === 'tupperbox' && !fileData) {
             return res.status(400).json({ error: 'Missing required field: fileData for Tupperbox import' });
@@ -90,7 +91,12 @@ router.post('/', async (req, res) => {
                 break;
 
             case 'simplyplural':
-                result = await importSimplyPluralAPI(system, user, tokenOrId, importOptions);
+                if (fileData) {
+                    result = await importSimplyPluralFile(system, user, fileData, importOptions);
+                } else {
+                    if (!tokenOrId) return res.status(400).json({ error: 'Missing tokenOrId' });
+                    result = await importSimplyPluralAPI(system, user, tokenOrId, importOptions);
+                }
                 break;
 
             case 'octocon':
@@ -156,8 +162,12 @@ router.post('/preview', async (req, res) => {
                 }
                 break;
             case 'simplyplural':
-                if (!tokenOrId) return res.status(400).json({ error: 'Missing tokenOrId' });
-                preview = await previewSimplyPluralAPI(system, tokenOrId);
+                if (fileData) {
+                    preview = await previewSimplyPluralFile(system, fileData);
+                } else {
+                    if (!tokenOrId) return res.status(400).json({ error: 'Missing tokenOrId' });
+                    preview = await previewSimplyPluralAPI(system, tokenOrId);
+                }
                 break;
             case 'octocon':
                 if (fileData) {
@@ -209,8 +219,8 @@ router.post('/stream', async (req, res) => {
             return res.status(400).json({ error: `Invalid source. Must be one of: ${validSources.join(', ')}` });
         }
 
-        if (source === 'simplyplural' && !tokenOrId) {
-            return res.status(400).json({ error: 'Missing required field: tokenOrId for Simply Plural import' });
+        if (source === 'simplyplural' && !tokenOrId && !fileData) {
+            return res.status(400).json({ error: 'Provide either tokenOrId (API) or fileData (file) for Simply Plural import' });
         }
         if (source === 'tupperbox' && !fileData) {
             return res.status(400).json({ error: 'Missing required field: fileData for Tupperbox import' });
@@ -291,7 +301,15 @@ router.post('/stream', async (req, res) => {
                 break;
 
             case 'simplyplural':
-                result = await importSimplyPluralAPI(system, user, tokenOrId, importOptions, onProgress);
+                if (fileData) {
+                    result = await importSimplyPluralFile(system, user, fileData, importOptions, onProgress);
+                } else {
+                    if (!tokenOrId) {
+                        sendEvent({ type: 'error', message: 'Missing tokenOrId' });
+                        return res.end();
+                    }
+                    result = await importSimplyPluralAPI(system, user, tokenOrId, importOptions, onProgress);
+                }
                 break;
 
             case 'octocon':

@@ -139,6 +139,7 @@ async function processOctoconData(system, user, data, options, onProgress) {
             system.name.display = data.user.username;
         }
         if (data.user.description) system.description = data.user.description;
+        if (data.user.color) system.color = data.user.color;
         if (data.user.avatar_url) {
             if (options.target === TARGET_DISCORD) {
                 system.discord = system.discord || {};
@@ -171,6 +172,13 @@ async function processOctoconData(system, user, data, options, onProgress) {
                 system.banner = media || { url: data.user.bannerUrl };
             }
         }
+        // System metadata
+        system.metadata = system.metadata || {};
+        system.metadata.importedFrom = 'octocon';
+        system.metadata.importedAt = new Date();
+        system.metadata.sourceIds = system.metadata.sourceIds || {};
+        system.metadata.sourceIds.octocon = systemId || undefined;
+        if (data.user.created_at) system.metadata.sourceCreatedAt = new Date(data.user.created_at);
         result.systemUpdated = true;
     }
 
@@ -502,12 +510,16 @@ function createAlterFromOctocon(octoAlter) {
         pronouns: octoAlter.pronouns ? [octoAlter.pronouns] : [],
         color: octoAlter.color || undefined,
         avatar: octoAlter.avatar_url ? { url: octoAlter.avatar_url } : undefined,
+        banner: octoAlter.banner_url ? { url: octoAlter.banner_url } : undefined,
         proxy: proxies,
         groupsIDs: [],
         metadata: {
             importedFrom: 'octocon',
             importedAt: new Date(),
-            octoconId: octoAlter.id
+            octoconId: octoAlter.id,
+            sourceCreatedAt: octoAlter.created_at ? new Date(octoAlter.created_at) : undefined,
+            sourceVisibility: octoAlter.visible === false ? 'private' : 'public',
+            messageCount: octoAlter.message_count || 0,
         }
     });
 }
@@ -526,7 +538,8 @@ function createAlterFromOctoconDiscord(octoAlter) {
             description: octoAlter.description || undefined,
             color: octoAlter.color || undefined,
             image: {
-                avatar: octoAlter.avatar_url ? { url: octoAlter.avatar_url } : undefined
+                avatar: octoAlter.avatar_url ? { url: octoAlter.avatar_url } : undefined,
+                banner: octoAlter.banner_url ? { url: octoAlter.banner_url } : undefined
             }
         },
         proxy: proxies,
@@ -534,7 +547,10 @@ function createAlterFromOctoconDiscord(octoAlter) {
         metadata: {
             importedFrom: 'octocon',
             importedAt: new Date(),
-            octoconId: octoAlter.id
+            octoconId: octoAlter.id,
+            sourceCreatedAt: octoAlter.created_at ? new Date(octoAlter.created_at) : undefined,
+            sourceVisibility: octoAlter.visible === false ? 'private' : 'public',
+            messageCount: octoAlter.message_count || 0,
         }
     });
 }
@@ -551,13 +567,17 @@ function createStateFromOctocon(octoAlter) {
         pronouns: octoAlter.pronouns ? [octoAlter.pronouns] : [],
         color: octoAlter.color || undefined,
         avatar: octoAlter.avatar_url ? { url: octoAlter.avatar_url } : undefined,
+        banner: octoAlter.banner_url ? { url: octoAlter.banner_url } : undefined,
         proxy: proxies,
         groupsIDs: [],
         alterIDs: [],
         metadata: {
             importedFrom: 'octocon',
             importedAt: new Date(),
-            octoconId: octoAlter.id
+            octoconId: octoAlter.id,
+            sourceCreatedAt: octoAlter.created_at ? new Date(octoAlter.created_at) : undefined,
+            sourceVisibility: octoAlter.visible === false ? 'private' : 'public',
+            messageCount: octoAlter.message_count || 0,
         }
     });
 }
@@ -576,7 +596,8 @@ function createStateFromOctoconDiscord(octoAlter) {
             description: octoAlter.description || undefined,
             color: octoAlter.color || undefined,
             image: {
-                avatar: octoAlter.avatar_url ? { url: octoAlter.avatar_url } : undefined
+                avatar: octoAlter.avatar_url ? { url: octoAlter.avatar_url } : undefined,
+                banner: octoAlter.banner_url ? { url: octoAlter.banner_url } : undefined
             }
         },
         proxy: proxies,
@@ -585,7 +606,10 @@ function createStateFromOctoconDiscord(octoAlter) {
         metadata: {
             importedFrom: 'octocon',
             importedAt: new Date(),
-            octoconId: octoAlter.id
+            octoconId: octoAlter.id,
+            sourceCreatedAt: octoAlter.created_at ? new Date(octoAlter.created_at) : undefined,
+            sourceVisibility: octoAlter.visible === false ? 'private' : 'public',
+            messageCount: octoAlter.message_count || 0,
         }
     });
 }
@@ -598,6 +622,8 @@ function createGroupFromOctocon(tag) {
         },
         description: tag.description || undefined,
         color: tag.color || undefined,
+        avatar: tag.icon ? { url: tag.icon } : undefined,
+        banner: tag.banner_url ? { url: tag.banner_url } : undefined,
         alterIDs: [],
         stateIDs: [],
         metadata: {
@@ -628,6 +654,7 @@ async function updateAlterFromOctocon(alter, octoAlter, system, targetMode = TAR
         if (octoAlter.pronouns) alter.pronouns = [octoAlter.pronouns];
         if (octoAlter.color) alter.color = octoAlter.color;
         if (octoAlter.avatar_url) alter.avatar = { url: octoAlter.avatar_url };
+        if (octoAlter.banner_url) alter.banner = { url: octoAlter.banner_url };
     }
 
     // Proxies always go to main proxy field
@@ -662,6 +689,7 @@ async function updateStateFromOctocon(state, octoAlter, system, targetMode = TAR
         if (octoAlter.pronouns) state.pronouns = [octoAlter.pronouns];
         if (octoAlter.color) state.color = octoAlter.color;
         if (octoAlter.avatar_url) state.avatar = { url: octoAlter.avatar_url };
+        if (octoAlter.banner_url) state.banner = { url: octoAlter.banner_url };
     }
 
     const newProxies = (octoAlter.discord_proxies || []).filter(p => p && p.length > 0);
@@ -683,6 +711,8 @@ function updateGroupFromOctocon(group, tag) {
     if (tag.name) group.name.display = tag.name;
     if (tag.description) group.description = tag.description;
     if (tag.color) group.color = tag.color;
+    if (tag.icon) group.avatar = { url: tag.icon };
+    if (tag.banner_url) group.banner = { url: tag.banner_url };
 
     group.metadata = group.metadata || {};
     group.metadata.octoconTagId = tag.id;
@@ -723,6 +753,7 @@ async function previewOctoconData(system, data) {
             action: existing ? 'update' : 'new',
             existingId: existing?._id?.toString() || null,
             visibility: octoAlter.visible === false ? 'private' : 'public',
+            banner: octoAlter.banner_url || null,
         });
     }
 
@@ -738,6 +769,8 @@ async function previewOctoconData(system, data) {
             action: existingGroup ? 'update' : 'new',
             existingId: existingGroup?._id?.toString() || null,
             visibility: tag.visible === false ? 'private' : 'public',
+            banner: tag.banner_url || null,
+            icon: tag.icon || null,
         });
     }
 
@@ -763,14 +796,7 @@ async function previewOctoconAPI(system, systemId) {
         user: systemData, alters: altersData, tags: tagsData
     });
 
-    return {
-        ...preview,
-        systemInfo: {
-            name: systemData.username || null,
-            avatar: systemData.avatar_url || null,
-            description: systemData.description || null,
-        }
-    };
+    return preview;
 }
 
 async function previewOctoconFile(system, fileData) {
@@ -779,14 +805,7 @@ async function previewOctoconFile(system, fileData) {
 
     const preview = await previewOctoconData(system, data);
 
-    return {
-        ...preview,
-        systemInfo: {
-            name: data.user?.username || null,
-            avatar: data.user?.avatar_url || null,
-            description: data.user?.description || null,
-        }
-    };
+    return preview;
 }
 
 module.exports = {

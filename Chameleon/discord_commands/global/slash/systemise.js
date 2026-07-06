@@ -23,16 +23,28 @@ module.exports = {
     async execute(interaction) {
         const page = interaction.options.getString('page');
 
-        if (page) {
-            const user = await User.findOne({ discordID: interaction.user.id });
-            if (user) {
-                await redis.set(`pendingActivity:${user._id}`, page, 'EX', 60);
-            }
+        // Respond immediately — DB/Redis work happens async
+        const rest = new REST({ version: '10' }).setToken(interaction.client.token);
+        try {
+            await rest.post(Routes.interactionCallback(interaction.id, interaction.token), {
+                body: { type: 12 }
+            });
+        } catch (err) {
+            // Interaction already expired — nothing we can do
+            console.error('[systemise] Failed to send interaction callback:', err.message);
+            return;
         }
 
-        const rest = new REST({ version: '10' }).setToken(interaction.client.token);
-        await rest.post(Routes.interactionCallback(interaction.id, interaction.token), {
-            body: { type: 12 }
-        });
+        // Fire-and-forget: set pending page in Redis
+        if (page) {
+            try {
+                const user = await User.findOne({ discordID: interaction.user.id });
+                if (user) {
+                    await redis.set(`pendingActivity:${user._id}`, page, 'EX', 60);
+                }
+            } catch (err) {
+                console.error('[systemise] Failed to set pending page:', err.message);
+            }
+        }
     }
 };

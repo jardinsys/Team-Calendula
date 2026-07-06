@@ -4,6 +4,7 @@ const { createEntitySchema, applyEntityDefaults } = require('./entityBase');
 
 const stateSchema = createEntitySchema({
     genesisDate: { type: Date, default: Date.now },
+    pronouns: [String],
     alters: [String],
     groupIDs: [String],
 }, alterPrivacySchema);

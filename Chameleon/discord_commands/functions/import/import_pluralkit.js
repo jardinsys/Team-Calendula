@@ -187,6 +187,13 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                 system.banner = media || { url: data.system.banner_url };
             }
         }
+        // System metadata
+        system.metadata = system.metadata || {};
+        system.metadata.importedFrom = 'pluralkit';
+        system.metadata.importedAt = new Date();
+        system.metadata.sourceIds = system.metadata.sourceIds || {};
+        system.metadata.sourceIds.pluralkit = data.system.id || undefined;
+        if (data.system.created) system.metadata.sourceCreatedAt = new Date(data.system.created);
         result.systemUpdated = true;
     }
 
@@ -536,6 +543,7 @@ function createAlterFromPK(pkMember) {
         color: pkMember.color ? `#${pkMember.color}` : undefined,
         birthday: pkMember.birthday ? new Date(pkMember.birthday) : undefined,
         avatar: pkMember.avatar_url ? { url: pkMember.avatar_url } : undefined,
+        banner: pkMember.banner_url ? { url: pkMember.banner_url } : undefined,
         proxy: proxies,
         groupsIDs: [],
         metadata: {
@@ -543,7 +551,11 @@ function createAlterFromPK(pkMember) {
             importedFrom: 'pluralkit',
             importedAt: new Date(),
             pluralKitId: pkMember.id,
-            pluralKitUuid: pkMember.uuid
+            pluralKitUuid: pkMember.uuid,
+            sourceCreatedAt: pkMember.created ? new Date(pkMember.created) : undefined,
+            sourceVisibility: pkMember.visibility || undefined,
+            lastMessageTimestamp: pkMember.last_message_timestamp ? new Date(pkMember.last_message_timestamp) : undefined,
+            messageCount: pkMember.message_count || 0,
         }
     });
 }
@@ -567,7 +579,7 @@ function createAlterFromPKDiscord(pkMember) {
             color: pkMember.color ? `#${pkMember.color}` : undefined,
             image: {
                 avatar: pkMember.avatar_url ? { url: pkMember.avatar_url } : undefined,
-                banner: pkMember.banner ? { url: pkMember.banner } : undefined
+                banner: pkMember.banner_url ? { url: pkMember.banner_url } : undefined
             }
         },
         proxy: proxies,
@@ -577,7 +589,11 @@ function createAlterFromPKDiscord(pkMember) {
             importedFrom: 'pluralkit',
             importedAt: new Date(),
             pluralKitId: pkMember.id,
-            pluralKitUuid: pkMember.uuid
+            pluralKitUuid: pkMember.uuid,
+            sourceCreatedAt: pkMember.created ? new Date(pkMember.created) : undefined,
+            sourceVisibility: pkMember.visibility || undefined,
+            lastMessageTimestamp: pkMember.last_message_timestamp ? new Date(pkMember.last_message_timestamp) : undefined,
+            messageCount: pkMember.message_count || 0,
         }
     });
 }
@@ -598,6 +614,7 @@ function createStateFromPK(pkMember) {
         pronouns: pkMember.pronouns ? [pkMember.pronouns] : [],
         color: pkMember.color ? `#${pkMember.color}` : undefined,
         avatar: pkMember.avatar_url ? { url: pkMember.avatar_url } : undefined,
+        banner: pkMember.banner_url ? { url: pkMember.banner_url } : undefined,
         proxy: proxies,
         groupsIDs: [],
         alterIDs: [],
@@ -606,7 +623,11 @@ function createStateFromPK(pkMember) {
             importedFrom: 'pluralkit',
             importedAt: new Date(),
             pluralKitId: pkMember.id,
-            pluralKitUuid: pkMember.uuid
+            pluralKitUuid: pkMember.uuid,
+            sourceCreatedAt: pkMember.created ? new Date(pkMember.created) : undefined,
+            sourceVisibility: pkMember.visibility || undefined,
+            lastMessageTimestamp: pkMember.last_message_timestamp ? new Date(pkMember.last_message_timestamp) : undefined,
+            messageCount: pkMember.message_count || 0,
         }
     });
 }
@@ -630,7 +651,7 @@ function createStateFromPKDiscord(pkMember) {
             color: pkMember.color ? `#${pkMember.color}` : undefined,
             image: {
                 avatar: pkMember.avatar_url ? { url: pkMember.avatar_url } : undefined,
-                banner: pkMember.banner ? { url: pkMember.banner } : undefined
+                banner: pkMember.banner_url ? { url: pkMember.banner_url } : undefined
             }
         },
         proxy: proxies,
@@ -641,7 +662,11 @@ function createStateFromPKDiscord(pkMember) {
             importedFrom: 'pluralkit',
             importedAt: new Date(),
             pluralKitId: pkMember.id,
-            pluralKitUuid: pkMember.uuid
+            pluralKitUuid: pkMember.uuid,
+            sourceCreatedAt: pkMember.created ? new Date(pkMember.created) : undefined,
+            sourceVisibility: pkMember.visibility || undefined,
+            lastMessageTimestamp: pkMember.last_message_timestamp ? new Date(pkMember.last_message_timestamp) : undefined,
+            messageCount: pkMember.message_count || 0,
         }
     });
 }
@@ -655,6 +680,7 @@ function createGroupFromPK(pkGroup) {
         description: pkGroup.description || undefined,
         color: pkGroup.color ? `#${pkGroup.color}` : undefined,
         avatar: pkGroup.icon ? { url: pkGroup.icon } : undefined,
+        banner: pkGroup.banner_url ? { url: pkGroup.banner_url } : undefined,
         alterIDs: [],
         stateIDs: [],
         metadata: {
@@ -688,6 +714,7 @@ async function updateAlterFromPK(alter, pkMember, system, targetMode = TARGET_AP
         if (pkMember.color) alter.color = `#${pkMember.color}`;
         if (pkMember.birthday) alter.birthday = new Date(pkMember.birthday);
         if (pkMember.avatar_url) alter.avatar = { url: pkMember.avatar_url };
+        if (pkMember.banner_url) alter.banner = { url: pkMember.banner_url };
     }
 
     // Proxy tags always go to main proxy field
@@ -729,6 +756,7 @@ async function updateStateFromPK(state, pkMember, system, targetMode = TARGET_AP
         if (pkMember.pronouns) state.pronouns = [pkMember.pronouns];
         if (pkMember.color) state.color = `#${pkMember.color}`;
         if (pkMember.avatar_url) state.avatar = { url: pkMember.avatar_url };
+        if (pkMember.banner_url) state.banner = { url: pkMember.banner_url };
     }
 
     const newProxies = (pkMember.proxy_tags || []).map(tag => {
@@ -757,6 +785,7 @@ function updateGroupFromPK(group, pkGroup) {
     if (pkGroup.description) group.description = pkGroup.description;
     if (pkGroup.color) group.color = `#${pkGroup.color}`;
     if (pkGroup.icon) group.avatar = { url: pkGroup.icon };
+    if (pkGroup.banner_url) group.banner = { url: pkGroup.banner_url };
 
     group.metadata = group.metadata || {};
     group.metadata.pluralKitId = pkGroup.id;
@@ -785,6 +814,7 @@ async function previewPluralKitData(system, data) {
             action: existing ? 'update' : 'new',
             existingId: existing?._id?.toString() || null,
             visibility: pkMember.visibility || 'public',
+            banner: pkMember.banner_url || null,
         });
     }
 
@@ -800,6 +830,7 @@ async function previewPluralKitData(system, data) {
             action: existingGroup ? 'update' : 'new',
             existingId: existingGroup?._id?.toString() || null,
             visibility: pkGroup.visibility || 'public',
+            banner: pkGroup.banner_url || null,
         });
     }
 
@@ -822,14 +853,7 @@ async function previewPluralKitAPI(system, token) {
         system: pkSystem, members: pkMembers, groups: pkGroups
     });
 
-    return {
-        ...preview,
-        systemInfo: {
-            name: pkSystem.name || null,
-            avatar: pkSystem.avatar_url || null,
-            description: pkSystem.description || null,
-        }
-    };
+    return preview;
 }
 
 async function previewPluralKitFile(system, fileData) {
@@ -840,14 +864,7 @@ async function previewPluralKitFile(system, fileData) {
         system: data, members: data.members || [], groups: data.groups || []
     });
 
-    return {
-        ...preview,
-        systemInfo: {
-            name: data.name || null,
-            avatar: data.avatar_url || null,
-            description: data.description || null,
-        }
-    };
+    return preview;
 }
 
 module.exports = {

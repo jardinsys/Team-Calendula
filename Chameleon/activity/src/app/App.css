@@ -1771,6 +1771,7 @@ select.text-input {
   max-width: 600px;
   margin: 0 auto;
   padding: var(--space-xl) var(--space-md);
+  color: var(--text);
 }
 .settings-page h1 {
   font-family: var(--font-accent);
@@ -1836,6 +1837,7 @@ select.text-input {
   margin: 0 auto;
   padding: var(--space-xl) var(--space-md);
   text-align: center;
+  color: var(--text);
 }
 .register-page h1 {
   font-family: var(--font-accent);

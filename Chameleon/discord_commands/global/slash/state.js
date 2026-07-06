@@ -295,6 +295,11 @@ function buildEditInterface(state, session, system = null) {
                 .setValue('card_info')
                 .setEmoji('🎴'),
             new StringSelectMenuOptionBuilder()
+                .setLabel('Personal Info')
+                .setDescription('Edit pronouns and age')
+                .setValue('personal_info')
+                .setEmoji(' PERSONAL'),
+            new StringSelectMenuOptionBuilder()
                 .setLabel('Connected Alters')
                 .setDescription('Edit which alters are connected to this state')
                 .setValue('alters_info')
@@ -1445,6 +1450,33 @@ async function handleSelectMenu(interaction) {
             );
             break;
 
+        case 'personal_info':
+            modal = new ModalBuilder()
+                .setCustomId(`state_edit_personal_modal_${sessionId}`)
+                .setTitle('Edit Personal Info');
+
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('pronouns')
+                        .setLabel('Pronouns (comma-separated)')
+                        .setStyle(TextInputStyle.Short)
+                        .setValue(state.pronouns?.join(', ') || '')
+                        .setRequired(false)
+                        .setMaxLength(200)
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('age')
+                        .setLabel('Age (text, e.g. "16" or "unknown")')
+                        .setStyle(TextInputStyle.Short)
+                        .setValue(state.age || '')
+                        .setRequired(false)
+                        .setMaxLength(20)
+                )
+            );
+            break;
+
         case 'alters_info':
             modal = new ModalBuilder()
                 .setCustomId(`state_edit_alters_modal_${sessionId}`)
@@ -1633,6 +1665,16 @@ async function handleModalSubmit(interaction) {
 
         await state.save();
         await proxyMessageHandler.invalidateDisplayCache(state._id);
+    }
+
+    // Handle personal info modal
+    if (interaction.customId.startsWith('state_edit_personal_modal_')) {
+        const pronouns = interaction.fields.getTextInputValue('pronouns');
+        const age = interaction.fields.getTextInputValue('age');
+
+        if (pronouns) state.pronouns = utils.parseCommaSeparated(pronouns);
+        if (age !== undefined) state.age = age || undefined;
+        await state.save();
     }
 
     // Handle connected alters modal

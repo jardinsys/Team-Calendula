@@ -16,6 +16,14 @@ const systemSchema = new mongoose.Schema({
     users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     metadata: {
         joinedAt: { type: Date, default: Date.now },
+        importedFrom: String,
+        importedAt: Date,
+        sourceIds: {
+            pluralkit: String,
+            simplyplural: String,
+            octocon: String,
+        },
+        sourceCreatedAt: Date,
     },
     syncWithApps: {
         discord: { type: Boolean, default: true },
@@ -50,6 +58,7 @@ const systemSchema = new mongoose.Schema({
         },
     },
     avatar: mediaSchema,
+    banner: mediaSchema,
     alterSynonym: {
         singular: { type: String, default: "alter" },
         plural: { type: String, default: "alters" },

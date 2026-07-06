@@ -1426,6 +1426,7 @@ async function handleSelectMenu(interaction) {
             modal.addComponents(
                 new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('pronouns').setLabel('Pronouns (comma-separated)').setStyle(TextInputStyle.Short).setValue(alter.pronouns?.join(', ') || '').setRequired(false).setMaxLength(200)),
                 new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('birthday').setLabel('Birthday (YYYY-MM-DD)').setStyle(TextInputStyle.Short).setValue(alter.birthday ? new Date(alter.birthday).toISOString().split('T')[0] : '').setRequired(false).setMaxLength(10)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('age').setLabel('Age (text, e.g. "16" or "unknown")').setStyle(TextInputStyle.Short).setValue(alter.age || '').setRequired(false).setMaxLength(20)),
                 new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('aliases').setLabel('Aliases (comma-separated)').setStyle(TextInputStyle.Paragraph).setValue(alter.name?.aliases?.join(', ') || '').setRequired(false).setMaxLength(500))
             );
             return modal;
@@ -1501,6 +1502,7 @@ async function handleModalSubmit(interaction) {
     if (interaction.customId.startsWith('alter_edit_personal_modal_')) {
         const pronouns = interaction.fields.getTextInputValue('pronouns');
         const birthday = interaction.fields.getTextInputValue('birthday');
+        const age = interaction.fields.getTextInputValue('age');
         const aliases = interaction.fields.getTextInputValue('aliases');
 
         if (pronouns) alter.pronouns = utils.parseCommaSeparated(pronouns);
@@ -1508,6 +1510,7 @@ async function handleModalSubmit(interaction) {
             const date = new Date(birthday);
             if (!isNaN(date.getTime())) alter.birthday = date;
         }
+        if (age !== undefined) alter.age = age || undefined;
         if (aliases) {
             if (!alter.name) alter.name = {};
             alter.name.aliases = utils.parseCommaSeparated(aliases);

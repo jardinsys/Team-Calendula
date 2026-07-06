@@ -184,26 +184,50 @@ async function createSystemFromPayload(userId, payload) {
         await system.save({ session });
         
         // Link entities to system (for staged IDs)
+        // Only update entities that actually exist in MongoDB (dryRun payloads may reference
+        // entities that were never saved — those IDs are still kept in the system arrays
+        // but we skip the updateMany for them to avoid unnecessary DB calls).
         if (alterIds.length > 0) {
-            await Alter.updateMany(
-                { _id: { $in: alterIds } },
-                { $set: { systemID: system._id.toString() } },
-                { session }
-            );
+            const existingAlterIds = await Alter.distinct('_id', { _id: { $in: alterIds } }).session(session);
+            const missingAlterIds = alterIds.filter(id => !existingAlterIds.some(eid => eid.equals(id)));
+            if (missingAlterIds.length > 0) {
+                console.log(`[System] Skipping updateMany for ${missingAlterIds.length} alters not found in DB (likely dryRun IDs)`);
+            }
+            if (existingAlterIds.length > 0) {
+                await Alter.updateMany(
+                    { _id: { $in: existingAlterIds } },
+                    { $set: { systemID: system._id.toString() } },
+                    { session }
+                );
+            }
         }
         if (stateIds.length > 0) {
-            await State.updateMany(
-                { _id: { $in: stateIds } },
-                { $set: { systemID: system._id.toString() } },
-                { session }
-            );
+            const existingStateIds = await State.distinct('_id', { _id: { $in: stateIds } }).session(session);
+            const missingStateIds = stateIds.filter(id => !existingStateIds.some(eid => eid.equals(id)));
+            if (missingStateIds.length > 0) {
+                console.log(`[System] Skipping updateMany for ${missingStateIds.length} states not found in DB (likely dryRun IDs)`);
+            }
+            if (existingStateIds.length > 0) {
+                await State.updateMany(
+                    { _id: { $in: existingStateIds } },
+                    { $set: { systemID: system._id.toString() } },
+                    { session }
+                );
+            }
         }
         if (groupIds.length > 0) {
-            await Group.updateMany(
-                { _id: { $in: groupIds } },
-                { $set: { systemID: system._id.toString() } },
-                { session }
-            );
+            const existingGroupIds = await Group.distinct('_id', { _id: { $in: groupIds } }).session(session);
+            const missingGroupIds = groupIds.filter(id => !existingGroupIds.some(eid => eid.equals(id)));
+            if (missingGroupIds.length > 0) {
+                console.log(`[System] Skipping updateMany for ${missingGroupIds.length} groups not found in DB (likely dryRun IDs)`);
+            }
+            if (existingGroupIds.length > 0) {
+                await Group.updateMany(
+                    { _id: { $in: existingGroupIds } },
+                    { $set: { systemID: system._id.toString() } },
+                    { session }
+                );
+            }
         }
 
         // --- Update User ---

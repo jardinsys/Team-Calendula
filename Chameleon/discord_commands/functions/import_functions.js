@@ -7,6 +7,7 @@ const helpers = require('./import/helpers');
 const pk = require('./import/import_pluralkit');
 const tb = require('./import/import_tupperbox');
 const sp = require('./import/import_simplyplural');
+const spFile = require('./import/import_simplyplural_file');
 const oc = require('./import/import_octocon');
 const auto = require('./import/import_autodetect');
 module.exports = {
@@ -17,5 +18,6 @@ module.exports = {
   ...pk,
   ...tb,
   ...sp,
+  ...spFile,
   ...oc,
 };

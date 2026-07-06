@@ -64,6 +64,11 @@ async function processTupperboxData(system, data, options, onProgress) {
     if (!system.alters) system.alters = { IDs: [], conditions: [] };
     if (!system.groups) system.groups = { IDs: [], types: [], conditions: [] };
 
+    // System metadata
+    system.metadata = system.metadata || {};
+    system.metadata.importedFrom = 'tupperbox';
+    system.metadata.importedAt = new Date();
+
     // Import groups first (if present)
     if (!options.noGroups && Array.isArray(data.groups)) {
         let groupIdx = 0;
@@ -82,6 +87,8 @@ async function processTupperboxData(system, data, options, onProgress) {
                 }
 
                 if (existingGroup) {
+                    if (tbGroup.description) existingGroup.description = tbGroup.description;
+                    if (tbGroup.color) existingGroup.color = tbGroup.color;
                     if (tbGroup.tag) existingGroup.signoff = tbGroup.tag;
                     await existingGroup.save();
                     groupIdMap.set(tbGroup.id, existingGroup._id);
@@ -93,6 +100,9 @@ async function processTupperboxData(system, data, options, onProgress) {
                             indexable: tbGroup.name.replace(/[^a-zA-Z0-9\-_]/g, '').substring(0, 32) || `group${Date.now()}`,
                             display: tbGroup.name
                         },
+                        description: tbGroup.description || undefined,
+                        color: tbGroup.color || undefined,
+                        avatar: tbGroup.icon ? { url: tbGroup.icon } : undefined,
                         signoff: tbGroup.tag || undefined,
                         alterIDs: [],
                         metadata: {
@@ -118,7 +128,7 @@ async function processTupperboxData(system, data, options, onProgress) {
     for (const tupper of (Array.isArray(data.tuppers) ? data.tuppers : [])) {
         tupperIdx++;
         try {
-            emit({ phase: 'members', current: tupperIdx, total: data.tuppers.length, entityName: tupper.nick || tupper.name, message: `Importing tupper ${tupperIdx}/${data.tuppers.length}: ${tupper.nick || tupper.name}` });
+            emit({ phase: 'members', current: tupperIdx, total: data.tuppers.length, entityName: tupper.name, message: `Importing tupper ${tupperIdx}/${data.tuppers.length}: ${tupper.name}` });
 
             if (!isMemberSelected(tupper.name, options)) continue;
 
@@ -136,7 +146,12 @@ async function processTupperboxData(system, data, options, onProgress) {
 
             if (existingAlter) {
                 if (tupper.avatar_url) existingAlter.avatar = { url: tupper.avatar_url };
-                if (tupper.nick) existingAlter.name.display = tupper.nick;
+                if (tupper.nick) {
+                    existingAlter.name.aliases = existingAlter.name.aliases || [];
+                    if (!existingAlter.name.aliases.includes(tupper.nick)) {
+                        existingAlter.name.aliases.push(tupper.nick);
+                    }
+                }
                 if (tupper.description) existingAlter.description = tupper.description;
                 if (proxy && !existingAlter.proxy?.includes(proxy)) {
                     const { exists } = await checkProxyExists(proxy, system, existingAlter._id.toString());
@@ -166,7 +181,8 @@ async function processTupperboxData(system, data, options, onProgress) {
                 const newAlter = new Alter({
                     name: {
                         indexable: tupper.name.replace(/[^a-zA-Z0-9\-_]/g, '').substring(0, 32) || `alter${Date.now()}`,
-                        display: tupper.nick || tupper.name
+                        display: tupper.name,
+                        aliases: tupper.nick ? [tupper.nick] : []
                     },
                     avatar: tupper.avatar_url ? { url: tupper.avatar_url } : undefined,
                     description: tupper.description || undefined,
@@ -175,7 +191,8 @@ async function processTupperboxData(system, data, options, onProgress) {
                     groupsIDs: [],
                     metadata: {
                         importedFrom: 'tupperbox',
-                        importedAt: new Date()
+                        importedAt: new Date(),
+                        sourceCreatedAt: tupper.created ? new Date(tupper.created) : undefined,
                     }
                 });
                 await syncEntityImages(newAlter, tupper, 'Alter', system, options.target, options.dryRun);
@@ -227,7 +244,8 @@ async function previewTupperboxData(system, data) {
 
         members.push({
             sourceId: tupper.name,
-            name: tupper.nick || tupper.name,
+            name: tupper.name,
+            aliases: tupper.nick ? [tupper.nick] : [],
             avatar: tupper.avatar_url || null,
             description: tupper.description || null,
             pronouns: null,
