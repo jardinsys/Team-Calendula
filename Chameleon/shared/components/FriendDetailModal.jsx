@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import api from '../api/client.js'
+import { Icon } from '../icons.jsx'
 import FrontDisplay from './FrontDisplay.jsx'
 
 function FriendDetailModal({ friend, onClose, onRemoved, onBlocked, onEntityClick, fallbackName }) {
@@ -143,7 +144,7 @@ function FriendDetailModal({ friend, onClose, onRemoved, onBlocked, onEntityClic
 
                 {!loading && !frontData && !error && (
                     <div className="empty-state">
-                        <span className="empty-icon">🌙</span>
+                        <span className="empty-icon"><Icon name="moon" size={32} /></span>
                         <h3>Nothing to show</h3>
                     </div>
                 )}

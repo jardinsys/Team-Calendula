@@ -15,10 +15,11 @@ export const STEP_TREE = {
   category: { parent: null },
   disorder: { parent: 'category' },
   import:   { parent: 'disorder' },
-  other:    { parent: 'disorder' },
+  other:    { parent: 'category' },     // back from Other → Category
   name:     { parent: (ctx) => {
     if (ctx.isSystem || ctx.isFragmented) return 'import'
     if (ctx.category === 'OTHER') return 'other'
+    if (ctx.category === 'NONE') return 'category'
     return 'disorder'
   }},
   alters:   { parent: 'name' },

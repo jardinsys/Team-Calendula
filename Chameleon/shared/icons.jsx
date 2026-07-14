@@ -4,7 +4,10 @@ import {
   Drama, Shuffle, Pencil, Trash2, Pin, Plus, ArrowLeft, ChevronRight,
   BatteryFull, BatteryMedium, BatteryLow, TriangleAlert, CircleCheck,
   CircleX, Moon, User, Waves, Package, BarChart3, RefreshCw, Rocket,
-  Star, Diamond, Circle, Globe, Inbox, NotepadText, GripVertical
+  Star, Diamond, Circle, Globe, Inbox, NotepadText, GripVertical,
+  Wrench, Bell, Lock, Download, Brain, Link, Search, Save,
+  ClipboardList, Sparkles, Menu, ChevronDown, ChevronUp,
+  LayoutGrid, PawPrint, Loader2
 } from 'lucide-react'
 
 export const Icons = {
@@ -44,7 +47,23 @@ export const Icons = {
   circle: Circle,
   globe: Globe,
   inbox: Inbox,
-  gripVertical: GripVertical
+  gripVertical: GripVertical,
+  wrench: Wrench,
+  bell: Bell,
+  lock: Lock,
+  download: Download,
+  brain: Brain,
+  link: Link,
+  search: Search,
+  save: Save,
+  clipboardList: ClipboardList,
+  sparkles: Sparkles,
+  menu: Menu,
+  chevronDown: ChevronDown,
+  chevronUp: ChevronUp,
+  layoutGrid: LayoutGrid,
+  pawPrint: PawPrint,
+  loader: Loader2
 }
 
 export function Icon({ name, size = 16, color, className = '', style, ...props }) {

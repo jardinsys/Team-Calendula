@@ -195,7 +195,7 @@ function DisorderStep({ category, onSelect, onBack, onStartOver }) {
                   onClick={() => depth === 0 ? handleSubtypeSelect(subtypeKey) : handleSubtype2Select(subtypeKey)}
                 >
                   <span>{subtypeMapping.fullName}</span>
-                  {subtypeMapping.hasSubtypes && <span className="subtype-arrow">▶</span>}
+                  {subtypeMapping.hasSubtypes && <span className="subtype-arrow"><Icon name="chevronRight" size={14} /></span>}
                 </button>
 
                 {/* Nested subtypes */}
@@ -242,7 +242,7 @@ function DisorderStep({ category, onSelect, onBack, onStartOver }) {
               >
                 <span className="disorder-name">{mapping.fullName}</span>
                 {hasSubtypes && <span className="disorder-parent-badge">{mapping.subtypes.length} types</span>}
-                <span className={`disorder-arrow ${isExpanded ? 'open' : ''}`}>▼</span>
+                <span className={`disorder-arrow ${isExpanded ? 'open' : ''}`}><Icon name="chevronDown" size={14} /></span>
               </button>
 
               {isExpanded && (

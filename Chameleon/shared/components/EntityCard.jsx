@@ -1,5 +1,6 @@
 import React from 'react'
 import { Icon } from '../icons.jsx'
+import { Check } from 'lucide-react'
 
 const DEFAULT_COLOR = '#c4b5fd'
 
@@ -37,7 +38,7 @@ function EntityCard({ entity, type = 'alter', typeLabel, onClick, fallbackName, 
         >
             {selectionMode && (
                 <div className={`entity-card-check${selected ? ' checked' : ''}`}>
-                    {selected ? '✓' : ''}
+                    {selected ? <Check size={14} /> : ''}
                 </div>
             )}
             <div className="entity-card-avatar">

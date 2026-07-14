@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, List, Calendar, Trash2, Edit3, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
-import { api, getBatteryIcon, frontKeys, ShiftEditModal } from '@chameleon/shared'
+import { api, getBatteryIcon, frontKeys, ShiftEditModal, Icon } from '@chameleon/shared'
 
 function formatDuration(ms) {
   if (!ms || ms < 0) return '—'
@@ -26,11 +26,10 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-function batteryEmoji(level) {
-  if (level == null) return ''
-  if (level >= 70) return '🔋'
-  if (level >= 30) return '🪫'
-  return '⚠️'
+function BatteryIcon({ level }) {
+  const icon = getBatteryIcon(level)
+  if (!icon) return null
+  return <Icon name={icon.name} size={16} color={icon.color} />
 }
 
 export function FrontHistoryPage({ system, onNavigate }) {
@@ -332,7 +331,7 @@ export function FrontHistoryPage({ system, onNavigate }) {
                     <div className="shift-meta">
                       {shift.statuses?.[shift.statuses.length - 1]?.battery != null && (
                         <span className="shift-battery">
-                          {batteryEmoji(shift.statuses[shift.statuses.length - 1].battery)}
+                          <BatteryIcon level={shift.statuses[shift.statuses.length - 1].battery} />
                           {shift.statuses[shift.statuses.length - 1].battery}%
                         </span>
                       )}
@@ -371,7 +370,7 @@ export function FrontHistoryPage({ system, onNavigate }) {
                                 </div>
                                 {s.status && <div className="status-timeline-text">{s.status}</div>}
                                 <div className="status-timeline-meta">
-                                  {s.battery != null && <span>{batteryEmoji(s.battery)} {s.battery}%</span>}
+                                  {s.battery != null && <span><BatteryIcon level={s.battery} /> {s.battery}%</span>}
                                   {s.caution && <span className="caution-badge">{s.caution.c_type}</span>}
                                   {s.layerName && <span className="layer-badge">{s.layerName}</span>}
                                 </div>

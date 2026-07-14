@@ -4,16 +4,16 @@ import { useFetchStatus } from '../../hooks/useFetchStatus.jsx'
 import { useSystemSession } from '../../hooks/useSystemSession.jsx'
 
 const SOURCES = [
-    { id: 'pluralkit', label: 'PluralKit', icon: '🦊', methods: [{ id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'Your PluralKit token', help: 'DM PluralKit: pk;token' }] },
+    { id: 'pluralkit', label: 'PluralKit', icon: 'pawPrint', methods: [{ id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'Your PluralKit token', help: 'DM PluralKit: pk;token' }] },
     { id: 'simplyplural', label: 'Simply Plural', icon: '&', methods: [
         { id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'SP API token', help: 'Settings → Developer → Add Token' },
         { id: 'file', label: 'File Import', help: 'Settings → Account → Export Data → Download. Upload the JSON file + avatar folder.' },
     ] },
-    { id: 'octocon', label: 'Octocon', icon: '🧠', methods: [{ id: 'api', label: 'API Import', tokenLabel: 'System ID', tokenPlaceholder: '7-char ID', help: 'octocon.app/u/yourid' }, { id: 'file', label: 'File Import', help: 'octocon.app → Settings → Export' }] },
-    { id: 'tupperbox', label: 'Tupperbox', icon: '📦', methods: [{ id: 'file', label: 'File Import', help: 'tul!export' }] },
+    { id: 'octocon', label: 'Octocon', icon: 'brain', methods: [{ id: 'api', label: 'API Import', tokenLabel: 'System ID', tokenPlaceholder: '7-char ID', help: 'octocon.app/u/yourid' }, { id: 'file', label: 'File Import', help: 'octocon.app → Settings → Export' }] },
+    { id: 'tupperbox', label: 'Tupperbox', icon: 'package', methods: [{ id: 'file', label: 'File Import', help: 'tul!export' }] },
 ]
 
-const METHOD_ICONS = { api: '🔗', file: '📄' }
+const METHOD_ICONS = { api: 'link', file: 'fileText' }
 
 const TARGET_LABELS = { app: 'Main Profile', overlay: 'Discord Overlay' }
 const targetLabel = (target) => TARGET_LABELS[target] || target
@@ -320,19 +320,19 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
                     <button className="settings-section" onClick={() => handleModeSelect('simple')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>
-                        <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>✨ Simple</div>
+                        <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)', display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}><Icon name="sparkles" size={18} /> Simple</div>
                         <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>One-click import</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>One source only. Everything imported together with sensible defaults.</div>
                     </button>
 
                     <button className="settings-section" onClick={() => handleModeSelect('intermediate')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>
-                        <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>📋 Intermediate</div>
+                        <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)', display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}><Icon name="clipboardList" size={18} /> Intermediate</div>
                         <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Choose source targets</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>1–2 sources. Pick each source’s target (Main Profile or Discord Overlay).</div>
                     </button>
 
                     <button className="settings-section" onClick={() => handleModeSelect('advanced')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>
-                        <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>🔍 Advanced</div>
+                        <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)', display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}><Icon name="search" size={18} /> Advanced</div>
                         <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Full control</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>1–4 sources. Pick targets, toggle switches/groups, and assign per-entity types.</div>
                     </button>
@@ -367,7 +367,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                         borderRadius: 'var(--radius)',
                                     }}>
                                         <input type="checkbox" checked={selectedSources.has(s.id)} onChange={() => toggleSource(s.id)} style={{ width: '18px', height: '18px' }} />
-                                        <span style={{ fontSize: '1.2rem' }}>{s.icon}</span>
+                                        <Icon name={s.icon} size={16} />
                                         <span style={{ fontWeight: 500, color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>{s.label}</span>
                                     </label>
                                 ))}
@@ -384,7 +384,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                     style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', transition: 'border-color 0.2s, transform 0.1s', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}
                                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
                                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--glass-border)'; e.currentTarget.style.transform = 'none' }}>
-                                    <div style={{ fontSize: '2rem', marginBottom: 'var(--space-sm)' }}>{s.icon}</div>
+                                    <div style={{ fontSize: '2rem', marginBottom: 'var(--space-sm)', display: 'flex', justifyContent: 'center' }}><Icon name={s.icon} size={32} /></div>
                                     <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>{s.label}</div>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--accent)', marginTop: 'var(--space-xs)', fontWeight: 500 }}>Select and continue →</div>
                                 </button>
@@ -424,12 +424,12 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                             borderRadius: 'var(--radius)', fontSize: '0.8rem', fontWeight: 600,
                             fontFamily: 'var(--font-accent)'
                         }}>
-                            {SOURCES.find(s => s.id === id)?.icon} {SOURCES.find(s => s.id === id)?.label}
+                            <Icon name={SOURCES.find(s => s.id === id)?.icon} size={14} /> {SOURCES.find(s => s.id === id)?.label}
                         </span>
                     ))}
                 </div>
 
-                <h1>{src?.icon} Configure {src?.label}</h1>
+                <h1><Icon name={src?.icon} size={24} /> Configure {src?.label}</h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>Source {currentIdx + 1} of {sourcesArray.length}</p>
 
                 <div className="settings-section" style={{ marginBottom: 'var(--space-md)' }}>
@@ -444,7 +444,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                     borderRadius: 'var(--radius)', transition: 'all 0.2s',
                                     color: 'var(--text)', fontFamily: 'var(--font-accent)'
                                 }}>
-                                <div style={{ fontSize: '1.5rem', marginBottom: 'var(--space-xs)' }}>{METHOD_ICONS[m.id]}</div>
+                                <div style={{ fontSize: '1.5rem', marginBottom: 'var(--space-xs)', display: 'flex', justifyContent: 'center' }}><Icon name={METHOD_ICONS[m.id]} size={20} /></div>
                                 <div style={{ fontWeight: 600 }}>{m.label}</div>
                             </button>
                         ))}
@@ -571,7 +571,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                     return (
                         <div key={sourceId} className="settings-section" style={{ marginBottom: 'var(--space-lg)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
                             <div style={{ padding: 'var(--space-md)', background: 'var(--bg-card)', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-                                <span style={{ fontSize: '1.5rem' }}>{src?.icon}</span>
+                                <Icon name={src?.icon} size={20} />
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: 600 }}>{src?.label}</div>
                                     {importMode !== 'simple' && (
@@ -730,7 +730,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
             <div className="settings-page" style={{ position: 'relative' }}>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13, 13, 20, 0.85)', backdropFilter: 'blur(8px)' }}>
                     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', padding: 'var(--space-xl) var(--space-2xl)', textAlign: 'center', maxWidth: '480px', width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-sm)' }}>📥</div>
+                        <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-sm)' }}><Icon name="download" size={32} /></div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: 'var(--space-xs)' }}>
                             Importing {sourcesArray.length} source{sourcesArray.length !== 1 ? 's' : ''}
                         </div>
@@ -758,7 +758,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                     const src = SOURCES.find(s => s.id === r.sourceId);
                                     return (
                                         <div key={i} style={{ padding: 'var(--space-xs) 0', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                                            <span style={{ fontSize: '1rem' }}>{src?.icon}</span>
+                                            <Icon name={src?.icon} size={16} />
                                             <span style={{ color: r.success ? 'var(--color-success)' : 'var(--color-error)' }}>
                                                 {r.success ? 'Imported' : 'Failed'}: {src?.label || r.sourceId}
                                             </span>
@@ -792,7 +792,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                 <h1>Import Complete</h1>
 
                 <div className="settings-section" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>{allSuccess ? '✅' : '⚠️'}</div>
+                    <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>{allSuccess ? <Icon name="check" size={48} color="var(--color-success)" /> : <Icon name="alert" size={48} color="var(--color-warning)" />}</div>
                     <div style={{ fontWeight: 600, fontSize: '1.2rem', marginBottom: 'var(--space-sm)', color: allSuccess ? 'var(--color-success)' : 'var(--color-warning)' }}>
                         {allSuccess ? 'Your import is done! Welcome to Systemiser!' : 'Some parts of the import need attention'}
                     </div>

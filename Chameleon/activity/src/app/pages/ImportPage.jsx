@@ -5,7 +5,7 @@ import { useSystemSession } from '../../hooks/useSystemSession.jsx'
 
 const SOURCES = [
     {
-        id: 'pluralkit', label: 'PluralKit', icon: '🦊',
+        id: 'pluralkit', label: 'PluralKit', icon: 'pawPrint',
         methods: [
             { id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'Your PluralKit token (DM PluralKit: pk;token)', help: 'DM PluralKit with pk;token to get your token', privacyNote: null },
             { id: 'file', label: 'File Import', help: 'Export with: /export in DMs with PluralKit', privacyNote: 'Your export file may contain private data (descriptions, pronouns, avatar URLs, proxy patterns). This data will only be stored in your system\'s database.' },
@@ -19,22 +19,22 @@ const SOURCES = [
         ],
     },
     {
-        id: 'octocon', label: 'Octocon', icon: '🧠',
+        id: 'octocon', label: 'Octocon', icon: 'brain',
         methods: [
             { id: 'api', label: 'API Import', tokenLabel: 'System ID', tokenPlaceholder: '7-char ID or octocon.app/u/yourid URL', help: 'octocon.app/u/yourid', privacyNote: null },
             { id: 'file', label: 'File Import', help: 'Export from octocon.app → Settings → Export', privacyNote: 'Your export file may contain private data (descriptions, pronouns, avatar URLs, proxy patterns, front history). This data will only be stored in your system\'s database.' },
         ],
     },
     {
-        id: 'tupperbox', label: 'Tupperbox', icon: '📦',
+        id: 'tupperbox', label: 'Tupperbox', icon: 'package',
         methods: [
             { id: 'file', label: 'File Import', help: 'Export with: tul!export', privacyNote: 'Your export file may contain private data (descriptions, avatar URLs, proxy brackets). This data will only be stored in your system\'s database.' },
         ],
     },
 ]
 
-const METHOD_ICONS = { api: '🔗', file: '📄' }
-const PHASE_ICONS = { fetching: '🔍', members: '👤', groups: '📦', switches: '🔄', saving: '💾', complete: '✅', error: '❌' }
+const METHOD_ICONS = { api: 'link', file: 'fileText' }
+const PHASE_ICONS = { fetching: 'search', members: 'user', groups: 'package', switches: 'refresh', saving: 'save', complete: 'check', error: 'x' }
 
 function getSourceTerm(source) {
     const terms = { pluralkit: 'members', simplyplural: 'members', octocon: 'alters', tupperbox: 'tuppers' }
@@ -322,7 +322,7 @@ export function ImportPage({ system, onNavigate }) {
                             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
                             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--glass-border)'; e.currentTarget.style.transform = 'none' }}
                         >
-                            <div style={{ fontSize: '2rem', marginBottom: 'var(--space-sm)' }}>{s.icon}</div>
+                            <div style={{ fontSize: '2rem', marginBottom: 'var(--space-sm)', display: 'flex', justifyContent: 'center' }}><Icon name={s.icon} size={32} /></div>
                             <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>{s.label}</div>
                             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                                 {s.methods.length > 1 ? `${s.methods.length} import methods` : s.methods[0].id === 'api' ? 'API import' : 'File import'}
@@ -336,7 +336,7 @@ export function ImportPage({ system, onNavigate }) {
 
                 <div className="settings-section" style={{ border: '1px dashed var(--glass-border)', background: 'rgba(196,181,253,0.05)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
-                        <span style={{ fontSize: '1.5rem' }}>➕</span>
+                        <Icon name="plus" size={20} />
                         <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Import from Multiple Sources</div>
                             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
@@ -363,7 +363,7 @@ export function ImportPage({ system, onNavigate }) {
                                     onChange={() => toggleSource(s.id)}
                                     style={{ width: '18px', height: '18px', accentColor: 'var(--accent)' }}
                                 />
-                                <span style={{ fontSize: '1.2rem' }}>{s.icon}</span>
+                                <Icon name={s.icon} size={16} />
                                 <span style={{ fontWeight: 500 }}>{s.label}</span>
                             </label>
                         ))}
@@ -412,12 +412,12 @@ export function ImportPage({ system, onNavigate }) {
                                 borderRadius: 'var(--radius)', fontSize: '0.8rem', fontWeight: 600
                             }}
                         >
-                            {SOURCES.find(s => s.id === id)?.icon} {SOURCES.find(s => s.id === id)?.label}
+                            <Icon name={SOURCES.find(s => s.id === id)?.icon} size={14} /> {SOURCES.find(s => s.id === id)?.label}
                         </span>
                     ))}
                 </div>
 
-                <h1>{src?.icon} Configure {src?.label}</h1>
+                <h1><Icon name={src?.icon} size={24} /> Configure {src?.label}</h1>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>
                     Source {currentIdx + 1} of {sourcesArray.length}
                 </p>
@@ -437,7 +437,7 @@ export function ImportPage({ system, onNavigate }) {
                                         borderRadius: 'var(--radius)', transition: 'all 0.2s'
                                     }}
                                 >
-                                    <div style={{ fontSize: '1.5rem', marginBottom: 'var(--space-xs)' }}>{METHOD_ICONS[m.id]}</div>
+                                    <div style={{ fontSize: '1.5rem', marginBottom: 'var(--space-xs)', display: 'flex', justifyContent: 'center' }}><Icon name={METHOD_ICONS[m.id]} size={20} /></div>
                                     <div style={{ fontWeight: 600 }}>{m.label}</div>
                                 </button>
                             ))}
@@ -604,7 +604,7 @@ export function ImportPage({ system, onNavigate }) {
                     return (
                         <div key={sourceId} className="settings-section" style={{ marginBottom: 'var(--space-lg)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
                             <div style={{ padding: 'var(--space-md)', background: 'var(--bg-card)', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-                                <span style={{ fontSize: '1.5rem' }}>{src?.icon}</span>
+                                <Icon name={src?.icon} size={20} />
                                 <div>
                                     <div style={{ fontWeight: 600 }}>{src?.label}</div>
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
@@ -718,7 +718,7 @@ export function ImportPage({ system, onNavigate }) {
             <div className="settings-page" style={{ position: 'relative' }}>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(13, 13, 20, 0.85)', backdropFilter: 'blur(8px)' }}>
                     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius)', padding: 'var(--space-xl) var(--space-2xl)', textAlign: 'center', maxWidth: '480px', width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-sm)' }}>📥</div>
+                        <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-sm)' }}><Icon name="download" size={32} /></div>
                         <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: 'var(--space-xs)' }}>
                             Importing {sourcesArray.length} source{sourcesArray.length !== 1 ? 's' : ''}
                         </div>
@@ -746,7 +746,7 @@ export function ImportPage({ system, onNavigate }) {
                                     const src = SOURCES.find(s => s.id === r.sourceId);
                                     return (
                                         <div key={i} style={{ padding: 'var(--space-xs) 0', display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-                                            <span style={{ fontSize: '1rem' }}>{src?.icon}</span>
+                                            <Icon name={src?.icon} size={16} />
                                             <span style={{ color: r.success ? 'var(--color-success)' : 'var(--color-error)' }}>
                                                 {r.success ? 'Imported' : 'Failed'}: {src?.label || r.sourceId}
                                             </span>
@@ -778,7 +778,7 @@ export function ImportPage({ system, onNavigate }) {
                 <h1>Import Complete</h1>
 
                 <div className="settings-section" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
-                    <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>{allSuccess ? '✅' : '⚠️'}</div>
+                    <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>{allSuccess ? <Icon name="check" size={48} color="var(--color-success)" /> : <Icon name="alert" size={48} color="var(--color-warning)" />}</div>
                     <div style={{ fontWeight: 600, fontSize: '1.2rem', marginBottom: 'var(--space-sm)', color: allSuccess ? 'var(--color-success)' : 'var(--color-warning)' }}>
                         {allSuccess ? 'All imports successful!' : 'Some imports had issues'}
                     </div>

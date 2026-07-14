@@ -109,14 +109,14 @@ export function NotesPage({ system, onOpenSettings }) {
                             onClick={() => setViewVariant('grid')}
                             title="Grid view"
                         >
-                            ▦
+                            <Icon name="layoutGrid" size={16} />
                         </button>
                         <button
                             className={`btn btn-ghost btn-sm ${viewVariant === 'list' ? 'active' : ''}`}
                             onClick={() => setViewVariant('list')}
                             title="List view"
                         >
-                            ☰
+                            <Icon name="menu" size={16} />
                         </button>
                         <button
                             className="btn btn-ghost btn-sm"

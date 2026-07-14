@@ -1,7 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-
-const SPINNERS = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-const DOTS = ['', '.', '..', '...'];
+import { Icon } from '@chameleon/shared';
 
 export function useFetchStatus() {
   const [status, setStatus] = useState(null); // { label, phase, current, total }
@@ -9,17 +7,7 @@ export function useFetchStatus() {
   const rafRef = useRef(null);
   const startRef = useRef(Date.now());
 
-  // Animated spinner
-  useEffect(() => {
-    if (!status) return;
-    const animate = () => {
-      frameRef.current = (frameRef.current + 1) % SPINNERS.length;
-      setStatus(s => s ? { ...s, _frame: frameRef.current } : null);
-      rafRef.current = requestAnimationFrame(animate);
-    };
-    rafRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [status]);
+  // No braille spinner animation needed — Loader2 handles it via CSS
 
   const start = useCallback((label, total = 0) => {
     startRef.current = Date.now();
@@ -43,9 +31,9 @@ export function useFetchStatus() {
 
   const render = useCallback(() => {
     if (!status) return null;
-    const spinner = SPINNERS[status._frame || 0];
+    const spinner = null;
     const pct = status.total ? ` ${Math.round((status.current / status.total) * 100)}%` : '';
-    const phaseIcons = { fetching: '🔍', processing: '⚙️', saving: '💾', complete: '✅', error: '❌' };
+    const phaseIcons = { fetching: 'search', processing: 'settings', saving: 'save', complete: 'check', error: 'x' };
     return (
       <div className="fetch-status" style={{
         display: 'flex', alignItems: 'center', gap: '8px',
@@ -53,7 +41,7 @@ export function useFetchStatus() {
         background: 'rgba(196,181,253,0.1)', border: '1px solid rgba(196,181,253,0.3)',
         fontSize: '0.85rem', fontFamily: 'monospace', color: '#c4b5fd'
       }}>
-        <span>{phaseIcons[status.phase] || spinner}</span>
+        <span>{phaseIcons[status.phase] ? <Icon name={phaseIcons[status.phase]} size={16} /> : <Icon name="loader" size={16} className="spin" />}</span>
         <span>{status.label}{pct}</span>
         {status.summary && <span style={{ opacity: 0.7, marginLeft: 'auto' }}>{status.summary}</span>}
       </div>

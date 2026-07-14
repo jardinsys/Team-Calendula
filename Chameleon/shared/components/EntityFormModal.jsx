@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Paintbrush } from 'lucide-react'
+import { Icon } from '../icons.jsx'
 import api from '../api/client.js'
 
 const COLORS = [
@@ -346,7 +347,7 @@ function EntityFormModal({ entity, type = 'alter', typeLabel: typeLabelProp, onC
                                 style={{ width: '100%', fontSize: '0.85rem' }}
                                 onClick={() => setShowMore(!showMore)}
                             >
-                                {showMore ? '▲ Hide more options' : '▼ More options'}
+                                {showMore ? <><Icon name="chevronUp" size={14} /> Hide more options</> : <><Icon name="chevronDown" size={14} /> More options</>}
                             </button>
                         </div>
                     )}

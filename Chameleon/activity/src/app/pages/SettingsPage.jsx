@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { api, getSystemTerm, systemKeys, privacyBucketKeys } from '@chameleon/shared'
+import { api, getSystemTerm, systemKeys, privacyBucketKeys, Icon } from '@chameleon/shared'
 
 const SETTINGS_TABS = [
-  { id: 'general', label: 'General', icon: '⚙️' },
-  { id: 'proxy', label: 'Proxy & Server', icon: '🔧' },
-  { id: 'notifications', label: 'Notifications', icon: '🔔' },
-  { id: 'privacy', label: 'Privacy Buckets', icon: '🔒' },
-  { id: 'import', label: 'Import', icon: '📥' },
-  { id: 'danger', label: 'Danger Zone', icon: '⚠️' },
+  { id: 'general', label: 'General', icon: 'settings' },
+  { id: 'proxy', label: 'Proxy & Server', icon: 'wrench' },
+  { id: 'notifications', label: 'Notifications', icon: 'bell' },
+  { id: 'privacy', label: 'Privacy Buckets', icon: 'lock' },
+  { id: 'import', label: 'Import', icon: 'download' },
+  { id: 'danger', label: 'Danger Zone', icon: 'alert' },
 ]
 
 export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
@@ -181,7 +181,7 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
   if (deleteResult?.success) {
     return (
       <div className="settings-page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>💙</div>
+        <div style={{ fontSize: '3rem', marginBottom: '16px' }}><Icon name="heart" size={48} color="#60a5fa" /></div>
         <h1 style={{ color: 'var(--text)', marginBottom: '8px' }}>Sorry to see you go</h1>
         <p style={{ color: 'var(--text-secondary)', maxWidth: '400px', lineHeight: '1.6', marginBottom: '24px' }}>
           Your account has been deleted. All your data has been removed.
@@ -845,7 +845,7 @@ export function SettingsPage({ system: systemProp, onNavigate, discordUser }) {
             onMouseEnter={e => { if (activeTab !== tab.id) e.target.style.background = 'var(--bg-hover)' }}
             onMouseLeave={e => { if (activeTab !== tab.id) e.target.style.background = 'transparent' }}
           >
-            <span>{tab.icon}</span>
+            <Icon name={tab.icon} size={16} />
             <span>{tab.label}</span>
           </button>
         ))}
