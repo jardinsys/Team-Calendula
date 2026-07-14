@@ -49,6 +49,7 @@ export function Activity() {
   const [pageParams, setPageParams] = useState(getInitialPageParams)
   const [system, setSystem] = useState(null)
   const [hasSystem, setHasSystem] = useState(false)
+  const [staleSession, setStaleSession] = useState(null)
   const [showSettings, setShowSettings] = useState(false)
   const [fromOnboarding, setFromOnboarding] = useState(false)
 
@@ -71,7 +72,16 @@ export function Activity() {
         }
       })
       .catch(() => {
-        if (!cancelled) setHasSystem(false)
+        if (!cancelled) {
+          setHasSystem(false)
+          // Check for stale registration session
+          try {
+            const saved = JSON.parse(sessionStorage.getItem('reg_local'))
+            if (saved?.step && saved?.ts && Date.now() - saved.ts < 15 * 60 * 1000) {
+              setStaleSession(saved)
+            }
+          } catch {}
+        }
       })
 
     return () => { cancelled = true }
@@ -160,15 +170,18 @@ export function Activity() {
     setActivePage(page)
   }, [activePage, pageParams])
 
+  const fromOnboardingRef = useRef(fromOnboarding)
+  useEffect(() => { fromOnboardingRef.current = fromOnboarding }, [fromOnboarding])
+
   const handleExitOnboarding = useCallback(() => {
     setFromOnboarding(false)
     setHistory([])
   }, [])
 
   const handleBack = useCallback(() => {
-    if (fromOnboarding && historyRef.current.length > 0) {
+    if (fromOnboardingRef.current && historyRef.current.length > 0) {
       const prev = historyRef.current[historyRef.current.length - 1]
-      setHistory(prev => prev.slice(0, -1))
+      setHistory(h => h.slice(0, -1))
       setActivePage(prev.page)
       setPageParams(prev.params)
       return
@@ -177,7 +190,7 @@ export function Activity() {
     setPageParams(null)
     setFromOnboarding(false)
     setHistory([])
-  }, [fromOnboarding])
+  }, [])
 
   if (status === 'INITIALIZING') {
     return (
@@ -259,6 +272,16 @@ export function Activity() {
             system={system}
             hasSystem={effectiveHasSystem}
             discordUser={discordUser}
+            staleSession={staleSession}
+            onContinueSession={() => {
+              const step = staleSession.step
+              setStaleSession(null)
+              handleNavigate('register', { startStep: step })
+            }}
+            onRestartSession={() => {
+              sessionStorage.removeItem('reg_local')
+              setStaleSession(null)
+            }}
           />
         )}
       </main>

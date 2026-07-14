@@ -148,7 +148,7 @@ function NewUserLanding({ onNavigate, discordUser, system }) {
 
       <div className="landing-newuser-actions">
         <button
-          className="btn-gradient btn-gradient-secondary"
+          className="btn-gradient btn-gradient-rainbow"
           onClick={() => onNavigate('what-is')}
         >
           What is Systemiser?
@@ -169,9 +169,46 @@ function NewUserLanding({ onNavigate, discordUser, system }) {
    Main Landing Page — Routes to Correct Variant
    ═══════════════════════════════════════════ */
 
-export function LandingPage({ onNavigate, system, hasSystem, discordUser }) {
+export function LandingPage({ onNavigate, system, hasSystem, discordUser, staleSession, onContinueSession, onRestartSession }) {
   if (hasSystem) {
     return <ReturningLanding onNavigate={onNavigate} system={system} discordUser={discordUser} />
+  }
+
+  // Show stale session prompt if there's a recent registration attempt
+  if (staleSession) {
+    return (
+      <div className="landing-page">
+        <div className="landing-returning">
+          <div className="landing-returning-avatar">
+            <div className="avatar-placeholder">
+              <User size={48} strokeWidth={2} />
+            </div>
+          </div>
+          <h1 className="landing-returning-title">Welcome Back!</h1>
+          <p className="landing-returning-subtitle">
+            It looks like you started setting up your system but didn't finish.
+          </p>
+          <p className="landing-returning-subtitle" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+            You were on step {staleSession.step} of registration.
+          </p>
+          <div className="landing-newuser-actions">
+            <button
+              className="btn-gradient btn-gradient-primary"
+              onClick={onContinueSession}
+            >
+              Continue Setup
+            </button>
+            <button
+              className="btn-gradient"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+              onClick={onRestartSession}
+            >
+              Start Fresh
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return <NewUserLanding onNavigate={onNavigate} discordUser={discordUser} system={system} />

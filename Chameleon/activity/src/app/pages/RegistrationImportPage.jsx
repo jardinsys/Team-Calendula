@@ -130,14 +130,12 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
             update({ importMode: false, importSources: [], importEntityTypeMode: null, importEntityTypeSelections: {} })
             return
         }
-        if (phase === 'select') {
+        if (phase === 'configure' || phase === 'select') {
             setPhase('mode')
             setSelectedSources(new Set())
-            return
-        }
-        if (phase === 'configure') {
-            setConfiguringSource(null)
-            setPhase('select')
+            setSourceConfigs({})
+            setPreviews({})
+            setImportMode(null)
             return
         }
         if (phase === 'preview') {
@@ -321,19 +319,19 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
-                    <button className="settings-section" onClick={() => handleModeSelect('simple')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}>
+                    <button className="settings-section" onClick={() => handleModeSelect('simple')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>
                         <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>✨ Simple</div>
                         <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>One-click import</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>One source only. Everything imported together with sensible defaults.</div>
                     </button>
 
-                    <button className="settings-section" onClick={() => handleModeSelect('intermediate')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}>
+                    <button className="settings-section" onClick={() => handleModeSelect('intermediate')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>
                         <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>📋 Intermediate</div>
                         <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Choose source targets</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>1–2 sources. Pick each source’s target (Main Profile or Discord Overlay).</div>
                     </button>
 
-                    <button className="settings-section" onClick={() => handleModeSelect('advanced')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)' }}>
+                    <button className="settings-section" onClick={() => handleModeSelect('advanced')} style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>
                         <div style={{ fontSize: '1.3rem', marginBottom: 'var(--space-xs)' }}>🔍 Advanced</div>
                         <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)' }}>Full control</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>1–4 sources. Pick targets, toggle switches/groups, and assign per-entity types.</div>
@@ -370,7 +368,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                     }}>
                                         <input type="checkbox" checked={selectedSources.has(s.id)} onChange={() => toggleSource(s.id)} style={{ width: '18px', height: '18px' }} />
                                         <span style={{ fontSize: '1.2rem' }}>{s.icon}</span>
-                                        <span style={{ fontWeight: 500 }}>{s.label}</span>
+                                        <span style={{ fontWeight: 500, color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>{s.label}</span>
                                     </label>
                                 ))}
                             </div>
@@ -383,7 +381,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-md)' }}>
                             {SOURCES.map(s => (
                                 <button key={s.id} onClick={() => { setSelectedSources(new Set([s.id])); setSourceConfigs({ [s.id]: getDefaultConfig(s.id) }); setConfiguringSource(s.id); setPhase('configure') }}
-                                    style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', transition: 'border-color 0.2s, transform 0.1s' }}
+                                    style={{ cursor: 'pointer', textAlign: 'left', padding: 'var(--space-lg)', border: '1px solid var(--glass-border)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', transition: 'border-color 0.2s, transform 0.1s', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}
                                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
                                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--glass-border)'; e.currentTarget.style.transform = 'none' }}>
                                     <div style={{ fontSize: '2rem', marginBottom: 'var(--space-sm)' }}>{s.icon}</div>
@@ -423,7 +421,8 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                             flex: 1, textAlign: 'center', padding: 'var(--space-xs)',
                             background: i < currentIdx ? 'var(--accent)' : i === currentIdx ? 'var(--accent-subtle)' : 'var(--glass-border)',
                             color: i <= currentIdx ? 'var(--bg)' : 'var(--text-secondary)',
-                            borderRadius: 'var(--radius)', fontSize: '0.8rem', fontWeight: 600
+                            borderRadius: 'var(--radius)', fontSize: '0.8rem', fontWeight: 600,
+                            fontFamily: 'var(--font-accent)'
                         }}>
                             {SOURCES.find(s => s.id === id)?.icon} {SOURCES.find(s => s.id === id)?.label}
                         </span>
@@ -442,7 +441,8 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                     flex: 1, padding: 'var(--space-md)', cursor: 'pointer', textAlign: 'center',
                                     background: cfg.method === m.id ? 'var(--accent-subtle)' : 'var(--bg-card)',
                                     border: `1px solid ${cfg.method === m.id ? 'var(--accent)' : 'var(--glass-border)'}`,
-                                    borderRadius: 'var(--radius)', transition: 'all 0.2s'
+                                    borderRadius: 'var(--radius)', transition: 'all 0.2s',
+                                    color: 'var(--text)', fontFamily: 'var(--font-accent)'
                                 }}>
                                 <div style={{ fontSize: '1.5rem', marginBottom: 'var(--space-xs)' }}>{METHOD_ICONS[m.id]}</div>
                                 <div style={{ fontWeight: 600 }}>{m.label}</div>
@@ -478,7 +478,8 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                     flex: 1, padding: 'var(--space-md)', cursor: 'pointer', textAlign: 'center',
                                     background: cfg.target === value ? 'var(--accent-subtle)' : 'var(--bg-card)',
                                     border: `1px solid ${cfg.target === value ? 'var(--accent)' : 'var(--glass-border)'}`,
-                                    borderRadius: 'var(--radius)', transition: 'all 0.2s'
+                                    borderRadius: 'var(--radius)', transition: 'all 0.2s',
+                                    color: 'var(--text)', fontFamily: 'var(--font-accent)'
                                 }}>
                                 <div style={{ fontWeight: 600 }}>{label}</div>
                             </button>
@@ -490,11 +491,11 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                     <div className="settings-section" style={{ marginBottom: 'var(--space-md)' }}>
                         <div className="settings-section-title">Options</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>
                                 <input type="checkbox" checked={cfg.includeGroups} onChange={e => updateSourceConfig(currentSourceId, { includeGroups: e.target.checked })} style={{ width: '18px', height: '18px' }} />
                                 Include groups
                             </label>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>
                                 <input type="checkbox" checked={cfg.includeSwitches} onChange={e => updateSourceConfig(currentSourceId, { includeSwitches: e.target.checked })} style={{ width: '18px', height: '18px' }} />
                                 Include switch history
                             </label>
@@ -787,6 +788,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
 
         return (
             <div className="settings-page">
+                <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
                 <h1>Import Complete</h1>
 
                 <div className="settings-section" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>

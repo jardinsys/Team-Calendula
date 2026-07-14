@@ -50,6 +50,16 @@ async function authenticateToken(req, res, next) {
             return res.status(401).json({ error: 'User not found' });
         }
 
+        // Cleanup orphan users: no systemID and older than 30 days
+        if (!user.systemID && user.createdAt) {
+            const daysSinceCreation = (Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSinceCreation > 30) {
+                console.log(`[Auth] Cleaning up orphan user ${user._id} (no system, created ${Math.floor(daysSinceCreation)} days ago)`);
+                await User.findByIdAndDelete(user._id);
+                return res.status(401).json({ error: 'Account expired. Please register again.' });
+            }
+        }
+
         // Attach user info to request
         req.user = {
             _id: user._id,

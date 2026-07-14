@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { api, DISORDER_MAP, DISORDER_DEFINITIONS, DSM_OPTIONS, ICD_OPTIONS, Icon, resolveSysTypeFromDisorder, resolveSysTypeFromExtraAnswer, resolveSysTypeFromMultiAnswer } from '@chameleon/shared'
 import { useSystemSession } from '../../hooks/useSystemSession'
+import { getParentStep, REGISTRATION_ROOT, REGISTER_STEPS } from '../navigation/registrationFlow'
 
 // ═══════════════════════════════════════════
 // Step 1: Category Selection
@@ -498,7 +499,7 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
         </button>
 
         <button
-          className="import-option-btn import-option-primary"
+          className="import-option-btn"
           onClick={handleNewSystem}
         >
           <span className="import-option-title">Start a New System</span>
@@ -639,8 +640,38 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
   } = useSystemSession()
 
   const startStep = pageParams?.startStep || 1
-  const [step, setStep] = useState(startStep)
-  const [category, setCategory] = useState(null)
+  const [step, setStep] = useState(() => {
+    try {
+      const s = JSON.parse(sessionStorage.getItem('reg_local'))
+      if (s?.ts && Date.now() - s.ts > 15 * 60 * 1000) {
+        sessionStorage.removeItem('reg_local')
+        return startStep
+      }
+      return s?.step || startStep
+    } catch { return startStep }
+  })
+  const [category, setCategory] = useState(() => {
+    try {
+      const s = JSON.parse(sessionStorage.getItem('reg_local'))
+      if (s?.ts && Date.now() - s.ts > 15 * 60 * 1000) return null
+      return s?.category || null
+    } catch { return null }
+  })
+  const [extraAnswer, setExtraAnswer] = useState(() => {
+    try {
+      const s = JSON.parse(sessionStorage.getItem('reg_local'))
+      if (s?.ts && Date.now() - s.ts > 15 * 60 * 1000) return null
+      return s?.extraAnswer || null
+    } catch { return null }
+  })
+  const [disorderKey, setDisorderKey] = useState(() => {
+    try {
+      const s = JSON.parse(sessionStorage.getItem('reg_local'))
+      if (s?.ts && Date.now() - s.ts > 15 * 60 * 1000) return null
+      return s?.disorderKey || null
+    } catch { return null }
+  })
+  const [error, setError] = useState(null)
 
   // Sync step when returning from registration import with a target step
   useEffect(() => {
@@ -648,27 +679,27 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
       setStep(pageParams.startStep)
     }
   }, [pageParams?.startStep])
-  const [disorderKey, setDisorderKey] = useState(null)
-  const [extraAnswer, setExtraAnswer] = useState(null)
-  const [error, setError] = useState(null)
+
+  // Persist local registration state so it survives remounting
+  useEffect(() => {
+    sessionStorage.setItem('reg_local', JSON.stringify({ step, category, extraAnswer, disorderKey, ts: Date.now() }))
+  }, [step, category, extraAnswer, disorderKey])
 
   // Derive sysType from session
   const resolvedSysType = session.sysType
   const { isSystem, isFragmented, isDissociative } = deriveFlags(resolvedSysType)
 
   const handleStartOver = useCallback(() => {
-    if (step === 1) {
-      onBack?.()
-      return
-    }
+    // Always go back to landing
+    sessionStorage.removeItem('reg_local')
     setStep(1)
     setCategory(null)
     setDisorderKey(null)
     setExtraAnswer(null)
-    setError(null)
     update({ sysType: null, systemName: '', members: [], front: null, stagedImports: [] })
     reset?.()
-  }, [step, setStep, setCategory, setDisorderKey, setExtraAnswer, setError, update, reset, onBack])
+    onNavigate?.(null)
+  }, [onNavigate, update, reset])
 
   // Step 1 → Step 2 or Step 3
   const handleCategorySelect = (cat) => {
@@ -847,16 +878,25 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     return layers
   }
 
-  // Back navigation
+  // Back navigation — linked list: follow parent pointer
   const handleBack = () => {
+    // Determine current step ID based on what's actually rendered
+    let currentStepId
+    if (step === 3) {
+      currentStepId = (category === 'OTHER' && !resolvedSysType?.isSystem && !resolvedSysType?.isFragmented)
+        ? 'other' : 'import'
+    } else {
+      currentStepId = REGISTER_STEPS[step - 1]?.id
+    }
+
     const ctx = {
       isSystem: resolvedSysType?.isSystem,
       isFragmented: resolvedSysType?.isFragmented,
       category,
     }
-    const prev = previous(REGISTER_STEPS, REGISTER_STEPS[step - 1]?.id, ctx)
-    if (prev) {
-      const idx = REGISTER_STEPS.findIndex((s) => s.id === prev.id)
+    const parentId = getParentStep(currentStepId, ctx)
+    if (parentId) {
+      const idx = REGISTER_STEPS.findIndex((s) => s.id === parentId)
       update({ importMode: false })
       return setStep(idx + 1)
     }

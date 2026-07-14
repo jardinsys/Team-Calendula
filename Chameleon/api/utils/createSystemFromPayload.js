@@ -183,16 +183,34 @@ async function createSystemFromPayload(userId, payload) {
         
         await system.save({ session });
         
-        // Link entities to system (for staged IDs)
-        // Only update entities that actually exist in MongoDB (dryRun payloads may reference
-        // entities that were never saved — those IDs are still kept in the system arrays
-        // but we skip the updateMany for them to avoid unnecessary DB calls).
-        if (alterIds.length > 0) {
-            const existingAlterIds = await Alter.distinct('_id', { _id: { $in: alterIds } }).session(session);
-            const missingAlterIds = alterIds.filter(id => !existingAlterIds.some(eid => eid.equals(id)));
-            if (missingAlterIds.length > 0) {
-                console.log(`[System] Skipping updateMany for ${missingAlterIds.length} alters not found in DB (likely dryRun IDs)`);
+        // Link entities to system
+        // If full entity data is provided (dryRun registration), create entities from payload
+        // Otherwise, link existing entities by ID
+        const createdAlterIds = [];
+        const createdStateIds = [];
+        const createdGroupIds = [];
+
+        // Create alters from payload entity data
+        if (payload.alters?.entities && payload.alters.entities.length > 0) {
+            log.info('Commit', 'Creating ' + payload.alters.entities.length + ' alters from payload');
+            for (const entityData of payload.alters.entities) {
+                try {
+                    const alterData = { ...entityData };
+                    delete alterData._id; // Let Mongoose generate new ID
+                    delete alterData.__v;
+                    const alter = new Alter(alterData);
+                    alter.systemID = system._id.toString();
+                    await alter.save({ session });
+                    createdAlterIds.push(alter._id);
+                    log.step('Commit', createdAlterIds.length, payload.alters.entities.length, 'Created alter: ' + (alter.name?.display || alter.name?.indexable || 'Unknown'));
+                } catch (err) {
+                    log.fail('Commit', 'Failed to create alter: ' + (entityData.name?.display || entityData.name?.indexable || 'Unknown'), err);
+                }
             }
+            system.alters.IDs = createdAlterIds.map(id => id.toString());
+        } else if (alterIds.length > 0) {
+            // Legacy path: link existing entities by ID
+            const existingAlterIds = await Alter.distinct('_id', { _id: { $in: alterIds } }).session(session);
             if (existingAlterIds.length > 0) {
                 await Alter.updateMany(
                     { _id: { $in: existingAlterIds } },
@@ -201,12 +219,27 @@ async function createSystemFromPayload(userId, payload) {
                 );
             }
         }
-        if (stateIds.length > 0) {
-            const existingStateIds = await State.distinct('_id', { _id: { $in: stateIds } }).session(session);
-            const missingStateIds = stateIds.filter(id => !existingStateIds.some(eid => eid.equals(id)));
-            if (missingStateIds.length > 0) {
-                console.log(`[System] Skipping updateMany for ${missingStateIds.length} states not found in DB (likely dryRun IDs)`);
+
+        // Create states from payload entity data
+        if (payload.states?.entities && payload.states.entities.length > 0) {
+            log.info('Commit', 'Creating ' + payload.states.entities.length + ' states from payload');
+            for (const entityData of payload.states.entities) {
+                try {
+                    const stateData = { ...entityData };
+                    delete stateData._id;
+                    delete stateData.__v;
+                    const state = new State(stateData);
+                    state.systemID = system._id.toString();
+                    await state.save({ session });
+                    createdStateIds.push(state._id);
+                    log.step('Commit', createdStateIds.length, payload.states.entities.length, 'Created state: ' + (state.name?.display || state.name?.indexable || 'Unknown'));
+                } catch (err) {
+                    log.fail('Commit', 'Failed to create state: ' + (entityData.name?.display || entityData.name?.indexable || 'Unknown'), err);
+                }
             }
+            system.states.IDs = createdStateIds.map(id => id.toString());
+        } else if (stateIds.length > 0) {
+            const existingStateIds = await State.distinct('_id', { _id: { $in: stateIds } }).session(session);
             if (existingStateIds.length > 0) {
                 await State.updateMany(
                     { _id: { $in: existingStateIds } },
@@ -215,12 +248,27 @@ async function createSystemFromPayload(userId, payload) {
                 );
             }
         }
-        if (groupIds.length > 0) {
-            const existingGroupIds = await Group.distinct('_id', { _id: { $in: groupIds } }).session(session);
-            const missingGroupIds = groupIds.filter(id => !existingGroupIds.some(eid => eid.equals(id)));
-            if (missingGroupIds.length > 0) {
-                console.log(`[System] Skipping updateMany for ${missingGroupIds.length} groups not found in DB (likely dryRun IDs)`);
+
+        // Create groups from payload entity data
+        if (payload.groups?.entities && payload.groups.entities.length > 0) {
+            log.info('Commit', 'Creating ' + payload.groups.entities.length + ' groups from payload');
+            for (const entityData of payload.groups.entities) {
+                try {
+                    const groupData = { ...entityData };
+                    delete groupData._id;
+                    delete groupData.__v;
+                    const group = new Group(groupData);
+                    group.systemID = system._id.toString();
+                    await group.save({ session });
+                    createdGroupIds.push(group._id);
+                    log.step('Commit', createdGroupIds.length, payload.groups.entities.length, 'Created group: ' + (group.name?.display || group.name?.indexable || 'Unknown'));
+                } catch (err) {
+                    log.fail('Commit', 'Failed to create group: ' + (entityData.name?.display || entityData.name?.indexable || 'Unknown'), err);
+                }
             }
+            system.groups.IDs = createdGroupIds.map(id => id.toString());
+        } else if (groupIds.length > 0) {
+            const existingGroupIds = await Group.distinct('_id', { _id: { $in: groupIds } }).session(session);
             if (existingGroupIds.length > 0) {
                 await Group.updateMany(
                     { _id: { $in: existingGroupIds } },

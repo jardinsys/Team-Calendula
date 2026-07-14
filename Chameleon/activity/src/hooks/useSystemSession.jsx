@@ -1,6 +1,23 @@
 import { useCallback, useMemo, useState } from 'react'
 import { api } from '@chameleon/shared'
 
+const STORAGE_KEY = 'system_session'
+
+function loadPersistedSession() {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return null
+}
+
+function saveSessionToStorage(session) {
+  try {
+    const { sysType, systemName, members, groups, front, shiftHistory, source } = session
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ sysType, systemName, members, groups, front, shiftHistory, source }))
+  } catch {}
+}
+
 const DEFAULT_SESSION = () => ({
   systemName: null,
   sysType: null,
@@ -19,29 +36,54 @@ const DEFAULT_SESSION = () => ({
 })
 
 export function useSystemSession() {
-  const [session, setSession] = useState(DEFAULT_SESSION)
+  const [session, setSession] = useState(() => {
+    const persisted = loadPersistedSession()
+    return persisted ? { ...DEFAULT_SESSION(), ...persisted } : DEFAULT_SESSION()
+  })
   const [committing, setCommitting] = useState(false)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
 
+  // update() ignores undefined values so partial patches don't clobber persisted fields
   const update = useCallback((patch) => {
-    setSession(prev => ({ ...prev, ...patch }))
+    setSession(prev => {
+      const filtered = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))
+      const next = { ...prev, ...filtered }
+      saveSessionToStorage(next)
+      return next
+    })
   }, [])
 
   const setSystemName = useCallback((name) => {
-    setSession(prev => ({ ...prev, systemName: name || null }))
+    setSession(prev => {
+      const next = { ...prev, systemName: name || null }
+      saveSessionToStorage(next)
+      return next
+    })
   }, [])
 
   const setSysType = useCallback((sysType) => {
-    setSession(prev => ({ ...prev, sysType }))
+    setSession(prev => {
+      const next = { ...prev, sysType }
+      saveSessionToStorage(next)
+      return next
+    })
   }, [])
 
   const setMembers = useCallback((members) => {
-    setSession(prev => ({ ...prev, members }))
+    setSession(prev => {
+      const next = { ...prev, members }
+      saveSessionToStorage(next)
+      return next
+    })
   }, [])
 
   const setGroups = useCallback((groups) => {
-    setSession(prev => ({ ...prev, groups }))
+    setSession(prev => {
+      const next = { ...prev, groups }
+      saveSessionToStorage(next)
+      return next
+    })
   }, [])
 
   const setSwitches = useCallback((switches) => {
@@ -60,6 +102,7 @@ export function useSystemSession() {
   }, [])
 
   const reset = useCallback(() => {
+    sessionStorage.removeItem(STORAGE_KEY)
     setSession(DEFAULT_SESSION())
     setError(null)
     setResult(null)
@@ -139,6 +182,36 @@ export function useSystemSession() {
     }
   }, [])
 
+  // Strip entity to essential fields only (avoids PayloadTooLargeError)
+  const stripEntityForPayload = (raw) => {
+    if (!raw) return null
+    const entity = {
+      name: raw.name,
+      entityType: raw.entityType,
+      description: raw.description,
+      color: raw.color,
+      pronouns: raw.pronouns,
+      avatar: raw.avatar,
+      birthday: raw.birthday,
+      proxy: raw.proxy,
+      condition: raw.condition,
+      signoff: raw.signoff,
+      age: raw.age,
+      banner: raw.banner,
+    }
+    if (raw.metadata) {
+      entity.metadata = {
+        importedFrom: raw.metadata.importedFrom,
+        addedAt: raw.metadata.addedAt,
+        pluralKitId: raw.metadata.pluralKitId,
+        pluralKitUuid: raw.metadata.pluralKitUuid,
+        simplyPluralId: raw.metadata.simplyPluralId,
+        octoconId: raw.metadata.octoconId,
+      }
+    }
+    return entity
+  }
+
   const buildPayloadFromSession = useCallback((sess) => {
     const { isSystem, isFragmented, isDissociative } = deriveFlags(sess.sysType)
     const name = sess.systemName || ''
@@ -168,6 +241,9 @@ export function useSystemSession() {
         IDs: (sess.members || [])
           .filter(m => !isSystem || m.entityType !== 'state')
           .map(m => m.id),
+        entities: (sess.members || [])
+          .filter(m => !isSystem || m.entityType !== 'state')
+          .map(m => stripEntityForPayload(m._raw) || { name: m.name, entityType: m.entityType }),
       },
       states: {
         conditions: (sess.members || [])
@@ -176,10 +252,14 @@ export function useSystemSession() {
         IDs: (sess.members || [])
           .filter(m => m.entityType === 'state')
           .map(m => m.id),
+        entities: (sess.members || [])
+          .filter(m => m.entityType === 'state')
+          .map(m => stripEntityForPayload(m._raw) || { name: m.name, entityType: m.entityType }),
       },
       groups: {
         conditions: (Array.isArray(sess.groups) ? sess.groups : []).map(g => ({ name: g.name, settings: { hide_to_self: false, include_in_Count: true } })),
         IDs: (Array.isArray(sess.groups) ? sess.groups : []).map(g => g.id),
+        entities: (Array.isArray(sess.groups) ? sess.groups : []).map(g => stripEntityForPayload(g._raw) || { name: g.name }),
       },
       setting: {
         friendAutoBucket: 'Friends',
@@ -205,25 +285,14 @@ export function useSystemSession() {
     }
 
     return payload
-  }, [
-    session.systemName,
-    session.sysType,
-    session.members,
-    session.front,
-    session.shiftHistory,
-    session.privacyBuckets,
-    deriveFlags,
-    buildFront,
-  ])
+  }, [session.systemName, session.sysType, session.members, session.front, session.shiftHistory, session.privacyBuckets, deriveFlags, buildFront])
 
-  // Convenience wrapper: builds payload from current session state
   const buildPayload = useCallback(() => buildPayloadFromSession(session), [session, buildPayloadFromSession])
 
   const commit = useCallback(async (overridePatch) => {
     setCommitting(true)
     setError(null)
     try {
-      // Apply patch to session (for any listeners) and build payload from patched state
       if (overridePatch) setSession(prev => ({ ...prev, ...overridePatch }))
       const patchedSession = overridePatch ? { ...session, ...overridePatch } : session
       const data = buildPayloadFromSession(patchedSession)

@@ -8,6 +8,31 @@ export const REGISTER_STEPS = [
   { id: 'finish', label: 'Complete' },
 ]
 
+// ─── Linked-list navigation ────────────────────────────────────
+// Each step knows its parent. Back = follow parent pointer.
+// Dynamic parents resolve based on context (category, sysType).
+export const STEP_TREE = {
+  category: { parent: null },
+  disorder: { parent: 'category' },
+  import:   { parent: 'disorder' },
+  other:    { parent: 'disorder' },
+  name:     { parent: (ctx) => {
+    if (ctx.isSystem || ctx.isFragmented) return 'import'
+    if (ctx.category === 'OTHER') return 'other'
+    return 'disorder'
+  }},
+  alters:   { parent: 'name' },
+  finish:   { parent: (ctx) => ctx.isSystem ? 'alters' : 'name' },
+}
+
+export const REGISTRATION_ROOT = 'category'
+
+export function getParentStep(stepId, ctx) {
+  const node = STEP_TREE[stepId]
+  if (!node) return null
+  return typeof node.parent === 'function' ? node.parent(ctx) : node.parent
+}
+
 export const IMPORT_PHASES = [
   { id: 'select', label: 'Select' },
   { id: 'mode', label: 'Mode' },

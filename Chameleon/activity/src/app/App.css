@@ -136,6 +136,9 @@
   --pastel-lilac: #d8b4fe;
   --pastel-cream: #fef3c7;
 
+  /* ── Rainbow gradient ── */
+  --rainbow-gradient: linear-gradient(135deg, #fda4af 0%, #fdba74 20%, #fef3c7 40%, #86efac 60%, #7dd3fc 80%, #c4b5fd 100%);
+
   /* ── Penpot Design System ── */
   --bg-gradient: linear-gradient(to bottom, rgba(24,40,89,1) 56%, rgba(1,21,58,1) 100%);
   --btn-gradient: linear-gradient(to bottom, rgba(211,189,242,1) 0%, rgba(89,108,217,1) 100%);
@@ -1469,6 +1472,46 @@ select.text-input {
   color: #ffffff;
 }
 
+/* Rainbow Button — landing page CTA */
+.btn-gradient-rainbow {
+  background: linear-gradient(135deg, rgba(253,164,175,0.2) 0%, rgba(253,186,116,0.2) 20%, rgba(254,243,199,0.2) 40%, rgba(134,239,172,0.2) 60%, rgba(125,211,252,0.2) 80%, rgba(196,181,253,0.2) 100%);
+  color: #ffffff;
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 2px 16px rgba(253, 164, 175, 0.1), 0 2px 16px rgba(196, 181, 253, 0.1);
+  position: relative;
+  background-size: 200% 200%;
+  transition: box-shadow var(--transition-smooth);
+}
+.btn-gradient-rainbow::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: calc(24px + 3px);
+  background: var(--btn-gradient);
+  z-index: -1;
+  transition: opacity 0.3s ease;
+}
+.btn-gradient-rainbow:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    #fda4af 0%, #fdba74 14%, #fef3c7 28%,
+    #86efac 42%, #7dd3fc 57%, #c4b5fd 71%,
+    #d8b4fe 85%, #fda4af 100%
+  );
+  background-size: 200% 200%;
+  animation: rainbow-shift 2s linear infinite;
+  filter: brightness(1.08);
+  box-shadow: 0 4px 24px rgba(253, 164, 175, 0.25), 0 4px 24px rgba(196, 181, 253, 0.25);
+}
+.btn-gradient-rainbow:hover::before {
+  opacity: 0.3;
+}
+@keyframes rainbow-shift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
 /* Crisis Button — larger, yellow gradient */
 .btn-gradient-crisis {
   background: var(--btn-crisis-gradient);
@@ -1662,9 +1705,8 @@ select.text-input {
   align-items: center;
   justify-content: center;
   height: 100vh;
-  height: 100dvh;
-  padding: clamp(8px, 2vw, 20px);
-  gap: clamp(8px, 2vw, 16px);
+  padding: clamp(6px, 1.5vw, 16px);
+  gap: clamp(4px, 1.2vw, 10px);
   text-align: center;
   overflow: hidden;
 }
@@ -1685,16 +1727,16 @@ select.text-input {
   font-weight: 700;
   color: #ffffff;
   line-height: 1.1;
-  margin-top: var(--space-md);
+  margin-top: clamp(2px, 0.5vw, 8px);
 }
 .landing-avatar-wrap {
   position: relative;
-  width: clamp(140px, 45vw, 351px);
-  height: clamp(140px, 45vw, 351px);
+  width: clamp(100px, 32vw, 260px);
+  height: clamp(100px, 32vw, 260px);
   border-radius: 50%;
-  padding: clamp(5px, 1.8vw, 13px);
+  padding: clamp(4px, 1.2vw, 10px);
   background: var(--avatar-border-gradient);
-  margin: var(--space-lg) 0;
+  margin: clamp(4px, 1vw, 12px) 0;
 }
 .landing-avatar-inner {
   width: 100%;
@@ -1727,8 +1769,8 @@ select.text-input {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(8px, 2.5vw, 14px);
-  margin-top: clamp(8px, 2vw, 16px);
+  gap: clamp(6px, 1.8vw, 12px);
+  margin-top: clamp(4px, 1vw, 10px);
   width: 100%;
   max-width: clamp(240px, 70vw, 400px);
 }
@@ -3212,6 +3254,29 @@ select.text-input {
 /* ═══════════════════════════════════════════
    Responsive — Penpot Design System
    ═══════════════════════════════════════════ */
+/* Short viewports (Discord panel with voice users, etc.) — shrink avatar, allow scroll */
+@media (max-height: 600px) {
+  .landing-returning,
+  .landing-newuser {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+    padding: var(--space-md) var(--space-md) var(--space-2xl);
+  }
+  .landing-avatar-wrap {
+    width: clamp(80px, 30vw, 160px);
+    height: clamp(80px, 30vw, 160px);
+    margin: var(--space-sm) 0;
+  }
+  .landing-feature-circle--sm {
+    width: clamp(48px, 15vw, 80px);
+    height: clamp(48px, 15vw, 80px);
+  }
+  .landing-feature-row {
+    gap: clamp(6px, 2vw, 16px);
+  }
+}
+
 @media (max-width: 768px) {
   .landing-feature-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -3616,6 +3681,75 @@ select.text-input {
   .modal-content {
     max-height: 85vh;
   }
+}
+
+/* ═══════════════════════════════════════════
+   Compact View (PIP / Grid mode)
+   ═══════════════════════════════════════════ */
+.compact-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  background: var(--bg-gradient);
+  gap: clamp(4px, 1.5vw, 12px);
+  padding: clamp(8px, 2vw, 20px);
+  text-align: center;
+}
+.compact-avatar {
+  width: clamp(32px, 10vw, 64px);
+  height: clamp(32px, 10vw, 64px);
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.compact-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.compact-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--btn-gradient);
+  color: #fff;
+  font-family: var(--font-accent);
+  font-weight: 700;
+  font-size: clamp(0.8rem, 3vw, 1.5rem);
+}
+.compact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.compact-name {
+  font-family: var(--font-accent);
+  font-size: clamp(0.6rem, 2vw, 0.9rem);
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compact-front {
+  font-family: var(--font-body);
+  font-size: clamp(0.5rem, 1.6vw, 0.75rem);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compact-hint {
+  font-family: var(--font-accent);
+  font-size: clamp(0.4rem, 1.2vw, 0.6rem);
+  color: var(--text-muted);
+  margin-top: clamp(2px, 0.5vw, 6px);
 }
 
 /* ═══════════════════════════════════════════
