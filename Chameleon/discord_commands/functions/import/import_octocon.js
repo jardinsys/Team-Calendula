@@ -3,6 +3,7 @@
 
 const mongoose = require('mongoose');
 const System = require('../../../schemas/system');
+const { mergeEntityData, isCrossSourceMatch } = require('./crossSourceMerge');
 const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
@@ -242,9 +243,14 @@ async function processOctoconData(system, user, data, options, onProgress) {
                 let existingState = await findExistingStateOctocon(system, octoAlter);
 
                 if (existingState && options.skipExisting) {
-                    alterIdMap.set(octoAlter.id, { id: existingState._id, type: 'state' });
-                    result.membersSkipped++;
-                    continue;
+                    // Cross-source match: merge instead of skip
+                    if (isCrossSourceMatch(existingState, 'octocon')) {
+                        // Fall through to merge below
+                    } else {
+                        alterIdMap.set(octoAlter.id, { id: existingState._id, type: 'state' });
+                        result.membersSkipped++;
+                        continue;
+                    }
                 }
 
                 if (existingState) {
@@ -270,9 +276,14 @@ async function processOctoconData(system, user, data, options, onProgress) {
                 let existingAlter = await findExistingAlterOctocon(system, octoAlter);
 
                 if (existingAlter && options.skipExisting) {
-                    alterIdMap.set(octoAlter.id, { id: existingAlter._id, type: 'alter' });
-                    result.membersSkipped++;
-                    continue;
+                    // Cross-source match: merge instead of skip
+                    if (isCrossSourceMatch(existingAlter, 'octocon')) {
+                        // Fall through to merge below
+                    } else {
+                        alterIdMap.set(octoAlter.id, { id: existingAlter._id, type: 'alter' });
+                        result.membersSkipped++;
+                        continue;
+                    }
                 }
 
                 if (existingAlter) {
@@ -447,42 +458,40 @@ async function importOctoconFronts(system, fronts, alterIdMap, options, onProgre
 // ============================================
 
 async function findExistingAlterOctocon(system, octoAlter) {
+    const inSystem = !!system._id;
+    const baseQuery = inSystem
+        ? { _id: { $in: system.alters?.IDs || [] } }
+        : { systemID: { $exists: false } };
+
     // Try by Octocon ID
-    let alter = await Alter.findOne({
-        _id: { $in: system.alters?.IDs || [] },
-        'metadata.octoconId': octoAlter.id
-    });
+    let alter = await Alter.findOne({ ...baseQuery, 'metadata.octoconId': octoAlter.id });
     if (alter) return alter;
 
     // Try by name
-    alter = await Alter.findOne({
-        _id: { $in: system.alters?.IDs || [] },
-        'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(octoAlter.name)}$`, 'i') }
-    });
-
+    alter = await Alter.findOne({ ...baseQuery, 'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(octoAlter.name)}$`, 'i') } });
     return alter;
 }
 
 async function findExistingStateOctocon(system, octoAlter) {
-    let state = await State.findOne({
-        _id: { $in: system.states?.IDs || [] },
-        'metadata.octoconId': octoAlter.id
-    });
+    const inSystem = !!system._id;
+    const baseQuery = inSystem
+        ? { _id: { $in: system.states?.IDs || [] } }
+        : { systemID: { $exists: false } };
+
+    let state = await State.findOne({ ...baseQuery, 'metadata.octoconId': octoAlter.id });
     if (state) return state;
 
-    state = await State.findOne({
-        _id: { $in: system.states?.IDs || [] },
-        'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(octoAlter.name)}$`, 'i') }
-    });
-
+    state = await State.findOne({ ...baseQuery, 'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(octoAlter.name)}$`, 'i') } });
     return state;
 }
 
 async function findExistingGroupOctocon(system, tag) {
-    let group = await Group.findOne({
-        _id: { $in: system.groups?.IDs || [] },
-        'metadata.octoconTagId': tag.id
-    });
+    const inSystem = !!system._id;
+    const baseQuery = inSystem
+        ? { _id: { $in: system.groups?.IDs || [] } }
+        : { systemID: { $exists: false } };
+
+    let group = await Group.findOne({ ...baseQuery, 'metadata.octoconTagId': tag.id });
     if (group) return group;
 
     group = await Group.findOne({
@@ -639,23 +648,28 @@ function createGroupFromOctocon(tag) {
 // ============================================
 
 async function updateAlterFromOctocon(alter, octoAlter, system, targetMode = TARGET_APP) {
+    // Build new data from Octocon alter
+    const newData = {};
     if (targetMode === TARGET_DISCORD) {
-        if (!alter.discord) alter.discord = {};
-        if (!alter.discord.name) alter.discord.name = {};
-        if (!alter.discord.image) alter.discord.image = {};
-
-        if (octoAlter.name) alter.discord.name.display = octoAlter.name;
-        if (octoAlter.description) alter.discord.description = octoAlter.description;
-        if (octoAlter.color) alter.discord.color = octoAlter.color;
-        if (octoAlter.avatar_url) alter.discord.image.avatar = { url: octoAlter.avatar_url };
+        newData.discord = {
+            name: octoAlter.name ? { display: octoAlter.name } : undefined,
+            description: octoAlter.description || undefined,
+            color: octoAlter.color || undefined,
+            image: {
+                avatar: octoAlter.avatar_url ? { url: octoAlter.avatar_url } : undefined,
+            },
+        };
     } else {
-        if (octoAlter.name) alter.name.display = octoAlter.name;
-        if (octoAlter.description) alter.description = octoAlter.description;
-        if (octoAlter.pronouns) alter.pronouns = [octoAlter.pronouns];
-        if (octoAlter.color) alter.color = octoAlter.color;
-        if (octoAlter.avatar_url) alter.avatar = { url: octoAlter.avatar_url };
-        if (octoAlter.banner_url) alter.banner = { url: octoAlter.banner_url };
+        newData.name = octoAlter.name ? { display: octoAlter.name } : undefined;
+        newData.description = octoAlter.description || undefined;
+        newData.pronouns = octoAlter.pronouns || undefined;
+        newData.color = octoAlter.color || undefined;
+        newData.avatar = octoAlter.avatar_url ? { url: octoAlter.avatar_url } : undefined;
+        newData.banner = octoAlter.banner_url ? { url: octoAlter.banner_url } : undefined;
     }
+
+    // Cross-source merge: only set fields that are empty
+    mergeEntityData(alter, newData, 'octocon', { octoconId: octoAlter.id });
 
     // Proxies always go to main proxy field
     const newProxies = (octoAlter.discord_proxies || []).filter(p => p && p.length > 0);
@@ -674,23 +688,28 @@ async function updateAlterFromOctocon(alter, octoAlter, system, targetMode = TAR
 }
 
 async function updateStateFromOctocon(state, octoAlter, system, targetMode = TARGET_APP) {
+    // Build new data from Octocon alter
+    const newData = {};
     if (targetMode === TARGET_DISCORD) {
-        if (!state.discord) state.discord = {};
-        if (!state.discord.name) state.discord.name = {};
-        if (!state.discord.image) state.discord.image = {};
-
-        if (octoAlter.name) state.discord.name.display = octoAlter.name;
-        if (octoAlter.description) state.discord.description = octoAlter.description;
-        if (octoAlter.color) state.discord.color = octoAlter.color;
-        if (octoAlter.avatar_url) state.discord.image.avatar = { url: octoAlter.avatar_url };
+        newData.discord = {
+            name: octoAlter.name ? { display: octoAlter.name } : undefined,
+            description: octoAlter.description || undefined,
+            color: octoAlter.color || undefined,
+            image: {
+                avatar: octoAlter.avatar_url ? { url: octoAlter.avatar_url } : undefined,
+            },
+        };
     } else {
-        if (octoAlter.name) state.name.display = octoAlter.name;
-        if (octoAlter.description) state.description = octoAlter.description;
-        if (octoAlter.pronouns) state.pronouns = [octoAlter.pronouns];
-        if (octoAlter.color) state.color = octoAlter.color;
-        if (octoAlter.avatar_url) state.avatar = { url: octoAlter.avatar_url };
-        if (octoAlter.banner_url) state.banner = { url: octoAlter.banner_url };
+        newData.name = octoAlter.name ? { display: octoAlter.name } : undefined;
+        newData.description = octoAlter.description || undefined;
+        newData.pronouns = octoAlter.pronouns || undefined;
+        newData.color = octoAlter.color || undefined;
+        newData.avatar = octoAlter.avatar_url ? { url: octoAlter.avatar_url } : undefined;
+        newData.banner = octoAlter.banner_url ? { url: octoAlter.banner_url } : undefined;
     }
+
+    // Cross-source merge: only set fields that are empty
+    mergeEntityData(state, newData, 'octocon', { octoconId: octoAlter.id });
 
     const newProxies = (octoAlter.discord_proxies || []).filter(p => p && p.length > 0);
     for (const proxy of newProxies) {

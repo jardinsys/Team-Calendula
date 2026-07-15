@@ -91,6 +91,10 @@ function entityFields() {
             unique: true,
         },
         systemID: String,
+        createdAt: { type: Date, default: Date.now },
+        // Custom attributes imported from external sources (SP, PK, etc.)
+        // System defines which attributes exist; entities store values here
+        customAttributes: [{ name: String, value: String }],
         syncWithApps: {
             discord: { type: Boolean, default: true },
         },
@@ -185,6 +189,13 @@ function createEntitySchema(additionalFields, privacySchema) {
 function applyEntityDefaults(schema, entityType) {
     schema.index({ systemID: 1 });
     schema.index({ systemID: 1, 'name.indexable': 1 });
+
+    // TTL index: auto-delete orphaned entities after5 minutes
+    // Only deletes entities where systemID is null (orphans from failed phase 2)
+    schema.index({ createdAt: 1 }, {
+        expireAfterSeconds: 300, //5 minutes
+        partialFilterExpression: { systemID: { $exists: false } }
+    });
 
     schema.post('save', function (doc) {
         try {

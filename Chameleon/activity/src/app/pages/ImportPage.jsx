@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import JSZip from 'jszip'
 import { api, isSystemUser, isFragmentedUser, isDissociativeUser, Icon, getSystemTerm } from '@chameleon/shared'
 import { useFetchStatus } from '../../hooks/useFetchStatus.jsx'
 import { useSystemSession } from '../../hooks/useSystemSession.jsx'
@@ -12,10 +13,10 @@ const SOURCES = [
         ],
     },
     {
-        id: 'simplyplural', label: 'Simply Plural', icon: '&',
+        id: 'simplyplural', label: 'Simply Plural', icon: 'ampersand',
         methods: [
             { id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'Your SP API token', help: 'Settings → Developer → Add Token', privacyNote: null },
-            { id: 'file', label: 'File Import', help: 'Settings → Account → Export Data → Download. Upload the JSON file + avatar folder.', privacyNote: 'Your export file may contain private data (descriptions, pronouns, avatar URLs, proxy patterns, front history). This data will only be stored in your system\'s database.' },
+            { id: 'file', label: 'File Import', help: 'Settings → Account → Export Data → Download. Upload the JSON export file.', privacyNote: 'Your export file may contain private data (descriptions, pronouns, avatar URLs, proxy patterns, front history). This data will only be stored in your system\'s database.' },
         ],
     },
     {
@@ -97,11 +98,15 @@ export function ImportPage({ system, onNavigate }) {
             token: '',
             fileData: null,
             fileName: '',
+            avatarData: null,
+            avatarFileName: '',
             target: 'app',
             replace: false,
             skipExisting: false,
             noGroups: false,
             noSwitches: false,
+            overwriteAvatars: true,
+            setFronters: false,
             selectedMemberIds: new Set(),
             selectedGroupIds: new Set(),
             memberEntityTypes: {},
@@ -158,6 +163,25 @@ export function ImportPage({ system, onNavigate }) {
             }
         }
         reader.readAsText(file)
+    }, [updateSourceConfig])
+
+    const handleZipChange = useCallback(async (sourceId, e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        try {
+            const zip = await JSZip.loadAsync(file)
+            const avatarData = []
+            const pngFiles = Object.keys(zip.files).filter(f => f.endsWith('.png'))
+            for (const filename of pngFiles) {
+                const blob = await zip.files[filename].async('base64')
+                const memberId = filename.replace('.png', '')
+                avatarData.push({ id: memberId, name: filename, data: blob, contentType: 'image/png' })
+            }
+            updateSourceConfig(sourceId, { avatarData, avatarFileName: file.name })
+            setError(null)
+        } catch {
+            setError('Invalid zip file. Please upload the Avatars zip from your SP export.')
+        }
     }, [updateSourceConfig])
 
     const handleBack = useCallback(() => {
@@ -277,9 +301,14 @@ export function ImportPage({ system, onNavigate }) {
                         stateNames,
                         selectedMemberIds,
                         selectedGroupIds,
+                        overwriteAvatars: cfg.overwriteAvatars,
+                        setFronters: cfg.setFronters,
                         systemConfig: buildPayload(),
                     },
-                    cfg.fileData
+                    cfg.fileData,
+                    null,
+                    null,
+                    cfg.avatarData
                 )
                 setImportResults(prev => [...prev, { sourceId, result: res, success: true }])
             } catch (err) {
@@ -466,6 +495,14 @@ export function ImportPage({ system, onNavigate }) {
                                     <label>Export File (JSON)</label>
                                     <input type="file" accept=".json" onChange={e => handleFileChange(currentSourceId, e)} style={{ color: 'var(--text)' }} />
                                     {cfg.fileName && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 'var(--space-xs)' }}>Selected: {cfg.fileName}</div>}
+                                    {currentSourceId === 'simplyplural' && (
+                                        <>
+                                            <label style={{ marginTop: 'var(--space-md)', display: 'block', fontWeight: 600 }}>Avatar Zip (optional)</label>
+                                            <input type="file" accept=".zip" onChange={e => handleZipChange(currentSourceId, e)} style={{ color: 'var(--text)' }} />
+                                            {cfg.avatarFileName && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 'var(--space-xs)' }}>Selected: {cfg.avatarFileName} ({cfg.avatarData?.length || 0} avatars)</div>}
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'var(--space-xs)' }}>Optional: upload the Avatars zip from your SP export to import profile pictures.</div>
+                                        </>
+                                    )}
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'var(--space-sm)' }}>{activeMethod?.help}</div>
                                 </div>
                             )}
@@ -542,6 +579,18 @@ export function ImportPage({ system, onNavigate }) {
                             <input type="checkbox" checked={cfg.noSwitches} onChange={e => updateSourceConfig(currentSourceId, { noSwitches: e.target.checked })} style={{ width: '18px', height: '18px' }} />
                             Don't import switch history
                         </label>
+                        {currentSourceId === 'simplyplural' && (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+                                <input type="checkbox" checked={cfg.overwriteAvatars} onChange={e => updateSourceConfig(currentSourceId, { overwriteAvatars: e.target.checked })} style={{ width: '18px', height: '18px' }} />
+                                Overwrite existing avatars
+                            </label>
+                        )}
+                        {currentSourceId === 'simplyplural' && (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
+                                <input type="checkbox" checked={cfg.setFronters} onChange={e => updateSourceConfig(currentSourceId, { setFronters: e.target.checked })} style={{ width: '18px', height: '18px' }} />
+                                Set imported fronters as currently fronting
+                            </label>
+                        )}
                     </div>
                 </div>
 

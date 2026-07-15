@@ -59,9 +59,12 @@ const {
     fetchOctoconAlters,
 } = importFunctions;
 
+// SP file import (separate module)
+const { importSimplyPluralFile } = require('../../functions/import/import_simplyplural_file');
+
 module.exports = {
     name: 'import',
-    aliases: ['imp'],
+    aliases: ['imp', 'importdata', 'load'],
 
     async executeMessage(message, args) {
         const parsed = utils.parseArgs(args);
@@ -127,6 +130,7 @@ module.exports = {
             }
 
             if (source === 'simplyplural' || source === 'sp') {
+                if (message.attachments.size > 0) return await handleSPFile(message, system, user, options);
                 return await showTokenButton(message, 'simplyplural', sessionId);
             }
 
@@ -681,6 +685,7 @@ async function handleAutoDetect(message, system, user, options) {
         if (fileData.tuppers) source = 'Tupperbox';
         else if (fileData.user && fileData.alters && fileData.tags) source = 'Octocon';
         else if (fileData.members || fileData.id) source = 'PluralKit';
+        else if (fileData.frontHistory || fileData.privacyBuckets) source = 'Simply Plural';
 
         await statusMsg.edit({
             embeds: [new EmbedBuilder()
@@ -702,6 +707,47 @@ async function handleAutoDetect(message, system, user, options) {
     }
 }
 
+async function handleSPFile(message, system, user, options) {
+    const attachment = message.attachments.first();
+    if (!attachment.name.endsWith('.json'))
+        return utils.error(message, 'Please attach a Simply Plural export file (JSON).\n\nExport from: Settings → Account → Export Data');
+
+    const statusMsg = await message.reply({
+        embeds: [new EmbedBuilder()
+            .setColor(IMPORT_COLOR)
+            .setDescription('🔄 Downloading file...')]
+    });
+
+    try {
+        const response = await fetch(attachment.url);
+        const fileData = await response.json();
+
+        await createBackup(system, 'simplyplural');
+
+        const memberCount = Array.isArray(fileData.members)
+            ? fileData.members.length
+            : Object.values(fileData.members || {}).length;
+
+        await statusMsg.edit({
+            embeds: [new EmbedBuilder()
+                .setColor(IMPORT_COLOR)
+                .setDescription(`🔄 Processing **${memberCount}** members...`)]
+        });
+
+        const result = await importSimplyPluralFile(system, user, fileData, options);
+
+        await statusMsg.edit({
+            embeds: [buildImportResultEmbed('Simply Plural', result, options.target)]
+        });
+    } catch (error) {
+        await statusMsg.edit({
+            embeds: [new EmbedBuilder()
+                .setColor(utils.ENTITY_COLORS.error)
+                .setDescription(`❌ ${error.message}`)]
+        });
+    }
+}
+
 // ============================================
 // HELP
 // ============================================
@@ -712,6 +758,22 @@ async function handleHelp(message) {
         .setTitle('📥 Import Command')
         .setDescription('Import your system data from other platforms.\n\n⚠️ **Note:** Other platforms don\'t have "states" - all members import as **alters** by default.')
         .addFields(
+            {
+                name: '🚀 Quick Start',
+                value: [
+                    '**Simplest import (auto-detect format):**',
+                    'Attach a JSON file and run: `sys!import`',
+                    '',
+                    '**Import from PluralKit:**',
+                    '```sys!import pluralkit```',
+                    'Then enter your token in the modal.',
+                    '',
+                    '**Import from Simply Plural:**',
+                    '```sys!import simplyplural```',
+                    'Then enter your token in the modal.'
+                ].join('\n'),
+                inline: false
+            },
             {
                 name: '🔷 PluralKit',
                 value: [
@@ -738,9 +800,14 @@ async function handleHelp(message) {
             {
                 name: '💜 Simply Plural',
                 value: [
+                    '**Via API (recommended):**',
                     '`sys!import simplyplural` → enter token in modal',
                     'Get token: Settings → Developer → Add Token',
-                    '*(Check "Read" permission)*'
+                    '*(Check "Read" permission)*',
+                    '',
+                    '**Via file:**',
+                    '`sys!import simplyplural` + attach file',
+                    'Export with: Settings → Account → Export Data'
                 ].join('\n'),
                 inline: false
             },
@@ -803,6 +870,16 @@ async function handleHelp(message) {
                     '',
                     'Or convert after import:',
                     '`sys!convert alter Tired to state`'
+                ].join('\n'),
+                inline: false
+            },
+            {
+                name: '💡 Tips',
+                value: [
+                    '• Use `sys!import` with no arguments to see this help',
+                    '• Your existing data is preserved by default (merge mode)',
+                    '• Use `-replace` to completely replace your data',
+                    '• Large imports (>25 members) skip the interactive menu'
                 ].join('\n'),
                 inline: false
             }

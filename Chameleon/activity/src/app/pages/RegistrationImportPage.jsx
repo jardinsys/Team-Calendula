@@ -1,13 +1,14 @@
 import React, { useState, useCallback, useEffect } from 'react'
+import JSZip from 'jszip'
 import { api, Icon } from '@chameleon/shared'
 import { useFetchStatus } from '../../hooks/useFetchStatus.jsx'
 import { useSystemSession } from '../../hooks/useSystemSession.jsx'
 
 const SOURCES = [
     { id: 'pluralkit', label: 'PluralKit', icon: 'pawPrint', methods: [{ id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'Your PluralKit token', help: 'DM PluralKit: pk;token' }] },
-    { id: 'simplyplural', label: 'Simply Plural', icon: '&', methods: [
+    { id: 'simplyplural', label: 'Simply Plural', icon: 'ampersand', methods: [
         { id: 'api', label: 'API Import', tokenLabel: 'API Token', tokenPlaceholder: 'SP API token', help: 'Settings → Developer → Add Token' },
-        { id: 'file', label: 'File Import', help: 'Settings → Account → Export Data → Download. Upload the JSON file + avatar folder.' },
+        { id: 'file', label: 'File Import', help: 'Settings → Account → Export Data → Download. Upload the JSON export file.' },
     ] },
     { id: 'octocon', label: 'Octocon', icon: 'brain', methods: [{ id: 'api', label: 'API Import', tokenLabel: 'System ID', tokenPlaceholder: '7-char ID', help: 'octocon.app/u/yourid' }, { id: 'file', label: 'File Import', help: 'octocon.app → Settings → Export' }] },
     { id: 'tupperbox', label: 'Tupperbox', icon: 'package', methods: [{ id: 'file', label: 'File Import', help: 'tul!export' }] },
@@ -59,10 +60,12 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
     const getDefaultConfig = (sourceId) => ({
         method: SOURCES.find(s => s.id === sourceId)?.methods[0]?.id || 'file',
         token: '', fileData: null, fileName: '',
+        avatarData: null, avatarFileName: '',
         target: 'app',
         includeSwitches: true,
         includeGroups: true,
         importPrivacyBuckets: false,
+        setFronters: false,
         selectedGroupIds: new Set(),
         memberEntityTypes: entityTypeMode === 'mixed' && entityTypeSelections[sourceId]
             ? { ...entityTypeSelections[sourceId] }
@@ -166,6 +169,25 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         reader.readAsText(file)
     }, [updateSourceConfig])
 
+    const handleZipChange = useCallback(async (sourceId, e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        try {
+            const zip = await JSZip.loadAsync(file)
+            const avatarData = []
+            const pngFiles = Object.keys(zip.files).filter(f => f.endsWith('.png'))
+            for (const filename of pngFiles) {
+                const blob = await zip.files[filename].async('base64')
+                const memberId = filename.replace('.png', '')
+                avatarData.push({ id: memberId, name: filename, data: blob, contentType: 'image/png' })
+            }
+            updateSourceConfig(sourceId, { avatarData, avatarFileName: file.name })
+            setError(null)
+        } catch {
+            setError('Invalid zip file. Please upload the Avatars zip from your SP export.')
+        }
+    }, [updateSourceConfig])
+
     const fetchPreviewForSource = useCallback(async (sourceId) => {
         const cfg = sourceConfigs[sourceId]
         const src = SOURCES.find(s => s.id === sourceId)
@@ -248,11 +270,15 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                     {
                         replace: false, skipExisting: true,
                         noGroups: !cfg.includeGroups, noSwitches: !cfg.includeSwitches,
+                        setFronters: cfg.setFronters,
                         target: cfg.target, forceAsStates, stateNames,
                         selectedMemberIds, selectedGroupIds,
                         systemConfig: buildPayload(),
                     },
-                    cfg.fileData
+                    cfg.fileData,
+                    null,
+                    null,
+                    cfg.avatarData
                 )
                 stagedImports.push({ sourceId, result: res, success: true })
             } catch (err) {
@@ -464,6 +490,14 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                             <label>Export File (JSON)</label>
                             <input type="file" accept=".json" onChange={e => handleFileChange(currentSourceId, e)} style={{ color: 'var(--text)' }} />
                             {cfg.fileName && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 'var(--space-xs)' }}>Selected: {cfg.fileName}</div>}
+                            {currentSourceId === 'simplyplural' && (
+                                <>
+                                    <label style={{ marginTop: 'var(--space-md)', display: 'block', fontWeight: 600 }}>Avatar Zip (optional)</label>
+                                    <input type="file" accept=".zip" onChange={e => handleZipChange(currentSourceId, e)} style={{ color: 'var(--text)' }} />
+                                    {cfg.avatarFileName && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 'var(--space-xs)' }}>Selected: {cfg.avatarFileName} ({cfg.avatarData?.length || 0} avatars)</div>}
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'var(--space-xs)' }}>Optional: upload the Avatars zip from your SP export to import profile pictures.</div>
+                                </>
+                            )}
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'var(--space-sm)' }}>{src?.methods.find(m => m.id === cfg.method)?.help}</div>
                         </div>
                     )}
@@ -499,6 +533,12 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                 <input type="checkbox" checked={cfg.includeSwitches} onChange={e => updateSourceConfig(currentSourceId, { includeSwitches: e.target.checked })} style={{ width: '18px', height: '18px' }} />
                                 Include switch history
                             </label>
+                            {currentSourceId === 'simplyplural' && (
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer', color: 'var(--text)', fontFamily: 'var(--font-accent)' }}>
+                                    <input type="checkbox" checked={cfg.setFronters} onChange={e => updateSourceConfig(currentSourceId, { setFronters: e.target.checked })} style={{ width: '18px', height: '18px' }} />
+                                    Set imported fronters as currently fronting
+                                </label>
+                            )}
                         </div>
                     </div>
                 )}
@@ -582,7 +622,7 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
                                     {hasPrivacyBuckets && (
                                         <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: cfg.importPrivacyBuckets ? 'var(--color-warning)' : 'var(--text-muted)', marginTop: '2px', cursor: 'pointer' }}>
                                             <input type="checkbox" checked={cfg.importPrivacyBuckets} onChange={() => updateSourceConfig(sourceId, { importPrivacyBuckets: !cfg.importPrivacyBuckets })} style={{ width: '16px', height: '16px' }} />
-                                            {cfg.importPrivacyBuckets ? (SOURCE_PRIVACY_LABEL[sourceId] || 'import privacy buckets') : 'skip'}
+                                            {cfg.importPrivacyBuckets ? 'import privacy buckets' : 'skip privacy buckets'}
                                         </label>
                                     )}
                                     {!hasPrivacyBuckets && cfg.importPrivacyBuckets && (
@@ -789,22 +829,22 @@ export function RegistrationImportPage({ onNavigate, onBack }) {
         return (
             <div className="settings-page">
                 <button className="btn btn-back" onClick={handleBack} style={{ marginBottom: 'var(--space-md)' }}>← Back</button>
-                <h1>Import Complete</h1>
+                <h1>Data Grabbed</h1>
 
                 <div className="settings-section" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
                     <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>{allSuccess ? <Icon name="check" size={48} color="var(--color-success)" /> : <Icon name="alert" size={48} color="var(--color-warning)" />}</div>
                     <div style={{ fontWeight: 600, fontSize: '1.2rem', marginBottom: 'var(--space-sm)', color: allSuccess ? 'var(--color-success)' : 'var(--color-warning)' }}>
-                        {allSuccess ? 'Your import is done! Welcome to Systemiser!' : 'Some parts of the import need attention'}
+                        {allSuccess ? 'Data collected from your sources!' : 'Some parts of the import need attention'}
                     </div>
                     <div style={{ color: 'var(--text-secondary)' }}>
-                        Imported <strong>{totalMembers}</strong> member{totalMembers !== 1 ? 's' : ''} and <strong>{totalGroups}</strong> group{totalGroups !== 1 ? 's' : ''}
+                        Found <strong>{totalMembers}</strong> member{totalMembers !== 1 ? 's' : ''} and <strong>{totalGroups}</strong> group{totalGroups !== 1 ? 's' : ''}
                         {' '}across <strong>{results.length}</strong> source{results.length !== 1 ? 's' : ''}
                     </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)', flexWrap: 'wrap' }}>
                     <button className="btn-gradient btn-gradient-primary" onClick={handleContinueToNameStep} style={{ flex: 1, minWidth: '200px', height: '56px', fontSize: '1.1rem' }}>
-                        Continue to System Setup →
+                        Create Your System →
                     </button>
                 </div>
             </div>

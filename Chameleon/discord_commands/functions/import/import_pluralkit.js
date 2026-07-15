@@ -8,6 +8,7 @@ const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
 const Group = require('../../../schemas/group');
 const { Shift } = require('../../../schemas/front');
+const { mergeEntityData, isCrossSourceMatch } = require('./crossSourceMerge');
 const { checkProxyExists } = require('../bot_utils');
 const utils = require('../bot_utils');
 const { syncImageToR2 } = require('./r2_sync');
@@ -260,9 +261,14 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                 let existingState = await findExistingState(system, pkMember);
 
                 if (existingState && options.skipExisting) {
-                    memberIdMap.set(pkMember.id, { id: existingState._id, type: 'state' });
-                    result.membersSkipped++;
-                    continue;
+                    // Cross-source match: merge instead of skip
+                    if (isCrossSourceMatch(existingState, 'pluralkit')) {
+                        // Fall through to merge below
+                    } else {
+                        memberIdMap.set(pkMember.id, { id: existingState._id, type: 'state' });
+                        result.membersSkipped++;
+                        continue;
+                    }
                 }
 
                 if (existingState) {
@@ -289,9 +295,14 @@ async function processPluralKitData(system, user, data, options, onProgress) {
                 let existingAlter = await findExistingAlter(system, pkMember);
 
                 if (existingAlter && options.skipExisting) {
-                    memberIdMap.set(pkMember.id, { id: existingAlter._id, type: 'alter' });
-                    result.membersSkipped++;
-                    continue;
+                    // Cross-source match: merge instead of skip
+                    if (isCrossSourceMatch(existingAlter, 'pluralkit')) {
+                        // Fall through to merge below
+                    } else {
+                        memberIdMap.set(pkMember.id, { id: existingAlter._id, type: 'alter' });
+                        result.membersSkipped++;
+                        continue;
+                    }
                 }
 
                 if (existingAlter) {
@@ -401,13 +412,16 @@ async function importSwitches(system, pkSwitches, memberIdMap, options, onProgre
 
         if (memberIds.length === 0) continue;
 
-        // Determine entity types for each member
-        const members = [];
+        // Create a shift for EACH member in the switch (co-fronting)
+        const startTime = new Date(pkSwitch.timestamp);
+        const endTime = i < sorted.length - 1
+            ? new Date(sorted[i + 1].timestamp)
+            : null;
+
         for (const memberId of memberIds) {
             let s_type = 'alter';
             let type_name = 'Unknown';
             if (dryRun) {
-                // In dryRun, entities aren't in MongoDB — use memberIdMap to determine type
                 for (const [, mapped] of memberIdMap) {
                     if (mapped.id.toString() === memberId.toString()) {
                         s_type = mapped.type;
@@ -420,34 +434,27 @@ async function importSwitches(system, pkSwitches, memberIdMap, options, onProgre
                 s_type = alter ? 'alter' : 'state';
                 type_name = (alter || state)?.name?.display || 'Unknown';
             }
-            members.push({ s_type, ID: memberId, type_name });
-        }
 
-        const shiftId = new mongoose.Types.ObjectId();
-        const shiftData = {
-            _id: shiftId,
-            s_type: 'alter',
-            ID: dryRun ? shiftId : system._id,
-            type_name: system.name?.display || 'System',
-            startTime: new Date(pkSwitch.timestamp),
-            endTime: i < sorted.length - 1
-                ? new Date(sorted[i + 1].timestamp)
-                : null,
-            statuses: [{
-                startTime: new Date(pkSwitch.timestamp),
-                endTime: i < sorted.length - 1
-                    ? new Date(sorted[i + 1].timestamp)
-                    : null,
-                layerID: targetLayer._id
-            }]
-        };
+            const shiftData = {
+                s_type,
+                ID: dryRun ? new mongoose.Types.ObjectId().toString() : system._id.toString(),
+                type_name,
+                startTime,
+                endTime,
+                statuses: [{
+                    startTime,
+                    endTime,
+                    layerID: targetLayer._id,
+                }],
+            };
 
-        if (dryRun) {
-            targetLayer.shifts.push(shiftData);
-        } else {
-            const shift = new Shift(shiftData);
-            await shift.save();
-            targetLayer.shifts.push(shift._id);
+            if (dryRun) {
+                targetLayer.shifts.push(shiftData);
+            } else {
+                const shift = new Shift(shiftData);
+                await shift.save();
+                targetLayer.shifts.push(shift._id);
+            }
         }
         imported++;
     }
@@ -463,46 +470,37 @@ async function importSwitches(system, pkSwitches, memberIdMap, options, onProgre
 // ============================================
 
 async function findExistingAlter(system, pkMember) {
+    const inSystem = !!system._id;
+    const baseQuery = inSystem
+        ? { _id: { $in: system.alters?.IDs || [] } }
+        : { systemID: { $exists: false } };
+
     // Try by PK ID first
-    let alter = await Alter.findOne({
-        _id: { $in: system.alters?.IDs || [] },
-        'metadata.pluralKitId': pkMember.id
-    });
+    let alter = await Alter.findOne({ ...baseQuery, 'metadata.pluralKitId': pkMember.id });
     if (alter) return alter;
 
     // Try by UUID
-    alter = await Alter.findOne({
-        _id: { $in: system.alters?.IDs || [] },
-        'metadata.pluralKitUuid': pkMember.uuid
-    });
+    alter = await Alter.findOne({ ...baseQuery, 'metadata.pluralKitUuid': pkMember.uuid });
     if (alter) return alter;
 
     // Try by name
-    alter = await Alter.findOne({
-        _id: { $in: system.alters?.IDs || [] },
-        'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(pkMember.name)}$`, 'i') }
-    });
-
+    alter = await Alter.findOne({ ...baseQuery, 'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(pkMember.name)}$`, 'i') } });
     return alter;
 }
 
 async function findExistingState(system, pkMember) {
-    let state = await State.findOne({
-        _id: { $in: system.states?.IDs || [] },
-        'metadata.pluralKitId': pkMember.id
-    });
+    const inSystem = !!system._id;
+    const baseQuery = inSystem
+        ? { _id: { $in: system.states?.IDs || [] } }
+        : { systemID: { $exists: false } };
+
+    let state = await State.findOne({ ...baseQuery, 'metadata.pluralKitId': pkMember.id });
     if (state) return state;
 
-    state = await State.findOne({
-        _id: { $in: system.states?.IDs || [] },
-        'metadata.pluralKitUuid': pkMember.uuid
-    });
+    state = await State.findOne({ ...baseQuery, 'metadata.pluralKitUuid': pkMember.uuid });
     if (state) return state;
 
-    state = await State.findOne({
-        _id: { $in: system.states?.IDs || [] },
-        'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(pkMember.name)}$`, 'i') }
-    });
+    state = await State.findOne({ ...baseQuery, 'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(pkMember.name)}$`, 'i') } });
 
     return state;
 }
@@ -697,25 +695,33 @@ function createGroupFromPK(pkGroup) {
 // ============================================
 
 async function updateAlterFromPK(alter, pkMember, system, targetMode = TARGET_APP) {
+    // Build new data from PK member
+    const newData = {};
     if (targetMode === TARGET_DISCORD) {
-        if (!alter.discord) alter.discord = {};
-        if (!alter.discord.name) alter.discord.name = {};
-        if (!alter.discord.image) alter.discord.image = {};
-
-        if (pkMember.display_name) alter.discord.name.display = pkMember.display_name;
-        if (pkMember.description) alter.discord.description = pkMember.description;
-        if (pkMember.color) alter.discord.color = `#${pkMember.color}`;
-        if (pkMember.avatar_url) alter.discord.image.avatar = { url: pkMember.avatar_url };
-        if (pkMember.banner) alter.discord.image.banner = { url: pkMember.banner };
+        newData.discord = {
+            name: pkMember.display_name ? { display: pkMember.display_name } : undefined,
+            description: pkMember.description || undefined,
+            color: pkMember.color ? `#${pkMember.color}` : undefined,
+            image: {
+                avatar: pkMember.avatar_url ? { url: pkMember.avatar_url } : undefined,
+                banner: pkMember.banner ? { url: pkMember.banner } : undefined,
+            },
+        };
     } else {
-        if (pkMember.display_name) alter.name.display = pkMember.display_name;
-        if (pkMember.description) alter.description = pkMember.description;
-        if (pkMember.pronouns) alter.pronouns = [pkMember.pronouns];
-        if (pkMember.color) alter.color = `#${pkMember.color}`;
-        if (pkMember.birthday) alter.birthday = new Date(pkMember.birthday);
-        if (pkMember.avatar_url) alter.avatar = { url: pkMember.avatar_url };
-        if (pkMember.banner_url) alter.banner = { url: pkMember.banner_url };
+        newData.name = pkMember.display_name ? { display: pkMember.display_name } : undefined;
+        newData.description = pkMember.description || undefined;
+        newData.pronouns = pkMember.pronouns || undefined;
+        newData.color = pkMember.color ? `#${pkMember.color}` : undefined;
+        newData.birthday = pkMember.birthday ? new Date(pkMember.birthday) : undefined;
+        newData.avatar = pkMember.avatar_url ? { url: pkMember.avatar_url } : undefined;
+        newData.banner = pkMember.banner_url ? { url: pkMember.banner_url } : undefined;
     }
+
+    // Cross-source merge: only set fields that are empty
+    mergeEntityData(alter, newData, 'pluralkit', {
+        pluralKitId: pkMember.id,
+        pluralKitUuid: pkMember.uuid,
+    });
 
     // Proxy tags always go to main proxy field
     const newProxies = (pkMember.proxy_tags || []).map(tag => {
@@ -740,24 +746,32 @@ async function updateAlterFromPK(alter, pkMember, system, targetMode = TARGET_AP
 }
 
 async function updateStateFromPK(state, pkMember, system, targetMode = TARGET_APP) {
+    // Build new data from PK member
+    const newData = {};
     if (targetMode === TARGET_DISCORD) {
-        if (!state.discord) state.discord = {};
-        if (!state.discord.name) state.discord.name = {};
-        if (!state.discord.image) state.discord.image = {};
-
-        if (pkMember.display_name) state.discord.name.display = pkMember.display_name;
-        if (pkMember.description) state.discord.description = pkMember.description;
-        if (pkMember.color) state.discord.color = `#${pkMember.color}`;
-        if (pkMember.avatar_url) state.discord.image.avatar = { url: pkMember.avatar_url };
-        if (pkMember.banner) state.discord.image.banner = { url: pkMember.banner };
+        newData.discord = {
+            name: pkMember.display_name ? { display: pkMember.display_name } : undefined,
+            description: pkMember.description || undefined,
+            color: pkMember.color ? `#${pkMember.color}` : undefined,
+            image: {
+                avatar: pkMember.avatar_url ? { url: pkMember.avatar_url } : undefined,
+                banner: pkMember.banner ? { url: pkMember.banner } : undefined,
+            },
+        };
     } else {
-        if (pkMember.display_name) state.name.display = pkMember.display_name;
-        if (pkMember.description) state.description = pkMember.description;
-        if (pkMember.pronouns) state.pronouns = [pkMember.pronouns];
-        if (pkMember.color) state.color = `#${pkMember.color}`;
-        if (pkMember.avatar_url) state.avatar = { url: pkMember.avatar_url };
-        if (pkMember.banner_url) state.banner = { url: pkMember.banner_url };
+        newData.name = pkMember.display_name ? { display: pkMember.display_name } : undefined;
+        newData.description = pkMember.description || undefined;
+        newData.pronouns = pkMember.pronouns || undefined;
+        newData.color = pkMember.color ? `#${pkMember.color}` : undefined;
+        newData.avatar = pkMember.avatar_url ? { url: pkMember.avatar_url } : undefined;
+        newData.banner = pkMember.banner_url ? { url: pkMember.banner_url } : undefined;
     }
+
+    // Cross-source merge: only set fields that are empty
+    mergeEntityData(state, newData, 'pluralkit', {
+        pluralKitId: pkMember.id,
+        pluralKitUuid: pkMember.uuid,
+    });
 
     const newProxies = (pkMember.proxy_tags || []).map(tag => {
         const prefix = tag.prefix || '';

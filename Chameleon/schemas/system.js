@@ -175,6 +175,35 @@ const systemSchema = new mongoose.Schema({
     },
     privacyBuckets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'PrivacyBucket' }],
     affirmations: [String],
+
+    // ─── Custom Attributes ──────────────────────────────
+    // Attribute definitions imported from external sources
+    // Entities store values in customAttributes
+    customAttributeDefinitions: [{
+        name: String,
+        description: String,
+        source: String, // 'simplyplural', 'pluralkit', etc.
+    }],
+
+    // ─── Group Type Definitions ─────────────────────────
+    // Group types imported from external sources
+    // Groups reference these by name
+    groupTypeDefinitions: [{
+        name: String,
+        description: String,
+        source: String, // 'simplyplural', 'pluralkit', 'octocon', etc.
+    }],
+
+    // ─── Friends Metadata (for future friend-matching alerts) ──
+    // Stored per-source so we know where the friend data came from
+    importedFriends: {
+        simplyplural: [{
+            uid: String,
+            name: String,
+            username: String,
+            // SP friend data
+        }],
+    },
 });
 
 systemSchema.post('save', function (doc) {

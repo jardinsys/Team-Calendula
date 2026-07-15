@@ -785,18 +785,20 @@ class ApiClient {
         })
     }
 
-    async previewImport(source, tokenOrId, fileData = null, options = {}) {
+    async previewImport(source, tokenOrId, fileData = null, options = {}, avatarData = null) {
         const body = { source, tokenOrId, options }
         if (fileData) body.fileData = fileData
+        if (avatarData) body.avatarData = avatarData
         return this.request('/import/preview', {
             method: 'POST',
             body: JSON.stringify(body),
         })
     }
 
-    importFromSourceStream(source, tokenOrId, options = {}, fileData = null, onProgress, systemConfig) {
+    importFromSourceStream(source, tokenOrId, options = {}, fileData = null, onProgress, systemConfig, avatarData = null) {
         const body = { source, tokenOrId, options }
         if (fileData) body.fileData = fileData
+        if (avatarData) body.avatarData = avatarData
         if (systemConfig) body.systemConfig = systemConfig
 
         const controller = new AbortController()

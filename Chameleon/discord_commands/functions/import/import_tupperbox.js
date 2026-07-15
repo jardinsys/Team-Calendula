@@ -3,6 +3,7 @@
 
 const mongoose = require('mongoose');
 const System = require('../../../schemas/system');
+const { mergeEntityData, isCrossSourceMatch } = require('./crossSourceMerge');
 const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const Group = require('../../../schemas/group');
@@ -132,27 +133,40 @@ async function processTupperboxData(system, data, options, onProgress) {
 
             if (!isMemberSelected(tupper.name, options)) continue;
 
-            let existingAlter = await Alter.findOne({
-                _id: { $in: system.alters.IDs || [] },
-                'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(tupper.name)}$`, 'i') }
-            });
+            // During registration (no system._id), search for entities without a systemID
+            // During normal import, search within the system's entity IDs
+            const alterQuery = system._id
+                ? { _id: { $in: system.alters?.IDs || [] }, 'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(tupper.name)}$`, 'i') } }
+                : { systemID: { $exists: false }, 'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(tupper.name)}$`, 'i') } };
+            let existingAlter = await Alter.findOne(alterQuery);
 
             if (existingAlter && options.skipExisting) {
-                result.membersSkipped++;
-                continue;
+                // Cross-source match: merge instead of skip
+                if (!isCrossSourceMatch(existingAlter, 'tupperbox')) {
+                    result.membersSkipped++;
+                    continue;
+                }
+                // Fall through to merge below
             }
 
             const proxy = convertTBBracketsToProxy(tupper.brackets);
 
             if (existingAlter) {
-                if (tupper.avatar_url) existingAlter.avatar = { url: tupper.avatar_url };
+                // Cross-source merge: only set fields that are empty
+                mergeEntityData(existingAlter, {
+                    avatar: tupper.avatar_url ? { url: tupper.avatar_url } : undefined,
+                    description: tupper.description || undefined,
+                }, 'tupperbox', {});
+
+                // TupperBox-specific: add nick as alias (always, since it's additive)
                 if (tupper.nick) {
                     existingAlter.name.aliases = existingAlter.name.aliases || [];
                     if (!existingAlter.name.aliases.includes(tupper.nick)) {
                         existingAlter.name.aliases.push(tupper.nick);
                     }
                 }
-                if (tupper.description) existingAlter.description = tupper.description;
+
+                // Proxy tags: append unique (always, since it's additive)
                 if (proxy && !existingAlter.proxy?.includes(proxy)) {
                     const { exists } = await checkProxyExists(proxy, system, existingAlter._id.toString());
                     if (!exists) {
@@ -160,7 +174,12 @@ async function processTupperboxData(system, data, options, onProgress) {
                         existingAlter.proxy.push(proxy);
                     }
                 }
-                if (tupper.tag) existingAlter.signoff = tupper.tag;
+
+                // Signoff: only set if empty
+                if (tupper.tag && !existingAlter.signoff) existingAlter.signoff = tupper.tag;
+
+                // Ensure TupperBox metadata is set
+                if (!existingAlter.metadata) existingAlter.metadata = {};
 
                 await existingAlter.save();
 

@@ -3,6 +3,7 @@
 
 const mongoose = require('mongoose');
 const System = require('../../../schemas/system');
+const { mergeEntityData, isCrossSourceMatch } = require('./crossSourceMerge');
 const User = require('../../../schemas/user');
 const Alter = require('../../../schemas/alter');
 const State = require('../../../schemas/state');
@@ -166,23 +167,38 @@ async function processSimplyPluralData(system, data, options, onProgress) {
             let entityType = shouldBeState ? 'state' : 'alter';
 
             if (shouldBeState) {
-                let existingState = await State.findOne({
-                    _id: { $in: system.states.IDs || [] },
-                    'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(spMember.name)}$`, 'i') }
-                });
+                // During registration (no system._id), search for entities without a systemID
+                // During normal import, search within the system's entity IDs
+                const stateQuery = system._id
+                    ? { _id: { $in: system.states?.IDs || [] }, 'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(spMember.name)}$`, 'i') } }
+                    : { systemID: { $exists: false }, 'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(spMember.name)}$`, 'i') } };
+                let existingState = await State.findOne(stateQuery);
 
                 if (existingState && options.skipExisting) {
-                    result.membersSkipped++;
-                    continue;
+                    // Cross-source match: merge instead of skip
+                    if (isCrossSourceMatch(existingState, 'simplyplural')) {
+                        // Fall through to merge below
+                    } else {
+                        result.membersSkipped++;
+                        continue;
+                    }
                 }
 
                 if (existingState) {
-                    if (spMember.avatarUrl) existingState.avatar = { url: spMember.avatarUrl };
-                    if (spMember.bannerUrl) existingState.banner = { url: spMember.bannerUrl };
-                    if (spMember.desc) existingState.description = spMember.desc;
-                    if (spMember.pronouns) existingState.pronouns = [spMember.pronouns];
-                    if (spMember.color) existingState.color = spMember.color;
-                                        await existingState.save();
+                    // Cross-source merge: only set fields that are empty
+                    const merged = mergeEntityData(existingState, {
+                        avatar: spMember.avatarUrl ? { url: spMember.avatarUrl } : undefined,
+                        banner: spMember.bannerUrl ? { url: spMember.bannerUrl } : undefined,
+                        description: spMember.desc || undefined,
+                        pronouns: spMember.pronouns || undefined,
+                        color: spMember.color || undefined,
+                    }, 'simplyplural', { simplyPluralId: spMember.uid });
+                    if (merged || !existingState.metadata?.simplyPluralId) {
+                        // Always ensure SP ID is set
+                        if (!existingState.metadata) existingState.metadata = {};
+                        existingState.metadata.simplyPluralId = spMember.uid;
+                        await existingState.save();
+                    }
                     entity = existingState;
                     result.statesUpdated++;
                     result.importedMembers.push(existingState);
@@ -216,27 +232,39 @@ async function processSimplyPluralData(system, data, options, onProgress) {
                     result.importedMembers.push(newState);
                 }
             } else {
-                let existingAlter = await Alter.findOne({
-                    _id: { $in: system.alters.IDs || [] },
-                    'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(spMember.name)}$`, 'i') }
-                });
+                // During registration (no system._id), search for entities without a systemID
+                // During normal import, search within the system's entity IDs
+                const alterQuery = system._id
+                    ? { _id: { $in: system.alters?.IDs || [] }, 'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(spMember.name)}$`, 'i') } }
+                    : { systemID: { $exists: false }, 'name.indexable': { $regex: new RegExp(`^${utils.escapeRegex(spMember.name)}$`, 'i') } };
+                let existingAlter = await Alter.findOne(alterQuery);
 
                 if (existingAlter && options.skipExisting) {
-                    result.membersSkipped++;
-                    continue;
+                    // Cross-source match: merge instead of skip
+                    if (isCrossSourceMatch(existingAlter, 'simplyplural')) {
+                        // Fall through to merge below
+                    } else {
+                        result.membersSkipped++;
+                        continue;
+                    }
                 }
 
                 if (existingAlter) {
-                    if (spMember.avatarUrl) existingAlter.avatar = { url: spMember.avatarUrl };
-                    if (spMember.bannerUrl) existingAlter.banner = { url: spMember.bannerUrl };
-                    if (spMember.desc) existingAlter.description = spMember.desc;
-                    if (spMember.pronouns) existingAlter.pronouns = [spMember.pronouns];
-                    if (spMember.color) existingAlter.color = spMember.color;
-                    if (spMember.pkId) {
-                        existingAlter.metadata = existingAlter.metadata || {};
-                        existingAlter.metadata.pluralKitId = spMember.pkId;
+                    // Cross-source merge: only set fields that are empty
+                    const merged = mergeEntityData(existingAlter, {
+                        avatar: spMember.avatarUrl ? { url: spMember.avatarUrl } : undefined,
+                        banner: spMember.bannerUrl ? { url: spMember.bannerUrl } : undefined,
+                        description: spMember.desc || undefined,
+                        pronouns: spMember.pronouns || undefined,
+                        color: spMember.color || undefined,
+                    }, 'simplyplural', { simplyPluralId: spMember.uid, pluralKitId: spMember.pkId });
+                    if (merged || !existingAlter.metadata?.simplyPluralId) {
+                        // Always ensure SP ID is set
+                        if (!existingAlter.metadata) existingAlter.metadata = {};
+                        existingAlter.metadata.simplyPluralId = spMember.uid;
+                        if (spMember.pkId) existingAlter.metadata.pluralKitId = spMember.pkId;
+                        await existingAlter.save();
                     }
-                                        await existingAlter.save();
                     entity = existingAlter;
                     result.membersUpdated++;
                     result.importedMembers.push(existingAlter);

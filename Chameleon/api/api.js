@@ -53,7 +53,7 @@ app.use(cors({
     ].filter(Boolean),
     credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Session configuration
 app.use(session({

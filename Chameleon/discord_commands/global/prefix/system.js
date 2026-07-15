@@ -63,7 +63,7 @@ const ICD_TYPES = ['P-DID', 'Trance', 'DNSD', 'Possession Trance', 'SDS'];
 
 module.exports = {
     name: 'system',
-    aliases: ['s','sys'],
+    aliases: ['s', 'sys', 'profile', 'me'],
 
     async executeMessage(message, args) {
         const parsed = utils.parseArgs(args);
@@ -244,23 +244,36 @@ async function handleNew(message, parsed) {
     // Get name from remaining positional args
     const name = parsed._positional.slice(1).join(' ') || null;
 
-    // Create new system
+    // Create new system with proper sys_type (matches embedded app)
+    const sysType = {
+        name: 'None',
+        dd: {},
+        isSystem: false,
+        isFragmented: false,
+        isDissociative: false,
+        onboardingCompleted: true,  // Important: marks onboarding as complete
+    };
+
     const newSystem = new System({
         users: [user._id],
         name: name ? (() => {
             const idx = name.toLowerCase().replace(/[^a-z0-9\-_]/g, '') || undefined;
             return { ...(idx && { indexable: idx }), display: name };
         })() : undefined,
+        sys_type: sysType,
         metadata: {
             joinedAt: new Date()
         }
     });
 
+    // Create privacy buckets (matches embedded app defaults)
     const strangersBucket = new PrivacyBucket({ name: 'Strangers', friends: [] });
     const friendsBucket = new PrivacyBucket({ name: 'Friends', friends: [] });
     await strangersBucket.save();
     await friendsBucket.save();
     newSystem.privacyBuckets = [strangersBucket._id, friendsBucket._id];
+
+    // Set default privacy settings (matches embedded app)
     newSystem.setting = {
         friendAutoBucket: 'Friends',
         privacy: [
@@ -274,6 +287,7 @@ async function handleNew(message, parsed) {
             }
         ]
     };
+
     await newSystem.save();
 
     user.systemID = newSystem._id;
@@ -290,7 +304,9 @@ async function handleNew(message, parsed) {
             { name: 'Next Steps', value: 
                 '• `sys!system displayname <name>` - Set display name\n' +
                 '• `sys!system description <desc>` - Add description\n' +
-                '• `sys!alter new <name>` - Create your first alter', inline: false }
+                '• `sys!alter new <name>` - Create your first alter\n' +
+                '• `sys!import simplyplural` - Import from Simply Plural\n' +
+                '• `sys!import pluralkit` - Import from PluralKit', inline: false }
         );
 
     return message.reply({ embeds: [embed] });

@@ -86,6 +86,13 @@ class BotSessionManager {
     /**
      * Build the full system payload from a session.
      * Mirrors the API's createSystemFromPayload structure.
+     *
+     * IMPORTANT: This payload is consumed by createSystemFromPayload which expects:
+     * - privacyBuckets: array of { name, friends } objects (NOT strings)
+     * - alters/states/groups: { entities: [...], conditions: [...], IDs: [...] }
+     * - entities: array of full entity objects to be bulk-inserted
+     * - IDs: array of IDs (will be populated after insert)
+     * - conditions: array of { name, settings } objects
      */
     static buildSystemPayload(session) {
         const sysType = session.sysType || {};
@@ -105,6 +112,46 @@ class BotSessionManager {
         const alters = members.filter((m) => m.entityType !== 'state');
         const stateEntities = members.filter((m) => m.entityType === 'state');
 
+        // Build entity objects for bulk insert (createSystemFromPayload expects full objects)
+        const alterEntities = alters.map((m) => ({
+            name: {
+                display: m.name,
+                indexable: m.name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 32) || `alter${Date.now()}`,
+            },
+            avatar: m.avatar || undefined,
+            banner: m.banner || undefined,
+            description: m.description || undefined,
+            pronouns: m.pronouns || [],
+            color: m.color || undefined,
+            proxy: m.proxy || [],
+            // Don't include _id - createSystemFromPayload will generate new ones
+        }));
+
+        const stateEntitites = stateEntities.map((s) => ({
+            name: {
+                display: s.name,
+                indexable: s.name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 32) || `state${Date.now()}`,
+            },
+            avatar: s.avatar || undefined,
+            banner: s.banner || undefined,
+            description: s.description || undefined,
+            pronouns: s.pronouns || [],
+            color: s.color || undefined,
+            proxy: s.proxy || [],
+        }));
+
+        const groupEntities = groups.map((g) => ({
+            name: {
+                display: g.name,
+                indexable: g.name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 32) || `group${Date.now()}`,
+            },
+            description: g.description || undefined,
+            color: g.color || undefined,
+            avatar: g.avatar || undefined,
+            banner: g.banner || undefined,
+            alterIDs: [],
+        }));
+
         const payload = {
             name: {
                 display: name || 'My System',
@@ -114,20 +161,37 @@ class BotSessionManager {
                 name: sysType.name || 'None',
                 dd: sysType.dd || {},
                 ...flags,
+                dissociativeStateName: sysType.dissociativeStateName || 'Dissociated',
                 onboardingCompleted: true,
             },
-            privacyBuckets: ['strangers_bucket', 'friends_bucket'],
+            // Privacy buckets as objects (NOT strings) - createSystemFromPayload creates them
+            privacyBuckets: [
+                { name: 'Strangers', friends: [] },
+                { name: 'Friends', friends: [] }
+            ],
             alters: {
-                conditions: alters.map((m) => ({ name: m.name, settings: { hide_to_self: false, include_in_Count: true } })),
-                IDs: alters.map((m) => m.id),
+                entities: alterEntities,
+                conditions: alters.map((m) => ({
+                    name: m.name,
+                    settings: { hide_to_self: false, include_in_Count: true }
+                })),
+                IDs: [], // Will be populated by createSystemFromPayload after insert
             },
             states: {
-                conditions: [...states, ...stateEntities].map((s) => ({ name: s.name, settings: { hide_to_self: false, include_in_Count: true } })),
-                IDs: [...states, ...stateEntities].map((s) => s.id),
+                entities: stateEntitites,
+                conditions: [...states, ...stateEntities].map((s) => ({
+                    name: s.name,
+                    settings: { hide_to_self: false, include_in_Count: true }
+                })),
+                IDs: [],
             },
             groups: {
-                conditions: groups.map((g) => ({ name: g.name, settings: { hide_to_self: false, include_in_Count: true } })),
-                IDs: groups.map((g) => g.id),
+                entities: groupEntities,
+                conditions: groups.map((g) => ({
+                    name: g.name,
+                    settings: { hide_to_self: false, include_in_Count: true }
+                })),
+                IDs: [],
             },
             setting: {
                 friendAutoBucket: 'Friends',
@@ -146,16 +210,14 @@ class BotSessionManager {
                 status: '',
                 caution: '',
                 layers: shiftHistory.length
-                    ? [
-                        {
-                            _id: `layer_${Date.now()}`,
-                            name: 'Active',
-                            shifts: shiftHistory.map((s) => ({
-                                ...s,
-                                timestamp: typeof s.timestamp === 'number' ? new Date(s.timestamp) : s.timestamp,
-                            })),
-                        },
-                    ]
+                    ? [{
+                        name: 'Main',
+                        color: '#8b5cf6',
+                        shifts: shiftHistory.map((s) => ({
+                            ...s,
+                            timestamp: typeof s.timestamp === 'number' ? new Date(s.timestamp) : s.timestamp,
+                        })),
+                    }]
                     : [],
             },
         };

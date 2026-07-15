@@ -1,5 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 
@@ -24,10 +27,27 @@ const {
 const { importSimplyPluralFile, previewSimplyPluralFile } = require('../../discord_commands/functions/import/import_simplyplural_file');
 const authActivity = require('../routes/auth');
 
+/**
+ * Decode avatarData array [{ id, name, data, contentType }] to a temp directory.
+ * Returns the temp dir path, or null if no avatars.
+ */
+function decodeAvatarData(avatarData) {
+    if (!Array.isArray(avatarData) || avatarData.length === 0) return null;
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-avatars-'));
+    for (const avatar of avatarData) {
+        if (!avatar.id || !avatar.data) continue;
+        const filename = avatar.name || `${avatar.id}.png`;
+        const buffer = Buffer.from(avatar.data, 'base64');
+        fs.writeFileSync(path.join(tmpDir, filename), buffer);
+    }
+    return tmpDir;
+}
+
 // POST /api/import — Import from external source
 router.post('/', async (req, res) => {
+    let avatarTmpDir = null;
     try {
-        const { source, tokenOrId, options = {}, fileData } = req.body;
+        const { source, tokenOrId, options = {}, fileData, avatarData } = req.body;
 
         if (!source) {
             return res.status(400).json({ error: 'Missing required field: source' });
@@ -72,11 +92,19 @@ router.post('/', async (req, res) => {
             stateNames: options.stateNames || [],
             target: options.target || 'app',
             forceAsStates: options.forceAsStates || false,
+            overwriteAvatars: options.overwriteAvatars !== false,
+            setFronters: options.setFronters || false,
         };
 
         // Create backup before import when possible
         if (typeof createBackup === 'function') {
             await createBackup(system, source);
+        }
+
+        // Decode avatar zip data to temp dir for SP file import
+        if (avatarData && source === 'simplyplural' && fileData) {
+            avatarTmpDir = decodeAvatarData(avatarData);
+            if (avatarTmpDir) importOptions.avatarFolderPath = avatarTmpDir;
         }
 
         // Run import based on source and method
@@ -125,13 +153,16 @@ router.post('/', async (req, res) => {
     } catch (err) {
         console.error('[Import] API error:', err);
         res.status(500).json({ error: err.message || 'Import failed' });
+    } finally {
+        if (avatarTmpDir) fs.rm(avatarTmpDir, { recursive: true, force: true }, () => {});
     }
 });
 
 // POST /api/import/preview — Preview import data without writing
 router.post('/preview', async (req, res) => {
+    let avatarTmpDir = null;
     try {
-        const { source, tokenOrId, fileData, options = {} } = req.body;
+        const { source, tokenOrId, fileData, options = {}, avatarData } = req.body;
 
         if (!source) return res.status(400).json({ error: 'Missing required field: source' });
 
@@ -151,6 +182,11 @@ router.post('/preview', async (req, res) => {
             if (!system) return res.status(404).json({ error: 'System not found.' });
         }
 
+        // Decode avatar zip data for SP preview
+        if (avatarData && source === 'simplyplural' && fileData) {
+            avatarTmpDir = decodeAvatarData(avatarData);
+        }
+
         let preview;
         switch (source) {
             case 'pluralkit':
@@ -163,7 +199,7 @@ router.post('/preview', async (req, res) => {
                 break;
             case 'simplyplural':
                 if (fileData) {
-                    preview = await previewSimplyPluralFile(system, fileData);
+                    preview = await previewSimplyPluralFile(system, fileData, avatarTmpDir ? { avatarFolderPath: avatarTmpDir } : {});
                 } else {
                     if (!tokenOrId) return res.status(400).json({ error: 'Missing tokenOrId' });
                     preview = await previewSimplyPluralAPI(system, tokenOrId);
@@ -202,13 +238,16 @@ router.post('/preview', async (req, res) => {
     } catch (err) {
         console.error('[Import] Preview error:', err);
         res.status(500).json({ error: err.message || 'Preview failed' });
+    } finally {
+        if (avatarTmpDir) fs.rm(avatarTmpDir, { recursive: true, force: true }, () => {});
     }
 });
 
 // POST /api/import/stream — Import with SSE progress streaming
 router.post('/stream', async (req, res) => {
+    let avatarTmpDir = null;
     try {
-        const { source, tokenOrId, options = {}, fileData } = req.body;
+        const { source, tokenOrId, options = {}, fileData, avatarData } = req.body;
 
         if (!source) {
             return res.status(400).json({ error: 'Missing required field: source' });
@@ -280,6 +319,8 @@ router.post('/stream', async (req, res) => {
             stateNames: options.stateNames || [],
             target: options.target || 'app',
             forceAsStates: options.forceAsStates || false,
+            overwriteAvatars: options.overwriteAvatars !== false,
+            setFronters: options.setFronters || false,
             selectedMemberIds: options.selectedMemberIds ? new Set(options.selectedMemberIds) : undefined,
             selectedGroupIds: options.selectedGroupIds ? new Set(options.selectedGroupIds) : undefined,
             dryRun: !!options.systemConfig,
@@ -288,6 +329,12 @@ router.post('/stream', async (req, res) => {
 
         if (typeof createBackup === 'function') {
             await createBackup(system, source);
+        }
+
+        // Decode avatar zip data to temp dir for SP file import
+        if (avatarData && source === 'simplyplural' && fileData) {
+            avatarTmpDir = decodeAvatarData(avatarData);
+            if (avatarTmpDir) importOptions.avatarFolderPath = avatarTmpDir;
         }
 
         let result;
@@ -346,6 +393,8 @@ router.post('/stream', async (req, res) => {
         } catch {
             res.status(500).end();
         }
+    } finally {
+        if (avatarTmpDir) fs.rm(avatarTmpDir, { recursive: true, force: true }, () => {});
     }
 });
 

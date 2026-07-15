@@ -104,6 +104,8 @@ async function importSimplyPluralFile(system, user, fileData, options, onProgres
         for (const entity of result.importedMembers) {
             const spId = entity.metadata?.simplyPluralId;
             if (spId && avatarMediaMap.has(spId)) {
+                // Skip if overwriteAvatars is false and entity already has an avatar
+                if (options.overwriteAvatars === false && entity.avatar?.url) continue;
                 entity.avatar = avatarMediaMap.get(spId);
                 await entity.save().catch(() => {});
             }
@@ -125,9 +127,18 @@ async function importSimplyPluralFile(system, user, fileData, options, onProgres
         result.importedShifts = switchResult.shifts || [];
     }
 
-    // ── Step 7: Custom fields → entity.age + metadata ──
+    // ── Step 7: Custom fields → entity.customAttributes + age ──
     if (Array.isArray(data.customFields) && data.customFields.length > 0) {
         applyCustomFields(result.importedMembers, data.customFields, data.members, options);
+        // Store custom attribute definitions on system
+        if (!options.dryRun) {
+            system.customAttributeDefinitions = system.customAttributeDefinitions || [];
+            for (const cf of data.customFields) {
+                if (cf.name && !system.customAttributeDefinitions.some(d => d.name === cf.name)) {
+                    system.customAttributeDefinitions.push({ name: cf.name, source: 'simplyplural' });
+                }
+            }
+        }
     }
 
     // ── Step 8: Privacy settings from member.privacy ──
@@ -145,16 +156,36 @@ async function importSimplyPluralFile(system, user, fileData, options, onProgres
         await importPrivacyBuckets(system, data.privacyBuckets, options);
     }
 
-    // ── Step 11: Store custom field definitions in system metadata ──
-    if (Array.isArray(data.customFields) && data.customFields.length > 0 && !options.dryRun) {
-        system.metadata = system.metadata || {};
-        system.metadata.spCustomFieldDefs = data.customFields.map(cf => ({
-            name: cf.name,
-            oid: cf.oid,
+    // ── Step 11: Store friends metadata for future friend-matching alerts ──
+    if (Array.isArray(data.friends) && data.friends.length > 0 && !options.dryRun) {
+        system.importedFriends = system.importedFriends || {};
+        system.importedFriends.simplyplural = data.friends.map(f => ({
+            uid: f.uid,
+            name: f.name,
+            username: f.username,
         }));
+        emit({ phase: 'friends', message: `Stored ${data.friends.length} friend${data.friends.length !== 1 ? 's' : ''} for future matching.` });
     }
 
-    // ── Step 12: Final save ──
+    // ── Step 12: Set fronters as currently fronting (if requested) ──
+    if (options.setFronters && Array.isArray(data.fronters) && data.fronters.length > 0 && !options.dryRun) {
+        const frontLayer = system.front?.layers?.[0];
+        if (frontLayer) {
+            for (const f of data.fronters) {
+                const memberId = f.uid || f.member;
+                const entity = result.importedMembers.find(m => m.metadata?.simplyPluralId === memberId);
+                if (entity) {
+                    frontLayer.members = frontLayer.members || [];
+                    if (!frontLayer.members.includes(entity._id.toString())) {
+                        frontLayer.members.push(entity._id.toString());
+                    }
+                }
+            }
+            emit({ phase: 'fronters', message: `Set ${data.fronters.length} front${data.fronters.length !== 1 ? 'ers' : ''} as currently fronting.` });
+        }
+    }
+
+    // ── Step 13: Final save ──
     emit({ phase: 'saving', message: 'Saving system...' });
     if (!options.dryRun) {
         await system.save();
@@ -337,13 +368,13 @@ async function importSPFrontHistory(system, frontHistory, memberIdMap, options, 
 }
 
 // ============================================
-// CUSTOM FIELDS → AGE + METADATA
+// CUSTOM FIELDS → CUSTOM ATTRIBUTES + AGE
 // ============================================
 
 /**
  * Map custom fields to imported entities.
- * - "Age" field → entity.age
- * - Other fields → entity.metadata.customFields
+ * - "Age" field → entity.age (backwards compatible)
+ * - All fields → entity.customAttributes (new system)
  *
  * Custom field values may be embedded in source member objects (e.g. spMember.age)
  * or referenced by oid. Handles both cases.
@@ -371,19 +402,24 @@ function applyCustomFields(importedMembers, customFields, sourceMembers, options
         const age = source.age || source.AGE || source.birthday;
         if (age && ageFieldDef) {
             entity.age = age;
-            entity.save().catch(() => {});
         }
 
-        // Store any other custom field values as metadata
-        const otherCustomFields = customFields
-            .filter(cf => cf.name?.toLowerCase() !== 'age')
-            .map(cf => ({ name: cf.name, oid: cf.oid }));
-
-        if (otherCustomFields.length > 0) {
-            entity.metadata = entity.metadata || {};
-            entity.metadata.customFieldDefs = otherCustomFields;
-            entity.save().catch(() => {});
+        // Store ALL custom field values in entity.customAttributes
+        entity.customAttributes = entity.customAttributes || [];
+        for (const cf of customFields) {
+            if (!cf.name) continue;
+            // Look for value in source member data (by field name or oid)
+            let value = source[cf.name] || source[cf.name?.toLowerCase()] || source[cf.oid];
+            if (value !== undefined && value !== null && value !== '') {
+                // Don't duplicate if already set
+                const existing = entity.customAttributes.find(a => a.name === cf.name);
+                if (!existing) {
+                    entity.customAttributes.push({ name: cf.name, value: String(value) });
+                }
+            }
         }
+
+        entity.save().catch(() => {});
     }
 }
 
@@ -393,7 +429,8 @@ function applyCustomFields(importedMembers, customFields, sourceMembers, options
 
 /**
  * Apply privacy settings from the SP export's `privacy` boolean field.
- * Private members get the "Private" privacy bucket assignment.
+ * Private members get assigned to the "Friends" bucket (or "Private" if it exists).
+ * Non-private members stay in the default (Strangers) bucket.
  */
 async function applyMemberPrivacy(system, importedMembers, sourceMembers, options) {
     if (options.dryRun) return;
@@ -403,17 +440,39 @@ async function applyMemberPrivacy(system, importedMembers, sourceMembers, option
         sourceMap.set(s.uid || s.id, s);
     }
 
+    // Find or create the "Friends" bucket for private members
+    let friendsBucketId = null;
+    if (system.privacyBuckets && system.privacyBuckets.length > 0) {
+        const { PrivacyBucket } = require('../../../schemas/settings');
+        for (const bucketId of system.privacyBuckets) {
+            const bucket = await PrivacyBucket.findById(bucketId);
+            if (bucket && (bucket.name === 'Friends' || bucket.name === 'Private')) {
+                friendsBucketId = bucket._id;
+                break;
+            }
+        }
+    }
+
     for (const entity of importedMembers) {
         const spId = entity.metadata?.simplyPluralId;
         const source = sourceMap.get(spId);
-        if (!source || !source.privacy) continue;
+        if (!source) continue;
 
         entity.setting = entity.setting || {};
         entity.setting.privacy = entity.setting.privacy || [];
 
-        const hasDefault = entity.setting.privacy.find(p => p.bucket === 'default');
-        if (!hasDefault) {
-            entity.setting.privacy.push({ bucket: 'default', settings: {} });
+        if (source.privacy && friendsBucketId) {
+            // Private member → Friends bucket
+            const hasBucket = entity.setting.privacy.find(p => p.bucket?.toString() === friendsBucketId.toString());
+            if (!hasBucket) {
+                entity.setting.privacy.push({ bucket: friendsBucketId, settings: {} });
+            }
+        } else {
+            // Non-private or no bucket found → default
+            const hasDefault = entity.setting.privacy.find(p => p.bucket === 'default');
+            if (!hasDefault) {
+                entity.setting.privacy.push({ bucket: 'default', settings: {} });
+            }
         }
 
         entity.save().catch(() => {});

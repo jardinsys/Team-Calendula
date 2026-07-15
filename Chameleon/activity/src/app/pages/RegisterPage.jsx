@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { api, DISORDER_MAP, DISORDER_DEFINITIONS, DSM_OPTIONS, ICD_OPTIONS, Icon, resolveSysTypeFromDisorder, resolveSysTypeFromExtraAnswer, resolveSysTypeFromMultiAnswer } from '@chameleon/shared'
 import { useSystemSession } from '../../hooks/useSystemSession'
 import { getParentStep, REGISTRATION_ROOT, REGISTER_STEPS } from '../navigation/registrationFlow'
+import { LoadingPage } from '../components/LoadingPage'
 
 // ═══════════════════════════════════════════
 // Step 1: Category Selection
@@ -524,7 +525,7 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
 // Step 6: Who's in Front? (for new isSystem)
 // ═══════════════════════════════════════════
 
-function FirstAlterStep({ onComplete, onBack, saving }) {
+function FirstAlterStep({ systemName, onComplete, onBack, saving }) {
   const [alterNames, setAlterNames] = useState([''])
   const [activeIndex, setActiveIndex] = useState(0)
 
@@ -550,11 +551,11 @@ function FirstAlterStep({ onComplete, onBack, saving }) {
 
   const handleComplete = () => {
     const validNames = alterNames.filter(n => n.trim())
-    onComplete(systemName, validNames)
+    onComplete(validNames)
   }
 
   const handleSkip = () => {
-    onComplete(systemName, [])
+    onComplete([])
   }
 
   return (
@@ -692,15 +693,16 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
   const handleStartOver = useCallback(() => {
     // Always go back to landing
     sessionStorage.removeItem('reg_local')
+    hasFinishedRef.current = false
     setStep(1)
     setCategory(null)
     setDisorderKey(null)
     setExtraAnswer(null)
+    setError(null)
     update({ sysType: null, systemName: '', members: [], front: null, stagedImports: [] })
     reset?.()
     onNavigate?.(null)
   }, [onNavigate, update, reset])
-
   // Step 1 → Step 2 or Step 3
   const handleCategorySelect = (cat) => {
     setCategory(cat)
@@ -839,7 +841,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
 
       // Final commit - creates everything atomically (including staged imports)
       const result = await commit()
-      if (result?.system) {
+      if (result?._id) {
         if (resolvedSysType?.isDissociative) {
           // Note: dissociative state is auto-created by createSystemFromPayload
         }
@@ -848,17 +850,19 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
     } catch (err) {
       console.error('[Register] Error:', err)
       setError(err.message || 'Failed to create profile')
+      // Reset the auto-commit flag so user can retry
+      hasFinishedRef.current = false
     }
   }
 
   // Step 7 (finish) — auto-commit when imported users land here
   const hasFinishedRef = useRef(false)
   useEffect(() => {
-    if (step >= 6 && !hasFinishedRef.current) {
+    if (step >= 6 && !hasFinishedRef.current && !committing) {
       hasFinishedRef.current = true
       handleFirstAlterComplete([])
     }
-  }, [step])
+  }, [step, committing])
 
   // Preset layers based on sys_type (moved inside for closure access)
   const buildPresetLayers = (sysType) => {
@@ -906,6 +910,22 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
 
   return (
     <div className="register-page">
+      {/* Fixed back button - always in the same position */}
+      {step > 1 && (
+        <button
+          className="btn btn-back btn-back-fixed"
+          onClick={handleBack}
+          style={{
+            position: 'fixed',
+            top: 'var(--space-lg)',
+            left: 'var(--space-lg)',
+            zIndex: 100,
+          }}
+        >
+          ← Back
+        </button>
+      )}
+
       {step === 1 && <CategoryStep onSelect={handleCategorySelect} onBack={handleStartOver} />}
       {step === 2 && (
         <DisorderStep
@@ -914,7 +934,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onBack={handleBack}
           onStartOver={handleStartOver}
         />)}
-      {step === 3 && (resolvedSysType?.isSystem || resolvedSysType?.isFragmented) && (
+      {step === 3 && resolvedSysType && (resolvedSysType.isSystem || resolvedSysType.isFragmented) && (
         <ImportStep
           sysType={resolvedSysType}
           onComplete={handleImportStepComplete}
@@ -922,7 +942,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onStartOver={handleStartOver}
           onNavigate={onNavigate}
         />)}
-      {step === 3 && category === 'OTHER' && !resolvedSysType?.isSystem && !resolvedSysType?.isFragmented && (
+      {step === 3 && category === 'OTHER' && resolvedSysType && !resolvedSysType.isSystem && !resolvedSysType.isFragmented && (
         <OtherStep
           onResolve={handleOtherResolve}
           onBack={handleBack}
@@ -946,13 +966,36 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           saving={committing}
         />)}
       {step >= 6 && (
-        <div className="register-step">
-          <h2>Finishing your setup...</h2>
-          <div className="spinner" style={{ margin: 'var(--space-lg) auto' }} />
-          <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
-            Creating your profile with imported data...
-          </p>
-        </div>
+        error ? (
+          <div className="register-step">
+            <h2>Something went wrong</h2>
+            <p style={{ color: 'var(--color-error)', marginBottom: 'var(--space-lg)' }}>{error}</p>
+            <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
+              <button className="btn btn-back" onClick={handleBack} style={{ flex: 1 }}>
+                ← Back
+              </button>
+              <button
+                className="btn-gradient btn-gradient-primary"
+                onClick={() => {
+                  setError(null)
+                  hasFinishedRef.current = false
+                }}
+                style={{ flex: 2 }}
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        ) : (
+          <LoadingPage
+            title="Creating your system..."
+            subtitle="Setting up your profile with imported data"
+            showProgress={true}
+            progress={committing ? 50 : 100}
+          >
+            <p>This may take a moment while we create your entities.</p>
+          </LoadingPage>
+        )
       )}
       {error && (
         <p style={{ color: 'var(--color-error)', fontSize: '0.85rem', marginTop: 'var(--space-md)' }}>{error}</p>

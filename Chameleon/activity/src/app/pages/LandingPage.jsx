@@ -4,6 +4,7 @@ import { getSystemTerm } from '@chameleon/shared'
 import {
   PersonStanding,
   Users,
+  User,
   NotepadText,
   Dices,
   TriangleAlert,

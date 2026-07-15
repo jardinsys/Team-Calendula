@@ -215,7 +215,7 @@ export const DISORDER_DEFINITIONS = {
 
 // Ordered lists for UI select menus / lists (by diagnostic code)
 export const DSM_OPTIONS = ['DID', 'OSDD', 'Amnesia', 'Dereal/Depers', 'UDD'];
-export const ICD_OPTIONS = ['P-DID', 'Amnesia', 'Possession Trance', 'Trance', 'DNSD', 'Depersonalization-Derealization'];
+export const ICD_OPTIONS = ['DID', 'P-DID', 'Amnesia', 'Possession Trance', 'Trance', 'DNSD', 'Depersonalization-Derealization'];
 
 // ═══════════════════════════════════════════
 // HELPER: Resolve sys_type from a disorder key

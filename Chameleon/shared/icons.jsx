@@ -63,7 +63,28 @@ export const Icons = {
   chevronUp: ChevronUp,
   layoutGrid: LayoutGrid,
   pawPrint: PawPrint,
-  loader: Loader2
+  loader: Loader2,
+  // Custom ampersand for SimplyPlural brand
+  ampersand: ({ size = 16, color = 'currentColor', className = '', style, ...props }) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`lucide-icon ${className}`}
+      style={style}
+      {...props}
+    >
+      <path d="M17.5 12c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.85 0 3.58.63 4.95 1.69" />
+      <path d="M12.5 12c0 2.76-2.24 5-5 5s-5-2.24-5-5 2.24-5 5-5c1.17 0 2.24.41 3.1 1.09" />
+      <path d="M17.5 12l4.5 4.5" />
+    </svg>
+  )
 }
 
 export function Icon({ name, size = 16, color, className = '', style, ...props }) {
