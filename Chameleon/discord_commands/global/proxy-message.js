@@ -511,13 +511,11 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
         }));
     }
 
-    // Extract media URLs from content to preserve Discord's auto-embeds
-    const mediaUrls = extractMediaUrls(content);
-
     // Get color for reply embed: entity color > system color > none
     const embedColor = getEmbedColor(entity, system);
 
     // Handle replies based on reply style setting
+    let hasReplyEmbed = false;
     if (originalMessage.reference) {
         const replyStyle = getEffectiveReplyStyle(system, guildSettings, guild.id);
 
@@ -528,6 +526,7 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
                 if (referencedMessage) {
                     const replyEmbed = buildReplyEmbed(referencedMessage, channel.id, guild.id, embedColor);
                     webhookOptions.embeds.push(replyEmbed);
+                    hasReplyEmbed = true;
                 }
             } catch (e) {
                 // Couldn't fetch referenced message, continue without it
@@ -542,23 +541,9 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
         }
     }
 
-    // If there are media URLs in content, we need to ensure they still embed
-    // Discord won't auto-embed URLs when there are other embeds present
-    // Solution: Add a second message or ensure media URLs are not suppressed
-    // For now, we'll add the first media URL as an image embed if we have a reply embed
-    if (webhookOptions.embeds.length > 0 && mediaUrls.length > 0) {
-        // Check if any media URLs are images/videos that would normally embed
-        const imageUrl = mediaUrls.find(url => isImageUrl(url));
-        if (imageUrl && webhookOptions.embeds.length < 10) {
-            // Add an empty embed with just the image to preserve the media display
-            webhookOptions.embeds.push({
-                image: { url: imageUrl }
-            });
-        }
-    }
-
-    // Send the webhook message
-    const webhookMessage = await webhook.send(webhookOptions);
+    // Send via split logic if needed (reply embed + non-embeddable URLs)
+    // Otherwise send normally with manual embeds for supported sites
+    const webhookMessage = await sendProxyMessageWithSplit(webhook, webhookOptions, originalMessage, hasReplyEmbed);
 
     // Delete the original message
     try {
@@ -1058,56 +1043,164 @@ function buildReplyEmbed(referencedMessage, channelId, guildId, color = null) {
     return embed;
 }
 
+// ============================================
+// URL DETECTION & CLASSIFICATION
+// ============================================
+
 /**
- * Extract media URLs from message content
+ * Extract all URLs from message content
+ * @param {string} content - Message content
+ * @returns {string[]} Array of all URLs
+ */
+function extractAllUrls(content) {
+    if (!content) return [];
+    const urlRegex = /https?:\/\/[^\s<]+/gi;
+    return content.match(urlRegex) || [];
+}
+
+/**
+ * Extract media URLs from message content (legacy compat)
  * @param {string} content - Message content
  * @returns {string[]} Array of media URLs
  */
 function extractMediaUrls(content) {
-    if (!content) return [];
-    
-    // Match URLs that are likely to be media
-    const urlRegex = /https?:\/\/[^\s<]+[^\s<.,:;"')\]!?]/gi;
-    const urls = content.match(urlRegex) || [];
-    
-    // Filter to likely media URLs
-    return urls.filter(url => isMediaUrl(url));
+    return extractAllUrls(content).filter(url => isMediaUrl(url));
 }
 
 /**
- * Check if a URL is likely to be media that Discord would embed
- * @param {string} url - URL to check
- * @returns {boolean}
+ * Sites where we can fetch OEmbed data for manual embed building
  */
-function isMediaUrl(url) {
-    const mediaExtensions = /\.(png|jpg|jpeg|gif|webp|mp4|webm|mov)(\?.*)?$/i;
-    const mediaHosts = [
-        'cdn.discordapp.com',
-        'media.discordapp.net',
-        'i.imgur.com',
-        'imgur.com',
-        'gyazo.com',
-        'prnt.sc',
-        'pbs.twimg.com',
-        'tenor.com',
-        'giphy.com',
-        'media.tenor.com',
-        'media.giphy.com'
-    ];
-    
+const OEMBED_SITES = {
+    youtube: {
+        match: (url) => /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts\/)/i.test(url),
+        fetch: async (url) => {
+            const videoId = extractYouTubeId(url);
+            if (!videoId) return null;
+            return {
+                title: 'YouTube Video',
+                thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+                url: `https://www.youtube.com/watch?v=${videoId}`,
+                site: 'YouTube'
+            };
+        }
+    },
+    twitter: {
+        match: (url) => /(?:twitter\.com|x\.com|t\.co)\/\w+\/status\//i.test(url) || /t\.co\/\w+/i.test(url),
+        fetch: async (url) => {
+            try {
+                // For t.co short URLs, resolve to full URL first
+                let resolvedUrl = url;
+                if (/t\.co\//i.test(url)) {
+                    const res = await fetchWithTimeout(url, 3000, { redirect: 'follow' });
+                    if (res.ok) resolvedUrl = res.url;
+                }
+                const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(resolvedUrl)}&omit_script=true`;
+                const res = await fetchWithTimeout(oembedUrl, 5000);
+                if (!res.ok) return null;
+                const data = await res.json();
+                return {
+                    title: data.author_name ? `@${data.author_name}` : 'X Post',
+                    description: stripHtml(data.html).substring(0, 400),
+                    url: resolvedUrl,
+                    site: 'X'
+                };
+            } catch {
+                return null;
+            }
+        }
+    },
+    tiktok: {
+        match: (url) => /(?:tiktok\.com\/@[\w.-]+\/video\/|vm\.tiktok\.com\/)/i.test(url),
+        fetch: async (url) => {
+            try {
+                // For vm.tiktok.com short URLs, resolve to full URL first
+                let resolvedUrl = url;
+                if (/vm\.tiktok\.com/i.test(url)) {
+                    const res = await fetchWithTimeout(url, 3000, { redirect: 'follow' });
+                    if (res.ok) resolvedUrl = res.url;
+                }
+                const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(resolvedUrl)}`;
+                const res = await fetchWithTimeout(oembedUrl, 5000);
+                if (!res.ok) return null;
+                const data = await res.json();
+                return {
+                    title: data.title || 'TikTok Video',
+                    author: data.author?.nickname || data.author?.unique_id,
+                    thumbnail: data.thumbnail_url,
+                    url: resolvedUrl,
+                    site: 'TikTok'
+                };
+            } catch {
+                return null;
+            }
+        }
+    }
+};
+
+/**
+ * GIF sites - we can embed these directly
+ */
+const GIF_SITES = {
+    tenor: {
+        match: (url) => /tenor\.com\/view\//i.test(url),
+        extractId: (url) => {
+            const match = url.match(/(\d+)$/);
+            return match ? match[1] : null;
+        }
+    },
+    giphy: {
+        match: (url) => /giphy\.com\/gifs\//i.test(url),
+        extractId: (url) => {
+            const match = url.match(/giphy\.com\/gifs\/[\w-]+-(\w+)/i);
+            return match ? match[1] : null;
+        }
+    },
+    klipy: {
+        match: (url) => /klipy\.com\/\w+\/[\w-]+/i.test(url),
+        extractId: (url) => url.split('/').pop()
+    }
+};
+
+/**
+ * Discord media CDN URLs
+ */
+function isDiscordCdnUrl(url) {
     try {
         const urlObj = new URL(url);
-        
-        // Check if it's a known media host
-        if (mediaHosts.some(host => urlObj.hostname.includes(host))) {
-            return true;
-        }
-        
-        // Check if it has a media extension
-        if (mediaExtensions.test(urlObj.pathname)) {
-            return true;
-        }
-        
+        return urlObj.hostname.includes('discordapp.com') || urlObj.hostname.includes('discordapp.net');
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Direct image host URLs
+ */
+const IMAGE_HOSTS = [
+    'i.imgur.com',
+    'imgur.com',
+    'gyazo.com',
+    'prnt.sc',
+    'pbs.twimg.com',
+    'media.tenor.com',
+    'media.giphy.com',
+    'media.klipy.com',
+    'i.redd.it',
+    'preview.redd.it',
+    'cdn.bsky.app'
+];
+
+/**
+ * Check if a URL is likely to be media that Discord would embed
+ */
+function isMediaUrl(url) {
+    const mediaExtensions = /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.apng|\.avif|\.svg|\.tiff?|\.bmp|\.ico|\.jfif|\.heic|\.heif|\.mp4|\.webm|\.mov|\.avi|\.mkv)(\?.*)?$/i;
+    try {
+        const urlObj = new URL(url);
+        if (IMAGE_HOSTS.some(host => urlObj.hostname.includes(host))) return true;
+        if (isDiscordCdnUrl(url) && urlObj.pathname.includes('/attachments/')) return true;
+        if (Object.values(GIF_SITES).some(site => site.match(url))) return true;
+        if (mediaExtensions.test(urlObj.pathname)) return true;
         return false;
     } catch {
         return false;
@@ -1116,40 +1209,278 @@ function isMediaUrl(url) {
 
 /**
  * Check if a URL is specifically an image URL
- * @param {string} url - URL to check
- * @returns {boolean}
  */
 function isImageUrl(url) {
-    const imageExtensions = /\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i;
-    const imageHosts = [
-        'cdn.discordapp.com',
-        'media.discordapp.net',
-        'i.imgur.com',
-        'gyazo.com',
-        'prnt.sc',
-        'pbs.twimg.com'
-    ];
-    
+    const imageExtensions = /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.apng|\.avif|\.svg|\.tiff?|\.bmp|\.ico|\.jfif|\.heic|\.heif)(\?.*)?$/i;
     try {
         const urlObj = new URL(url);
-        
-        // Check if it has an image extension
-        if (imageExtensions.test(urlObj.pathname)) {
-            return true;
-        }
-        
-        // Check if it's a known image host with common patterns
-        if (imageHosts.some(host => urlObj.hostname.includes(host))) {
-            // Discord CDN and media URLs are images
+        if (imageExtensions.test(urlObj.pathname)) return true;
+        if (IMAGE_HOSTS.some(host => urlObj.hostname.includes(host))) {
             if (urlObj.hostname.includes('discordapp')) {
                 return urlObj.pathname.includes('/attachments/');
             }
             return true;
         }
-        
+        if (Object.values(GIF_SITES).some(site => site.match(url))) return true;
         return false;
     } catch {
         return false;
+    }
+}
+
+/**
+ * Check if a URL is from a site we can manually build embeds for (OEmbed)
+ */
+function isEmbeddableSite(url) {
+    return Object.values(OEMBED_SITES).some(site => site.match(url));
+}
+
+/**
+ * Check if a URL is a GIF site
+ */
+function isGifSite(url) {
+    return Object.values(GIF_SITES).some(site => site.match(url));
+}
+
+/**
+ * Check if a URL can be manually embedded (OEmbed site, GIF, image, or Discord CDN)
+ */
+function isManuallyEmbeddable(url) {
+    return isEmbeddableSite(url) || isGifSite(url) || isImageUrl(url);
+}
+
+// ============================================
+// URL HELPERS
+// ============================================
+
+function extractYouTubeId(url) {
+    const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/i);
+    return match ? match[1] : null;
+}
+
+function stripHtml(html) {
+    return html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+}
+
+async function fetchWithTimeout(url, timeoutMs = 5000, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'ChameleonBot/1.0' }, ...options });
+        return res;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// ============================================
+// MANUAL EMBED BUILDERS
+// ============================================
+
+/**
+ * Build a manual embed for a URL that Discord won't auto-embed
+ * Handles: YouTube, X/Twitter, TikTok, GIF sites, Discord CDN images
+ * @param {string} url - The URL to build an embed for
+ * @param {number|null} color - Embed color (entity/system)
+ * @returns {Promise<Object|null>} Discord embed object or null if can't build
+ */
+async function buildManualEmbed(url, color = null) {
+    // Try OEmbed sites first (YouTube, X, TikTok)
+    for (const site of Object.values(OEMBED_SITES)) {
+        if (site.match(url)) {
+            try {
+                const data = await site.fetch(url);
+                if (data) return buildOEmbedEmbed(data, color);
+            } catch {
+                // OEmbed fetch failed, continue to other methods
+            }
+        }
+    }
+
+    // Try GIF sites (Tenor, Giphy, Klipy)
+    for (const [name, site] of Object.entries(GIF_SITES)) {
+        if (site.match(url)) {
+            return buildGifEmbed(url, name, color);
+        }
+    }
+
+    // Discord CDN images
+    if (isDiscordCdnUrl(url) && isImageUrl(url)) {
+        return buildImageEmbed(url, null, color);
+    }
+
+    // Generic image URLs (imgur, etc.)
+    if (isImageUrl(url)) {
+        return buildImageEmbed(url, null, color);
+    }
+
+    return null;
+}
+
+/**
+ * Build an embed from OEmbed data (YouTube, X, TikTok)
+ */
+function buildOEmbedEmbed(data, color = null) {
+    const embed = {
+        title: data.title?.substring(0, 256) || 'Link',
+        url: data.url
+    };
+
+    if (data.description) {
+        embed.description = data.description.substring(0, 4096);
+    }
+
+    if (data.thumbnail) {
+        embed.thumbnail = { url: data.thumbnail };
+    }
+
+    if (data.author) {
+        embed.author = { name: data.author };
+    }
+
+    if (data.site) {
+        embed.footer = { text: data.site };
+    }
+
+    if (color) embed.color = color;
+
+    return embed;
+}
+
+/**
+ * Build a GIF embed for Tenor/Giphy/Klipy
+ */
+function buildGifEmbed(url, siteName, color = null) {
+    // For GIF sites, we use the URL directly as an image
+    // Discord will render the image from the GIF URL
+    const embed = {
+        image: { url },
+        url
+    };
+
+    if (color) embed.color = color;
+
+    return embed;
+}
+
+/**
+ * Build an image embed for direct image URLs
+ */
+function buildImageEmbed(url, description = null, color = null) {
+    const embed = {
+        image: { url },
+        url
+    };
+
+    if (description) {
+        embed.description = description.substring(0, 4096);
+    }
+
+    if (color) embed.color = color;
+
+    return embed;
+}
+
+/**
+ * Build embeds for all URLs in content that Discord won't auto-embed
+ * @param {string} content - Message content
+ * @param {number|null} color - Embed color
+ * @returns {Promise<Object[]>} Array of Discord embed objects
+ */
+async function buildEmbedsForUrls(content, color = null) {
+    const allUrls = extractAllUrls(content);
+    const embeds = [];
+
+    for (const url of allUrls) {
+        if (embeds.length >= 9) break; // Leave room for reply embed (1 slot)
+
+        // Skip URLs that Discord will auto-embed (plain media URLs without reply embeds)
+        // We only manually embed when there's a conflict (reply embed present)
+        const embed = await buildManualEmbed(url, color);
+        if (embed) {
+            embeds.push(embed);
+        }
+    }
+
+    return embeds;
+}
+
+/**
+ * Check if content has URLs that CAN'T be manually embedded
+ * These are URLs from sites we don't have OEmbed support for and aren't images/GIFs
+ * @param {string} content - Message content
+ * @returns {boolean} True if there are non-embeddable URLs
+ */
+function hasNonEmbeddableUrls(content) {
+    const allUrls = extractAllUrls(content);
+    return allUrls.some(url => !isManuallyEmbeddable(url));
+}
+
+// ============================================
+// TWO-MESSAGE SPLIT LOGIC
+// ============================================
+
+/**
+ * Determine if we need to split into two messages
+ * Split when: we have a reply embed AND URLs that can't be manually embedded
+ * @param {boolean} hasReplyEmbed - Whether the webhook has a reply embed
+ * @param {string} content - Message content
+ * @returns {boolean}
+ */
+function needsTwoMessageSplit(hasReplyEmbed, content) {
+    if (!hasReplyEmbed) return false;
+    return hasNonEmbeddableUrls(content);
+}
+
+/**
+ * Send a proxy message, splitting into two messages if needed to preserve link embeds
+ */
+async function sendProxyMessageWithSplit(webhook, webhookOptions, originalMessage, hasReplyEmbed) {
+    const content = webhookOptions.content;
+
+    if (needsTwoMessageSplit(hasReplyEmbed, content)) {
+        // Split: Message 1 = reply embed only (no content with URLs)
+        //        Message 2 = content (no embeds in payload → Discord generates link previews)
+
+        // Message 1: Reply embed + attachments + display info
+        const msg1Options = {
+            username: webhookOptions.username,
+            avatarURL: webhookOptions.avatarURL,
+            content: '', // No content to avoid suppressing embeds
+            allowedMentions: webhookOptions.allowedMentions,
+            embeds: webhookOptions.embeds, // Reply embed(s)
+            files: webhookOptions.files // Attachments go with the reply
+        };
+
+        const sent1 = await webhook.send(msg1Options);
+
+        // Message 2: Content only (Discord will auto-embed URLs)
+        // Strip URLs that we already manually embedded in msg1
+        const msg2Options = {
+            username: webhookOptions.username,
+            avatarURL: webhookOptions.avatarURL,
+            content: content,
+            allowedMentions: webhookOptions.allowedMentions,
+            embeds: [] // Empty — let Discord auto-embed
+        };
+
+        const sent2 = await webhook.send(msg2Options);
+
+        // Return the second message for caching (the one with content)
+        return sent2;
+    } else {
+        // No split needed — send everything in one message
+        // Add manual embeds for any URLs that need them
+        if (hasReplyEmbed) {
+            const manualEmbeds = await buildEmbedsForUrls(content, webhookOptions.embeds[0]?.color || null);
+            for (const embed of manualEmbeds) {
+                if (webhookOptions.embeds.length < 10) {
+                    webhookOptions.embeds.push(embed);
+                }
+            }
+        }
+
+        return await webhook.send(webhookOptions);
     }
 }
 
@@ -1312,6 +1643,15 @@ module.exports = {
     getOrCreateWebhook,
     buildReplyEmbed,
     extractMediaUrls,
+    extractAllUrls,
+    isMediaUrl,
+    isImageUrl,
+    isEmbeddableSite,
+    isGifSite,
+    isManuallyEmbeddable,
+    buildManualEmbed,
+    buildEmbedsForUrls,
+    needsTwoMessageSplit,
     flushToMongoDB,
     reconcileOnStartup,
     invalidateDisplayCache,
