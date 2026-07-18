@@ -14,6 +14,23 @@ jest.mock('mongoose', () => {
   };
 });
 
+jest.mock('passport-discord', () => {
+  return {
+    Strategy: class MockDiscordStrategy {
+      constructor() {}
+    },
+  };
+});
+
+jest.mock('passport', () => ({
+  initialize: () => (req, res, next) => next(),
+  session: () => (req, res, next) => next(),
+  authenticate: () => (req, res, next) => next(),
+  use: jest.fn(),
+  serializeUser: jest.fn(),
+  deserializeUser: jest.fn(),
+}));
+
 describe('API route mounts', () => {
   let app;
   const expectedRoutes = [
@@ -32,7 +49,7 @@ describe('API route mounts', () => {
     process.env.NODE_ENV = 'test';
     process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/chameleon_test';
     jest.isolateModules(() => {
-      app = require('./api');
+      app = require('../api.js');
     });
   });
 

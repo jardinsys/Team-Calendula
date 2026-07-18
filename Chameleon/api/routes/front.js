@@ -60,14 +60,8 @@ router.get('/history', async (req, res) => {
         
         const { limit = 100, before, from, to } = req.query;
         
-        // Collect all shift IDs from all layers
-        const allShiftIds = [];
-        for (const layer of system.front?.layers || []) {
-            allShiftIds.push(...(layer.shifts || []));
-        }
-        
-        // Build query
-        let query = { _id: { $in: allShiftIds } };
+        // Query ALL shifts for this system, not just current layer shifts
+        let query = {};
         if (before) {
             query.startTime = { ...query.startTime, $lt: new Date(before) };
         }
@@ -502,6 +496,7 @@ router.post('/switch', async (req, res) => {
 
                 const shift = new Shift({
                     _id: new mongoose.Types.ObjectId(),
+                    shiftId: new mongoose.Types.ObjectId(),
                     s_type: ent.type,
                     ID: ent.id,
                     type_name: entity.name?.display || entity.name?.indexable || 'Unknown',
@@ -618,6 +613,7 @@ router.post('/shift', async (req, res) => {
         const shiftId = new mongoose.Types.ObjectId();
         const shift = new Shift({
             _id: shiftId,
+            shiftId: shiftId,
             s_type: entityType,
             ID: entityId,
             type_name: entity.name?.display || entity.name?.indexable || 'Unknown',
@@ -874,6 +870,7 @@ router.post('/shift/:shiftId/children', async (req, res) => {
 
         const childShift = new Shift({
             _id: new mongoose.Types.ObjectId(),
+            shiftId: new mongoose.Types.ObjectId(),
             s_type: entityType,
             ID: entityId,
             type_name: entity.name?.display || entity.name?.indexable || 'Unknown',
@@ -991,15 +988,11 @@ async function updateRecentProxies(system, entity, entityType) {
     if (!system.proxy) system.proxy = {};
     if (!system.proxy.recentProxies) system.proxy.recentProxies = [];
 
-    const entry = {
-        type: entityType,
-        id: entity._id.toString(),
-        timestamp: Date.now()
-    };
+    const entry = `${entityType}:${entity._id.toString()}`;
 
     // Remove existing entry for this entity
     system.proxy.recentProxies = system.proxy.recentProxies.filter(
-        p => !(p.id === entry.id && p.type === entry.type)
+        p => p !== entry
     );
 
     // Add to front

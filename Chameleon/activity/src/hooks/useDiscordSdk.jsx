@@ -33,11 +33,26 @@ export function DiscordContextProvider({ children, authenticate = false, scope =
     async function init() {
       try {
         const params = new URLSearchParams(window.location.search)
-        const frameId = params.get('frame_id')
-        const instanceId = params.get('instance_id')
+        let frameId = params.get('frame_id')
+        let instanceId = params.get('instance_id')
+        // SDK requires these params — inject missing ones for local dev
+        if (!params.get('platform')) params.set('platform', 'desktop')
+        if (frameId && !instanceId) {
+          instanceId = frameId
+          params.set('instance_id', instanceId)
+          window.location.search = params.toString()
+          return
+        }
+        if (instanceId && !frameId) {
+          frameId = instanceId
+          params.set('frame_id', frameId)
+          window.location.search = params.toString()
+          return
+        }
         const channelId = instanceId || frameId
+        const isLocalDev = window.location.hostname === 'localhost' || params.get('mock') === 'true'
 
-        if (channelId) {
+        if (channelId && !isLocalDev) {
           sdk = new DiscordSDK(process.env.VITE_DISCORD_CLIENT_ID)
 
           await Promise.race([
@@ -108,7 +123,7 @@ export function DiscordContextProvider({ children, authenticate = false, scope =
             channelId: '123456789012345679',
             guildMember: {
               user: {
-                id: 'mock-user-id',
+                id: '1000000000000000001',
                 username: 'MockUser',
                 discriminator: '0000',
                 avatar: null,

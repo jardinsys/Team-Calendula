@@ -1,6 +1,1 @@
-global.localStorage = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
-};
+// Test setup - no localStorage mock needed (Node 25+ has built-in localStorage)

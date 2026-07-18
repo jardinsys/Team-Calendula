@@ -3,6 +3,7 @@
 
 const express = require('express');
 const mongoose = require('mongoose');
+const { sanitizeInput } = require('../../shared/utils/sanitize.cjs');
 const router = express.Router();
 
 
@@ -162,10 +163,13 @@ router.post('/', async (req, res) => {
         if (!name) {
             return res.status(400).json({ error: 'Name is required' });
         }
-        
+
+        // Sanitize name
+        const sanitizedName = sanitizeInput(name);
+
         // Check for duplicate name
         const existingAlters = await Alter.find({ _id: { $in: system.alters?.IDs || [] } });
-        const idx = name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
+        const idx = sanitizedName.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
         const duplicate = idx ? existingAlters.find(a => a.name?.indexable?.toLowerCase() === idx) : undefined;
         
         if (duplicate) {
@@ -174,7 +178,7 @@ router.post('/', async (req, res) => {
         
         const alter = new Alter({
             name: {
-                display: name,
+                display: sanitizedName,
                 ...(idx && { indexable: idx })
             },
             pronouns: pronouns || [],
@@ -231,6 +235,7 @@ router.patch('/:id', async (req, res) => {
         // Handle name update
         if (updates.name !== undefined) {
             if (typeof updates.name === 'string') {
+                updates.name = sanitizeInput(updates.name);
                 const upIdx = updates.name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
                 alter.name = {
                     display: updates.name,

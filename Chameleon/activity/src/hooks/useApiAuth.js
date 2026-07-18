@@ -15,7 +15,27 @@ export function useApiAuth() {
 
     if (isMock) {
       api.setBaseUrl('/api')
-      setAuthStatus('READY')
+      // Fetch a real JWT from the dev-token endpoint so API calls work in local dev
+      fetch('/api/auth/dev-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ discordId: session?.id || '1000000000000000001', username: session?.username || 'MockUser' })
+      })
+        .then(r => r.ok ? r.json() : Promise.reject(new Error(`dev-token ${r.status}`)))
+        .then(data => {
+          api.setToken(data.token)
+          setHasSystem(data.user?.hasSystem || false)
+          setDiscordUser(data.user || null)
+          setAuthStatus('READY')
+          // Notify WebSocket hook that token is available
+          try {
+            window.dispatchEvent(new CustomEvent('systemiser_token_updated', { detail: { key: 'systemiser_token' } }))
+          } catch (_) {}
+        })
+        .catch(err => {
+          console.warn('[Mock Auth] dev-token failed, continuing without token:', err.message)
+          setAuthStatus('READY')
+        })
       return
     }
 

@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
 const router = express.Router();
 
 const { broadcastLocal } = require('../../redis');
-const { getPrivacyBucket, shouldShowEntity } = require('../../discord_commands/functions/bot_utils');
+const { getPrivacyBucket, shouldShowEntity } = require('../../discord_commands/functions/bot_utils/privacy');
 const System = require('../../schemas/system');
 const User = require('../../schemas/user');
 const Alter = require('../../schemas/alter');
@@ -585,6 +585,262 @@ router.get('/:friendId/front', async (req, res) => {
         res.json(frontData);
     } catch (err) {
         console.error('[Friends] Get front error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
+// GET FRIEND'S SYSTEM INFO
+// ===========================================
+
+router.get('/:friendId/system', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { friendId } = req.params;
+        
+        const isFriend = user.friends?.some(
+            f => f.friendID === friendId || f.discordID === friendId
+        );
+        
+        if (!isFriend) {
+            return res.status(403).json({ error: 'Not friends' });
+        }
+        
+        let friendUser = await User.findOne({ friendID: friendId });
+        if (!friendUser) {
+            friendUser = await User.findOne({ discordID: friendId });
+        }
+        
+        if (!friendUser || !friendUser.systemID) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+        
+        const system = await System.findById(friendUser.systemID)
+            .select('name avatar color sys_type battery front.status front.caution setting.privacy');
+        
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+        
+        // Get privacy bucket
+        const privacyBucket = getPrivacyBucket(system, user.discordID, user.friendID);
+        const systemPrivacy = system.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
+        
+        // Check if hidden
+        if (systemPrivacy?.settings?.hidden === true) {
+            return res.status(403).json({ error: 'This system is hidden' });
+        }
+        
+        res.json({
+            _id: system._id,
+            name: system.name?.closedNameDisplay || system.name?.display || system.name?.indexable,
+            avatar: system.avatar?.url,
+            color: system.color,
+            sysType: systemPrivacy?.settings?.dx === false ? undefined : system.sys_type,
+            status: systemPrivacy?.settings?.front?.hidden === true ? undefined : system.front?.status,
+            battery: system.battery,
+            caution: system.front?.caution
+        });
+    } catch (err) {
+        console.error('[Friends] Get system error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
+// GET FRIEND'S ALTERS
+// ===========================================
+
+router.get('/:friendId/alters', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { friendId } = req.params;
+        
+        const isFriend = user.friends?.some(
+            f => f.friendID === friendId || f.discordID === friendId
+        );
+        
+        if (!isFriend) {
+            return res.status(403).json({ error: 'Not friends' });
+        }
+        
+        let friendUser = await User.findOne({ friendID: friendId });
+        if (!friendUser) {
+            friendUser = await User.findOne({ discordID: friendId });
+        }
+        
+        if (!friendUser || !friendUser.systemID) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+        
+        const system = await System.findById(friendUser.systemID);
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+        
+        // Get privacy bucket
+        const privacyBucket = getPrivacyBucket(system, user.discordID, user.friendID);
+        
+        // Get all alters
+        const alterIds = system.alters?.IDs || [];
+        const alters = await Alter.find({ _id: { $in: alterIds } })
+            .select('_id name avatar color pronouns description groupsIDs');
+        
+        // Filter by privacy
+        const visibleAlters = alters.filter(alter => 
+            shouldShowEntity(alter, privacyBucket, false, false)
+        );
+        
+        // Get count
+        const { skip = 0, limit = 20 } = req.query;
+        const s = parseInt(skip, 10);
+        const l = parseInt(limit, 10);
+        const paginatedAlters = visibleAlters.slice(s, s + l);
+        
+        res.json({
+            data: paginatedAlters.map(a => ({
+                _id: a._id,
+                name: a.name?.display || a.name?.indexable,
+                avatar: a.avatar?.url,
+                color: a.color,
+                pronouns: a.pronouns,
+                description: a.description
+            })),
+            total: visibleAlters.length,
+            hasMore: s + l < visibleAlters.length
+        });
+    } catch (err) {
+        console.error('[Friends] Get alters error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
+// GET FRIEND'S ALTER DETAIL
+// ===========================================
+
+router.get('/:friendId/alters/:alterId', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { friendId, alterId } = req.params;
+        
+        const isFriend = user.friends?.some(
+            f => f.friendID === friendId || f.discordID === friendId
+        );
+        
+        if (!isFriend) {
+            return res.status(403).json({ error: 'Not friends' });
+        }
+        
+        let friendUser = await User.findOne({ friendID: friendId });
+        if (!friendUser) {
+            friendUser = await User.findOne({ discordID: friendId });
+        }
+        
+        if (!friendUser || !friendUser.systemID) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+        
+        const system = await System.findById(friendUser.systemID);
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+        
+        // Check if alter belongs to this system
+        const alterIds = system.alters?.IDs?.map(id => id.toString()) || [];
+        if (!alterIds.includes(alterId)) {
+            return res.status(404).json({ error: 'Alter not found' });
+        }
+        
+        const alter = await Alter.findById(alterId)
+            .select('_id name avatar color pronouns description groupsIDs setting');
+        
+        if (!alter) {
+            return res.status(404).json({ error: 'Alter not found' });
+        }
+        
+        // Get privacy bucket
+        const privacyBucket = getPrivacyBucket(system, user.discordID, user.friendID);
+        
+        // Check if visible
+        if (!shouldShowEntity(alter, privacyBucket, false, false)) {
+            return res.status(403).json({ error: 'Not visible' });
+        }
+        
+        // Get entity privacy
+        const entityPrivacy = alter.setting?.privacy?.find(p => p.bucket === privacyBucket?.name);
+        
+        res.json({
+            _id: alter._id,
+            name: alter.name?.display || alter.name?.indexable,
+            avatar: entityPrivacy?.settings?.avatar === false ? undefined : alter.avatar?.url,
+            color: alter.color,
+            pronouns: alter.pronouns,
+            description: alter.description,
+            groupsIDs: alter.groupsIDs
+        });
+    } catch (err) {
+        console.error('[Friends] Get alter detail error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ===========================================
+// GET FRIEND'S STATES
+// ===========================================
+
+router.get('/:friendId/states', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { friendId } = req.params;
+        
+        const isFriend = user.friends?.some(
+            f => f.friendID === friendId || f.discordID === friendId
+        );
+        
+        if (!isFriend) {
+            return res.status(403).json({ error: 'Not friends' });
+        }
+        
+        let friendUser = await User.findOne({ friendID: friendId });
+        if (!friendUser) {
+            friendUser = await User.findOne({ discordID: friendId });
+        }
+        
+        if (!friendUser || !friendUser.systemID) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+        
+        const system = await System.findById(friendUser.systemID);
+        if (!system) {
+            return res.status(404).json({ error: 'Not registered' });
+        }
+        
+        // Get privacy bucket
+        const privacyBucket = getPrivacyBucket(system, user.discordID, user.friendID);
+        
+        // Get all states
+        const stateIds = system.states?.IDs || [];
+        const states = await State.find({ _id: { $in: stateIds } })
+            .select('_id name avatar color description');
+        
+        // Filter by privacy
+        const visibleStates = states.filter(state => 
+            shouldShowEntity(state, privacyBucket, false, false)
+        );
+        
+        res.json({
+            data: visibleStates.map(s => ({
+                _id: s._id,
+                name: s.name?.display || s.name?.indexable,
+                avatar: s.avatar?.url,
+                color: s.color,
+                description: s.description
+            })),
+            total: visibleStates.length
+        });
+    } catch (err) {
+        console.error('[Friends] Get states error:', err);
         res.status(500).json({ error: err.message });
     }
 });

@@ -229,6 +229,8 @@ export function useSystemSession() {
         isSystem,
         isFragmented,
         isDissociative,
+        dissociativeStateName: sess.sysType?.dissociativeStateName || 'Dissociated',
+        onboardingCompleted: sess.sysType?.onboardingCompleted ?? true,
       },
       privacyBuckets: [
         sess.privacyBuckets?.Strangers?._id,
@@ -240,10 +242,11 @@ export function useSystemSession() {
           .map(m => ({ name: m.name, settings: { hide_to_self: false, include_in_Count: true } })),
         IDs: (sess.members || [])
           .filter(m => !isSystem || m.entityType !== 'state')
-          .map(m => m.id),
+          .map(m => m.id || m._id)
+          .filter(id => id && !String(id).startsWith('temp_')),
         entities: (sess.members || [])
           .filter(m => !isSystem || m.entityType !== 'state')
-          .map(m => stripEntityForPayload(m._raw) || { name: m.name, entityType: m.entityType }),
+          .map(m => stripEntityForPayload(m._raw) || { name: { display: m.name, indexable: m.name?.toLowerCase?.() }, entityType: m.entityType || 'alter' }),
       },
       states: {
         conditions: (sess.members || [])
@@ -251,15 +254,16 @@ export function useSystemSession() {
           .map(m => ({ name: m.name, settings: { hide_to_self: false, include_in_Count: true } })),
         IDs: (sess.members || [])
           .filter(m => m.entityType === 'state')
-          .map(m => m.id),
+          .map(m => m.id || m._id)
+          .filter(id => id && !String(id).startsWith('temp_')),
         entities: (sess.members || [])
           .filter(m => m.entityType === 'state')
-          .map(m => stripEntityForPayload(m._raw) || { name: m.name, entityType: m.entityType }),
+          .map(m => stripEntityForPayload(m._raw) || { name: { display: m.name, indexable: m.name?.toLowerCase?.() }, entityType: m.entityType || 'state' }),
       },
       groups: {
         conditions: (Array.isArray(sess.groups) ? sess.groups : []).map(g => ({ name: g.name, settings: { hide_to_self: false, include_in_Count: true } })),
-        IDs: (Array.isArray(sess.groups) ? sess.groups : []).map(g => g.id),
-        entities: (Array.isArray(sess.groups) ? sess.groups : []).map(g => stripEntityForPayload(g._raw) || { name: g.name }),
+        IDs: (Array.isArray(sess.groups) ? sess.groups : []).map(g => g.id || g._id).filter(id => id && !String(id).startsWith('temp_')),
+        entities: (Array.isArray(sess.groups) ? sess.groups : []).map(g => stripEntityForPayload(g._raw) || { name: { display: g.name, indexable: g.name?.toLowerCase?.() } }),
       },
       setting: {
         friendAutoBucket: 'Friends',

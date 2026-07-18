@@ -24,12 +24,13 @@ async function uploadNoteContent(userId, noteId, content) {
 
     await sysR2.send(command);
 
-    const publicUrl = `${config.r2.system.app.publicURL}/${r2Key}`;
+    // Use proxy URL instead of direct R2 URL (CSP-safe for Discord)
+    const proxyUrl = `${config.activityUrl || 'http://localhost:3001'}/media/r2/${r2Key}`;
 
     return {
         r2Key,
         bucket: 'app',
-        url: publicUrl,
+        url: proxyUrl,
         filename: `${noteId}.md`,
         mimeType: 'text/markdown',
         size: Buffer.byteLength(content, 'utf8'),
@@ -68,12 +69,13 @@ async function uploadMediaToR2(buffer, filename, mimeType, userId, entityType, f
 
     await sysR2.send(command);
 
-    const publicUrl = `${config.r2.system.app.publicURL}/${r2Key}`;
+    // Use proxy URL instead of direct R2 URL (CSP-safe for Discord)
+    const proxyUrl = `${config.activityUrl || 'http://localhost:3001'}/media/r2/${r2Key}`;
 
     return {
         r2Key,
         bucket: 'app',
-        url: publicUrl,
+        url: proxyUrl,
         filename,
         mimeType,
         size: buffer.length,

@@ -3,6 +3,7 @@
 
 const express = require('express');
 const mongoose = require('mongoose');
+const { sanitizeInput, sanitizeTag } = require('../../shared/utils/sanitize.cjs');
 const router = express.Router();
 
 const { optionalAuthMiddleware } = require('../middleware/auth');
@@ -301,6 +302,121 @@ router.get('/tags', async (req, res) => {
 });
 
 /**
+ * PUT /api/notes/tags/:tag
+ * Rename a tag across all notes
+ */
+router.put('/tags/:tag', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { tag } = req.params;
+        const { newName } = req.body;
+
+        if (!newName || typeof newName !== 'string') {
+            return res.status(400).json({ error: 'newName is required' });
+        }
+
+        const sanitizedNewName = sanitizeTag(newName);
+        if (!sanitizedNewName) {
+            return res.status(400).json({ error: 'Invalid tag name' });
+        }
+
+        if (!user.notes?.tags?.includes(tag)) {
+            return res.status(404).json({ error: 'Tag not found' });
+        }
+
+        // Update user's tag list
+        user.notes.tags = user.notes.tags.map(t => t === tag ? sanitizedNewName : t);
+        await user.save();
+
+        // Update all notes with this tag
+        await Note.updateMany(
+            { _id: { $in: user.notes?.notes || [] }, tags: tag },
+            { $set: { 'tags.$': sanitizedNewName } }
+        );
+
+        res.json({ success: true, oldTag: tag, newTag: sanitizedNewName });
+    } catch (err) {
+        console.error('[Notes] Rename tag error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/notes/:id/content
+ * Proxy endpoint to fetch note content from R2 (avoids CSP issues in Discord)
+ */
+router.get('/:id/content', async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        const { id } = req.params;
+
+        let note = await Note.findOne({ id: id });
+        if (!note && mongoose.Types.ObjectId.isValid(id)) {
+            note = await Note.findById(id);
+        }
+        if (!note) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+
+        // Check access
+        const userId = user._id.toString();
+        const isOwner = note.users?.owner?.userID?.toString() === userId ||
+                       note.author?.userID?.toString() === userId;
+        const hasRead = note.users?.rAccess?.some(a => a.userID?.toString() === userId);
+        const hasWrite = note.users?.rwAccess?.some(a => a.userID?.toString() === userId);
+        const inUserNotes = user.notes?.notes?.some(n => n.toString() === note._id.toString());
+
+        if (!isOwner && !hasRead && !hasWrite && !inUserNotes) {
+            return res.status(403).json({ error: 'You do not have access to this note' });
+        }
+
+        // Fetch content from R2
+        if (note.content?.url) {
+            try {
+                const https = require('https');
+                const fetchContent = (url) => new Promise((resolve, reject) => {
+                    https.get(url, (response) => {
+                        let data = '';
+                        response.on('data', (chunk) => { data += chunk; });
+                        response.on('end', () => resolve(data));
+                    }).on('error', reject);
+                });
+
+                // Handle both direct R2 URLs and proxied URLs
+                let fetchUrl = note.content.url;
+                if (note.content.url.includes('.r2.dev/')) {
+                    // Direct R2 URL - extract the key and use our proxy
+                    const r2Key = note.content.url.split('.r2.dev/')[1];
+                    fetchUrl = `/media/r2/${r2Key}`;
+                }
+
+                // If URL is relative (proxy path), fetch through our server
+                if (fetchUrl.startsWith('/')) {
+                    const localUrl = `http://localhost:${process.env.PORT || 3001}${fetchUrl}`;
+                    const content = await fetchContent(localUrl);
+                    res.set('Content-Type', 'text/markdown; charset=utf-8');
+                    return res.send(content);
+                }
+
+                const content = await fetchContent(fetchUrl);
+                res.set('Content-Type', 'text/markdown; charset=utf-8');
+                return res.send(content);
+            } catch (fetchErr) {
+                console.error('[Notes] R2 fetch error:', fetchErr);
+                // Fallback to preview
+                return res.set('Content-Type', 'text/plain').send(note.contentPreview || '');
+            }
+        }
+
+        // Fallback to preview
+        res.set('Content-Type', 'text/plain').send(note.contentPreview || '');
+    } catch (err) {
+        console.error('[Notes] Content fetch error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
  * DELETE /api/notes/tags/:tag
  * Delete a tag from the user's tag collection and all their notes
  */
@@ -510,9 +626,9 @@ router.post('/', async (req, res) => {
 
         const note = new Note({
             _id: new mongoose.Types.ObjectId(),
-            title: title || 'Untitled Note',
+            title: sanitizeInput(title) || 'Untitled Note',
             contentPreview: typeof content === 'string' ? generatePreview(content) : undefined,
-            tags: tags || [],
+            tags: (tags || []).map(t => sanitizeTag(t)).filter(Boolean),
             pinned: pinned || false,
             color,
             author: {
@@ -556,8 +672,9 @@ router.post('/', async (req, res) => {
 
         if (tags?.length) {
             for (const tag of tags) {
-                if (!user.notes.tags.includes(tag)) {
-                    user.notes.tags.push(tag);
+                const sanitizedTag = sanitizeTag(tag);
+                if (sanitizedTag && !user.notes.tags.includes(sanitizedTag)) {
+                    user.notes.tags.push(sanitizedTag);
                 }
             }
         }
@@ -605,6 +722,10 @@ router.patch('/:id', async (req, res) => {
         }
 
         const updates = req.body;
+
+        // Sanitize title and tags
+        if (updates.title !== undefined) updates.title = sanitizeInput(updates.title);
+        if (updates.tags !== undefined) updates.tags = updates.tags.map(t => sanitizeTag(t)).filter(Boolean);
 
         const allowedFields = ['title', 'tags', 'pinned', 'color'];
         for (const field of allowedFields) {

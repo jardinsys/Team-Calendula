@@ -188,7 +188,7 @@ app.use('/systemiser', express.static(activityDist, {
     maxAge: '5m',
 }));
 
-app.get('/systemiser/*', (req, res) => {
+app.get('/systemiser/{*any}', (req, res) => {
     res.sendFile(path.join(activityDist, 'index.html'));
 });
 

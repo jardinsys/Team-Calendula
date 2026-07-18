@@ -49,3 +49,22 @@ export function ConnectionToast({ disconnected }) {
     </div>
   )
 }
+
+// Subtle dot indicator for connection status (shown in header/footer)
+export function ConnectionDot({ connected }) {
+  return (
+    <span
+      title={connected ? 'Connected' : 'Disconnected'}
+      style={{
+        display: 'inline-block',
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: connected ? '#4ade80' : '#ef4444',
+        transition: 'background 0.3s ease',
+        marginLeft: 6,
+        verticalAlign: 'middle',
+      }}
+    />
+  )
+}

@@ -53,6 +53,9 @@ export function Activity() {
   const [showSettings, setShowSettings] = useState(false)
   const [fromOnboarding, setFromOnboarding] = useState(false)
 
+  const handleOpenSettings = useCallback(() => setShowSettings(true), [])
+  const handleCloseSettings = useCallback(() => setShowSettings(false), [])
+
   // Enable WebSocket only on pages that need real-time updates
   // Exclude registration and import (from onboarding) to avoid premature connections
   const wsEnabled = ['friends', 'notes', 'crisis'].includes(activePage || '') && 

@@ -135,7 +135,7 @@ function CreateNoteModal({ system, onClose, onCreated }) {
                                 setEntityOwner({ type, id, name: ent?.name?.display || ent?.name?.indexable || 'Unknown' })
                             }}
                         >
-                            <option value="">None</option>
+                            <option value="">Not Specified</option>
                             {entities.map(ent => {
                                 const name = ent.name?.display || ent.name?.indexable || 'Unknown'
                                 return <option key={ent._id} value={`${entityTab}:${ent._id}`}>{name}</option>

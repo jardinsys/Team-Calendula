@@ -40,11 +40,6 @@ function CategoryStep({ onSelect, onBack }) {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
-          ← Back
-        </button>
-      </div>
     </div>
   )
 }
@@ -264,9 +259,6 @@ function DisorderStep({ category, onSelect, onBack, onStartOver }) {
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
-          ← Back
-        </button>
         <button className="btn btn-back" onClick={onStartOver} style={{ flex: 1 }}>
           Start Over
         </button>
@@ -364,9 +356,6 @@ function OtherStep({ onResolve, onBack, onStartOver }) {
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
-          ← Back
-        </button>
         <button className="btn btn-back" onClick={onStartOver} style={{ flex: 1 }}>
           Start Over
         </button>
@@ -418,7 +407,7 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStar
 
   return (
     <div className="register-step">
-      <h2>Almost done!</h2>
+      <h2>Name your system</h2>
 
       <div className="summary-card" style={{ textAlign: 'left', marginBottom: 'var(--space-lg)' }}>
         {typeName && (
@@ -451,9 +440,6 @@ function NameStep({ disorderKey, extraAnswer, sysType, onConfirm, onBack, onStar
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
-          ← Back
-        </button>
         <button className="btn btn-back" onClick={onStartOver} style={{ flex: 1 }}>
           Start Over
         </button>
@@ -509,9 +495,6 @@ function ImportStep({ sysType, onComplete, onBack, onStartOver, onNavigate }) {
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
-          ← Back
-        </button>
         <button className="btn btn-back" onClick={onStartOver} style={{ flex: 1 }}>
           Start Over
         </button>
@@ -598,9 +581,6 @@ function FirstAlterStep({ systemName, onComplete, onBack, saving }) {
       </div>
 
       <div style={{ display: 'flex', gap: 'var(--space-md)', marginTop: 'var(--space-lg)' }}>
-        <button className="btn btn-back" onClick={onBack} style={{ flex: 1 }}>
-          ← Back
-        </button>
         <button className="btn btn-ghost" onClick={handleSkip} style={{ flex: 1 }} disabled={saving}>
           Skip for now
         </button>
@@ -818,9 +798,10 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
   const handleFirstAlterComplete = async (alterNames) => {
     setError(null)
     try {
+      let members = []
       if (alterNames && alterNames.length > 0) {
         // Add first alters to staged session
-        const members = alterNames.filter(n => n.trim()).map((name, i) => ({
+        members = alterNames.filter(n => n.trim()).map((name, i) => ({
           name: name.trim(),
           entityType: 'alter',
           _id: `temp_alter_${Date.now()}_${i}`,
@@ -840,7 +821,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
       }
 
       // Final commit - creates everything atomically (including staged imports)
-      const result = await commit()
+      const result = await commit({ members })
       if (result?._id) {
         if (resolvedSysType?.isDissociative) {
           // Note: dissociative state is auto-created by createSystemFromPayload
@@ -911,7 +892,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
   return (
     <div className="register-page">
       {/* Fixed back button - always in the same position */}
-      {step > 1 && (
+      {step >= 1 && (
         <button
           className="btn btn-back btn-back-fixed"
           onClick={handleBack}
@@ -942,7 +923,7 @@ export function RegisterPage({ onNavigate, onRegistered, refreshSystem, discordU
           onStartOver={handleStartOver}
           onNavigate={onNavigate}
         />)}
-      {step === 3 && category === 'OTHER' && resolvedSysType && !resolvedSysType.isSystem && !resolvedSysType.isFragmented && (
+      {step === 3 && category === 'OTHER' && !resolvedSysType && (
         <OtherStep
           onResolve={handleOtherResolve}
           onBack={handleBack}

@@ -575,14 +575,8 @@ body {
   gap: clamp(12px, 3.5vw, 20px);
   align-items: start;
 }
-.notes-page .notes-grid .note-card:nth-child(6n+1) { transform: rotate(-1.5deg); }
-.notes-page .notes-grid .note-card:nth-child(6n+2) { transform: rotate(1deg); }
-.notes-page .notes-grid .note-card:nth-child(6n+3) { transform: rotate(-0.5deg); }
-.notes-page .notes-grid .note-card:nth-child(6n+4) { transform: rotate(1.5deg); }
-.notes-page .notes-grid .note-card:nth-child(6n+5) { transform: rotate(-1deg); }
-.notes-page .notes-grid .note-card:nth-child(6n+6) { transform: rotate(0.5deg); }
 .notes-page .notes-grid .note-card:hover {
-  transform: translateY(-2px) rotate(0deg);
+  transform: translateY(-2px);
 }
 
 /* ── List View ── */

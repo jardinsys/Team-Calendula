@@ -3,6 +3,7 @@
 
 const express = require('express');
 const mongoose = require('mongoose');
+const { sanitizeInput } = require('../../shared/utils/sanitize.cjs');
 const router = express.Router();
 
 
@@ -153,10 +154,13 @@ router.post('/', async (req, res) => {
         if (!name) {
             return res.status(400).json({ error: 'Name is required' });
         }
-        
+
+        // Sanitize name
+        const sanitizedName = sanitizeInput(name);
+
         // Check for duplicate name
         const existingStates = await State.find({ _id: { $in: system.states?.IDs || [] } });
-        const stIdx = name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
+        const stIdx = sanitizedName.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
         const duplicate = stIdx ? existingStates.find(s => s.name?.indexable?.toLowerCase() === stIdx) : undefined;
         
         if (duplicate) {
@@ -165,7 +169,7 @@ router.post('/', async (req, res) => {
         
         const state = new State({
             name: {
-                display: name,
+                display: sanitizedName,
                 ...(stIdx && { indexable: stIdx })
             },
             description,
@@ -239,6 +243,7 @@ router.patch('/:id', async (req, res) => {
         // Handle name update specially
         if (updates.name !== undefined) {
             if (typeof updates.name === 'string') {
+                updates.name = sanitizeInput(updates.name);
                 const stUpIdx = updates.name.toLowerCase().replace(/[^a-z0-9]/g, '') || undefined;
                 state.name = {
                     display: updates.name,

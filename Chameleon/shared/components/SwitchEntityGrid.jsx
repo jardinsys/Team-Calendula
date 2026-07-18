@@ -95,7 +95,7 @@ function SwitchEntityGrid({ entities, selectedIds = [], onToggle, searchQuery = 
             const q = searchQuery.toLowerCase()
             list = list.filter(e => {
                 const name = getDisplayName(e, '').toLowerCase()
-                const pronouns = (e.pronouns?.join?.(', ') || e.pronouns || '').toLowerCase()
+                const pronouns = (e.pronouns?.join?.(', ') || '').toLowerCase()
                 return name.includes(q) || pronouns.includes(q)
             })
         }

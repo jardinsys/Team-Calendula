@@ -229,7 +229,7 @@ function LayerCard({
         }
         return list.filter(e => {
             const name = getDisplayName(e, '').toLowerCase()
-            const pronouns = (e.pronouns?.join?.(', ') || e.pronouns || '').toLowerCase()
+            const pronouns = (e.pronouns?.join?.(', ') || '').toLowerCase()
             return name.includes(q) || pronouns.includes(q)
         }).slice(0, 20)
     }, [allEntities, searchQuery, searchMode, replaceTarget])

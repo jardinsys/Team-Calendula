@@ -7,6 +7,21 @@ function stripHeaders(text) {
     return text.replace(/^#{1,3}\s+/gm, '')
 }
 
+// Strip HTML tags and decode common entities for clean preview
+function stripHtml(text) {
+    if (!text) return ''
+    return text
+        .replace(/<[^>]*>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&#x27;/g, "'")
+        .replace(/&#x2F;/g, '/')
+        .trim()
+}
+
 function NoteCard({ note, onClick, variant = 'grid' }) {
     const color = note.color || DEFAULT_NOTE_COLOR
 
@@ -33,7 +48,7 @@ function NoteCard({ note, onClick, variant = 'grid' }) {
                 {note.pinned && <span className="note-pin"><Icon name="pin" size={14} /></span>}
                 <div className="note-card-title">{note.title || 'Untitled'}</div>
                 {note.contentPreview && (
-                    <div className="note-card-preview">{stripHeaders(note.contentPreview)}</div>
+                    <div className="note-card-preview">{stripHtml(note.contentPreview)}</div>
                 )}
                 {note.tags?.length > 0 && (
                     <div className="note-card-tags">
