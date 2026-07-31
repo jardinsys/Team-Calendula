@@ -153,6 +153,14 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
 
+/* Discord mobile safe areas */
+:root {
+  --safe-top: var(--discord-safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--discord-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-left: var(--discord-safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --safe-right: var(--discord-safe-area-inset-right, env(safe-area-inset-right, 0px));
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -175,6 +183,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
 }
 
 /* ── Font utilities ── */
@@ -205,8 +214,26 @@ body {
   display: flex; flex-direction: column; height: 100vh;
 }
 .app-content {
-  flex: 1; overflow-y: auto; padding: var(--space-md);
+  flex: 1; overflow-y: auto;
+  padding: clamp(var(--space-md), 4vw, var(--space-xl));
   padding-bottom: calc(var(--space-xl) + 72px);
+}
+
+/* General page padding — ensures consistent spacing on all pages */
+.app-content > * {
+  max-width: 100%;
+}
+
+/* Specific page overrides for more breathing room */
+.system-page,
+.friends-page,
+.switch-page,
+.front-history-page {
+  padding: clamp(var(--space-lg), 5vw, var(--space-2xl));
+}
+
+.notes-page {
+  padding: clamp(var(--space-lg), 5vw, var(--space-2xl));
 }
 /* app-content--no-scroll removed: allow scrolling on all pages for now */
 
