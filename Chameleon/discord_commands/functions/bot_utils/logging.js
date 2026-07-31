@@ -1,5 +1,9 @@
 // Guild Logging Utilities
 // Discord guild log channel posting and log embed builders
+//
+// NOTE: Log embeds intentionally use EmbedBuilder (not Components v2)
+// because they don't display entity banners/thumbnails and don't need
+// spoiler support. Entity card displays use buildEntityCard() from containerCard.js.
 
 const Guild = require('../../../schemas/guild');
 const { EmbedBuilder } = require('discord.js');

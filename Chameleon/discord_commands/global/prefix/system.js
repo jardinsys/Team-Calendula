@@ -170,6 +170,9 @@ module.exports = {
             case 'mask':
                 return handleMask(message, parsed);
             
+            case 'spoiler':
+                return handleSpoiler(message, parsed);
+            
             case 'proxystyle':
             case 'ps':
                 return handleProxyStyle(message, parsed);
@@ -987,6 +990,31 @@ async function handleCaution(message, parsed) {
     await system.save();
     if (system?._id) publishEvent(system._id.toString(), { type: 'system:updated', systemId: system._id.toString() });
     return utils.success(message, `Profile caution set to **${type}**`);
+}
+
+// ==== SPOILER TOGGLE ====
+
+const SPOILER_FIELD_MAP = {
+    'banner': { path: 'discord.image.banner', label: 'Banner' },
+    'avatar': { path: 'discord.image.avatar', label: 'Avatar' },
+    'proxyavatar': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+    'pav': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+};
+
+async function handleSpoiler(message, parsed) {
+    const field = parsed._positional[1]?.toLowerCase();
+    if (!field || !SPOILER_FIELD_MAP[field]) {
+        return utils.error(message, 'Usage: `!system spoiler <banner|avatar|proxyavatar>`');
+    }
+    const { path, label } = SPOILER_FIELD_MAP[field];
+    // System getter — looks up by user's own system
+    const getter = async (msg) => {
+        const { system } = await utils.getOrCreateUserAndSystem(msg);
+        if (!system) return null;
+        return { entity: system, system };
+    };
+    const handler = utils.spoilerToggle(getter, path, label);
+    return handler(message, parsed, null);
 }
 
 async function handleMask(message, parsed) {

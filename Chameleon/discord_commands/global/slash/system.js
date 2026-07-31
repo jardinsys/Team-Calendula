@@ -60,6 +60,18 @@ module.exports = {
                 .addChoices(
                     { name: 'Edit - Modify system information', value: 'edit' },
                     { name: 'Settings - Open system settings', value: 'settings' }
+                )))
+        .addSubcommand(sub => sub
+            .setName('spoiler')
+            .setDescription('Toggle spoiler on system media')
+            .addStringOption(opt => opt
+                .setName('field')
+                .setDescription('Which media field to toggle')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Banner', value: 'banner' },
+                    { name: 'Avatar', value: 'avatar' },
+                    { name: 'Proxy Avatar', value: 'proxyavatar' }
                 ))),
 
     async execute(interaction) {
@@ -81,6 +93,7 @@ module.exports = {
         switch (subcommand) {
             case 'show': return await handleShow(interaction, user, system);
             case 'manage': return await handleManage(interaction, user, system);
+            case 'spoiler': return await handleSpoiler(interaction, user, system);
         }
     },
 
@@ -94,42 +107,23 @@ module.exports = {
 
 //Build the system card embed
 async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, showFull = false, guildId = null) {
-    const embed = new EmbedBuilder();
-
     const session = { mode: null, syncWithDiscord: system.syncWithApps?.discord, serverId: guildId };
 
-    // Get display values - system.color or none
-    const color = getSystemEmbedColor(system);
     const description = utils.getDiscordOrDefault(system, 'description');
     const displayName = closedCharAllowed
         ? (system.name?.display || system.name?.indexable)
         : (system.name?.closedNameDisplay || system.name?.indexable);
 
-    // Header/Author — proxy avatar priority
     const proxyAvatar = utils.resolveProxyAvatarUrl(system, session);
 
-    if (proxyAvatar) embed.setAuthor({ name: system.name?.indexable || '', iconURL: proxyAvatar });
-    const avatar = utils.resolveAvatarUrl(system, session);
-    if (avatar) embed.setThumbnail(avatar);
-    const banner = utils.resolveBannerUrl(system, session);
-    if (banner) embed.setImage(banner);
-    if (displayName) embed.setTitle(displayName || '');
-    if (color) embed.setColor(color);
-    if (description) embed.setDescription(description);
-
-    // Get counts — respect include_in_Count on conditions
-    // Build list of condition names that should NOT be counted
+    // Get counts
     const excludedAlterConditions = (system.alters?.conditions || [])
-        .filter(c => !c.settings?.include_in_Count)
-        .map(c => c.name);
+        .filter(c => !c.settings?.include_in_Count).map(c => c.name);
     const excludedStateConditions = (system.states?.conditions || [])
-        .filter(c => !c.settings?.include_in_Count)
-        .map(c => c.name);
+        .filter(c => !c.settings?.include_in_Count).map(c => c.name);
     const excludedGroupConditions = (system.groups?.conditions || [])
-        .filter(c => !c.settings?.include_in_Count)
-        .map(c => c.name);
+        .filter(c => !c.settings?.include_in_Count).map(c => c.name);
 
-    // Query actual entities, excluding those with "non-countable" conditions
     const alterCount = await Alter.countDocuments({
         systemID: system._id.toString(),
         ...(excludedAlterConditions.length > 0 && { condition: { $nin: excludedAlterConditions } })
@@ -143,134 +137,80 @@ async function buildSystemCard(system, privacyBucket, closedCharAllowed = true, 
         ...(excludedGroupConditions.length > 0 && { condition: { $nin: excludedGroupConditions } })
     });
 
-    // Basic Info field
+    // Build fields
+    const fields = [];
+
     let basicInfo = '';
     basicInfo += `**${getAlterTerm(system, {plural:true}).charAt(0).toUpperCase() + getAlterTerm(system, {plural:true}).slice(1)}:** ${alterCount}\n`;
     basicInfo += `**States:** ${stateCount}\n`;
     basicInfo += `**Groups:** ${groupCount}\n`;
-
     if (system.birthday) basicInfo += `**Birthday:** ${utils.formatDate(system.birthday)}\n`;
     if (system.timezone) basicInfo += `**Timezone:** ${system.timezone}\n`;
+    fields.push({ name: '📊 Overview', value: basicInfo.trim() });
 
-    embed.addFields({
-        name: '📊 Overview',
-        value: basicInfo.trim() || 'No info',
-        inline: false
-    });
-
-    // System Type field
     let typeInfo = '';
     if (system.sys_type?.name && system.sys_type.name !== 'None') typeInfo += `**Type:** ${system.sys_type.name}\n`;
     if (system.sys_type?.dd?.DSM) typeInfo += `**DSM:** ${system.sys_type.dd.DSM}\n`;
     if (system.sys_type?.dd?.ICD) typeInfo += `**ICD:** ${system.sys_type.dd.ICD}\n`;
     if (system.sys_type?.isSystem !== undefined) typeInfo += `**Is a system:** ${system.sys_type.isSystem ? 'Yes' : 'No'}\n`;
-    if (typeInfo) {
-        embed.addFields({
-            name: '🏷️ System Type',
-            value: typeInfo.trim(),
-            inline: false
-        });
-    }
+    if (typeInfo) fields.push({ name: '🏷️ System Type', value: typeInfo.trim() });
 
-    // Terminology field
     if (system.alterSynonym?.singular || system.alterSynonym?.plural || system.systemSynonym) {
         let termInfo = '';
         if (system.systemSynonym && system.systemSynonym !== 'system') termInfo += `**${getSystemTerm(system)}:** ${system.systemSynonym}\n`;
         if (system.alterSynonym?.singular) termInfo += `**Singular:** ${system.alterSynonym.singular}\n`;
         if (system.alterSynonym?.plural) termInfo += `**Plural:** ${system.alterSynonym.plural}\n`;
-        embed.addFields({
-            name: '📝 Terminology',
-            value: termInfo.trim(),
-            inline: true
-        });
+        fields.push({ name: '📝 Terminology', value: termInfo.trim() });
     }
 
-    // Front Status field
     if (system.front?.status || system.front?.caution) {
         let frontInfo = '';
         if (system.front.status) frontInfo += `**Status:** ${system.front.status}\n`;
         if (system.front.caution) frontInfo += `**Caution:** ${system.front.caution}\n`;
-        embed.addFields({
-            name: '🎭 Current Front',
-            value: frontInfo.trim(),
-            inline: true
-        });
+        fields.push({ name: '🎭 Current Front', value: frontInfo.trim() });
     }
 
-    // Battery/Social Battery
     if (system.battery !== undefined && system.battery !== null) {
         const emoji = utils.getBatteryEmoji(system.battery);
-        embed.addFields({
-            name: `${emoji} Social Battery`,
-            value: `${system.battery}%`,
-            inline: true
-        });
-    }
-
-    // Caution field
-    if (system.caution && (system.caution.c_type || system.caution.detail || system.caution.triggers?.length > 0)) {
-        let cautionInfo = '';
-
-        if (system.caution.c_type) cautionInfo += `**Type:** ${system.caution.c_type}\n`;
-        if (system.caution.detail) cautionInfo += `**Details:** ${system.caution.detail}\n`;
-        if (system.caution.triggers?.length > 0) {
-            const triggerNames = system.caution.triggers.map(t => t.name).filter(Boolean);
-            if (triggerNames.length > 0) cautionInfo += `**Triggers:** ${triggerNames.join(', ')}\n`;
-        }
-        if (cautionInfo) {
-            embed.addFields({
-                name: '⚠️ Caution',
-                value: cautionInfo.trim(),
-                inline: false
-            });
-        }
+        fields.push({ name: `${emoji} Social Battery`, value: `${system.battery}%` });
     }
 
     // Show additional info if full view
     if (showFull) {
-        // Metadata
         let metadataInfo = '';
         if (system.metadata?.joinedAt) metadataInfo += `**Joined:** ${utils.formatDate(system.metadata.joinedAt)}\n`;
         if (system.proxy?.lastProxyTime) metadataInfo += `**Last Proxy:** ${utils.formatDate(system.proxy.lastProxyTime)}\n`;
-        if (metadataInfo) {
-            embed.addFields({
-                name: '📅 Metadata',
-                value: metadataInfo.trim(),
-                inline: false
-            });
-        }
+        if (metadataInfo) fields.push({ name: '📅 Metadata', value: metadataInfo.trim() });
 
-        // Proxy Settings (owner only)
         let proxyInfo = '';
         if (system.proxy?.layout) proxyInfo += `**Layout:** \`${system.proxy.layout}\`\n`;
         if (system.proxy?.style) proxyInfo += `**Style:** ${system.proxy.style}\n`;
         if (system.proxy?.break !== undefined) proxyInfo += `**On Break:** ${system.proxy.break ? 'Yes' : 'No'}\n`;
-        if (proxyInfo) {
-            embed.addFields({
-                name: '💬 Proxy Settings',
-                value: proxyInfo.trim(),
-                inline: false
-            });
-        }
+        if (proxyInfo) fields.push({ name: '💬 Proxy Settings', value: proxyInfo.trim() });
 
-        // Privacy Buckets
         if (system.privacyBuckets?.length > 0) {
             const bucketNames = system.privacyBuckets.map(b => b.name).join(', ');
-            embed.addFields({
-                name: '🔒 Privacy Buckets',
-                value: bucketNames,
-                inline: false
-            });
+            fields.push({ name: '🔒 Privacy Buckets', value: bucketNames });
         }
     }
 
-    // Thumbnail/Avatar
-    if (avatar) embed.setThumbnail(avatar);
+    // Resolve media
+    const avatarUrl = utils.resolveAvatarUrl(system, session);
+    const bannerUrl = utils.resolveBannerUrl(system, session);
+    const avatarSpoiler = system.discord?.image?.avatar?.spoiler || system.avatar?.spoiler || false;
+    const bannerSpoiler = system.discord?.image?.banner?.spoiler || false;
 
-    // Banner
-    if (banner) embed.setImage(banner);
-
-    return embed;
+    return utils.buildEntityCard({
+        entity: system, type: 'system', system,
+        displayName: displayName || '',
+        description,
+        avatarUrl, avatarSpoiler,
+        bannerUrl, bannerSpoiler,
+        authorName: system.name?.indexable || '',
+        authorIconUrl: proxyAvatar || undefined,
+        fields,
+        caution: system.caution,
+    });
 }
 
 //Build the edit interface for a system
@@ -680,7 +620,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
 
     // Build the card
-    const embed = await buildSystemCard(targetSystem, privacyBucket, closedCharAllowed, false, interaction.guildId);
+    const card = await buildSystemCard(targetSystem, privacyBucket, closedCharAllowed, false, interaction.guildId);
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -690,25 +630,35 @@ async function handleShow(interaction, currentUser, currentSystem) {
         isOwner
     });
 
-    /*// Only show action buttons if owner // Not using anymore, just want to show
-    const buttons = isOwner ? [
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`system_show_full_${sessionId}`)
-                .setLabel('Show All Info')
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji('📄'),
-            new ButtonBuilder()
-                .setCustomId(`system_show_edit_${sessionId}`)
-                .setLabel('Edit')
-                .setStyle(ButtonStyle.Secondary)
-                .setEmoji('✏️')
-        )
-    ] : [];
+    await interaction.reply({ ...card, ephemeral: false });
+}
 
-    await interaction.reply({ embeds: [embed], components: buttons, ephemeral: true }); */
+// ==== SPOILER TOGGLE ====
 
-    await interaction.reply({ embeds: [embed], ephemeral: false });
+const SPOILER_FIELD_MAP = {
+    'banner': { path: 'discord.image.banner', label: 'Banner' },
+    'avatar': { path: 'discord.image.avatar', label: 'Avatar' },
+    'proxyavatar': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+};
+
+async function handleSpoiler(interaction, user, system) {
+    const field = interaction.options.getString('field');
+    const { path, label } = SPOILER_FIELD_MAP[field];
+    const { getNested } = require('../../functions/bot_utils/entityHandlers');
+
+    const mediaObj = getNested(system, path);
+    if (!mediaObj || !mediaObj.url) {
+        return await interaction.reply({ content: `❌ No ${label.toLowerCase()} set to spoiler.`, ephemeral: true });
+    }
+
+    const currentSpoiler = mediaObj.spoiler || false;
+    mediaObj.spoiler = !currentSpoiler;
+    await system.save();
+
+    await interaction.reply({
+        content: `✅ ${label} spoiler: **${!currentSpoiler ? 'ON' : 'OFF'}**`,
+        ephemeral: true
+    });
 }
 
 async function handleManage(interaction, user, system) {
@@ -788,8 +738,8 @@ async function handleButtonInteraction(interaction) {
     // Handle show full info
     if (customId.startsWith('system_show_full_')) {
         const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
-        const embed = await buildSystemCard(system, null, closedCharAllowed, true, interaction.guildId);
-        return await interaction.update({ embeds: [embed], components: [] });
+        const card = await buildSystemCard(system, null, closedCharAllowed, true, interaction.guildId);
+        return await interaction.update({ ...card, components: card.components });
     }
 
     // Handle show -> edit transition

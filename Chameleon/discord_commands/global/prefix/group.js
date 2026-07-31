@@ -109,6 +109,7 @@ module.exports = {
             'defaultbattery': nestedField(getGroupEntity, 'setting', 'default_battery', 'Default battery', { parser: (v) => parseInt(v), validator: (v) => !isNaN(v) && v >= 0 && v <= 100, errorMsg: 'Please provide a battery level (0-100).' }),
             'db': nestedField(getGroupEntity, 'setting', 'default_battery', 'Default battery', { parser: (v) => parseInt(v), validator: (v) => !isNaN(v) && v >= 0 && v <= 100, errorMsg: 'Please provide a battery level (0-100).' }),
             'mask': maskHandler(getGroupEntity, 'group', utils.ENTITY_COLORS.group),
+            'spoiler': handleSpoiler,
             'delete': handleDelete,
             'random': handleRandom,
             'id': idHandler(getGroupEntity)
@@ -125,6 +126,30 @@ async function getGroup(message, groupName) {
     const result = await utils.findEntity(groupName, system, 'group');
     if (!result) { await utils.error(message, `Group **${groupName}** not found.`); return { group: null, system }; }
     return { group: result.entity, system };
+}
+
+// ==== SPOILER TOGGLE ====
+
+const SPOILER_FIELD_MAP = {
+    'banner': { path: 'discord.image.banner', label: 'Banner' },
+    'avatar': { path: 'discord.image.avatar', label: 'Avatar' },
+    'proxyavatar': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+    'pav': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+};
+
+async function handleSpoiler(message, parsed, groupName) {
+    const field = parsed._positional[2]?.toLowerCase();
+    if (!field || !SPOILER_FIELD_MAP[field]) {
+        return utils.error(message, 'Usage: `!group spoiler <banner|avatar|proxyavatar> <name>`');
+    }
+    const { path, label } = SPOILER_FIELD_MAP[field];
+    const getter = async (msg, name) => {
+        const { group, system } = await getGroup(msg, name || groupName);
+        if (!group) return null;
+        return { entity: group, system };
+    };
+    const handler = utils.spoilerToggle(getter, path, label);
+    return handler(message, parsed, groupName);
 }
 
 async function handleShow(message, parsed, groupName) {

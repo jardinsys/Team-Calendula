@@ -743,6 +743,37 @@ function maskHandler(getter, entityType, color) {
     };
 }
 
+// ── spoilerToggle ──────────────────────────────────────────────────────────────
+// Toggles the spoiler boolean on a media field (banner, avatar, proxyAvatar)
+
+/**
+ * Create a handler that toggles the spoiler boolean on a media field.
+ * @param {Function} getter - (message, entityName) => { entity, system } | null
+ * @param {string} mediaFieldPath - Dot path to the media object (e.g. 'discord.image.banner')
+ * @param {string} displayName - Human-readable name for messages
+ * @returns {Function} async (message, parsed, entityName) => void
+ */
+function spoilerToggle(getter, mediaFieldPath, displayName) {
+    return async (message, parsed, entityName) => {
+        const result = await getter(message, entityName);
+        if (!result || !result.entity) return;
+        const { entity } = result;
+
+        const mediaObj = getNested(entity, mediaFieldPath);
+        if (!mediaObj || !mediaObj.url) {
+            return utils.error(message, `No ${displayName.toLowerCase()} set to spoiler.`);
+        }
+
+        const currentSpoiler = mediaObj.spoiler || false;
+        mediaObj.spoiler = !currentSpoiler;
+        await entity.save();
+
+        return utils.success(message,
+            `${displayName} spoiler: **${!currentSpoiler ? 'ON' : 'OFF'}**`
+        );
+    };
+}
+
 // ── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -761,4 +792,5 @@ module.exports = {
     privacyHandler,
     idHandler,
     maskHandler,
+    spoilerToggle,
 };

@@ -88,6 +88,7 @@ module.exports = {
             'defaultbattery': nestedField(getStateEntity, 'setting', 'default_battery', 'Default battery', { parser: (v) => parseInt(v), validator: (v) => !isNaN(v) && v >= 0 && v <= 100, errorMsg: 'Please provide a battery level (0-100).' }),
             'db': nestedField(getStateEntity, 'setting', 'default_battery', 'Default battery', { parser: (v) => parseInt(v), validator: (v) => !isNaN(v) && v >= 0 && v <= 100, errorMsg: 'Please provide a battery level (0-100).' }),
             'mask': maskHandler(getStateEntity, 'state', utils.ENTITY_COLORS.state),
+            'spoiler': handleSpoiler,
             'id': idHandler(getStateEntity),
             // Entity-specific handlers
             'groups': handleGroups, 'group': handleGroups,
@@ -113,6 +114,31 @@ async function getState(message, stateName) {
     const result = await utils.findEntity(stateName, system, 'state');
     if (!result) { await utils.error(message, `State **${stateName}** not found.`); return { state: null, system }; }
     return { state: result.entity, system };
+}
+
+// ==== SPOILER TOGGLE ====
+
+const SPOILER_FIELD_MAP = {
+    'banner': { path: 'discord.image.banner', label: 'Banner' },
+    'avatar': { path: 'discord.image.avatar', label: 'Avatar' },
+    'proxyavatar': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+    'pav': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+};
+
+async function handleSpoiler(message, parsed, stateName) {
+    const field = parsed._positional[2]?.toLowerCase();
+    if (!field || !SPOILER_FIELD_MAP[field]) {
+        return utils.error(message, 'Usage: `!state spoiler <banner|avatar|proxyavatar> <name>`');
+    }
+    const { path, label } = SPOILER_FIELD_MAP[field];
+    // Build a getter compatible with entityHandlers
+    const getter = async (msg, name) => {
+        const { state, system } = await getState(msg, name || stateName);
+        if (!state) return null;
+        return { entity: state, system };
+    };
+    const handler = utils.spoilerToggle(getter, path, label);
+    return handler(message, parsed, stateName);
 }
 
 async function handleShow(message, parsed, stateName) {

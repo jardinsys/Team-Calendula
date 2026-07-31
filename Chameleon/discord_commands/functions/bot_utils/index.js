@@ -323,6 +323,9 @@ module.exports = {
     // Guild logging
     ...logging,
 
+    // Components v2 card builder
+    ...require('./containerCard'),
+
     // Notification settings utilities (local)
     getDeliveryLabel,
     buildNotificationSettingsEmbed,

@@ -1,3 +1,33 @@
+/**
+ * @deprecated This file is DEPRECATED. Do not add new code here.
+ * All utilities have been migrated to the modular bot_utils/ directory:
+ *   bot_utils/index.js — barrel exports
+ *   bot_utils/display.js — display helpers
+ *   bot_utils/r2Media.js — R2 media operations
+ *   bot_utils/response.js — prefix command responses
+ *   bot_utils/entityHandlers.js — entity field handlers
+ *   bot_utils/entitySearch.js — entity search
+ *   bot_utils/privacy.js — privacy/visibility
+ *   bot_utils/formatting.js — formatting utilities
+ *   bot_utils/sessions.js — session management
+ *   bot_utils/args.js — argument parsing
+ *   bot_utils/userSystem.js — user/system management
+ *   bot_utils/helpers.js — misc helpers
+ *   bot_utils/logging.js — guild logging
+ *   bot_utils/embedColors.js — embed color helpers
+ *   bot_utils/constants.js — constants
+ *   bot_utils/proxyValidation.js — proxy validation
+ *   bot_utils/entityLinking.js — entity linking
+ *   bot_utils/containerCard.js — Components v2 card builder
+ *
+ * Components v2 migration: Entity card builders (buildAlterCard,
+ * buildGroupCard, buildStateCard, buildSystemCard) now use
+ * Components v2 containers via buildEntityCard() from containerCard.js.
+ *
+ * This file is kept only for functions still referenced by legacy code.
+ * New features should go in the appropriate bot_utils/ module.
+ */
+
 // Systemiser Shared Utilities
 // Merged utilities for both slash commands and prefix commands
 // Used by: alter.js, state.js, group.js, system.js, switch.js, autoproxy.js, etc.

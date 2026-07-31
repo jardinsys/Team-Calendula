@@ -511,6 +511,33 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
         }));
     }
 
+    // Handle stickers - add as attachments (final fallback for sticker content)
+    if (originalMessage.stickers?.size > 0) {
+        // Initialize files array if not already set by attachments
+        if (!webhookOptions.files) {
+            webhookOptions.files = [];
+        }
+
+        // Add each non-Lottie sticker as an attachment
+        for (const sticker of originalMessage.stickers.values()) {
+            // Skip Lottie stickers (they return JSON, not images)
+            if (sticker.format === 3) { // StickerFormatType.Lottie = 3
+                continue;
+            }
+
+            // Get the sticker image URL and add as attachment
+            const stickerUrl = sticker.url;
+            if (stickerUrl) {
+                // Use sticker name with appropriate extension
+                const ext = sticker.format === 1 ? 'png' : (sticker.format === 2 ? 'apng' : 'png');
+                webhookOptions.files.push({
+                    attachment: stickerUrl,
+                    name: `sticker-${sticker.name}.${ext}`
+                });
+            }
+        }
+    }
+
     // Get color for reply embed: entity color > system color > none
     const embedColor = getEmbedColor(entity, system);
 
@@ -583,6 +610,9 @@ async function sendProxyMessage(originalMessage, entity, type, system, content, 
         attachments: originalMessage.attachments.map(att => ({
             url: att.url, name: att.name, size: att.size
         })),
+        stickers: originalMessage.stickers?.map(sticker => ({
+            id: sticker.id, name: sticker.name, url: sticker.url, format: sticker.format
+        })) || [],
         timestamp: Date.now()
     };
 
@@ -1038,6 +1068,12 @@ function buildReplyEmbed(referencedMessage, channelId, guildId, color = null) {
     
     if (imageAttachment) {
         embed.thumbnail = { url: imageAttachment.url };
+    } else if (referencedMessage.stickers?.size > 0) {
+        // Fallback: show first non-Lottie sticker as thumbnail
+        const sticker = referencedMessage.stickers.find(s => s.format !== 3); // Not Lottie
+        if (sticker?.url) {
+            embed.thumbnail = { url: sticker.url };
+        }
     }
 
     return embed;

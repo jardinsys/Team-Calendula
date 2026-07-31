@@ -93,6 +93,24 @@ module.exports = {
                 .setDescription('State name (required for edit/remission/delete)')
                 .setRequired(false)))
 
+        // SPOILER subcommand
+        .addSubcommand(sub => sub
+            .setName('spoiler')
+            .setDescription('Toggle spoiler on state media')
+            .addStringOption(opt => opt
+                .setName('field')
+                .setDescription('Which media field to toggle')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Banner', value: 'banner' },
+                    { name: 'Avatar', value: 'avatar' },
+                    { name: 'Proxy Avatar', value: 'proxyavatar' }
+                ))
+            .addStringOption(opt => opt
+                .setName('state_name')
+                .setDescription('State name')
+                .setRequired(true)))
+
         /*// SETTINGS subcommand
         .addSubcommand(sub => sub
             .setName('settings')
@@ -115,6 +133,11 @@ module.exports = {
             });
 
         const action = interaction.options.getString('action');
+
+        // Handle spoiler subcommand
+        if (subcommand === 'spoiler') {
+            return await handleSpoiler(interaction, user, system);
+        }
 
         const MUTATING_ACTIONS = ['new', 'edit', 'settings', 'remission', 'delete'];
         if (system && MUTATING_ACTIONS.includes(action) && !system.sys_type?.isFragmented && !system.sys_type?.isDissociative) {
@@ -178,34 +201,20 @@ function buildStateListEmbed(states, page, system, showFullList, fallbackName) {
 
 // Build the state card embed
 async function buildStateCard(state, system, privacyBucket, closedCharAllowed = true, guildId = null, fallbackName = null) {
-    const embed = new EmbedBuilder();
-
     const session = { mode: null, syncWithDiscord: state.syncWithApps?.discord, serverId: guildId };
 
-    // Color priority: state.color > system.color > none
-    const color = utils.getEntityEmbedColor(state, system);
     const description = utils.getDiscordOrDefault(state, 'description');
     const displayName = closedCharAllowed
         ? (state.name?.display || state.name?.indexable)
         : (state.name?.closedNameDisplay || state.name?.display || state.name?.indexable);
 
-    // Header/Author — proxy avatar priority
+    // Header/Author
     const proxyAvatar = utils.resolveProxyAvatarUrl(state, session);
     const systemDisplayName = utils.getDisplayName(system, closedCharAllowed);
+    const authorName = `${state.name?.indexable || fallbackName || 'Unknown'} (from ${systemDisplayName})`;
 
-    embed.setAuthor({
-        name: `${state.name?.indexable || fallbackName || 'Unknown'} (from ${systemDisplayName})`,
-        iconURL: proxyAvatar || undefined
-    });
-
-    embed.setTitle(displayName || fallbackName || 'Unknown State');
-    if (color) embed.setColor(color);
-    if (description) embed.setDescription(description);
-
-    // Get groups for this state
+    // Groups
     const groups = await Group.find({ _id: { $in: state.groupIDs || [] } });
-
-    // Organize groups by type
     const groupsByType = {};
     for (const group of groups) {
         const typeName = group.type?.name || 'Other';
@@ -213,62 +222,43 @@ async function buildStateCard(state, system, privacyBucket, closedCharAllowed = 
         groupsByType[typeName].push(utils.getDisplayName(group, closedCharAllowed));
     }
 
-    // Get connected alters
+    // Connected alters
     const connectedAlters = await Alter.find({ _id: { $in: state.alters || [] } });
     const alterNames = connectedAlters.map(a => utils.getDisplayName(a, closedCharAllowed));
 
-    // Identification Info field
+    // Build fields
+    const fields = [];
+
     let identificationInfo = '';
     for (const [type, groupNames] of Object.entries(groupsByType)) identificationInfo += `**${type}:** ${groupNames.join(', ')}\n`;
     if (state.signoff) identificationInfo += `**Sign-off:** ${state.signoff}\n`;
     if (state.proxy?.length > 0) identificationInfo += `**Proxies:** ${utils.formatProxies(state.proxy)}\n`;
-    //identificationInfo += `**Display Name:** ${displayName}\n`;
     if (state.name?.aliases?.length > 0) identificationInfo += `**Aliases:** ${state.name.aliases.join(', ')}\n`;
-    if (identificationInfo) {
-        embed.addFields({
-            name: '🏷️ Identification',
-            value: identificationInfo.trim() || 'None',
-            inline: false
-        });
-    }
+    if (identificationInfo) fields.push({ name: '🏷️ Identification', value: identificationInfo.trim() });
 
-    // Connected Alters field
     if (alterNames.length > 0) {
-        embed.addFields({
-            name: '🔗 Connected Alters',
-            value: alterNames.join(', '),
-            inline: false
-        });
+        fields.push({ name: '🔗 Connected Alters', value: alterNames.join(', ') });
     }
 
-    // Caution field
-    if (state.caution && (state.caution.c_type || state.caution.detail || state.caution.triggers?.length > 0)) {
-        let cautionInfo = '';
+    // Resolve media
+    const avatarUrl = utils.resolveAvatarUrl(state, session);
+    const bannerUrl = utils.resolveBannerUrl(state, session);
+    const avatarSpoiler = state.discord?.image?.avatar?.spoiler || state.avatar?.spoiler || false;
+    const bannerSpoiler = state.discord?.image?.banner?.spoiler || false;
 
-        if (state.caution.c_type) cautionInfo += `**Type:** ${state.caution.c_type}\n`;
-        if (state.caution.detail) cautionInfo += `**Details:** ${state.caution.detail}\n`;
-        if (state.caution.triggers?.length > 0) {
-            const triggerNames = state.caution.triggers.map(t => t.name).filter(Boolean);
-            if (triggerNames.length > 0) cautionInfo += `**Triggers:** ${triggerNames.join(', ')}\n`;
-        }
-        if (cautionInfo) {
-            embed.addFields({
-                name: '⚠️ Caution',
-                value: cautionInfo.trim(),
-                inline: false
-            });
-        }
-    }
-
-    // Thumbnail — avatar priority
-    const avatar = utils.resolveAvatarUrl(state, session);
-    if (avatar) embed.setThumbnail(avatar);
-
-    // Banner
-    const banner = utils.resolveBannerUrl(state, session);
-    if (banner) embed.setImage(banner);
-
-    return embed;
+    return utils.buildEntityCard({
+        entity: state, type: 'state', system,
+        displayName: displayName || fallbackName || 'Unknown State',
+        description,
+        avatarUrl, avatarSpoiler,
+        bannerUrl, bannerSpoiler,
+        authorName, authorIconUrl: proxyAvatar || undefined,
+        fields,
+        caution: state.caution,
+        signoff: state.signoff,
+        proxies: state.proxy,
+        aliases: state.name?.aliases,
+    });
 }
 
 // Build the edit interface for a state
@@ -484,11 +474,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
 
     // Build the card
-    const embed = await buildStateCard(state, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
-
-    if (isOwner && !targetSystem.sys_type?.isFragmented && !targetSystem.sys_type?.isDissociative) {
-        embed.addFields({ name: '⚠️ Notice', value: 'Your current setup does not allow states. You can update this in `/system edit` if you need a change.' });
-    }
+    const card = await buildStateCard(state, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
 
     // Create session
     const sessionId = utils.generateSessionId(interaction.user.id);
@@ -499,18 +485,20 @@ async function handleShow(interaction, currentUser, currentSystem) {
         isOwner
     });
 
-    // Only show "Show All Info" button if owner
-    const buttons = isOwner ? [
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`state_show_full_${sessionId}`)
-                .setLabel('Show All Info')
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji('📄')
-        )
-    ] : [];
+    if (isOwner) {
+        const container = card.components[0];
+        container.addActionRowComponents(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`state_show_full_${sessionId}`)
+                    .setLabel('Show All Info')
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('📄')
+            )
+        );
+    }
 
-    await interaction.reply({ embeds: [embed], components: buttons, ephemeral: false });
+    await interaction.reply({ ...card, ephemeral: false });
 }
 
 // Handle /state new
@@ -619,6 +607,39 @@ async function handleDelete(interaction, user, system) {
     );
 
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+}
+
+// ==== SPOILER TOGGLE ====
+
+const SPOILER_FIELD_MAP = {
+    'banner': { path: 'discord.image.banner', label: 'Banner' },
+    'avatar': { path: 'discord.image.avatar', label: 'Avatar' },
+    'proxyavatar': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+};
+
+async function handleSpoiler(interaction, user, system) {
+    const stateName = interaction.options.getString('state_name');
+    const field = interaction.options.getString('field');
+    const state = await utils.findStateByName(stateName, system);
+
+    if (!state) return await interaction.reply({ content: '❌ State not found.', ephemeral: true });
+
+    const { path, label } = SPOILER_FIELD_MAP[field];
+    const { getNested } = require('../../functions/bot_utils/entityHandlers');
+
+    const mediaObj = getNested(state, path);
+    if (!mediaObj || !mediaObj.url) {
+        return await interaction.reply({ content: `❌ No ${label.toLowerCase()} set to spoiler.`, ephemeral: true });
+    }
+
+    const currentSpoiler = mediaObj.spoiler || false;
+    mediaObj.spoiler = !currentSpoiler;
+    await state.save();
+
+    await interaction.reply({
+        content: `✅ ${label} spoiler: **${!currentSpoiler ? 'ON' : 'OFF'}**`,
+        ephemeral: true
+    });
 }
 
 // Handle /state settings
@@ -744,7 +765,7 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('state_show_full_')) {
         const state = await State.findById(session.stateId);
         const system = await System.findById(session.systemId);
-        const embed = await buildStateCard(state, system, null, true, interaction.guildId, interaction.user?.displayName);
+        const card = await buildStateCard(state, system, null, true, interaction.guildId, interaction.user?.displayName);
 
         // Add metadata
         let metadataInfo = '';
@@ -759,10 +780,16 @@ async function handleButtonInteraction(interaction) {
         if (state.discord?.metadata?.lastMessageTime)
             metadataInfo += `**Last Message:** ${utils.formatDate(state.discord.metadata.lastMessageTime)}\n`;
 
-        if (metadataInfo)
-            embed.addFields({ name: '📊 Metadata', value: metadataInfo.trim(), inline: false });
+        if (metadataInfo) {
+            const { TextDisplayBuilder, SeparatorBuilder } = require('discord.js');
+            const container = card.components[0];
+            container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+            container.addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(`### 📊 Metadata\n${metadataInfo.trim()}`)
+            );
+        }
 
-        return await interaction.update({ embeds: [embed], components: [] });
+        return await interaction.update({ ...card, components: card.components });
     }
 
     // Handle sync buttons for new/edit

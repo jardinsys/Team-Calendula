@@ -90,6 +90,24 @@ module.exports = {
                 .setDescription('Group name (required for edit/delete)')
                 .setRequired(false)))
 
+        // SPOILER subcommand
+        .addSubcommand(sub => sub
+            .setName('spoiler')
+            .setDescription('Toggle spoiler on group media')
+            .addStringOption(opt => opt
+                .setName('field')
+                .setDescription('Which media field to toggle')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Banner', value: 'banner' },
+                    { name: 'Avatar', value: 'avatar' },
+                    { name: 'Proxy Avatar', value: 'proxyavatar' }
+                ))
+            .addStringOption(opt => opt
+                .setName('group_name')
+                .setDescription('Group name')
+                .setRequired(true)))
+
 /*        // SETTINGS subcommand
         .addSubcommand(sub => sub
             .setName('settings')
@@ -115,6 +133,12 @@ module.exports = {
         }
 
         const action = interaction.options.getString('action');
+
+        // Handle spoiler subcommand
+        if (subcommand === 'spoiler') {
+            return await handleSpoiler(interaction, user, system);
+        }
+
         switch (action) {
             case 'list': return await handleShowList(interaction, user, system);
             case 'show': return await handleShow(interaction, user, system);
@@ -169,30 +193,21 @@ function buildGroupListEmbed(groups, page, system, showFullList, fallbackName) {
 }
 
 async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = true, guildId = null, fallbackName = null) {
-    const embed = new EmbedBuilder();
-
     const session = { mode: null, syncWithDiscord: group.syncWithApps?.discord, serverId: guildId };
 
-    // Color priority: group.color > system.color > none
-    const color = utils.getEntityEmbedColor(group, system);
     const description = utils.getDiscordOrDefault(group, 'description');
     const displayName = closedCharAllowed
         ? (group.name?.display || group.name?.indexable)
         : (group.name?.closedNameDisplay || group.name?.display || group.name?.indexable);
 
     const proxyAvatar = utils.resolveProxyAvatarUrl(group, session);
-    embed.setAuthor({
-        name: `${group.name?.indexable || fallbackName || 'Unknown'} (from ${utils.getDisplayName(system, closedCharAllowed)})`,
-        iconURL: proxyAvatar || undefined
-    });
-
-    embed.setTitle(displayName || fallbackName || 'Unknown Group');
-    if (color) embed.setColor(color);
-    if (description) embed.setDescription(description);
+    const authorName = `${group.name?.indexable || fallbackName || 'Unknown'} (from ${utils.getDisplayName(system, closedCharAllowed)})`;
 
     // Count members
     const alterCount = await Alter.countDocuments({ groupsIDs: group._id.toString() });
     const stateCount = await State.countDocuments({ groupIDs: group._id.toString() });
+
+    const fields = [];
 
     let identInfo = `**Alters:** ${alterCount}\n**States:** ${stateCount}\n`;
     if (group.signoff) identInfo += `**Sign-off:** ${group.signoff}\n`;
@@ -200,25 +215,26 @@ async function buildGroupCard(group, system, privacyBucket, closedCharAllowed = 
     if (group.name?.aliases?.length > 0) identInfo += `**Aliases:** ${group.name.aliases.join(', ')}\n`;
     if (group.type?.name) identInfo += `**Type:** ${group.type.name}\n`;
     if (group.type?.canFront) identInfo += `**Can Front:** ${group.type.canFront}\n`;
+    fields.push({ name: '🏷️ Identification', value: identInfo.trim() });
 
-    embed.addFields({ name: '🏷️ Identification', value: identInfo.trim(), inline: false });
+    const avatarUrl = utils.resolveAvatarUrl(group, session);
+    const bannerUrl = utils.resolveBannerUrl(group, session);
+    const avatarSpoiler = group.discord?.image?.avatar?.spoiler || group.avatar?.spoiler || false;
+    const bannerSpoiler = group.discord?.image?.banner?.spoiler || false;
 
-    if (group.caution && (group.caution.c_type || group.caution.detail || group.caution.triggers?.length)) {
-        let cautionInfo = '';
-        if (group.caution.c_type) cautionInfo += `**Type:** ${group.caution.c_type}\n`;
-        if (group.caution.detail) cautionInfo += `**Details:** ${group.caution.detail}\n`;
-        if (group.caution.triggers?.length) 
-            cautionInfo += `**Triggers:** ${group.caution.triggers.map(t => t.name).filter(Boolean).join(', ')}\n`;
-        if (cautionInfo) embed.addFields({ name: '⚠️ Caution', value: cautionInfo.trim(), inline: false });
-    }
-
-    const avatar = utils.resolveAvatarUrl(group, session);
-    if (avatar) embed.setThumbnail(avatar);
-
-    const banner = utils.resolveBannerUrl(group, session);
-    if (banner) embed.setImage(banner);
-
-    return embed;
+    return utils.buildEntityCard({
+        entity: group, type: 'group', system,
+        displayName: displayName || fallbackName || 'Unknown Group',
+        description,
+        avatarUrl, avatarSpoiler,
+        bannerUrl, bannerSpoiler,
+        authorName, authorIconUrl: proxyAvatar || undefined,
+        fields,
+        caution: group.caution,
+        signoff: group.signoff,
+        proxies: group.proxy,
+        aliases: group.name?.aliases,
+    });
 }
 
 function buildEditInterface(group, session, system = null) {
@@ -362,16 +378,21 @@ async function handleShow(interaction, currentUser, currentSystem) {
         return await interaction.reply({ content: '❌ Group cannot be found.', ephemeral: true });
 
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
-    const embed = await buildGroupCard(group, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
+    const card = await buildGroupCard(group, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, { type: 'show', groupId: group._id, systemId: targetSystem._id, isOwner });
 
-    const buttons = isOwner ? [new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`group_show_full_${sessionId}`).setLabel('Show All Info').setStyle(ButtonStyle.Primary).setEmoji('📄')
-    )] : [];
+    if (isOwner) {
+        const container = card.components[0];
+        container.addActionRowComponents(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`group_show_full_${sessionId}`).setLabel('Show All Info').setStyle(ButtonStyle.Primary).setEmoji('📄')
+            )
+        );
+    }
 
-    await interaction.reply({ embeds: [embed], components: buttons, ephemeral: true });
+    await interaction.reply({ ...card, ephemeral: true });
 }
 
 async function handleNew(interaction, user, system) {
@@ -428,6 +449,39 @@ async function handleDelete(interaction, user, system) {
     );
 
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
+}
+
+// ==== SPOILER TOGGLE ====
+
+const SPOILER_FIELD_MAP = {
+    'banner': { path: 'discord.image.banner', label: 'Banner' },
+    'avatar': { path: 'discord.image.avatar', label: 'Avatar' },
+    'proxyavatar': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+};
+
+async function handleSpoiler(interaction, user, system) {
+    const groupName = interaction.options.getString('group_name');
+    const field = interaction.options.getString('field');
+    const group = await utils.findGroupByName(groupName, system);
+
+    if (!group) return await interaction.reply({ content: '❌ Group not found.', ephemeral: true });
+
+    const { path, label } = SPOILER_FIELD_MAP[field];
+    const { getNested } = require('../../functions/bot_utils/entityHandlers');
+
+    const mediaObj = getNested(group, path);
+    if (!mediaObj || !mediaObj.url) {
+        return await interaction.reply({ content: `❌ No ${label.toLowerCase()} set to spoiler.`, ephemeral: true });
+    }
+
+    const currentSpoiler = mediaObj.spoiler || false;
+    mediaObj.spoiler = !currentSpoiler;
+    await group.save();
+
+    await interaction.reply({
+        content: `✅ ${label} spoiler: **${!currentSpoiler ? 'ON' : 'OFF'}**`,
+        ephemeral: true
+    });
 }
 
 async function handleSettings(interaction, user, system) {
@@ -509,9 +563,16 @@ async function handleButtonInteraction(interaction) {
     // Show full
     if (customId.startsWith('group_show_full_')) {
         const group = await Group.findById(session.groupId);
-        const embed = await buildGroupCard(group, system, null, true, interaction.guildId, interaction.user?.displayName);
-        if (group.metadata?.addedAt) embed.addFields({ name: '📊 Metadata', value: `**Added:** ${utils.formatDate(group.metadata.addedAt)}`, inline: false });
-        return await interaction.update({ embeds: [embed], components: [] });
+        const card = await buildGroupCard(group, system, null, true, interaction.guildId, interaction.user?.displayName);
+        if (group.metadata?.addedAt) {
+            const { TextDisplayBuilder, SeparatorBuilder } = require('discord.js');
+            const container = card.components[0];
+            container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+            container.addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(`### 📊 Metadata\n**Added:** ${utils.formatDate(group.metadata.addedAt)}`)
+            );
+        }
+        return await interaction.update({ ...card, components: card.components });
     }
 
     // Sync buttons

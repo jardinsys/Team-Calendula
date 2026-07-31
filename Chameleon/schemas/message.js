@@ -17,6 +17,12 @@ const messageSchema = new mongoose.Schema({
         url: String,
         name: String,
         size: Number
+    }],
+    stickers: [{
+        id: String,
+        name: String,
+        url: String,
+        format: Number
     }]
 }, { timestamps: true });
 

@@ -23,6 +23,10 @@ const mediaSchema = new mongoose.Schema({
   uploadedAt: {
     type: Date,
     default: Date.now
+  },
+  spoiler: {
+    type: Boolean,
+    default: false
   }
 });
 

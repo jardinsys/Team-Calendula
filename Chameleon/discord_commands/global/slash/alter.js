@@ -72,6 +72,24 @@ module.exports = {
                 .setRequired(false))*/
             )
 
+        // SPOILER subcommand
+        .addSubcommand(sub => sub
+            .setName('spoiler')
+            .setDescription('Toggle spoiler on alter media')
+            .addStringOption(opt => opt
+                .setName('field')
+                .setDescription('Which media field to toggle')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Banner', value: 'banner' },
+                    { name: 'Avatar', value: 'avatar' },
+                    { name: 'Proxy Avatar', value: 'proxyavatar' }
+                ))
+            .addStringOption(opt => opt
+                .setName('alter_name')
+                .setDescription('Alter name')
+                .setRequired(true)))
+
         // MANAGE subcommand
         .addSubcommand(sub => sub
             .setName('manage')
@@ -114,6 +132,12 @@ module.exports = {
             });
 
         const action = interaction.options.getString('action');
+
+        // Handle spoiler subcommand
+        if (subcommand === 'spoiler') {
+            return await handleSpoiler(interaction, user, system);
+        }
+
         switch (action) {
             case 'list': return await handleShowList(interaction, user, system);
             case 'show': return await handleShow(interaction, user, system);
@@ -163,8 +187,6 @@ function buildAlterListEmbed(alters, page, system, showFullList, fallbackName) {
 }
 
 async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = true, guildId = null, fallbackName = null) {
-    const embed = new EmbedBuilder();
-
     const session = { mode: null, syncWithDiscord: alter.syncWithApps?.discord, serverId: guildId };
 
     // Resolve active states for display
@@ -192,7 +214,6 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
     const proxyAvatar = utils.resolveProxyAvatarUrl(alter, session);
     const systemDisplayName = utils.getDisplayName(system, closedCharAllowed);
 
-    // When active states exist, show priority state avatar + "Currently {state name}"
     let authorName, authorIcon;
     if (alter.activeStates?.all?.length > 0 && alter.activeStates?.priority) {
         const priorityState = alter.states?.find(s => s.connected_id === alter.activeStates.priority);
@@ -208,12 +229,8 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
         authorName = `${alter.name?.indexable || fallbackName || 'unknown'} (from ${systemDisplayName})`;
         authorIcon = proxyAvatar || undefined;
     }
-    embed.setAuthor({ name: authorName, iconURL: authorIcon });
 
-    embed.setTitle(displayName || fallbackName || '*No Name*');
-    if (color) embed.setColor(color);
-    if (description) embed.setDescription(description); 
-
+    // Groups by type
     const groups = await Group.find({ _id: { $in: alter.groupsIDs || [] } });
     const groupsByType = {};
     for (const group of groups) {
@@ -222,20 +239,10 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
         groupsByType[typeName].push(utils.getDisplayName(group, closedCharAllowed));
     }
 
-    // Personal Info field
-    let personalInfo = '';
-    if (pronouns?.length > 0) personalInfo += `**Pronouns:** ${pronouns.join(', ')}\n`;
-    if (alter.birthday) personalInfo += `**Birthday:** ${utils.formatDate(alter.birthday)}\n`;
-    if (alter.name?.aliases?.length > 0) personalInfo += `**Aliases:** ${alter.name.aliases.join(', ')}\n`;
-    if (personalInfo) {
-        embed.addFields({
-            name: '👤 Personal Info',
-            value: personalInfo.trim(),
-            inline: false
-        });
-    }
+    // Build fields array for buildEntityCard
+    const fields = [];
 
-    // Active States field
+    // Active States
     if (alter.activeStates?.all?.length > 0) {
         const activeStateNames = [];
         for (const stateId of alter.activeStates.all) {
@@ -247,56 +254,42 @@ async function buildAlterCard(alter, system, privacyBucket, closedCharAllowed = 
             }
         }
         if (activeStateNames.length > 0) {
-            embed.addFields({
-                name: '🔄 Active States',
-                value: activeStateNames.join('\n'),
-                inline: false
-            });
+            fields.push({ name: '🔄 Active States', value: activeStateNames.join('\n') });
         }
     }
 
-    // Identification Info field
+    // Identification Info
     let identificationInfo = '';
     if (signoff) identificationInfo += `**Sign-off:** ${signoff}\n`;
-    if (alter.proxy?.length > 0) identificationInfo += `**Proxies:** ${utils.formatProxies(alter.proxy)}\n`; 
+    if (alter.proxy?.length > 0) identificationInfo += `**Proxies:** ${utils.formatProxies(alter.proxy)}\n`;
     for (const [type, groupNames] of Object.entries(groupsByType)) {
         identificationInfo += `**${type}:** ${groupNames.join(', ')}\n`;
     }
     if (identificationInfo) {
-        embed.addFields({
-            name: '🏷️ ID\'s',
-            value: identificationInfo.trim() || 'None',
-            inline: false
-        });
+        fields.push({ name: "🏷️ ID's", value: identificationInfo.trim() });
     }
 
-    // Caution field
-    if (alter.caution && (alter.caution.c_type || alter.caution.detail || alter.caution.triggers?.length > 0)) {
-        let cautionInfo = '';
-        if (alter.caution.c_type) cautionInfo += `**Type:** ${alter.caution.c_type}\n`;
-        if (alter.caution.detail) cautionInfo += `**Details:** ${alter.caution.detail}\n`;
-        if (alter.caution.triggers?.length > 0) {
-            const triggerNames = alter.caution.triggers.map(t => t.name).filter(Boolean);
-            if (triggerNames.length > 0) cautionInfo += `**Triggers:** ${triggerNames.join(', ')}\n`;
-        }
-        if (cautionInfo) {
-            embed.addFields({
-                name: '⚠️ Cautions',
-                value: cautionInfo.trim(),
-                inline: false
-            });
-        }
-    }
+    // Resolve media URLs
+    const avatarUrl = utils.resolveAvatarUrl(alter, session);
+    const bannerUrl = utils.resolveBannerUrl(alter, session);
+    const avatarSpoiler = alter.discord?.image?.avatar?.spoiler || alter.avatar?.spoiler || false;
+    const bannerSpoiler = alter.discord?.image?.banner?.spoiler || false;
 
-    // Thumbnail — avatar priority
-    const avatar = utils.resolveAvatarUrl(alter, session);
-    if (avatar) embed.setThumbnail(avatar);
-
-    // Banner
-    const banner = utils.resolveBannerUrl(alter, session);
-    if (banner) embed.setImage(banner);
-
-    return embed;
+    return utils.buildEntityCard({
+        entity: alter, type: 'alter', system,
+        displayName: displayName || fallbackName || '*No Name*',
+        description,
+        avatarUrl, avatarSpoiler,
+        bannerUrl, bannerSpoiler,
+        authorName, authorIconUrl: authorIcon,
+        fields,
+        caution: alter.caution,
+        pronouns,
+        birthday: alter.birthday ? utils.formatDate(alter.birthday) : null,
+        aliases: alter.name?.aliases,
+        signoff,
+        proxies: alter.proxy,
+    });
 }
 
 function buildEditInterface(alter, session, system = null) {
@@ -571,7 +564,7 @@ async function handleShow(interaction, currentUser, currentSystem) {
     if (!isOwner && !utils.shouldShowEntity(alter, privacyBucket, isOwner)) return await interaction.reply({ content: '❌ Alter cannot be found.', ephemeral: true });
 
     const closedCharAllowed = await utils.checkClosedCharAllowed(interaction.guild);
-    const embed = await buildAlterCard(alter, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
+    const card = await buildAlterCard(alter, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
 
     const sessionId = utils.generateSessionId(interaction.user.id);
     utils.setSession(sessionId, {
@@ -581,11 +574,23 @@ async function handleShow(interaction, currentUser, currentSystem) {
         isOwner
     });
 
-    const buttons = isOwner ? [new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`alter_show_full_${sessionId}`).setLabel('Show All Info').setStyle(ButtonStyle.Primary).setEmoji('📄')
-    )] : [];
+    // Add "Show All Info" button to the card if owner
+    if (isOwner) {
+        const showAllBtn = { customId: `alter_show_full_${sessionId}`, label: 'Show All Info', emoji: '📄' };
+        // Rebuild card with button included
+        const cardWithBtn = await buildAlterCard(alter, targetSystem, privacyBucket, closedCharAllowed, interaction.guildId, interaction.user?.displayName);
+        // Add button to existing container
+        const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+        const container = cardWithBtn.components[0];
+        container.addActionRowComponents(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`alter_show_full_${sessionId}`).setLabel('Show All Info').setStyle(ButtonStyle.Primary).setEmoji('📄')
+            )
+        );
+        return await interaction.reply({ ...cardWithBtn, ephemeral: true });
+    }
 
-    await interaction.reply({ embeds: [embed], components: buttons, ephemeral: true });
+    await interaction.reply({ ...card, ephemeral: true });
 }
 
 async function handleNew(interaction, user, system) {
@@ -680,6 +685,39 @@ async function handleDelete(interaction, user, system) {
     await interaction.reply({ embeds: [embed], components: [buttons], ephemeral: true });
 }
 
+// ==== SPOILER TOGGLE ====
+
+const SPOILER_FIELD_MAP = {
+    'banner': { path: 'discord.image.banner', label: 'Banner' },
+    'avatar': { path: 'discord.image.avatar', label: 'Avatar' },
+    'proxyavatar': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+};
+
+async function handleSpoiler(interaction, user, system) {
+    const alterName = interaction.options.getString('alter_name');
+    const field = interaction.options.getString('field');
+    const alter = await utils.findAlterByName(alterName, system);
+
+    if (!alter) return await interaction.reply({ content: '❌ Alter not found.', ephemeral: true });
+
+    const { path, label } = SPOILER_FIELD_MAP[field];
+    const { getNested } = require('../../functions/bot_utils/entityHandlers');
+
+    const mediaObj = getNested(alter, path);
+    if (!mediaObj || !mediaObj.url) {
+        return await interaction.reply({ content: `❌ No ${label.toLowerCase()} set to spoiler.`, ephemeral: true });
+    }
+
+    const currentSpoiler = mediaObj.spoiler || false;
+    mediaObj.spoiler = !currentSpoiler;
+    await alter.save();
+
+    await interaction.reply({
+        content: `✅ ${label} spoiler: **${!currentSpoiler ? 'ON' : 'OFF'}**`,
+        ephemeral: true
+    });
+}
+
 async function handleSettings(interaction, user, system) {
     const alterName = interaction.options.getString('alter_name');
     const alter = await utils.findAlterByName(alterName, system);
@@ -769,16 +807,24 @@ async function handleButtonInteraction(interaction) {
     if (customId.startsWith('alter_show_full_')) {
         const alter = await Alter.findById(session.alterId);
         const system = await System.findById(session.systemId);
-        const embed = await buildAlterCard(alter, system, null, true, interaction.guildId, interaction.user?.displayName);
+        const card = await buildAlterCard(alter, system, null, true, interaction.guildId, interaction.user?.displayName);
 
+        // Add metadata to the container
         let metadataInfo = '';
         if (alter.metadata?.addedAt) metadataInfo += `**Added:** ${utils.formatDate(alter.metadata.addedAt)}\n`;
         if (alter.genesisDate) metadataInfo += `**Genesis Date:** ${utils.formatDate(alter.genesisDate)}\n`;
         if (alter.discord?.metadata?.messageCount) metadataInfo += `**Discord Messages:** ${alter.discord.metadata.messageCount}\n`;
         if (alter.discord?.metadata?.lastMessageTime) metadataInfo += `**Last Message:** ${utils.formatDate(alter.discord.metadata.lastMessageTime)}\n`;
-        if (metadataInfo) embed.addFields({ name: '📊 Metadata', value: metadataInfo.trim(), inline: false });
+        if (metadataInfo) {
+            const { TextDisplayBuilder, SeparatorBuilder } = require('discord.js');
+            const container = card.components[0];
+            container.addSeparatorComponents(new SeparatorBuilder().setDivider(true));
+            container.addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(`### 📊 Metadata\n${metadataInfo.trim()}`)
+            );
+        }
 
-        return await interaction.update({ embeds: [embed], components: [] });
+        return await interaction.update({ ...card, components: card.components });
     }
 
     // New/Edit sync buttons

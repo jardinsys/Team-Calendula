@@ -130,6 +130,7 @@ module.exports = {
                 errorMsg: 'Please provide a battery level (0-100).'
             }),
             'mask': maskHandler(getAlterEntity, 'alter', utils.ENTITY_COLORS.alter),
+            'spoiler': handleSpoiler,
             'delete': handleDelete,
             'dormant': handleDormant,
             'id': idHandler(getAlterEntity),
@@ -360,6 +361,25 @@ async function buildAlterEmbed(alter, system, showFull = false, fallbackName = n
         embed.addFields({ name: '⚠️ Caution', value: ct, inline: false });
     }
     return embed;
+}
+
+// ==== SPOILER TOGGLE ====
+
+const SPOILER_FIELD_MAP = {
+    'banner': { path: 'discord.image.banner', label: 'Banner' },
+    'avatar': { path: 'discord.image.avatar', label: 'Avatar' },
+    'proxyavatar': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+    'pav': { path: 'discord.image.proxyAvatar', label: 'Proxy Avatar' },
+};
+
+async function handleSpoiler(message, parsed, alterName) {
+    const field = parsed._positional[2]?.toLowerCase();
+    if (!field || !SPOILER_FIELD_MAP[field]) {
+        return utils.error(message, 'Usage: `!alter spoiler <banner|avatar|proxyavatar> <name>`');
+    }
+    const { path, label } = SPOILER_FIELD_MAP[field];
+    const handler = utils.spoilerToggle(getAlterEntity, path, label);
+    return handler(message, parsed, alterName);
 }
 
 // ==== STATES HANDLERS ====
