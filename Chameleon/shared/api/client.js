@@ -761,7 +761,7 @@ class ApiClient {
     // ═══════════════════════════════════════════
 
     async getPublicEntity(type, id) {
-        return this.request(`/public/entity/${type}/${id}`)
+        return this.request(`/api/public/entity/${type}/${id}`)
     }
 
     // ═══════════════════════════════════════════
