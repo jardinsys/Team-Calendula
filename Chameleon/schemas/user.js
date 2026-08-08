@@ -81,7 +81,17 @@ const userSchema = new mongoose.Schema({
             appMessages: { type: Boolean, default: true },
             friendSwitches: { type: Boolean, default: true }
         }
-    }
+    },
+
+    // ─── API / Recovery Tokens ─────────────────────────
+    // Hashed tokens for API access and account recovery.
+    // Raw token is shown ONCE at creation, then only the hash is stored.
+    tokens: [{
+        hash: { type: String, required: true },
+        label: { type: String, default: 'API Token' },
+        createdAt: { type: Date, default: Date.now },
+        expiresAt: Date, // null = never expires
+    }]
 
 });
 
