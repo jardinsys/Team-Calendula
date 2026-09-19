@@ -38,6 +38,7 @@ const importRoutes = require('./routes/import');
 const userRoutes = require('./routes/user');
 const publicRoutes = require('./routes/public');
 const convertRoutes = require('./routes/convert');
+const tokenRoutes = require('./routes/tokens');
 
 const app = express();
 
@@ -138,6 +139,8 @@ app.use('/api/import', importRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/convert', convertRoutes);
+app.use('/api/auth/tokens', tokenRoutes);
+app.use('/api/tokens', tokenRoutes);
 
 // Normalized root mounts for same-origin or downstream host usage
 app.use('/auth', authRoutes);
@@ -153,6 +156,7 @@ app.use('/import', importRoutes);
 app.use('/user', userRoutes);
 app.use('/public', publicRoutes);
 app.use('/convert', convertRoutes);
+app.use('/tokens', tokenRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => { res.json({ status: 'ok', timestamp: new Date(), service: 'Systemiser API' }); });

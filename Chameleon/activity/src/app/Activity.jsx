@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useDiscordSdk } from '../hooks/useDiscordSdk'
 import { useApiAuth } from '../hooks/useApiAuth'
-import { useWebSocket } from '../hooks/useWebSocket'
+import { useWebSocket, initSyncIdentity } from '../hooks/useWebSocket'
 import { api, isSystemUser } from '@chameleon/shared'
 import { ArrowLeft } from 'lucide-react'
 import { LandingPage } from './pages/LandingPage'
@@ -56,12 +56,18 @@ export function Activity() {
   const handleOpenSettings = useCallback(() => setShowSettings(true), [])
   const handleCloseSettings = useCallback(() => setShowSettings(false), [])
 
-  // Enable WebSocket only on pages that need real-time updates
+  // Enable sync only on pages that need real-time updates
   // Exclude registration and import (from onboarding) to avoid premature connections
-  const wsEnabled = ['friends', 'notes', 'crisis'].includes(activePage || '') && 
-                    activePage !== 'register' && 
+  const wsEnabled = ['friends', 'notes', 'crisis'].includes(activePage || '') &&
+                    activePage !== 'register' &&
                     !(activePage === 'register-import')
   const { disconnected } = useWebSocket(wsEnabled)
+
+  // Learn our userId (and eventually systemId) for presence self-filtering
+  useEffect(() => {
+    if (!wsEnabled) return
+    return initSyncIdentity()
+  }, [wsEnabled])
 
   useEffect(() => {
     if (authStatus !== 'READY') return

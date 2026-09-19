@@ -15,6 +15,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@robojs/patch": "^0.1.1",
     "@robojs/server": "^0.5.7",
+    "@robojs/sync": "^0.1.3",
     "@tanstack/react-query": "^5.62.0",
     "@tiptap/extension-highlight": "^2.11.5",
     "@tiptap/extension-image": "^2.11.5",

@@ -36,6 +36,10 @@ Team-Calendula/
 │   │   └── routes/                 # Per-resource API route files
 │   ├── webapp/
 │   │   ├── server.js               # Express 5 + WebSocket server — heartbeat (30s ping/pong), note rooms, serves API/webapp/activity
+│   │   │                           # NOTE (Sep 2026): the activity server migrated to @robojs/sync at /sync.
+│   │   │                           # webapp/server.js still runs the OLD custom ws layer (rooms, heartbeat, note protocol).
+│   │   │                           # TODO later: assess whether webapp needs the sync mount too — or drop its ws layer
+│   │   │                           # entirely if the webapp frontend stops consuming ws events. Do not migrate as-is.
 │   │   └── package.json
 │   ├── activity/
 │   │   ├── package.json            # Independent project (not workspace) with "@chameleon/shared": "file:../shared"
