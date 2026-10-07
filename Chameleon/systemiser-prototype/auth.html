@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280, height=720">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500&family=Nunito+Sans:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
+  <title>Systemiser — Authentication</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 1280px;
+      height: 720px;
+      overflow: hidden;
+      background: #01153a;
+    }
+
+    .viewport {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      overflow: hidden;
+    }
+
+    /* === Background gradient === */
+    .bg-gradient {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, #182859 56%, #01153a 100%);
+    }
+
+    /* === Black overlay === */
+    .bg-overlay {
+      position: absolute;
+      inset: 0;
+      background: #000;
+      opacity: 0.9;
+    }
+
+    /* === Circle container === */
+    .circles {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 100px;
+    }
+
+    .circle {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      position: relative;
+      will-change: transform;
+    }
+
+    .circle:nth-child(1) { background: #5bf2f2; }
+    .circle:nth-child(2) { background: #5bf260; }
+    .circle:nth-child(3) { background: #f2f25b; }
+    .circle:nth-child(4) { background: #f2b85b; }
+
+    /* Settle state — stop bobbing and return to rest */
+    .circle.settled {
+      animation: none !important;
+      transition: transform 0.3s ease-out;
+      transform: translateY(0);
+    }
+    .circle:nth-child(5) { background: #f25b5b; }
+    .circle:nth-child(6) { background: #f25bd7; }
+    .circle:nth-child(7) { background: #c55cf2; }
+    .circle:nth-child(8) { background: #5b7af2; }
+
+    /* === Bobbing animation === */
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+    }
+
+    .circle.bobbing:nth-child(1) { animation: bob 1.2s ease-in-out 0.0s infinite; }
+    .circle.bobbing:nth-child(2) { animation: bob 1.2s ease-in-out 0.12s infinite; }
+    .circle.bobbing:nth-child(3) { animation: bob 1.2s ease-in-out 0.24s infinite; }
+    .circle.bobbing:nth-child(4) { animation: bob 1.2s ease-in-out 0.36s infinite; }
+    .circle.bobbing:nth-child(5) { animation: bob 1.2s ease-in-out 0.48s infinite; }
+    .circle.bobbing:nth-child(6) { animation: bob 1.2s ease-in-out 0.60s infinite; }
+    .circle.bobbing:nth-child(7) { animation: bob 1.2s ease-in-out 0.72s infinite; }
+    .circle.bobbing:nth-child(8) { animation: bob 1.2s ease-in-out 0.84s infinite; }
+
+    /* === Exit animations === */
+    /* First 4 go DOWN, last 4 go UP — staggered */
+    @keyframes exitDown {
+      0% { transform: translateY(0); opacity: 1; }
+      100% { transform: translateY(500px); opacity: 0; }
+    }
+    @keyframes exitUp {
+      0% { transform: translateY(0); opacity: 1; }
+      100% { transform: translateY(-500px); opacity: 0; }
+    }
+
+    .circle.exit-down {
+      animation: exitDown 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    .circle.exit-up {
+      animation: exitUp 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    /* Staggered exit delays — mirrored: outer circles fastest, inner slowest */
+    .circle.exit-down:nth-child(1) { animation-delay: 0.0s; }
+    .circle.exit-down:nth-child(2) { animation-delay: 0.08s; }
+    .circle.exit-down:nth-child(3) { animation-delay: 0.16s; }
+    .circle.exit-down:nth-child(4) { animation-delay: 0.24s; }
+
+    .circle.exit-up:nth-child(5) { animation-delay: 0.24s; }
+    .circle.exit-up:nth-child(6) { animation-delay: 0.16s; }
+    .circle.exit-up:nth-child(7) { animation-delay: 0.08s; }
+    .circle.exit-up:nth-child(8) { animation-delay: 0.0s; }
+
+    /* === Reveal circle (system found) === */
+    .reveal-circle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: transparent;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .reveal-circle.expanding {
+      animation: expandReveal 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    }
+
+    @keyframes expandReveal {
+      0% {
+        width: 0;
+        height: 0;
+        /* Show the gradient behind by making the overlay cut out */
+      }
+      100% {
+        width: 2200px;
+        height: 2200px;
+      }
+    }
+
+    /* The mask that creates the "transparent circle" reveal effect */
+    .reveal-mask {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+
+    .reveal-mask.active {
+      opacity: 1;
+    }
+
+    .reveal-mask svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* === Hello text (registration path) === */
+    .hello-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      z-index: 10;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 48px;
+      font-weight: 300;
+      color: #fff;
+      letter-spacing: 2px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .hello-text.visible {
+      animation: helloIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* === Auth Failed state === */
+    .auth-failed-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .auth-failed-container.visible {
+      animation: fadeIn 0.6s ease forwards;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    .auth-fail-title {
+      font-family: 'Quicksand', sans-serif;
+      font-size: 72px;
+      font-weight: 400;
+      margin-top: 0;
+      margin-bottom: 0;
+      background: linear-gradient(135deg, #d97b73, #f24b4b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+
+    .auth-failed-container.visible .auth-fail-title {
+      animation: textSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+    }
+
+    .auth-fail-subtitle {
+      font-family: 'Nunito Sans', sans-serif;
+      font-size: 36px;
+      font-weight: 500;
+      text-align: center;
+      line-height: 1.4;
+      margin-top: 200px;
+      margin-bottom: 30px;
+      background: linear-gradient(135deg, #f2bf5e, #f2a444);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+
+    .auth-failed-container.visible .auth-fail-subtitle {
+      animation: textSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+    }
+
+    .auth-fail-help {
+      font-family: 'Nunito Sans', sans-serif;
+      font-size: 24px;
+      font-weight: 500;
+      font-style: italic;
+      background: linear-gradient(135deg, #D3BDF2, #596cd9);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      opacity: 0;
+    }
+
+    .auth-failed-container.visible .auth-fail-help {
+      animation: textSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards;
+    }
+
+    .auth-fail-help a {
+      color: inherit;
+      -webkit-text-fill-color: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    @keyframes textSlideIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes helloIn {
+      0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.8);
+      }
+      100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+    }
+
+    /* === Debug / controls === */
+    .controls {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 100;
+      display: flex;
+      gap: 10px;
+    }
+
+    .controls button {
+      padding: 8px 16px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+
+    .controls button:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .controls button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .status {
+      position: fixed;
+      bottom: 24px;
+      left: 20px;
+      z-index: 100;
+      color: rgba(255,255,255,0.3);
+      font-family: monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="viewport">
+  <!-- Background -->
+  <div class="bg-gradient"></div>
+  <div class="bg-overlay" id="overlay"></div>
+
+  <!-- Reveal mask for "system found" transition -->
+  <svg class="reveal-mask" id="revealMask" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <mask id="circleMask">
+        <rect width="100%" height="100%" fill="white"/>
+        <circle id="maskCircle" cx="640" cy="360" r="0" fill="black"/>
+      </mask>
+    </defs>
+    <rect width="100%" height="100%" fill="#182859" mask="url(#circleMask)" opacity="0.9"/>
+  </svg>
+
+  <!-- Circles -->
+  <div class="circles" id="circlesContainer">
+    <div class="circle bobbing" data-index="0"></div>
+    <div class="circle bobbing" data-index="1"></div>
+    <div class="circle bobbing" data-index="2"></div>
+    <div class="circle bobbing" data-index="3"></div>
+    <div class="circle bobbing" data-index="4"></div>
+    <div class="circle bobbing" data-index="5"></div>
+    <div class="circle bobbing" data-index="6"></div>
+    <div class="circle bobbing" data-index="7"></div>
+  </div>
+
+  <!-- Hello text for registration path -->
+  <div class="hello-text" id="helloText">hello</div>
+
+  <!-- Auth Failed state -->
+  <div class="auth-failed-container" id="authFailed">
+    <div class="auth-fail-title">Authentication is Failing...</div>
+    <div class="auth-fail-subtitle">
+      Try closing and reopening Systemiser<br>
+      and follow relevant prompts.
+    </div>
+    <div class="auth-fail-help">
+      You can also join our <a href="#">support server</a> if you need more help!
+    </div>
+  </div>
+</div>
+
+<!-- Controls for testing -->
+<div class="controls">
+  <button id="btnSuccess" onclick="triggerAuthSuccess('system')">✓ System Found</button>
+  <button id="btnNoSystem" onclick="triggerAuthSuccess('register')">✗ No System → Register</button>
+  <button id="btnFailed" onclick="triggerAuthFailed()">✗ Auth Failed</button>
+  <button id="btnReset" onclick="resetAll()">↻ Reset</button>
+</div>
+<div class="status" id="status">authenticating…</div>
+
+<script>
+  const circles = document.querySelectorAll('.circle');
+  const overlay = document.getElementById('overlay');
+  const revealMask = document.getElementById('revealMask');
+  const maskCircle = document.getElementById('maskCircle');
+  const helloText = document.getElementById('helloText');
+  const btnSuccess = document.getElementById('btnSuccess');
+  const btnNoSystem = document.getElementById('btnNoSystem');
+  const status = document.getElementById('status');
+  const authFailed = document.getElementById('authFailed');
+  const btnFailed = document.getElementById('btnFailed');
+
+  let state = 'bobbing'; // bobbing | exiting | revealed | hello | failed
+
+  function triggerAuthSuccess(path) {
+    if (state !== 'bobbing') return;
+    state = 'exiting';
+    btnSuccess.disabled = true;
+    btnNoSystem.disabled = true;
+    status.textContent = 'auth success — exiting circles…';
+
+    // Stop bobbing, start exit animations
+    circles.forEach((c, i) => {
+      c.classList.remove('bobbing');
+      if (i < 4) {
+        c.classList.add('exit-down');
+      } else {
+        c.classList.add('exit-up');
+      }
+    });
+
+    // After circles exit, trigger the path-specific transition
+    // Last exit delay is 0.24s + 0.7s duration = 0.94s, add buffer
+    const exitDone = 1100;
+
+    setTimeout(() => {
+      if (path === 'system') {
+        triggerReveal();
+      } else {
+        triggerHello();
+      }
+    }, exitDone);
+  }
+
+  function triggerReveal() {
+    state = 'revealed';
+    status.textContent = 'system found — revealing…';
+
+    // Animate the mask circle expanding from center
+    revealMask.classList.add('active');
+
+    const startR = 0;
+    const endR = 1200;
+    const duration = 1200;
+    const startTime = performance.now();
+
+    function animateReveal(now) {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const r = startR + (endR - startR) * eased;
+      maskCircle.setAttribute('r', r);
+
+      if (progress < 1) {
+        requestAnimationFrame(animateReveal);
+      } else {
+        status.textContent = 'landed on system dashboard';
+      }
+    }
+
+    requestAnimationFrame(animateReveal);
+  }
+
+  function triggerHello() {
+    state = 'hello';
+    status.textContent = 'no system — going to registration…';
+
+    helloText.classList.add('visible');
+    helloText.addEventListener('animationend', () => {
+      status.textContent = 'registration ready';
+    }, { once: true });
+  }
+
+  function triggerAuthFailed() {
+    if (state !== 'bobbing') return;
+    state = 'failed';
+    btnSuccess.disabled = true;
+    btnNoSystem.disabled = true;
+    btnFailed.disabled = true;
+    status.textContent = 'auth failed';
+
+    // Settle circles — stop bobbing, return to rest
+    circles.forEach(c => {
+      c.classList.remove('bobbing');
+      c.classList.add('settled');
+    });
+
+    // Show the failed text
+    authFailed.classList.add('visible');
+  }
+
+  function resetAll() {
+    state = 'bobbing';
+    btnSuccess.disabled = false;
+    btnNoSystem.disabled = false;
+    btnFailed.disabled = false;
+    status.textContent = 'authenticating…';
+
+    // Reset circles
+    circles.forEach(c => {
+      c.classList.remove('bobbing', 'exit-down', 'exit-up', 'settled');
+      // Force reflow to restart animations
+      void c.offsetWidth;
+      c.classList.add('bobbing');
+    });
+
+    // Reset reveal mask
+    revealMask.classList.remove('active');
+    maskCircle.setAttribute('r', 0);
+
+    // Reset hello text
+    helloText.classList.remove('visible');
+
+    // Reset auth failed
+    authFailed.classList.remove('visible');
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poiret+One&family=Quicksand:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<title>Systemiser — Constellation Flow Prototype</title>
+<style>
+/* ============================================================
+   SYSTEMISER — "Constellation" progression prototype
+   Colors from activity/src/app/tokens.css (exact values).
+   Family: capitalize (Quicksand soft, lowercase Quicksand??)
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --grad-lav: #D3BDF2;
+  --grad-peri: #596cd9;
+  --bg-top: #182859;
+  --bg-bottom: #01153a;
+  --bg-card: rgba(26, 26, 40, 0.55);
+  --bg-surface: rgba(38, 38, 58, 0.5);
+  --glass-blur: blur(20px);
+  --glass-border: rgba(255,255,255,0.06);
+  --glass-border-strong: rgba(255,255,255,0.1);
+  --text: #ffffff;
+  /* Window-friendly secondary text (contrast fix) */
+  --text-secondary: #c9c9dc;
+  --text-muted: #a4a4ba;
+  --radius-card: 24px;
+  --radius-pill: 999px;
+  --font-title: 'Poiret One', cursive;
+  --font-accent: 'Quicksand', sans-serif;
+  --font-body: 'Nunito', sans-serif;
+
+  /* Per-step shadow colors on the bloom mark — one per major step.
+     EDIT THESE: Jardin sets the exact logo/theme hexes here. */
+  --shadow-0: rgba(123, 123, 144, 0.35);   /* Category — dim neutral */
+  --shadow-1: rgba(196, 181, 253, 0.45);   /* Condition — lavender */
+  --shadow-2: rgba(125, 211, 252, 0.50);   /* Import — sky */
+  --shadow-3: rgba(134, 239, 172, 0.55);   /* Details — mint */
+  --shadow-4: rgba(242, 191, 94, 0.60);    /* Front — cream/amber */
+  --shadow-5: rgba(211, 189, 242, 0.95);   /* Complete — full signature lavender */
+}
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg-bottom);
+  overflow: hidden;
+}
+
+/* ── Scene (one full-bleed frame) ─────────────────────────── */
+.scene {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(to bottom, var(--bg-top) 0%, #10224d 40%, var(--bg-bottom) 100%);
+  overflow: hidden;
+  transition: background 2s ease;
+}
+
+/* Nebula wash — appears gradually as steps brighten */
+.nebula {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 3s ease;
+  background:
+    radial-gradient(900px 500px at 80% 15%, rgba(89,108,217,0.28), transparent 70%),
+    radial-gradient(700px 500px at 15% 80%, rgba(211,189,242,0.18), transparent 70%),
+    radial-gradient(500px 400px at 60% 110%, rgba(125,211,252,0.12), transparent 70%),
+    radial-gradient(1600px 900px at 50% 105%, rgba(89,108,217,0.5), rgba(211,189,242,0.16) 45%, transparent 78%),
+    radial-gradient(900px 400px at 50% 95%, rgba(211,189,242,0.25), transparent 75%);
+}
+
+/* Dark overlay — the "heavier dark" tab pattern, easing per step.
+   Sits UNDER the nebula + stars so the sky stays alive at step 0. */
+.dark-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+  opacity: var(--overlay, 0.82);
+  transition: opacity 2.2s ease;
+  z-index: 1;
+}
+.nebula { z-index: 2; }
+#starfield { z-index: 3; }
+
+/* ── Stars ────────────────────────────────────────────────── */
+#starfield { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+  animation: starIn 4s ease forwards, twinkle 6s ease-in-out infinite;
+}
+.star.lav  { background: #D3BDF2; }
+.star.sky  { background: #7dd3fc; }
+.star.mint { background: #86efac; }
+@keyframes starIn { to { opacity: var(--peak, 0.8); } }
+@keyframes twinkle { 50% { opacity: calc(var(--peak, 0.8) * 0.35); } }
+
+.shooting-star {
+  position: absolute;
+  width: 140px; height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #fff, transparent);
+  opacity: 0;
+  transform: rotate(-28deg);
+}
+.shooting-star.go { animation: shoot 1.6s ease-out forwards; }
+@keyframes shoot {
+  0% { opacity: 0; transform: rotate(-28deg) translateX(0); }
+  10% { opacity: 0.9; }
+  100% { opacity: 0; transform: rotate(-28deg) translateX(420px); }
+}
+
+/* ── Constellation path (progress line connecting step stars) ── */
+.constellation {
+  position: absolute;
+  top: 64px; left: 0; right: 0;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 34px;
+  z-index: 5;
+}
+.cst-node {
+  display: flex; align-items: center;
+}
+.cst-star {
+  width: 34px; height: 34px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  font-family: var(--font-accent);
+  font-size: 11px; font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-border-strong);
+  backdrop-filter: blur(8px);
+  transition: all 0.8s ease;
+  box-shadow: none;
+}
+.cst-node.reached .cst-star {
+  color: #fff;
+  background: linear-gradient(160deg, var(--grad-lav), var(--grad-peri));
+  border-color: transparent;
+  box-shadow: 0 0 14px rgba(211,189,242,0.55), 0 0 4px rgba(255,255,255,0.6) inset;
+}
+.cst-node.current .cst-star { transform: scale(1.18); }
+.cst-label {
+  position: absolute;
+  top: 42px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-accent);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.cst-node.reached .cst-label { opacity: 1; color: var(--text-secondary); }
+.cst-lines { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.cst-line {
+  position: absolute;
+  height: 1px;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
+}
+.cst-line::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--grad-lav), var(--grad-peri));
+  transition: width 1.4s ease;
+}
+.cst-node.reached-next .cst-line { background: rgba(255,255,255,0.12); }
+.cst-line.lit::after { width: 100%; }
+
+/* ── The bloom (drop-shaped mark) ─────────────────────────── */
+.bloom-wrap {
+  position: absolute;
+  left: 50%;
+  top: 32%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  pointer-events: none;
+}
+.bloom {
+  width: 148px; height: 148px;
+  filter: drop-shadow(0 0 var(--bloom-glow, 30px) var(--bloom-color, var(--shadow-0)));
+  transition: filter 1.6s ease;
+  animation: breathe 5s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+/* layered halo rings that wake over time */
+.halo {
+  position: absolute;
+  left: 50%; top: 50%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255,255,255,0.0);
+  pointer-events: none;
+  transition: all 2s ease;
+}
+.halo.h1 { width: 220px; height: 220px; border-color: color-mix(in srgb, var(--bloom-step-color, #7b7b90) 30%, transparent); opacity: 0; }
+.halo.h2 { width: 320px; height: 320px; border-color: color-mix(in srgb, var(--bloom-step-color, #7b7b90) 18%, transparent); opacity: 0; }
+.halo.h3 { width: 460px; height: 460px; border-color: color-mix(in srgb, var(--bloom-step-color, #7b7b90) 10%, transparent); opacity: 0; }
+.bloom-wrap.warm .halo { opacity: 1; }
+
+/* ── Card (glass bubble content) ──────────────────────────── */
+.content {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  transform: translate(-50%, 0);
+  z-index: 10;
+  width: min(560px, calc(100vw - 48px));
+}
+.bubble {
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  padding: 26px 28px 24px;
+}
+.step-tag {
+  font-family: var(--font-accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.bubble h2 {
+  font-family: var(--font-accent);
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.bubble .sub {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+/* choice bubbles */
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.choice {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  text-align: left;
+}
+.choice:hover { border-color: rgba(211,189,242,0.4); background: var(--bg-surface); transform: translateY(-1px); }
+.choice .dot {
+  width: 30px; height: 30px; flex: none;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.06);
+  font-size: 14px;
+}
+.choice b { font-family: var(--font-accent); font-size: 13px; font-weight: 600; display: block; }
+.choice span { font-size: 11px; color: var(--text-secondary); display: block; margin-top: 2px; }
+.choice.on {
+  border-color: rgba(211,189,242,0.7);
+  background: linear-gradient(160deg, rgba(211,189,242,0.14), rgba(89,108,217,0.14));
+  box-shadow: 0 0 0 1px rgba(211,189,242,0.35), 0 4px 14px rgba(89,108,217,0.25);
+}
+
+/* buttons */
+.btn-row { display: flex; gap: 12px; margin-top: 18px; }
+.btn {
+  font-family: var(--font-accent);
+  font-weight: 600; font-size: 14px;
+  padding: 13px 22px;
+  border-radius: var(--radius-pill);
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.btn-primary {
+  flex: 2;
+  color: #fff;
+  background: linear-gradient(to bottom, var(--grad-lav) 25%, var(--grad-peri) 100%);
+  box-shadow: 0 4px 14px rgba(89,108,217,0.35);
+}
+.btn-primary:hover { box-shadow: 0 6px 20px rgba(89,108,217,0.5); transform: translateY(-1px); }
+.btn-ghost {
+  flex: 1;
+  color: var(--text-secondary);
+  background: rgba(211,189,242,0.08);
+  border: 0 solid transparent;
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--glass-border-strong);
+}
+.btn-ghost:hover { color: #fff; background: rgba(211,189,242,0.14); }
+
+/* ── Hint / fallback nav (prototype only) ─────────────────── */
+.proto-nav {
+  position: fixed;
+  bottom: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 50;
+  display: flex; gap: 6px;
+  padding: 6px 10px;
+  background: rgba(0,0,0,0.45);
+  border-radius: var(--radius-pill);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+}
+.proto-nav button {
+  font-family: var(--font-accent);
+  font-size: 11px; font-weight: 600;
+  color: var(--text-secondary);
+  background: none; border: none;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.proto-nav button:hover { color: #fff; background: rgba(211,189,242,0.15); }
+.proto-nav button.on { color: #fff; background: rgba(211,189,242,0.3); }
+
+/* ── The other-actions mock (a compact "action board") ────── */
+.actions-scene { display: none; }
+body.scene-actions .flow-scene { display: none; }
+body.scene-actions .actions-scene {
+  display: block;
+  position: fixed; inset: 0;
+  padding: 64px 24px 24px;
+  overflow-y: auto;
+  z-index: 2;
+}
+.actions-head { text-align: center; margin-bottom: 18px; }
+.actions-head h1 { font-family: var(--font-title); font-size: 34px; font-weight: 400; letter-spacing: 0.04em; }
+.actions-head p { font-family: var(--font-body); font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
+.action-orbits {
+  max-width: 980px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.orbit {
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  padding: 22px 20px 18px;
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+.orbit:hover { transform: translateY(-3px); border-color: rgba(211,189,242,0.4); }
+.orbit .glyph {
+  width: 84px; height: 84px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--font-title);
+  font-size: 26px;
+  background: radial-gradient(circle at 35% 30%, rgba(211,189,242,0.35), rgba(89,108,217,0.18) 70%);
+  box-shadow: 0 0 22px var(--o-glow, rgba(211,189,242,0.25)), inset 0 0 12px rgba(255,255,255,0.07);
+  position: relative;
+}
+.orbit .glyph::after {
+  /* tiny moonlet like the logo's satellite drop */
+  content: '';
+  position: absolute;
+  right: -4px; top: 12px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(160deg, var(--grad-lav), var(--grad-peri));
+  box-shadow: 0 0 8px var(--o-glow, rgba(211,189,242,0.4));
+}
+.orbit h3 { font-family: var(--font-accent); font-size: 15px; font-weight: 600; text-align: center; margin-bottom: 6px; }
+.orbit p { font-size: 11.5px; line-height: 1.5; color: var(--text-secondary); text-align: center; }
+.orbit.warm-switch  { --o-glow: rgba(196,181,253,0.45); }
+.orbit.warm-notes   { --o-glow: rgba(134,239,172,0.4); }
+.orbit.warm-friends { --o-glow: rgba(125,211,252,0.4); }
+.orbit.warm-crisis  { --o-glow: rgba(253,186,116,0.5); border: 1px solid rgba(253,186,116,0.55); }
+.orbit.warm-crisis h3 { color: #f2bf5e; }
+.orbit.warm-front   { --o-glow: rgba(211,189,242,0.4); }
+.orbit.warm-import  { --o-glow: rgba(216,180,254,0.4); }
+.orbit p { color: #c5cad4; }
+
+/* ── Router params frame mode ─────────────────────────────── */
+body.frame { --nav-hide: 1; }
+body.frame .proto-nav { display: none; }
+
+/* ── Mobile layout ────────────────────────────────────────── */
+body.mobile .content {
+  top: auto;
+  bottom: calc(3vh + env(safe-area-inset-bottom));
+  left: 50%;
+  right: auto;
+  width: min(calc(100vw - 32px), 560px);
+  transform: translateX(-50%);
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+}
+body.mobile .bubble { padding: 20px 18px 18px; }
+body.mobile .bubble h2 { font-size: 18px; }
+body.mobile .choices { grid-template-columns: 1fr; }
+body.mobile .bloom { width: 92px; height: 92px; }
+body.mobile .bloom-wrap { top: 26%; }
+body.mobile .constellation { top: 20px; gap: 0; }
+body.mobile .cst-star { width: 27px; height: 27px; font-size: 9px; }
+body.mobile .cst-label { display: none; }
+body.mobile .action-orbits { grid-template-columns: 1fr; }
+body.mobile .orbit .glyph { width: 64px; height: 64px; font-size: 20px; }
+body.mobile .orbit p { display: none; }
+body.mobile .actions-head h1 { font-size: 26px; }
+body.mobile .actions-scene { padding: 56px 16px 60px; }
+
+/* Hidden scrollbars — scrollbar chrome breaks the frameless sky */
+html { scrollbar-width: none; }
+body::-webkit-scrollbar, html::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.actions-scene, .content, body { scrollbar-width: none; }
+.actions-scene::-webkit-scrollbar, .content::-webkit-scrollbar { display: none; }
+
+
+</style>
+</head>
+<body>
+
+<!-- 🌸 FLOWER SKETCH AREA — flow scene -->
+<section class="scene flow-scene" id="flowScene">
+  <div class="nebula" id="nebula"></div>
+  <div id="starfield"></div>
+  <div class="dark-overlay" id="darkOverlay"></div>
+
+  <div class="constellation" id="constellation"></div>
+  <svg class="cst-lines" id="cstLines"></svg>
+
+  <div class="bloom-wrap" id="bloomWrap">
+    <div class="halo h3"></div>
+    <div class="halo h2"></div>
+    <div class="halo h1"></div>
+    <svg class="bloom" id="bloom" viewBox="0 0 100 100" fill="none">
+      <!-- drop/bloom body: teardrop point at top-right, satellite dot -->
+      <path d="M50 10 C 76 28, 88 46, 88 62 A 38 38 0 1 1 12 62 C 12 46, 24 28, 50 10 Z"
+            fill="url(#bloomGrad)"/>
+      <circle cx="88" cy="18" r="7" fill="url(#bloomGrad)" opacity="0.95"/>
+      <defs>
+        <linearGradient id="bloomGrad" x1="0.26" y1="0.05" x2="0.72" y2="0.98">
+          <stop offset="0%" stop-color="#D3BDF2"/>
+          <stop offset="100%" stop-color="#596cd9"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="content" id="content"></div>
+</section>
+
+<!-- ── Other-actions scene ── -->
+<section class="actions-scene" id="actionsScene" style="position:fixed;inset:0;background:linear-gradient(to bottom, #182859 0%, #10224d 40%, #01153a 100%);">
+  <div class="nebula" style="opacity:1"></div>
+  <div class="dark-overlay" style="opacity:0.28"></div>
+  <div id="starfield2" style="position:absolute;inset:0;pointer-events:none"></div>
+  <div class="actions-head">
+    <h1>Your system, in orbit</h1>
+    <p>Every action is a soft body in the same sky</p>
+  </div>
+  <div class="action-orbits">
+    <div class="orbit warm-front"><div class="glyph">⌁</div><h3>Switch</h3><p>Tap who's front. The bloom does a soft pulse and the sky hue matches their avatar theme.</p></div>
+    <div class="orbit warm-notes"><div class="glyph">✎</div><h3>Notes</h3><p>Float like post-its, like the Tumblr cork board — tilted slightly, pinned, no heavy chrome.</p></div>
+    <div class="orbit warm-friends"><div class="glyph">◍</div><h3>Friends</h3><p>Friend systems are small clusters of 2–3 stars. On hover they drift a little closer.</p></div>
+    <div class="orbit warm-crisis"><div class="glyph">✦</div><h3>Crisis</h3><p>Amber star in the corner, slow pulse. Two taps to open, never by accident.</p></div>
+    <div class="orbit warm-import"><div class="glyph">⇅</div><h3>Import</h3><p>Sources arrive as comets; their stars join your constellation.</p></div>
+    <div class="orbit warm-switch"><div class="glyph">⚙</div><h3>Settings</h3><p>Your bloom avatar and theme choices as sky palettes.</p></div>
+  </div>
+</section>
+
+<div class="proto-nav" id="protoNav">
+  <button data-scene="flow" class="on">Flow</button>
+  <button data-scene="actions">Actions</button>
+</div>
+
+<script>
+/* ============================================================
+   STEP DEFINITIONS — mirrors activity/src/app/navigation/registrationFlow.js
+   Shadow colors: edit the CSS vars in :root ABOVE, not here.
+   ============================================================ */
+const STEPS = [
+  { id:'category', label:'Category', short:'CAT', word:'Every sky starts dark.',
+    overlay:0.82, glow:26, stars:0, shadowVar:'--shadow-0', bloomVar:'--shadow-0',
+    h2:'Do you have a dissociative condition?', sub:'This helps us set up your profile with the right features. You can always change this later in settings.',
+    choices:[['DSM-5','Diagnostic and Statistical Manual'],['ICD-10/11','International Classification'],['Other','Custom identifiers or conditions'],['None','No specific condition']] },
+
+  { id:'condition', label:'Condition', short:'CDN', word:'The sky starts thinking.',
+    overlay:0.70, glow:38, stars:14, shadowVar:'--shadow-1', bloomVar:'--shadow-1',
+    h2:'DSM-5 Conditions', sub:'Select the condition that best describes your experience.',
+    choices:[['Dissociative Identity Disorder','Distinct identity states','4 types'],['Partial DID','Distinct states, taking over less fully'],['OSDD-1a','Identity alteration, less distinct'],['Depersonalization/Derealization','Feeling detached from self or world']] },
+
+  { id:'import', label:'Import', short:'IMP', word:'Bring your stars with you.',
+    overlay:0.56, glow:52, stars:30, shadowVar:'--shadow-2', bloomVar:'--shadow-2',
+    h2:'Import your people?', sub:'We can bring profiles from Simply Plural, PluralKit, Tupperbox and Octocon at once. Skip this if you are starting fresh.',
+    choices:[['Import now','Multiple platforms, one pass'],['Enter manually','We will make it gentle']] },
+
+  { id:'details', label:'Details', short:'DTL', word:'Name the sky.',
+    overlay:0.42, glow:66, stars:48, shadowVar:'--shadow-3', bloomVar:'--shadow-3',
+    h2:'Name your system', sub:'This is the sky you will see every day. It can always change.',
+    input:true, choices:[] },
+
+  { id:'front', label:'Front', short:'FRT', word:'Who is at the window?',
+    overlay:0.28, glow:80, stars:70, shadowVar:'--shadow-4', bloomVar:'--shadow-4',
+    h2:'Who is front right now?', sub:'Add the person who is here. You can add more members any time.',
+    choices:[['Add first member','Name, avatar, description'],['Skip for now','You can add them later']] },
+
+  { id:'complete', label:'Complete', short:'FIN', word:'Welcome home.',
+    overlay:0.14, glow:110, stars:96, shadowVar:'--shadow-5', bloomVar:'--shadow-5',
+    h2:'Your sky is lit', sub:'Six stars remain across the top as your map. Progress never disappears — back steps dim, forward steps brighten.',
+    done:true, choices:[], copyBright:true },
+];
+
+let current = 0;
+const chosen = {};
+
+function starsSVG(stepIdx, reached){
+  // tiny 4-point star glyph for the constellation node
+  return `<svg width="15" height="15" viewBox="0 0 24 24" fill="${reached?'rgba(255,255,255,0.95)':'rgba(255,255,255,0.25)'}"><path d="M12 2 L14 10 L22 12 L14 14 L12 22 L10 14 L2 12 L10 10 Z"/></svg>`;
+}
+
+function buildConstellation(){
+  const c = document.getElementById('constellation');
+  c.innerHTML = '';
+  STEPS.forEach((s, i) => {
+    const node = document.createElement('div');
+    node.className = `cst-node ${i <= current ? 'reached' : ''} ${i === current ? 'current' : ''}`;
+    node.style.position = 'relative';
+    node.innerHTML = `<div class="cst-star">${starsSVG(i, i <= current)}</div><div class="cst-label">${s.label}</div>`;
+    c.appendChild(node);
+    if (i < STEPS.length - 1){
+      const g = document.createElementNS('http://www.w3.org/2000/svg','line');
+      g.setAttribute('id','cgl-'+i);
+      c.appendChild(g);
+    }
+  });
+  // connector lines between nodes (HTML overlay for simplicity)
+  requestAnimationFrame(() => {
+    const nodes = c.querySelectorAll('.cst-node');
+    const lines = document.getElementById('cstLines');
+    lines.innerHTML = '';
+    for (let i=0;i<nodes.length-1;i++){
+      const a = nodes[i].querySelector('.cst-star').getBoundingClientRect();
+      const b = nodes[i+1].querySelector('.cst-star').getBoundingClientRect();
+      const sx = a.right, sy = a.top + a.height/2;
+      const ex = b.left, ey = b.top + b.height/2;
+      const div = document.createElement('div');
+      div.className = 'cst-line' + (i < current ? ' lit' : '');
+      div.style.left = sx+'px'; div.style.top = sy+'px';
+      div.style.width = (ex-sx)+'px';
+      lines.appendChild(div);
+    }
+  });
+}
+
+function paintStars(target, count, w, h){
+  const palette = ['lav','sky','mint'];
+
+  // preserve previously created stars, only add shortfall
+  const existing = target.querySelectorAll('.star').length;
+  for (let i = existing; i < count; i++){
+    const s = document.createElement('div');
+    s.className = 'star ' + palette[i % 3] + (Math.random() > 0.82 ? ' stars-dense' : '');
+    s.style.left = (Math.random()*100)+'%';
+    s.style.top = (Math.random()*100)+'%';
+    const sz = (Math.random()*2.2+0.8);
+    s.style.width = sz+'px'; s.style.height = sz+'px';
+    s.style.setProperty('--peak', (Math.random()*0.6+0.25).toFixed(2));
+    s.style.animationDelay = (Math.random()*7)+'s, '+(Math.random()*5)+'s';
+    target.appendChild(s);
+  }
+}
+
+function shootingStar(){
+  const field = document.querySelector('body.scene-flow #starfield, #starfield');
+  const sh = document.createElement('div');
+  sh.className = 'shooting-star go';
+  sh.style.left = (Math.random()*60+10)+'%';
+  sh.style.top = (Math.random()*35+5)+'%';
+  field.appendChild(sh);
+  setTimeout(()=>sh.remove(), 1800);
+}
+
+function applyStep(idx){
+  const s = STEPS[idx];
+  document.documentElement.style.setProperty('--overlay', s.overlay);
+  document.documentElement.style.setProperty('--bloom-color', `var(${s.bloomVar})`);
+  document.documentElement.style.setProperty('--bloom-glow', s.glow+'px');
+  document.documentElement.style.setProperty('--bloom-step-color', `var(${s.bloomVar})`);
+  document.getElementById('nebula').style.opacity = 0.55 + idx * 0.08;
+  paintStars(document.getElementById('starfield'), s.stars, innerWidth, innerHeight);
+  document.getElementById('bloomWrap').classList.toggle('warm', idx >= 2);
+  const bloom = document.getElementById('bloom');
+  bloom.style.filter = `drop-shadow(0 0 ${s.glow}px var(${s.shadowVar}))`;
+  buildConstellation();
+  renderContent(s);
+  document.querySelectorAll('#protoNav button').forEach(b => b.classList.toggle('on', b.dataset.scene === (document.body.classList.contains('scene-actions')?'actions':'flow')));
+}
+
+function renderContent(s){
+  const c = document.getElementById('content');
+  let inner = '';
+  const tag = `<div class="step-tag">${s.word}</div>`;
+
+  if (s.done){
+    inner = `<div class="bubble">${tag}<h2>${s.h2}</h2><p class="sub" style="${s.copyBright?'color:#dcdce8':''}">${s.sub}</p>
+      <div class="btn-row"><button class="btn btn-primary" data-act="start">Open your sky</button></div></div>`;
+  } else if (s.input){
+    inner = `<div class="bubble">${tag}<h2>${s.h2}</h2><p class="sub">${s.sub}</p>
+      <input type="text" class="text-input" placeholder="e.g. The Garden Sky" style="width:100%;padding:13px 16px;font-family:var(--font-accent);font-size:14px;color:var(--text);background:rgba(255,255,255,0.04);border:1px solid var(--glass-border-strong);border-radius:14px;outline:none;margin-bottom:6px"/>
+      <div class="btn-row"><button class="btn btn-ghost" data-act="back">Back</button><button class="btn btn-primary" data-act="next">Continue</button></div></div>`;
+  } else if (s.choices.length === 2 && (s.choices[0][0]==='Import now'||s.choices[0][0]==='Add first member')){
+    inner = `<div class="bubble">${tag}<h2>${s.h2}</h2><p class="sub">${s.sub}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${s.choices.map((ch,i)=>`<div class="choice ${chosen[s.id]===i?'on':''}" data-pick="${i}"><div class="dot">${i===0?'✨':'·'}</div><div><b>${ch[0]}</b><span>${ch[1]}</span></div></div>`).join('')}</div>
+      <div class="btn-row"><button class="btn btn-ghost" data-act="back">Back</button><button class="btn btn-primary" data-act="next">Continue</button></div></div>`;
+  } else {
+    inner = `<div class="bubble">${tag}<h2>${s.h2}</h2><p class="sub">${s.sub}</p>
+      <div class="choices">${s.choices.map((ch,i)=>`<div class="choice ${chosen[s.id]===i?'on':''}" data-pick="${i}"><div class="dot">${'✦✧⟡—'[i%4]||'✦'}</div><div><b>${ch[0]}</b><span>${ch[1]}</span>${ch[2]?`<span>${ch[2]}</span>`:''}</div></div>`).join('')}</div>
+      ${current>0?`<div class="btn-row"><button class="btn btn-ghost" data-act="back">Back</button><button class="btn btn-primary" data-act="next" style="${chosen[s.id]===undefined?'opacity:0.5':'flex:2'}">Continue</button></div>`:''}</div>`;
+  }
+  c.innerHTML = inner;
+
+  // one-shot (no-choice) steps jump straight ahead on Continue
+  c.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', e => {
+    const act = el.dataset.act;
+    if (act==='next') next();
+    if (act==='back') prev();
+  }));
+  c.querySelectorAll('[data-pick]').forEach(el => el.addEventListener('click', () => {
+    chosen[s.id] = parseInt(el.dataset.pick);
+    renderContent(s);
+  }));
+}
+
+function next(){ if (current < STEPS.length-1){ current++; applyStep(current); if (current>1) maybeShoot(); } }
+function prev(){ if (current > 0){ current--; applyStep(current); } }
+function maybeShoot(){ shootingStar(); }
+
+document.querySelectorAll('#protoNav button').forEach(b => b.addEventListener('click', () => {
+  document.body.classList.toggle('scene-actions', b.dataset.scene === 'actions');
+  document.body.classList.toggle('scene-flow', b.dataset.scene === 'flow');
+  document.body.classList.toggle('actions-scene-active', b.dataset.scene === 'actions');
+  document.querySelectorAll('#protoNav button').forEach(x => x.classList.toggle('on', x === b));
+  paintStars(document.getElementById('starfield2'), 40, innerWidth, innerHeight);
+}));
+
+// ── URL params for screenshot frames ───────────────────────
+window.addEventListener('load', () => {
+  const q = new URLSearchParams(location.search);
+  document.body.classList.add('scene-flow');
+  if (q.get('frame') === 'mobile') document.body.classList.add('mobile');
+  if (q.get('frame')) document.body.classList.add('frame');
+  if (q.get('scene') === 'actions'){
+    document.body.classList.add('scene-actions');
+    document.querySelectorAll('#protoNav button').forEach(x => x.classList.toggle('on', x.dataset.scene==='actions'));
+    paintStars(document.getElementById('starfield2'), 40, innerWidth, innerHeight);
+  }
+  const step = parseInt(q.get('step') ?? '0');
+  current = Math.min(Math.max(step,0), STEPS.length-1);
+  applyStep(current);
+  setInterval(shootingStar, 9000);
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') next();
+  if (e.key === 'ArrowLeft') prev();
+});
+</script>
+</body>
+</html>

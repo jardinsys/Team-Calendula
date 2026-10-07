@@ -2,6 +2,8 @@
    Self-hosted Fonts (Nunito, Quicksand, Poiret One, Rudiment)
    ═══════════════════════════════════════════ */
 
+@import './tokens.css';
+
 /* Nunito — variable weight via single file per subset */
 @font-face {
   font-family: 'Nunito';

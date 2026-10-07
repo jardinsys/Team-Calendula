@@ -1,0 +1,153 @@
+/* ============================================================
+   SYSTEMISER DESIGN TOKENS — v2 "Soft, not minimalist"
+   Layered ON TOP of App.css, never a replacement.
+
+   CONTRACT: every variable that already exists in App.css
+   keeps its current value EXACTLY (no visual changes to
+   hand-made design). This file's duplicate names restate the
+   SAME values for single-source-of-truth reference;
+   anything NEW here (gradients, rings, radii) is opt-in.
+
+   Sources: Penpot "Asset Attempts" boards (harvested via MCP,
+   Sep 2026) + legacy App.css :root.
+   ============================================================ */
+
+:root {
+  /* ── Core palette ──────────────────────────────────────── */
+  /* Harvested from Asset Attempts shape fills (Penpot) */
+  --grad-lav: #D3BDF2;     /* lavender top of the signature gradient */
+  --grad-peri: #596cd9;    /* periwinkle bottom of the signature gradient */
+  --grad-peri-deep: #3d55c0; /* pressed/deepened periwinkle */
+
+  /* ── Page background & legacy duplicates — App.css exact ── */
+  /* (restate App.css values; tokens.css adds, never overrides) */
+  --bg-top: rgba(24, 40, 89, 1);       /* page gradient top — App.css exact */
+  --bg-bottom: rgba(1, 21, 58, 1);    /* page gradient bottom — App.css exact */
+  --bg-page: linear-gradient(to bottom, rgba(24,40,89,1) 56%, rgba(1,21,58,1) 100%);  /* App.css exact */
+  --bg-card: rgba(26, 26, 40, 0.55);   /* App.css exact */
+  --bg-surface: rgba(38, 38, 58, 0.5);   /* App.css exact */
+  --bg-elevated: rgba(54, 60, 104, 0.45);
+  --bg-hover: rgba(255, 255, 255, 0.04);
+
+  /* ── The signature gradient (primary CTA) ──────────────── */
+  /* Penpot: dir 0.26,0.05 -> 0.72,0.98 (slight diagonal, mostly vertical) */
+  /* App.css exact (current hand-made look) */
+  --btn-gradient: linear-gradient(to bottom, rgba(211,189,242,1) 0%, rgba(89,108,217,1) 100%);
+  --btn-gradient-border: linear-gradient(to bottom, rgba(211,189,242,1) 25%, rgba(89,108,217,1) 100%);
+  /* NEW Penpot-direction variant (opt-in only) */
+  --grad-primary: linear-gradient(173deg, var(--grad-lav) 0%, var(--grad-peri) 100%);
+  --grad-primary-hover: linear-gradient(173deg, #e2d2f8 0%, #6c7fe4 100%);
+
+  /* ── Status gradients (Penpot-exact, 25%→100% stops) ───── */
+  /* NOTE: your file's Success is MINT→AQUA, Warning is AMBER→ORANGE,
+     Error is CORAL→RED. The legacy CSS said mint→teal, warning=crisis, etc.
+     Penpot is the source of truth. */
+  /* App.css exact (current look) */
+  --btn-success-gradient: linear-gradient(to bottom, rgba(147,191,163,1) 25%, rgba(89,186,217,1) 100%);
+  --btn-error-gradient: linear-gradient(to bottom, rgba(217,123,115,1) 25%, rgba(242,75,75,1) 100%);
+  --btn-warning-gradient: linear-gradient(to bottom, rgba(242,191,94,1) 25%, rgba(242,164,68,1) 100%);
+  --btn-crisis-gradient: linear-gradient(to bottom, rgba(242,191,94,1) 25%, rgba(242,164,68,1) 100%);
+  /* NEW Penpot-direction variants (opt-in) */
+  --grad-success: linear-gradient(173deg, #93bfa3 25%, #59bad9 100%);   /* mint → aqua */
+  --grad-warning: linear-gradient(173deg, #f2bf5e 25%, #f2a444 100%);  /* amber → orange */
+  --grad-error:   linear-gradient(173deg, #d97b73 25%, #f14b4b 100%);  /* coral → red */
+  --grad-crisis:  linear-gradient(173deg, #f2bf5e 25%, #f2a444 100%);  /* crisis uses Warning per Penpot */
+
+  /* ── Ghost/secondary button (Penpot: 17.5% tint + gradient ring) ── */
+  --grad-ghost-fill: rgba(211, 189, 242, 0.175);
+  --ghost-ring: 2px solid transparent;
+  --ghost-border-image: linear-gradient(173deg, rgba(211,189,242,1) 25%, rgba(89,108,217,1) 100%) 1;
+
+  /* ── Avatar ring (PFP treatment) ───────────────────────── */
+  --grad-avatar-ring: linear-gradient(173deg, #D3BDF2 0%, #596cd9 100%);
+
+/* Penpot: 13px gradient ring stroke, centered */
+  --ring-width: 13px;      /* decorative ring width (desktop); scale down to 5px mono at ≤480px */
+  --ring-gradient: linear-gradient(173deg, var(--grad-lav) 0%, var(--grad-peri) 100%);
+
+  /* ── Glass & elevation ─────────────────────────────────── */
+  --glass-blur: blur(20px);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-border-strong: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);   /* App.css exact */
+  --glass-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.3);  /* App.css exact */
+  --btn-shadow: 0 4px 14px rgba(89, 108, 217, 0.35);   /* lavender-glow under primary CTAs */
+  --btn-shadow-hover: 0 6px 20px rgba(89, 108, 217, 0.5);
+
+  /* ── Text ──────────────────────────────────────────────── */
+  --text: #ffffff;
+  --text-primary: #ffffff;
+  --text-secondary: #a8a8b8;
+  --text-muted: #7b7b90;
+  --text-on-gradient: #ffffff;   /* always white on any gradient */
+
+  /* ── Borders ───────────────────────────────────────────── */
+  --border: rgba(255, 255, 255, 0.06);
+  --border-accent: rgba(211, 189, 242, 0.35);
+
+  --accent: #c4b5fd;
+  --accent-hover: #a78bfa;
+  --accent-strong: #8b5cf6;
+  --accent-subtle: rgba(196, 181, 253, 0.12);
+  --accent-glow: rgba(196, 181, 253, 0.25);
+
+  /* ── Radii ramp ────────────────────────────────────────── */
+  /* Penpot buttons use 30px on an 89px-tall control → generously soft */
+  --radius: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-btn: 30px;      /* ← NEW: from Penpot buttons */
+  --radius-card: 24px;
+  --radius-pill: 999px;
+
+  /* ── Spacing ───────────────────────────────────────────── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* ── Motion ────────────────────────────────────────────── */
+  --transition-fast: 150ms ease;
+  --transition-smooth: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: 350ms cubic-bezier(0.34, 1.56, 0.64, 1);  /* playful pop */
+  --transition-bounce-hover: 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-bounce-press: 120ms cubic-bezier(0.34, 1.25, 0.64, 1);
+
+  /* ── Fonts ───────────────── Text Attempts direction ───── */
+  --font-title: 'Poiret One', cursive;
+  --font-accent: 'Quicksand', sans-serif;
+  --font-body: 'Nunito', sans-serif;
+  --font-notes: 'Rudiment', 'Nunito', sans-serif;
+
+  /* ─ Nunito Sans is the open candidate to REPLACE Nunito (Text
+     Attempts specimens auditioned it; not adopted yet) */
+  --font-body-candidate: 'Nunito Sans', sans-serif;
+
+  --color-error: #fca5a5;    /* App.css exact — text-safe pastel */
+  --color-success: #86efac;  /* App.css exact */
+  --color-warning: #fdba74;  /* App.css exact */
+
+  /* ── Pastel palette (kept; alignment with gradients) ───── */
+  --pastel-lavender: #c4b5fd;
+  --pastel-mint: #86efac;
+  --pastel-peach: #fdba74;
+  --pastel-sky: #7dd3fc;
+  --pastel-rose: #fda4af;
+  --pastel-lilac: #d8b4fe;
+  --pastel-cream: #fef3c7;
+
+  /* ── Rainbow gradient (kept from legacy) ───────────────── */
+  --rainbow-gradient: linear-gradient(135deg, #fda4af 0%, #fdba74 20%, #fef3c7 40%, #86efac 60%, #7dd3fc 80%, #c4b5fd 100%);
+
+  /* ── Discord safe areas ────────────────────────────────── */
+  --safe-top: var(--discord-safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--discord-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+
+  /* ── Z-index scale ─────────────────────────────────────── */
+  --z-base: 0;
+  --z-sticky: 100;
+  --z-modal: 1000;
+  --z-toast: 2000;
+}

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<!-- SYSTEMISER — Registration flow PREVIEW v2
+     Mirrors the REAL current flow (WhatIsPage → RegisterPage steps 1–5) with the
+     ToS/Privacy gate inserted at Get Started. Clinical tone, no branching games.
+     Tokens mirror activity tokens.css + App.css. Not connected to the app. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Systemiser — Registration Flow Preview</title>
+<style>
+  :root{
+    --bg-top:rgba(24,40,89,1); --bg-bottom:rgba(1,21,58,1);
+    --grad-lav:#d3bdf2; --grad-peri:#596cd9; --grad-peri-deep:#3d55c0;
+    --accent:#c4b5fd; --accent-hover:#a78bfa;
+    --text:#fff; --text-secondary:#a8a8b8; --text-muted:#7b7b90;
+    --glass:rgba(38,38,58,.5); --glass-border:rgba(255,255,255,.07);
+    --radius-card:16px; --radius-btn:30px;
+    --btn-gradient:linear-gradient(to bottom,#d3bdf2 0%,#596cd9 100%);
+    --ghost-fill:rgba(211,189,242,.175);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    min-height:100vh;color:var(--text);
+    font-family:'Nunito',system-ui,sans-serif;
+    background:linear-gradient(to bottom,var(--bg-top) 56%,var(--bg-bottom) 100%) fixed;
+    display:flex;flex-direction:column;align-items:center;padding:24px 16px 60px;
+  }
+  h1,h2{font-family:'Poiret One','Nunito',sans-serif;letter-spacing:.5px}
+  .banner{text-align:center;margin-bottom:18px}
+  .banner h1{font-size:28px}
+  .banner p{color:var(--text-secondary);font-size:14px;margin-top:6px}
+  .phone{
+    width:100%;max-width:390px;min-height:620px;
+    background:var(--glass);border:1px solid var(--glass-border);
+    border-radius:var(--radius-card);backdrop-filter:blur(12px);
+    box-shadow:0 8px 32px rgba(0,0,0,.3);
+    padding:26px 22px;position:relative;
+  }
+  h2{font-size:21px;margin-bottom:10px}
+  .lede{color:var(--text-secondary);font-size:13.5px;line-height:1.55;margin-bottom:18px}
+  .btn{
+    display:block;width:100%;text-align:center;cursor:pointer;
+    background:var(--btn-gradient);color:#fff;border:none;border-radius:var(--radius-btn);
+    padding:14px 18px;font:inherit;font-size:15px;font-weight:700;margin-top:16px;
+    box-shadow:0 4px 20px rgba(89,108,217,.35);
+  }
+  .btn:hover{filter:brightness(1.08)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .btn.ghost{
+    background:var(--ghost-fill);border:1px solid rgba(211,189,242,.4);color:var(--text);
+    font-weight:600;box-shadow:none;
+  }
+  .btn.small{flex:1;font-size:13.5px;font-weight:600}
+  .row{display:flex;gap:10px;margin-top:16px}
+  .back{background:none;border:none;color:var(--text-secondary);font:inherit;font-size:13px;cursor:pointer;margin-top:14px}
+  .back:hover{color:var(--accent)}
+  .what p{font-size:14px;line-height:1.65;color:#e8e6f2;margin-bottom:14px}
+  .what .highlight{color:var(--accent);font-weight:700}
+  .tabs{display:flex;gap:8px;margin-bottom:12px}
+  .tab{flex:1;text-align:center;padding:9px 0;cursor:pointer;font-size:14px;color:var(--text-secondary);border-bottom:2px solid var(--glass-border)}
+  .tab.active{color:var(--accent);border-bottom:2px solid var(--accent)}
+  .legal{font-size:12.5px;line-height:1.6;color:var(--text-secondary);height:230px;overflow-y:auto;padding-right:8px}
+  .legal h4{color:var(--text);margin:10px 0 3px;font-size:13px}
+  .agree{display:flex;gap:10px;align-items:flex-start;margin:14px 0 0;font-size:12.5px;color:var(--text-secondary);line-height:1.45}
+  .agree input{margin-top:2px;accent-color:var(--accent-hover)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
+  .cat{
+    text-align:center;cursor:pointer;border-radius:var(--radius-card);
+    background:var(--ghost-fill);border:1px solid rgba(211,189,242,.35);
+    color:var(--text);font:inherit;padding:18px 10px 14px;
+  }
+  .cat:hover{border-color:var(--accent-hover)}
+  .cat .ic{display:block;font-size:20px;margin-bottom:6px}
+  .cat .lbl{display:block;font-weight:700;font-size:14px}
+  .cat .dsc{display:block;color:var(--text-secondary);font-size:11px;margin-top:3px;line-height:1.35}
+  label.f{display:block;font-size:12.5px;color:var(--text-secondary);margin:14px 0 6px}
+  input[type=text]{
+    width:100%;background:rgba(0,0,0,.25);border:1px solid var(--glass-border);
+    border-radius:12px;color:var(--text);font:inherit;padding:11px 13px;font-size:14.5px;outline:none;margin-bottom:10px;
+  }
+  input[type=text]:focus{border-color:var(--accent-hover)}
+  .ck{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;margin:12px 0}
+  .ck small{display:block;color:var(--text-muted);font-size:11.5px;margin-top:2px}
+  .ck input{accent-color:var(--accent-hover);width:17px;height:17px;margin-top:1px}
+  .summary{background:rgba(0,0,0,.22);border-radius:12px;padding:12px 14px;font-size:13px;margin-bottom:6px}
+  .summary .si{display:flex;justify-content:space-between;padding:3px 0}
+  .summary .l{color:var(--text-muted)}
+  .import-opt{
+    display:block;width:100%;text-align:left;cursor:pointer;border-radius:var(--radius-card);
+    background:var(--ghost-fill);border:1px solid rgba(211,189,242,.35);color:var(--text);
+    font:inherit;padding:16px;margin-bottom:12px;
+  }
+  .import-opt:hover{border-color:var(--accent-hover)}
+  .import-opt b{display:block;font-size:14.5px;margin-bottom:3px}
+  .import-opt span{color:var(--text-secondary);font-size:12px;line-height:1.4}
+  .crumb{font-size:10.5px;color:var(--text-muted);letter-spacing:1.4px;text-transform:uppercase;margin-bottom:12px}
+</style>
+</head>
+<body>
+  <div class="banner">
+    <h1>Systemiser · Registration Preview</h1>
+    <p>Mirrors the real current flow + ToS gate at Get Started. Clickable end-to-end.</p>
+  </div>
+  <div class="phone" id="screen"></div>
+<script>
+const S = document.getElementById('screen');
+let st = { category:null, disorder:null, isSystem:false, systemName:'' };
+
+const V = {
+  welcome: () => `
+    <div class="crumb">Entry · Welcome</div>
+    <h2>Hello friend</h2>
+    <p class="lede">We're glad you're here. Take your time — there's no rush, and nothing is required yet.</p>
+    <button class="btn" onclick="go('authdone')">Begin →</button>
+    <button class="btn ghost" onclick="go('whatis')">What is Systemiser?</button>
+    <button class="back" onclick="alert('would return to Landing')">← Back</button>`,
+
+  authdone: () => `
+    <div class="crumb">Entry · Signed in</div>
+    <h2>Signed in via Discord</h2>
+    <p class="lede">Authentication happens automatically when the activity opens — this is the landing spot after it completes.</p>
+    <div class="summary">
+      <div class="si"><span class="l">Account:</span><span>✔ Connected with Discord</span></div>
+    </div>
+    <button class="import-opt" style="opacity:.45;cursor:not-allowed" onclick="alert('Link a system — not implemented yet')"><b>Link an account</b><span>Connect an existing system to this Discord account — unavailable at the moment</span></button>
+    <button class="btn" onclick="go('gate')">Get Started</button>
+    <button class="btn ghost" onclick="go('whatis')">What is Systemiser?</button>
+    <button class="back" onclick="go('welcome')">← Back</button>`,
+
+  gate: () => `
+    <div class="crumb">Get Started · Agreement</div>
+    <h2>A quick agreement</h2>
+    <p class="lede">Before your profile is created, please confirm our Terms and Privacy Policy.</p>
+    <div class="legal" id="legalBody" style="height:190px">
+      <h4>Terms</h4>
+      <p>A Discord activity for tracking members, fronting, notes, and friends. Not a medical service.</p>
+      <h4>Privacy</h4>
+      <p>One account = one system. Strangers see nothing by default; notes are system-level. Prior legal names are never retained after a name change.</p>
+    </div>
+    <label class="agree"><input type="checkbox" id="ok" onchange="agr()"> I have read and agree to the Terms of Service and Privacy Policy.</label>
+    <button class="btn" id="agreeBtn" disabled onclick="go('cat')">I understand &amp; agree</button>
+    <button class="back" onclick="go('authdone')">← Back</button>`,
+
+  whatis: () => `
+    <div class="crumb">Landing → What is Systemiser</div>
+    <h2>What is Systemiser?</h2>
+    <div class="what">
+      <p><span class="highlight">Systemiser</span> is a tool designed for those with dissociative disorders, those who generally need a tool to manage multiple states of mind, or other related needs.</p>
+      <p>This current version is a relatively basic starting point, but it will eventually give a wide array of features to help with organization, tracking, and the ability to aid during mental episodes. This is currently within Discord, but will eventually have standalone applications on webapp, desktop, and mobile devices.</p>
+      <p>That's all for now, but if you have any questions, feel free to join the current makeshift <u>support and testing server!</u> — JardinSys</p>
+    </div>
+    <button class="btn" onclick="go('gate')">Get Started</button>
+    <button class="back" onclick="alert('would return to Landing')">← Back</button>`,
+
+  
+
+  cat: () => `
+    <div class="crumb">Register · Step 1</div>
+    <h2>Do you have a dissociative condition?</h2>
+    <p class="lede">This helps us set up your profile with the right features. You can always change this later in settings.</p>
+    <div class="grid">
+      <button class="cat" onclick="go('cond',{category:'DSM'})"><span class="ic">📄</span><span class="lbl">DSM-5</span><span class="dsc">Diagnostic and Statistical Manual</span></button>
+      <button class="cat" onclick="go('cond',{category:'ICD'})"><span class="ic">🌐</span><span class="lbl">ICD-10/11</span><span class="dsc">International Classification</span></button>
+      <button class="cat" onclick="go('other',{category:'OTHER'})"><span class="ic">✎</span><span class="lbl">Other</span><span class="dsc">Other conditions or custom identifiers</span></button>
+      <button class="cat" onclick="go('name',{category:'NONE'})"><span class="ic">—</span><span class="lbl">None</span><span class="dsc">No specific condition</span></button>
+    </div>
+    <button class="back" onclick="go('gate')">← Back</button>`,
+
+  cond: () => `
+    <div class="crumb">Register · Step 2</div>
+    <h2>${st.category==='DSM'?'DSM-5':'ICD-10/11'} Conditions</h2>
+    <p class="lede">Select the condition that best describes your experience. Expand a card to read its definition before selecting.</p>
+    <!-- full expandable condition list mirrors RegisterPage DisorderStep; two sample cards shown -->
+    <button class="import-opt" onclick="go('import',{disorder:'Dissociative Identity Disorder',isSystem:true})"><b>Dissociative Identity Disorder</b><span>Expandable card in the real flow — expands to definition + subtypes, then [Select this]</span></button>
+    <button class="import-opt" onclick="go('import',{disorder:'Partial DID',isSystem:true})"><b>Other specified dissociative disorder</b><span>Sample expansion — definition shown inline before selection</span></button>
+    <div class="row"><button class="btn small ghost" onclick="startOver()">Start Over</button></div>
+    <button class="back" onclick="go('cat')">← Back</button>`,
+
+  other: () => `
+    <div class="crumb">Register · Custom profile</div>
+    <h2>Custom Profile</h2>
+    <p class="lede">Set up your profile manually.</p>
+    <label class="f">What might you call it? (optional)</label>
+    <input type="text" placeholder="e.g. Complex Trauma Response">
+    <div class="ck"><input type="checkbox"><div>You also... are a system<small>You have distinct identity states (alters)</small></div></div>
+    <div class="ck"><input type="checkbox"><div>You also... experience fragmented states<small>Altered states of mind without distinct alters</small></div></div>
+    <div class="ck"><input type="checkbox"><div>You also... dissociate<small>Feel detached from yourself or the world around you</small></div></div>
+    <div class="row">
+      <button class="btn small ghost" onclick="startOver()">Start Over</button>
+      <button class="btn small" onclick="go('import',{isSystem:true})" style="flex:2">Continue</button>
+    </div>
+    <button class="back" onclick="go('cat')">← Back</button>`,
+
+  import: () => `
+    <div class="crumb">Register · Import decision</div>
+    <h2>Set Up Your System</h2>
+    <p class="lede">Since your condition involves a system, you can import from another tool or start fresh.</p>
+    <button class="import-opt" onclick="go('rimport')"><b>Import from Another Tool</b><span>Preview and import your existing alters and data — Simple / Intermediate / Advanced modes</span></button>
+    <button class="import-opt" onclick="go('name')"><b>Start a New System</b><span>Begin fresh and create your first alter</span></button>
+    <div class="row"><button class="btn small ghost" onclick="startOver()">Start Over</button></div>
+    <button class="back" onclick="go('cat')">← Back to condition</button>`,
+
+  rimport: () => `
+    <div class="crumb">Register · Import (RegistrationImportPage)</div>
+    <h2>Choose Import Mode</h2>
+    <p class="lede">Pick how much control you want over your import.</p>
+    <button class="import-opt" onclick="go('rimpsrc')"><b>✦ Simple</b><span>One-click import — one source only, everything imported together with sensible defaults</span></button>
+    <button class="import-opt" onclick="go('rimpsrc')"><b>📋 Intermediate</b><span>Choose source targets — 1–2 sources, pick where things land (Main Profile / Discord Overlay)</span></button>
+    <button class="import-opt" onclick="go('rimpsrc')"><b>⚙ Advanced</b><span>Up to 4 sources — select switches, groups, per-member entity types before import</span></button>
+    <button class="back" onclick="go('import')">← Back</button>`,
+
+  rimpsrc: () => `
+    <div class="crumb">Import · Select source</div>
+    <h2>Pick your source${st.modeLabel||''}</h2>
+    <p class="lede">Supported today: PluralKit (API/file) · Simply Plural (API/file) · Octocon (API/file) · Tupperbox (file)</p>
+    <button class="import-opt" onclick="go('rimpcfg')"><b>PluralKit</b><span>API token (DM pk;token) or /export file</span></button>
+    <button class="import-opt" onclick="go('rimpcfg')"><b>Simply Plural</b><span>API token or JSON export</span></button>
+    <button class="import-opt" onclick="go('rimpcfg')"><b>Octocon</b><span>7-char System ID or export file</span></button>
+    <button class="back" onclick="go('rimport')">← Back</button>`,
+
+  rimpcfg: () => `
+    <div class="crumb">Import · Configure &amp; preview</div>
+    <h2>Configure your import</h2>
+    <p class="lede">Paste a token (or upload export file), then we fetch and preview: members, groups, switch history — with toggles for whether fronters get set and where data lands (Main Profile vs Discord Overlay).</p>
+    <div class="summary">
+      <div class="si"><span class="l">Preview:</span><span>14 members · 6 groups · 31 fields</span></div>
+      <div class="si"><span class="l">Target:</span><span>Main Profile</span></div>
+    </div>
+    <button class="btn" onclick="go('creating')">Import &amp; finish setup →</button>
+    <button class="back" onclick="go('rimpsrc')">← Change source</button>`,
+
+  name: () => `
+    <div class="crumb">Register · Name</div>
+    <h2>Name your system</h2>
+    <div class="summary">
+      <div class="si"><span class="l">Condition:</span><span>${st.disorder || (st.category==='OTHER'?'Custom':st.category==='NONE'?'None':st.category)}</span></div>
+      <div class="si"><span class="l">Profile type:</span><span>${st.isSystem?'System':'Basic'}</span></div>
+    </div>
+    <label class="f">System name (optional)</label>
+    <input type="text" placeholder="Leave blank to use your Discord display name.">
+    <div class="row">
+      <button class="btn small ghost" onclick="startOver()">Start Over</button>
+      <button class="btn small" onclick="st.isSystem?go('firstalt'):go('creating')" style="flex:2">Create Profile</button>
+    </div>
+    <button class="back" onclick="go('import')">← Back</button>`,
+
+  firstalt: () => `
+    <div class="crumb">Register · Who's in front</div>
+    <h2>So...Who is in front?</h2>
+    <p class="lede">Add the names of who's currently fronting. You can always add more later.</p>
+    <input type="text" placeholder="e.g. Host, Main, or a name">
+    <button class="import-opt" onclick="alert('adds another row — real flow')"><b>+</b><span>Add another</span></button>
+    <div class="row">
+      <button class="btn small ghost" onclick="go('creating')">Skip for now</button>
+      <button class="btn small" onclick="go('creating')" style="flex:2">Create &amp; Finish</button>
+    </div>
+    <button class="back" onclick="go('name')">← Back</button>`,
+
+  creating: () => `
+    <div class="crumb">Register · Finishing</div>
+    <h2>Creating your system…</h2>
+    <p class="lede">This may take a moment while we create your entities.</p>
+    <div style="height:8px;border-radius:4px;background:rgba(0,0,0,.3);overflow:hidden">
+      <div style="height:100%;width:60%;background:var(--btn-gradient)"></div>
+    </div>
+    <p style="color:var(--text-muted);font-size:12px;margin-top:10px">Preview ends here — the real flow lands on the hub.</p>`,
+};
+
+function agr(){ document.getElementById('agreeBtn').disabled = !document.getElementById('ok').checked }
+function tab(which){ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.t===which)); /* both tabs summarized for preview */ }
+function startOver(){ go('cat') }
+function go(name,patch={}){
+  st={...st,...patch};
+  S.innerHTML=V[name]();
+}
+go('welcome');
+</script>
+</body>
+</html>
