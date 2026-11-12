@@ -37,6 +37,13 @@ Collected Nov 2026 for the ACM talk. Companion sheets: `reference-chatbot-facts.
 - ⚠ The 170+ sites figure is VA/military-adjacent — attribute as "VA clinical sites." The app suite is VA-built (US/veterans-origin, publicly available to anyone).
 - Taxonomy guardrail: DSM-5 places dissociative disorders in their own chapter, SEPARATE from trauma- and stressor-related disorders (ICD-11 recognizes complex PTSD as its own diagnosis). The talk's safe category claim is "conditions closely tied to trauma that receive little mainstream attention" — association, not chapter membership. PTSD belongs to the well-served side of the line; dissociative disorders to the under-served side.
 
+## Slide 3 funding-funnel figures (added Nov 2026)
+
+- **Crunchbase, Q3 2024 sector snapshot**: AI $19B, healthcare & biotech $15B, hardware $13B, fintech $8B (global venture funding by sector, one quarter). Annual AI series: 2022 $45.8B, 2023 ~$50B, 2024 $114B (as revised in 2026 reporting), 2025 $211B (+85% YoY, ~⅓ of global VC).
+- **CB Insights, State of Venture 2024**: AI captured a record 37% of all venture funding (17% of deals) — both all-time highs; vertical sectors (fintech, digital health, retail tech) lost AI-deal share, 38% (2019) → 24% (2024).
+- **Rock Health, 2024 year-end market overview**: US digital health raised $10.1B across 497 deals; mental health $1.4B — top-funded clinical area for the sixth straight year. Mental-health startups' share of digital-health funding roughly halved since 2021 (16.1% → ≈8%).
+- Slide-3 guardrail: all three bar figures are full-year 2024 or explicitly quarter-labeled; never mix the Q3 sector snapshot with annual mental-health dollars in one bar set.
+
 ## Slide placement
 
 - **Slide 5 (technology gap) leads with this sheet**: feasibility (S3) → research funding declined to 2014 levels → tech investment concentrated in generic formats and shrinking → AI investment skips mental health → "scalability and data limitations rather than a lack of need" → allocation gap. NO dissociative-disorders mention (Jardin's v2 rule — first DD mention is Systemiser, slide 9); keep the split-visual's right side generic ("under-represented conditions").

@@ -308,6 +308,17 @@
     *{transition:none!important;animation:none!important;opacity:1!important;transform:none!important}
     .s9 .seg,.s9 .mend,.s11 .spoke{stroke-dashoffset:0!important}
   }
+  /* golden-ratio vertical balance (measured: content band optically centered, cy ~47%) */
+  .s3{padding-top:113px}
+  .s4{padding-top:153px}
+  .s5{padding-top:136px}
+  .s6{padding-top:96px}
+  .s7{padding-top:166px}
+  .s8{padding-top:123px}
+  .s12{padding-top:126px}
+  .s13{padding-top:121px}
+  .s14{padding-top:114px}
+  .s16{padding-top:107px}
   /* ===== v3 overrides: unified navy-gradient deck + icons + refs + photo slot ===== */
   .slide h1,.slide h2,.slide h3{color:var(--ink)}
   .slide .ic{display:flex;align-items:center;justify-content:center}
@@ -323,6 +334,7 @@
     font-size:13px;font-weight:600;padding:7px 13px;border-radius:9px;
     opacity:0;transition:opacity .2s ease;white-space:nowrap}
   #meteors{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.5;overflow:hidden}
+  #petals{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.5;overflow:hidden}
   .refs .refcols{display:grid;grid-template-columns:1fr 1fr;gap:10px 40px;margin-top:20px}
   .refs p{font-size:13.5px;line-height:1.5;color:var(--ink-soft);margin:0 0 8px}
   .refs p b{color:var(--ink);font-weight:700}
@@ -338,6 +350,13 @@
   .bfill i{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-style:normal;font-size:13.5px;font-weight:800;color:var(--ink)}
   .bfill.hot{background:var(--orange)} .bfill.hot i{color:#241503}
   .bfill.cold{background:rgba(91,58,14,.35)}
+  .btrack{flex:1;height:32px;border-radius:6px;background:rgba(91,58,14,.10);position:relative;overflow:visible}
+  .bar .bv{font-size:13.5px;font-weight:800;color:var(--ink);width:64px;flex:none;font-style:normal}
+  .bfill{position:absolute;left:0;top:0;height:100%;border-radius:6px;min-width:8px}
+  .bfill.mh{background:var(--butter)}
+  .stchip{display:block;margin-top:8px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:3px 6px;text-align:center}
+  .stchip.yes{background:rgba(255,189,89,.55);color:#241503}
+  .stchip.no{color:var(--ink-soft);border:1px dashed var(--line)}
   .bcap{font-size:12px;color:var(--ink-soft);margin-top:10px}
   .bcap b{color:var(--deep)}
   .s3line{font-size:27px;font-weight:600;margin-top:26px}
@@ -367,6 +386,7 @@
   .cnote{font-size:13px;color:var(--ink-soft);margin-top:16px;line-height:1.45}
   .cnote b{color:var(--ink)}
 </style>
+  <link rel="stylesheet" href="assets/sakura.css">
 </head>
 <body>
 <div id="stage">
@@ -402,7 +422,7 @@
       <p class="subtitle b" data-d="3" style="font-size:44px;font-weight:800;line-height:1.18;color:var(--deep)">Building software for under-represented mental health conditions</p>
       <div class="rule b" data-d="4"></div>
       <p class="byline b" data-d="5">Jardin · Tennessee State University</p>
-      <div class="pagenum">1 / 15</div>
+      <div class="pagenum">1 / 16</div>
     </section>
 
     <!-- ============ 2 · HOOK ============ -->
@@ -413,7 +433,7 @@
         <img src="assets/photo-crisis.jpg" alt="" onerror="this.parentNode.style.display='none'">
         <figcaption class="photo-cap">Photo: Unsplash (credit on references slide)</figcaption>
       </figure>
-      <div class="pagenum">2 / 15</div>
+      <div class="pagenum">2 / 16</div>
     </section>
 
     <!-- ============ 3 · INNOVATION EVERYWHERE ============ -->
@@ -422,28 +442,26 @@
       <h2 class="b" data-d="1">The money has a direction.</h2>
       <div class="chart">
         <div class="chartcol b" data-d="2">
-          <div class="ch">Where the wave is <small>global venture funding to AI companies, by year</small></div>
+          <div class="ch">Where the wave goes <small>global venture funding by sector, one quarter (Q3 2024)</small></div>
           <div class="bars">
-            <div class="bar"><span class="bl">2022</span><div class="bfill" style="width:22%"><i>$45.8B</i></div></div>
-            <div class="bar"><span class="bl">2023</span><div class="bfill" style="width:24%"><i>~$50B</i></div></div>
-            <div class="bar"><span class="bl">2024</span><div class="bfill" style="width:54%"><i>$114B</i></div></div>
-            <div class="bar"><span class="bl">2025</span><div class="bfill hot" style="width:100%"><i>$211B</i></div></div>
+            <div class="bar"><span class="bl">AI</span><div class="btrack"><div class="bfill hot" style="width:100%"></div></div><i class="bv">$19B</i></div>
+            <div class="bar"><span class="bl">Health &amp; biotech</span><div class="btrack"><div class="bfill" style="width:79%"></div></div><i class="bv">$15B</i></div>
+            <div class="bar"><span class="bl">Hardware</span><div class="btrack"><div class="bfill" style="width:68%"></div></div><i class="bv">$13B</i></div>
+            <div class="bar"><span class="bl">Fintech</span><div class="btrack"><div class="bfill" style="width:42%"></div></div><i class="bv">$8B</i></div>
           </div>
-          <div class="bcap"><b>+85% in the last year</b> · about one third of all global venture funding · Crunchbase</div>
+          <div class="bcap">2024 context: AI took a <b>record 37%</b> of all venture funding, an all-time high · CB Insights</div>
         </div>
         <div class="chartcol b" data-d="4">
-          <div class="ch">Where else it goes <small>venture funding by sector, one quarter (Q3 2024)</small></div>
+          <div class="ch">Zoom in on health <small>US venture funding, full-year 2024</small></div>
           <div class="bars">
-            <div class="bar"><span class="bl">AI</span><div class="bfill hot" style="width:100%"><i>$19B</i></div></div>
-            <div class="bar"><span class="bl">Health &amp; biotech</span><div class="bfill" style="width:79%"><i>$15B</i></div></div>
-            <div class="bar"><span class="bl">Hardware</span><div class="bfill" style="width:68%"><i>$13B</i></div></div>
-            <div class="bar"><span class="bl">Fintech</span><div class="bfill" style="width:42%"><i>$8B</i></div></div>
+            <div class="bar"><span class="bl">All digital health</span><div class="btrack"><div class="bfill" style="width:100%"></div></div><i class="bv">$10.1B</i></div>
+            <div class="bar"><span class="bl">Mental health</span><div class="btrack"><div class="bfill mh" style="width:14%"></div></div><i class="bv">$1.4B</i></div>
           </div>
-          <div class="bcap">Mental health sits inside healthcare's slice, and its share of digital-health funding has <b>roughly halved</b> since 2021 · Rock Health</div>
+          <div class="bcap">Mental health is the <b>top-funded clinical area</b> in digital health, six years running · Rock Health</div>
         </div>
       </div>
-      <p class="s3line b" data-d="6">The wave is real. <b>Mental health is missing from it.</b></p>
-      <div class="pagenum">3 / 15</div>
+      <p class="s3line b" data-d="6">The wave is real. <b>Mental health gets a sliver of it.</b></p>
+      <div class="pagenum">3 / 16</div>
     </section>
 
     <!-- ============ 4 · SCALE + UNEVEN NEGLECT ============ -->
@@ -459,7 +477,7 @@
         <div class="card res b" data-d="4"><h3>Some conditions…</h3><p>attract significant research funding and technology investment.</p></div>
         <div class="card neg b" data-d="5"><h3>Others…</h3><p>draw disproportionately little support relative to their real-world burden.</p></div>
       </div>
-      <div class="pagenum">4 / 15</div>
+      <div class="pagenum">4 / 16</div>
     </section>
 
     <!-- ============ 5 · TECHNOLOGY GAP ============ -->
@@ -477,7 +495,7 @@
         <div class="src">npj Digital Medicine — on why AI investment skips mental health</div>
       </div>
       <div class="triad b" data-d="7"><span>The need is there.</span><span>The capability is there.</span><span class="no">The investment isn't.</span></div>
-      <div class="pagenum">5 / 15</div>
+      <div class="pagenum">5 / 16</div>
     </section>
 
     <!-- ============ 6 · AI: THE TELLING EXTRA ============ -->
@@ -494,7 +512,7 @@
         <div class="fbox b" data-d="6"><b>OpenAI's own reported data</b><br>1,000,000+ users a week in conversations with explicit indicators of potential suicide planning.</div>
         <div class="fbox b" data-d="7"><b>ACM FAcT 2025 (Stanford)</b><br>Therapy chatbots showed stigma toward severe conditions and failed to interrupt suicidal intent.</div>
       </div>
-      <div class="pagenum">6 / 15</div>
+      <div class="pagenum">6 / 16</div>
     </section>
 
     <!-- ============ 7 · TEAM CALENDULA ============ -->
@@ -507,7 +525,7 @@
         <p class="b" data-d="2">Proof the model works: where a condition gets sustained investment, <b>purpose-built software follows</b>.</p>
         <p class="b" data-d="3">Every product begins the same way: <b>rigorous research into the condition it serves</b>, before a single feature is designed.</p>
       </div>
-      <div class="pagenum">7 / 15</div>
+      <div class="pagenum">7 / 16</div>
     </section>
 
     <!-- ============ 8 · LANDSCAPE ============ -->
@@ -524,6 +542,7 @@
           <div class="ci"><span class="code">F43.81</span> Prolonged grief disorder</div>
           <div class="ci"><span class="code">F43.89</span> Other specified</div>
           <div class="ci"><span class="code">F43.9</span> Unspecified</div>
+          <div class="stchip yes">specialized apps exist, VA-built</div>
         </div>
         <div class="cat b" data-d="3">
           <div class="ct">Adjustment disorders</div>
@@ -533,11 +552,13 @@
           <div class="ci"><span class="code">F43.24</span> With disturbance of conduct</div>
           <div class="ci"><span class="code">F43.25</span> With emotions &amp; conduct</div>
           <div class="ci"><span class="code">F43.20</span> Unspecified</div>
+          <div class="stchip no">no purpose-built apps</div>
         </div>
         <div class="cat b" data-d="4">
           <div class="ct">Attachment disorders</div>
           <div class="ci"><span class="code">F94.1</span> Reactive attachment disorder</div>
           <div class="ci"><span class="code">F94.2</span> Disinhibited social engagement disorder</div>
+          <div class="stchip no">no purpose-built apps</div>
         </div>
         <div class="cat star b" data-d="5">
           <div class="ct">Dissociative disorders <span class="starmk">★</span></div>
@@ -546,10 +567,11 @@
           <div class="ci"><span class="code">F44.81</span> Dissociative identity disorder</div>
           <div class="ci"><span class="code">F44.89</span> Other specified</div>
           <div class="ci"><span class="code">F44.9</span> Unspecified</div>
+          <div class="stchip no">no purpose-built software</div>
         </div>
       </div>
       <p class="cnote b" data-d="6">Trauma-cluster categories, with ICD-10 codes as catalogued by our research mapping. <b>Other clusters exist where trauma can be a major causal factor</b>: depressive, anxiety, personality, and substance-use disorders.</p>
-      <div class="pagenum">8 / 15</div>
+      <div class="pagenum">8 / 16</div>
     </section>
 
     <!-- ============ 9 · SYSTEMISER: CONTINUITY (first dissociative mention) ============ -->
@@ -582,7 +604,7 @@
         <p class="b" data-d="7">Symptoms disrupt memory, identity, and the organization of daily life, <b>the thread of a person's own story can break without warning</b>.</p>
         <p class="b" data-d="8">Systemiser's purpose: <b>hold that thread</b>: restore continuity when symptoms disrupt it.</p>
       </div>
-      <div class="pagenum">9 / 15</div>
+      <div class="pagenum">9 / 16</div>
     </section>
 
     <!-- ============ 10 · CAPABILITIES ============ -->
@@ -624,7 +646,7 @@
         </div>
       </div>
       <p class="footnote foot b" data-d="5">Capabilities as designed, in development; tested status follows.</p>
-      <div class="pagenum">10 / 15</div>
+      <div class="pagenum">10 / 16</div>
     </section>
 
     <!-- ============ 11 · ECOSYSTEM + PLANNED GATEWAYS ============ -->
@@ -647,8 +669,7 @@
         <div>
           <svg class="b" data-d="5" viewBox="0 0 560 330" role="img" aria-label="Systemiser hub with planned gateway spokes">
             <ellipse cx="97" cy="165" rx="84" ry="46" fill="#E7853F"/>
-            <text class="hubt" x="97" y="158" text-anchor="middle">SYSTEM-</text>
-            <text class="hubt" x="97" y="176" text-anchor="middle">ISER</text>
+            <text class="hubt" x="97" y="170" text-anchor="middle" style="font-size:14px;letter-spacing:.04em">SYSTEMISER</text>
             <!-- spokes: draw outward -->
             <line class="spoke b" data-d="6" pathLength="1" x1="181" y1="142" x2="360" y2="62"/>
             <line class="spoke b" data-d="6" pathLength="1" x1="181" y1="165" x2="360" y2="165" style="animation-delay:.2s"/>
@@ -663,7 +684,7 @@
           <div class="planned-note b" data-d="9"><span class="tag">planned</span>&nbsp; every spoke is <b>planned: roadmap, not shipped</b>.</div>
         </div>
       </div>
-      <div class="pagenum">11 / 15</div>
+      <div class="pagenum">11 / 16</div>
     </section>
 
     <!-- ============ 12 · HONEST STATUS ============ -->
@@ -683,7 +704,7 @@
         </div>
       </div>
       <p class="honest b" data-d="7">That is what exists in testing. <span class="no">That is the line I won't blur.</span></p>
-      <div class="pagenum">12 / 15</div>
+      <div class="pagenum">12 / 16</div>
     </section>
 
     <!-- ============ 13 · ROADMAP ============ -->
@@ -705,10 +726,10 @@
         </div>
         <div class="rnode dashed b" data-d="5">
           <h3>App connectivity <span class="tag ghost">planned</span></h3>
-          <p>Connects with future Team Calendula apps, like <b>Canary</b> (planned: a space to vent, guided through episodes before a crisis), plus <b>partnered apps and resources</b>.</p>
+          <p>Connects with <b>future Team Calendula apps</b> and <b>partnered apps and resources</b>.</p>
         </div>
       </div>
-      <div class="pagenum">13 / 15</div>
+      <div class="pagenum">13 / 16</div>
     </section>
 
     <!-- ============ 14 · BEYOND SYSTEMISER ============ -->
@@ -719,10 +740,10 @@
       <h2 class="b" data-d="1">A growing family of condition-specific products.</h2>
       <div class="traj">
         <div class="tnode b pop" data-d="2"><div class="tcirc oval">SYSTEM-<br>ISER</div><div class="lb">first product</div></div>
-        <div class="tlink solid b" data-d="3"></div>
-        <div class="tnode future b pop" data-d="4"><div class="tcirc oval">CANARY</div><div class="lb">pre-crisis companion · <span class="tag ghost" style="font-size:10px;padding:2px 8px">planned</span></div></div>
+        <div class="tlink b" data-d="3"></div>
+        <div class="tnode future b pop" data-d="4"><div class="tcirc oval">TRIGIN</div><div class="lb">trigger management · <span class="tag ghost" style="font-size:10px;padding:2px 8px">planned</span></div></div>
         <div class="tlink b" data-d="5"></div>
-        <div class="tnode future b pop" data-d="5"><div class="tcirc oval">TRIGIN</div><div class="lb">trigger management · <span class="tag ghost" style="font-size:10px;padding:2px 8px">planned</span></div></div>
+        <div class="tnode future b pop" data-d="5"><div class="tcirc oval">CANARY</div><div class="lb">pre-crisis companion · <span class="tag ghost" style="font-size:10px;padding:2px 8px">planned</span></div></div>
         <div class="tlink b" data-d="6"></div>
         <div class="tnode future b pop" data-d="6"><div class="tcirc oval">+ MORE</div><div class="lb">condition by condition</div></div>
       </div>
@@ -731,7 +752,7 @@
         <p class="b" data-d="8">Connectivity across the family: <b>apps talk to apps</b>, and to partnered resources.</p>
         <p class="b" data-d="9">Closing the gap <b>condition by condition</b>; early conversations with clinicians and organizations already underway.</p>
       </div>
-      <div class="pagenum">14 / 15</div>
+      <div class="pagenum">14 / 16</div>
     </section>
 
     <!-- ============ 15 · CLOSE ============ -->
@@ -741,7 +762,7 @@
       <p class="l b" data-d="2">Team Calendula targets that gap condition by condition, starting with Systemiser, whose four tested cycles are <b>the beginning, not the promise</b>.</p>
       <p class="final b" data-d="3">One condition at a time,<br>that is how the gap closes.</p>
       <p class="thanks b" data-d="4">Thank you · Questions welcome</p>
-      <div class="pagenum">15 / 15</div>
+      <div class="pagenum">15 / 16</div>
     </section>
 
     <!-- ============ 16 · REFERENCES ============ -->
@@ -753,7 +774,9 @@
           <p><b>WHO</b> (Sept 2025). Over a billion people living with mental health conditions — services require urgent scale-up.</p>
           <p><b>IAMHRF</b> (2026). Global mental-health research funding analysis, 2014–2023 (~110,000 grants); the decline to 2014 real-terms levels is reported in Nature, "Mental-health research is too often invisible."</p>
           <p><b>WHO Mental Health Atlas</b> (2020, 2024). Government mental-health service spending.</p>
-          <p><b>Rock Health</b> (2020–2026). US digital-health venture funding reports; mental-health startup funding share.</p>
+          <p><b>Rock Health</b> (2020–2026). US digital-health venture funding reports: 2024 total $10.1B; mental health $1.4B, top-funded clinical area six years running.</p>
+          <p><b>Crunchbase</b> (2024–2025). Global venture funding by sector (Q3 2024 snapshot); AI funding by year, 2022–2025.</p>
+          <p><b>CB Insights</b> (2025). State of Venture 2024: AI at a record 37% of global venture funding.</p>
           <p><b>npj Digital Medicine</b> (2026). Mapping AI startup investment and innovation in healthcare. doi:10.1038/s41746-026-02595-5.</p>
           <p><b>Torous, J.</b> (Nov 2025). Testimony, US House Energy &amp; Commerce Subcommittee; OpenAI-reported usage data — Harvard Medicine Magazine, "Millions already turn to AI for therapy."</p>
           <p><b>Moore, J., et al.</b> (2025). Expressing stigma and inappropriate responses prevents LLMs from safely replacing mental health providers. ACM FAccT 2025. arXiv:2504.18412.</p>
@@ -765,7 +788,7 @@
           <p><b>US Dept. of Veterans Affairs, National Center for PTSD</b> — mobile application suite (ptsd.va.gov).</p>
           <p><b>USC Institute for Creative Technologies</b> — Bravemind VR exposure therapy (medvr.ict.usc.edu).</p>
           <p><b>Image credits:</b> photography via Unsplash/Pexels free licenses — photographer credited per image.</p>
-          <p><b>Icons:</b> Lucide (ISC license, lucide.dev) · <b>Star-field effect:</b> shootingstar-html v1.0.0 (MIT, github.com/bvv8808/shootingstar-html).</p>
+          <p><b>Icons:</b> Lucide (ISC license, lucide.dev) · <b>Star-field effect:</b> shootingstar-html v1.0.0 (MIT, github.com/bvv8808/shootingstar-html) · <b>Petal effect:</b> Sakura.js v1.1.1 (MIT, github.com/jhammann/sakura).</p>
           <p><b>Deck source:</b> github.com/jardinsys/Team-Calendula — docs/acm-presentation.</p>
         </div>
       </div>
@@ -780,9 +803,11 @@
   <button class="navbtn" id="nextB" title="Next (→)">›</button>
   <div id="slideTip"></div>
   <div id="meteors"></div>
+  <div id="petals"></div>
 </div>
 
 <script src="assets/shootingstar.js"></script>
+<script src="assets/sakura.js"></script>
 <script>
 (function(){
   "use strict";
@@ -793,6 +818,7 @@
   var dotsEl= document.getElementById('dots');
   var stage = document.getElementById('stage');
   var meteors = document.getElementById('meteors');
+  var petals = document.getElementById('petals');
   var tip = document.getElementById('slideTip');
 
   /* ---------- build dot navigation ---------- */
@@ -880,8 +906,9 @@
     /* warm-cream ↔ dark-navy stage shift for the Calendula → Systemiser transition */
     var navy = slides[cur-1].classList.contains('navy');
     stage.classList.toggle('on-navy', navy);
-    /* shooting stars live only on the Systemiser (navy) slides */
+    /* shooting stars live only on the Systemiser (navy) slides; calendula petals on the warm ones */
     if (meteors) meteors.style.display = navy ? '' : 'none';
+    if (petals) petals.style.display = navy ? 'none' : '';
     if (cur===4){ buildFraction(); runCounter(); }
   }
 
@@ -972,6 +999,21 @@
       starLength: 70, starColor: '#FFD9A0', distance: 110,
       shootingDuration: 700, frequency: 4200, minFrequency: 2600,
       showBackgroundStars: true, numberOfBackgroundStars: 14
+    });
+  }
+
+  /* ---------- calendula petals on the warm slides ----------
+     vendored plugin: jhammann/sakura v1.1.1 (MIT) — assets/sakura.js + sakura.css
+     calendula-tinted, sparse and small so it stays behind the words */
+  if (petals && !noMotion && window.Sakura){
+    new Sakura('#petals', {
+      className: 'sakura',
+      fallSpeed: 1, minSize: 8, maxSize: 13, delay: 650,
+      colors: [{
+        gradientColorStart: 'rgba(255,145,77,0.55)',
+        gradientColorEnd: 'rgba(255,189,89,0.45)',
+        gradientColorDegree: 120
+      }]
     });
   }
 
