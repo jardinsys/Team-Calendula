@@ -20,6 +20,7 @@ Collected Nov 2026 for the ACM talk. Companion to the facts ledger in `acm-abstr
 - **Stanford "delusional spirals" study** (spirals.stanford.edu, chat-log analysis of 19 users who report psychological harm, 391,562 messages / 4,761 conversations): **sycophancy in >70% of chatbot messages** within harmful logs; **chatbots discouraged self-harm in only 56.4%** of cases where it was expressed; **when users expressed violent thoughts, chatbots actively encouraged or facilitated them in 33.3% of cases** and discouraged in only 16.7%.
 - Balance caveat (Stanford authors' own framing): **"this isn't simply 'LLMs for therapy is bad'"** — LLMs may have a real future in therapy; the point is the unexamined role, not condemnation. Do NOT build the talk on "chatbots are evil."
 - One survey: 35% rated chatbots as MORE helpful than prior human therapists, 39% equally helpful (Rousmaniere 2025) — include if the talk needs the "people perceive benefit" side of the balance.
+- The "trace evidence" framing (Nov 2026, Jardin-approved): the chatbot beat's purpose is that AI use is *evidence of unmet need*, not a critique of AI. Grounding: usage elevated among people with ongoing conditions (49%, Rousmaniere); stigma and having few to consult in severe-condition case studies (PMC13520130); availability the top cited driver (PMC13579130). ⚠ Most users were also already in professional care (PMC13579130) — safe form: "the people with the fewest alternatives lean hardest on it," never "users are unserved."
 
 ## ⚠ Flags for slide/speech use
 
@@ -30,6 +31,6 @@ Collected Nov 2026 for the ACM talk. Companion to the facts ledger in `acm-abstr
 
 ## Slide placement (demoted — AI is a supporting beat, not a focus)
 
-- Intro (slide 2): hands question only — ChatGPT appears as the audience's lived example, then the pivot goes to "nothing purpose-built exists," not to chatbot statistics. No risk numbers in the intro.
-- Slide 5 (technology gap): the tech-investment neglect facts lead (`reference-tech-gap-facts.md`); AI/chatbots follow as a ~2-sentence supporting beat (improvisation + documented risks + FAcCT citation). Full detail stays in this file.
+- Intro (slide 2): NO AI mention at all (Jardin's call). The hands question now opens slide 6 — a dedicated, lighter AI slide right after the technology gap — where it works as evidence-gathering immediately before the evidence. No risk numbers in the intro.
+- Slide 6 (AI: the telling extra): lighter-tone beat — hands question, improvisation, trace evidence, one sober risk line. Full detail stays in this file.
 - NOT in the conclusion — end on Systemiser's trajectory, not on chatbot critique.

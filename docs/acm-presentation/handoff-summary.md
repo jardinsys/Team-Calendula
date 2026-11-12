@@ -26,7 +26,8 @@ This folder is the home for the ACM conference presentation build (target: GitHu
 ## Presentation build notes (for the next session)
 
 - Venue: a GitHub Page connected to `docs/acm-presentation/` (likely served via GitHub Pages from this folder).
-- Format: visual-first conference presentation, not a document dump. Mission-driven narrative matching the abstract's arc: urgency → uneven neglect → feasibility → Team Calendula → Systemiser (continuity) → ecosystem → tested cycles + roadmap → broader trajectory.
+- **Audience (Jardin, Nov 2026 — governs every slide): computer engineers, potential designers and developers.** Engineering-first register; the human stakes carry the why, the engineering carries the how.
+- Format: visual-first conference presentation, not a document dump. Mission-driven narrative matching the abstract's arc, with v2 refinements in `talk-outline.md` (dissociative disorders first named only at Systemiser; AI as a lighter separate slide; trauma-class landscape slide; privacy bar worded as aspiration, never "HIPAA compliant").
 - Tone: singular first person ("my solution, Team Calendula", "I present Systemiser"), clinical register, no hype.
 - Do NOT create placeholder/demo imagery implying a shipped product.
 

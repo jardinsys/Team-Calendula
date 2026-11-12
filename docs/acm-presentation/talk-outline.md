@@ -1,14 +1,18 @@
-# ACM Talk Outline — Team Calendula and Systemiser (15 minutes)
+# ACM Talk Outline — Team Calendula and Systemiser (15 minutes) — v2
 
-Source of truth: `acm-abstract.md` v7. Framing constraints from `handoff-summary.md` apply throughout (clinical vocabulary only, singular first person, honest build status, continuity framing).
+**Audience (Jardin, Nov 2026 — governs every slide): computer engineers, potential designers and developers.** Engineering-first register: design spaces, architecture, platform constraints. The human stakes carry the why; the engineering carries the how.
+
+Source of truth: `acm-abstract.md` v7. Framing constraints from `handoff-summary.md` apply throughout (clinical vocabulary only, singular first person, honest build status, continuity framing, no community terminology).
+
+**v2 structural changes (Jardin's calls):** dissociative disorders NOT mentioned before Systemiser (slides 3–8 disorder-agnostic, first mention slide 9); AI = lighter separate slide 6; Team Calendula framed as "a solution to part of this, for trauma-based disorders — PTSD isn't the only one in that class"; new slide 8 (trauma-related condition landscape, AndColon mapping visual candidate); ecosystem + gateways merged (slide 11); privacy bar = *striving toward* clinical-grade/HIPAA-aligned, never achieved; status + roadmap slides concrete-pending.
 
 ## Problem statement (reference — NOT the spoken introduction)
 
-Compressed from abstract sentences 1–3 (the eLearn doc's 1–2 sentence form):
+Engineer-facing recast (Jardin's reframe for slide 3) + the scale sentence:
 
-> More than one billion people live with mental-health conditions, yet support reaches only a fraction of them — and within that population, conditions drawing disproportionately little research support relative to their real-world burden remain invisible to technology. As software advances make assistive mental-health technology newly feasible, this gap between what technology could do and what it serves grows more urgent rather than less.
+> Software has rebuilt sector after sector — finance, transport, logistics, communication — yet a few sectors technology touches have barely moved, and mental health is one of them. More than one billion people live with mental-health conditions, support reaches only a fraction, and within that population, conditions drawing disproportionately little research support relative to their real-world burden remain invisible to technology — even as software advances make assistive mental-health technology newly feasible, making the gap more urgent rather than less.
 
-Role: anchor for the problem section (slides 2–3). The spoken introduction opens differently (see attention getter below). Does NOT claim: a funding percentage, "no care at all," or a separately measured dissociative-disorder funding statistic.
+Role: anchor for slides 3–5. The spoken introduction opens with the crisis line instead. Does NOT claim: a funding percentage, "no care at all," or a separately measured dissociative-disorder funding statistic. Does NOT name any specific disorder cluster before slide 9.
 
 ## Speech skeleton (per the outline template)
 
@@ -16,91 +20,100 @@ Role: anchor for the problem section (slides 2–3). The spoken introduction ope
 
 **General purpose:** To inform (with a persuasive through-line).
 
-**Specific purpose:** To inform the audience how Team Calendula develops assistive software for conditions receiving little mainstream attention, beginning with dissociative disorders.
+**Specific purpose:** To show an engineering audience an under-served design space in mental-health software and how Team Calendula addresses part of it — trauma-related conditions — beginning with dissociative disorders.
 
-**Thesis / central idea:** Mental-health technology neglects under-represented conditions; Team Calendula's first product, Systemiser, addresses this gap for dissociative disorders by restoring continuity of memory, identity, and daily organization, with four core feature cycles exercised in prototype testing to date.
+**Thesis / central idea:** Technology has transformed most sectors but left mental-health software concentrated on a few common conditions; Team Calendula targets under-represented, trauma-related conditions, and its first product, Systemiser, serves dissociative disorders by restoring continuity of memory, identity, and daily organization — with four core feature cycles exercised in prototype testing to date.
 
 ## Introduction (~2 min)
 
-- **I. Attention getter.** *(Revised — full beat-by-beat in `speaker-notes.md` slide 2.)* "We are in a crisis — though you might not know it." + show-of-hands question ("know someone who talks to ChatGPT about things they'd tell a therapist"), self-included, then pivot: "That tells you where technology's attention is going. Let me show you where it isn't." Chatbot risk evidence deliberately held for Section II (slide 5). Sources: `reference-chatbot-facts.md`.
-- **II. Problem statement** (the compressed 1–2 sentences above — spoken here as the setup, not as a label).
-- **III. Preview of main points.** "I'll show why this gap is urgent, how Team Calendula addresses it, and what Systemiser — its first product — already does in prototype."
+- **I. Attention getter.** *(Full beat-by-beat in `speaker-notes.md` slide 2.)* "We are in a crisis — though you might not know it." + pivot to what technology builds and what it doesn't. NO audience question, NO AI mention, NO disorder names.
+- **II. Engineer-facing problem statement** (the recast above — slide 3's opening claim; the WHO number follows on slide 4).
+- **III. Preview of main points.** "I'll show where technology's attention has gone, where it hasn't, my response to part of that gap, and the first product built on it."
 
-*Transition (full sentence):* "First, the scale of the problem."
+*Transition (full sentence):* "First — the design space."
 
 ## Body
 
-- **I. The problem: vast need, uneven neglect (~3 min)** — abstract S1–S2
-  - A. Mental health is among the most under-resourced areas of modern health care; 1 billion+ people, support reaches only a fraction (WHO, Sept 2025).
-  - B. Neglect is uneven: some conditions attract significant research funding and technology investment; others draw disproportionately little relative to their real-world burden.
+- **I. The problem: innovation everywhere, some sectors left behind (~2.5 min)** — abstract S1–S2, engineer-facing (slides 3–4)
+  - A. Fastest innovation cycle in software history; whole sectors rebuilt; mental health barely moved.
+  - B. Scale: 1 billion+ people with mental-health conditions, support reaches a fraction (WHO, Sept 2025); neglect is uneven across conditions — some attract funding and tech investment, others draw little relative to burden.
     - 1. Qualitative claim only — no percentage on any slide.
-    - 2. Dissociative disorders introduced here as an instance of the under-served class, not as a separately measured statistic.
-- **II. The moment: the technology gap (~2 min)** — abstract S3 + tech-gap facts
-  - A. Advances in software platforms, real-time collaboration, AI, and privacy engineering make assistive mental-health technology newly feasible.
-  - B. The neglect, in technology terms (leads — facts in `reference-tech-gap-facts.md`): research funding fell back to 2014 levels (IAMHRF); tech investment concentrates in generic formats for common conditions and its share is shrinking (Rock Health); AI investment specifically skips mental health, "rather than a lack of need" (npj Digital Medicine).
-  - C. AI chatbots as a brief supporting beat only (~2 sentences: people improvising therapy from tools never designed for it, documented risks per ACM FAcCT study) — NOT a focus. Detail: `reference-chatbot-facts.md`.
-  - D. Therefore the gap between what technology could do and what it serves is growing more urgent, not less.
+    - 2. NO specific disorder clusters named yet (Jardin's rule — focus condition revealed with Systemiser).
+- **II. The technology gap (~1.5 min)** — abstract S3 + tech-gap facts (slide 5)
+  - A. Advances in platforms, real-time collaboration, AI, privacy engineering make assistive mental-health tech newly feasible.
+  - B. The allocation evidence (facts in `reference-tech-gap-facts.md`): research funding fell back to 2014 levels (IAMHRF); tech investment concentrates in generic formats for common conditions and its share is shrinking (Rock Health); AI investment skips mental health, "rather than a lack of need" (npj Digital Medicine).
+  - C. Therefore the gap is growing more urgent, not less.
+- **III. AI: the telling extra (~1 min, lighter tone)** — slide 6, separate slide (Jardin's call)
+  - A. Hands question (show-of-hands, self-included) → people improvise with tools never built for it.
+  - B. The use of AI is the trace evidence of the gap; one sober risk line (OpenAI-reported data; ACM FAcCT study). Not anti-AI. Detail: `reference-chatbot-facts.md`.
+- **IV. Team Calendula: a solution to part of this (~1.5 min)** — abstract S4 (slide 7)
+  - A. An independent software project (never "company") for trauma-based disorders — Jardin's framing.
+  - B. PTSD as proof-of-model only (VA app suite + Bravemind VR, 170+ VA clinical sites); PTSD is NOT the only condition in that class that deserves focus — never named as a target.
+  - C. Rigorous research per product: every product begins with research into the condition it serves.
+- **V. The landscape: how many trauma-related conditions (~1 min)** — NEW slide 8
+  - A. DSM-5 trauma- and stressor-related chapter: PTSD, acute stress disorder, adjustment disorders, reactive attachment disorder, disinhibited social engagement disorder, prolonged grief disorder (DSM-5-TR).
+  - B. Closely tied condition classes around the chapter; AndColon research mapping is cataloguing them (visual candidate: AndColon screenshot — ⚠ contains a dissociative-disorders category; Jardin decides).
+  - C. Dissociative disorders NOT named here.
+- **VI. Systemiser (~4.5 min)** — abstract S5–S7, Systemiser-specific content clustered (slides 9–13)
+  - A. Continuity by design — unifying need: continuity when dissociative symptoms disrupt memory, identity, and daily organization. FIRST mention of dissociative disorders (slide 9).
+  - B. Capabilities: identity states + transitions; structured record (auto-linked to the identity state present when created); granular viewer-tiered privacy. (+ additional features pending Jardin's list)
+  - C. Built as an ecosystem with planned gateways (MERGED slide): desktop, mobile, web; real-time collaboration layer; privacy-focused cloud storage; gateways into messaging/collaboration (Discord, Slack) and in-vehicle (CarPlay, Android Auto) — "planned," never shipped claims.
+  - D. Honest status: four core feature cycles exercised in prototype testing (identity-state representation/transitions, status/functioning tracking, privacy-gated sharing, collaborative information management). Never claim a working or shipped product. *(Concrete-pending — Jardin may firm up.)*
+  - E. Roadmap: grounding + crisis-support tools under active development; daily-organization extensions (reminders, offline, accessibility). *(Concrete-pending.)*
+- **VII. Team Calendula: beyond Systemiser (~1 min)** — abstract S8, the general model (slide 14)
+  - A. The reusable model: condition-specific products + rigorous research per product; gateway categories reusable across the family.
+  - B. Privacy bar worded as aspiration: "with the aim of clinical-grade, HIPAA-aligned privacy as the ecosystem matures" — NEVER asserted as achieved (not inside medical systems yet).
+  - C. Trajectory: growing family of products, more under-represented conditions over time; "early conversations with clinicians and organizations already underway" (qualitative, Jardin-supplied).
+  - D. No named future conditions (PTSD stays proof-of-model, never a target).
 
-*Transition:* "Team Calendula exists to narrow this gap."
+*Transition:* "That's the trajectory. Let me close."
 
-- **III. Team Calendula: the response (~1.5 min)** — abstract S4
-  - A. An independent software project (not a registered company — say "project," never "company").
-  - B. Builds technology for conditions with little mainstream attention; first focus: dissociative disorders.
-- **IV. Systemiser: continuity by design (~3.5 min)** — abstract S5
-  - A. Unifying need: continuity when dissociative symptoms disrupt memory, identity, and the organization of daily life.
-  - B. Capabilities:
-    - 1. Represent distinct identity states; track transitions between them.
-    - 2. Structured record of events, status, and functioning — bridges memory gaps.
-    - 3. Granular privacy model: share details selectively.
-  - C. Continuity framing carries the slide, not a feature list.
-- **V. Built as an ecosystem (~2 min)** — abstract S6–S7
-  - A. Desktop, mobile, and web; real-time collaboration layer; privacy-focused cloud-hosted storage.
-  - B. Planned gateways into third-party platform categories: messaging/collaboration (Discord, Slack), in-vehicle (Apple CarPlay, Android Auto).
-    - 1. "Planned" — gateways are roadmap, not shipped.
-    - 2. Framing: platforms that already shape daily digital life, turned toward assistive purposes.
-- **VI. Honest status: tested vs. in development (~1.5 min)** — abstract S7
-  - A. Four core feature cycles exercised in prototype testing: identity-state representation and transitions; status and functioning tracking; privacy-gated sharing; collaborative information management.
-  - B. Under active development (roadmap, not tested): grounding techniques and crisis-support tools.
-    - 1. Never claim a working or shipped product.
+## Conclusion (~1 min)
 
-*Transition:* "Systemiser is the first case study — not the last word."
+- **I. Review of main points.** Technology rebuilt sector after sector and left this one behind; the need is documented, the capability exists, attention is the missing piece; Team Calendula targets the gap condition by condition, starting with Systemiser — four tested cycles are the beginning, not the promise.
+- **II. Signal the end.** Closing line invites questions. *(Draft: "One condition at a time — that is how the gap closes. Thank you.")* ⚠ Jardin to rephrase.
 
-## Conclusion (~1.5 min)
+## Timing budget (per slide, sums to 14:30 + ~30s buffer)
 
-- **I. Review of main points.** The gap is vast and unevenly neglected; feasibility is rising; Team Calendula targets the gap condition by condition, starting with Systemiser.
-- **II. Broader trajectory (abstract S8).** A growing family of products addressing more under-represented conditions over time — closing the mental-health technology gap condition by condition.
-- **III. Signal the end.** Closing line invites questions. *(Draft: "One condition at a time — that is how the gap closes. Thank you.")* ⚠ Jardin to rephrase.
+| Slide | Section | Seconds |
+|---|---|---|
+| 1 | Title | 30 |
+| 2 | Hook (crisis line) | 30 |
+| 3 | Innovation everywhere, sectors left behind | 60 |
+| 4 | Scale + uneven neglect | 60 |
+| 5 | Technology gap | 90 |
+| 6 | AI: the telling extra | 45 |
+| 7 | Team Calendula: a solution to part of this | 75 |
+| 8 | Landscape: trauma-related conditions | 60 |
+| 9 | Systemiser: continuity (first DD mention) | 75 |
+| 10 | Systemiser: capabilities (+ expansion pending) | 90 |
+| 11 | Systemiser: ecosystem + gateways (merged) | 60 |
+| 12 | Systemiser: tested cycles (concrete-pending) | 45 |
+| 13 | Systemiser: roadmap (concrete-pending) | 45 |
+| 14 | Beyond Systemiser | 45 |
+| 15 | Close | 60 |
+| **Total** | | **14:30** |
 
-## Timing budget (sums to 15 min)
-
-| Section | Minutes |
-|---|---|
-| Introduction | 2 |
-| I. Problem | 3 |
-| II. Feasibility | 2 |
-| III. Team Calendula | 1.5 |
-| IV. Systemiser | 3.5 |
-| V. Ecosystem | 2 |
-| VI. Status | 1.5 |
-| Conclusion | 1.5 |
-| **Total** | **15** |
+Buffer: ~30s — absorbs the hands beat and slide-10 expansion.
 
 ## Slide mapping (visual-first, no document dump)
 
 | Slide | Content | Abstract source |
 |---|---|---|
 | 1 | Title + author + affiliation | form fields |
-| 2 | Problem: 1 billion+, fraction reached | S1 |
-| 3 | Problem: uneven neglect (qualitative) | S2 |
-| 4 | Feasibility → widening gap | S3 |
-| 5 | Team Calendula: mission, first focus | S4 |
-| 6 | Systemiser: continuity framing | S5 |
-| 7 | Capabilities: states, transitions, record, privacy | S5 |
-| 8 | Ecosystem: desktop/mobile/web + collaboration layer | S6 |
-| 9 | Planned gateways by platform category | S7 |
-| 10 | Tested: four cycles (honest status) | S7 |
-| 11 | Roadmap: grounding + crisis tools | S7 |
-| 12 | Trajectory: condition by condition | S8 |
-| 13 | Closing / questions | S8 |
+| 2 | Hook: "a crisis you might not know" (no question, no AI) | — |
+| 3 | Innovation everywhere; sectors left behind | S1–S3 recast |
+| 4 | Scale (1 billion+) + uneven neglect (qualitative, no disorder names) | S1–S2 |
+| 5 | Technology gap: funding decline, concentration, shrinking, "rather than a lack of need" | S3 |
+| 6 | AI: the telling extra (hands question, trace evidence, one risk line) | — |
+| 7 | Team Calendula: a solution to part of this (trauma-based; PTSD = proof-of-model) | S4 |
+| 8 | Landscape: DSM-5 trauma chapter + condition classes (+ AndColon visual candidate) | S4 elaboration |
+| 9 | Systemiser: continuity framing (FIRST dissociative mention) | S5 |
+| 10 | Capabilities: states, transitions, auto-linked record, tiered privacy (+ features TBD) | S5 |
+| 11 | Ecosystem + planned gateways (merged) | S6–S7 |
+| 12 | Tested: four cycles (honest status; concrete-pending) | S7 |
+| 13 | Roadmap: grounding + crisis tools (concrete-pending) | S7 |
+| 14 | Beyond Systemiser: reusable model, aspiring privacy bar, networking | S8 |
+| 15 | Closing / questions | S8 |
 
 Visuals: diagrams and framing only. No placeholder or demo imagery implying a shipped product.

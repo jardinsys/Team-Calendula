@@ -29,8 +29,18 @@ Collected Nov 2026 for the ACM talk. Companion sheets: `reference-chatbot-facts.
 - The 2%-of-budgets and treatment-gap numbers are service-system facts — useful context, but don't present them as technology facts.
 - IAMHRF is already the abstract's underlying evidence base (its earlier 75,000-grant report) — the 2014–2023 update is consistent, not contradictory. If asked, the abstract's qualitative wording stands.
 
+## PTSD contrast case (proof-of-model, NOT a target)
+
+- Purpose in the talk: evidence that purpose-built software follows investment — NOT an example of a neglected condition. Never name PTSD as "under-represented"; the abstract's ledger flag is confirmed by these findings.
+- **VA app suite** (free, government-built, publicly available): PTSD Coach (self-management), PTSD Family Coach, PE Coach and CPT Coach (treatment companions for evidence-based therapies). Sources: ptsd.va.gov/appvid/mobile (PE Coach pages + mobile app summary PDF); mobile.va.gov.
+- **Bravemind** (USC Institute for Creative Technologies, Dr. Albert "Skip" Rizzo): clinical VR exposure-therapy system, multisensory (sight, sound, smell, vibration/haptics); in the largest RCT to date (Difede, Rothbaum, Rizzo et al., 2022) found **equivalent to Prolonged Exposure**, the best evidence-based PTSD treatment, with better outcomes in comorbid major depression; **distributed to over 170 clinical sites**; deployed at ~28–29 VA medical centers via SoldierStrong; adapted for military sexual trauma and Ukrainian war survivors. Sources: medvr.ict.usc.edu/projects/bravemind.html; marketplace.va.gov/innovations/bravemind; ict.usc.edu/research/projects/bravemind-virtual-reality-exposure-therapy.
+- ⚠ The 170+ sites figure is VA/military-adjacent — attribute as "VA clinical sites." The app suite is VA-built (US/veterans-origin, publicly available to anyone).
+- Taxonomy guardrail: DSM-5 places dissociative disorders in their own chapter, SEPARATE from trauma- and stressor-related disorders (ICD-11 recognizes complex PTSD as its own diagnosis). The talk's safe category claim is "conditions closely tied to trauma that receive little mainstream attention" — association, not chapter membership. PTSD belongs to the well-served side of the line; dissociative disorders to the under-served side.
+
 ## Slide placement
 
-- **Slide 5 (technology gap) leads with this sheet**: feasibility (S3) → research funding declined to 2014 levels → tech investment concentrated in generic formats and shrinking → AI investment skips mental health → "scalability and data limitations rather than a lack of need" → allocation gap.
-- **AI/chatbot beat follows, ~2 sentences** (people improvising with general-purpose chatbots + documented risks; details and citations in `reference-chatbot-facts.md`).
+- **Slide 5 (technology gap) leads with this sheet**: feasibility (S3) → research funding declined to 2014 levels → tech investment concentrated in generic formats and shrinking → AI investment skips mental health → "scalability and data limitations rather than a lack of need" → allocation gap. NO dissociative-disorders mention (Jardin's v2 rule — first DD mention is Systemiser, slide 9); keep the split-visual's right side generic ("under-represented conditions").
+- **Slide 6 (AI: the telling extra, lighter tone)**: the chatbot beat lives here as its own slide (hands question + trace evidence + one risk line); details in `reference-chatbot-facts.md`.
 - Context facts (treatment gap, 2% budgets) live on slides 3–4, not on slide 5.
+- **Slide 7 (Team Calendula)**: PTSD contrast case as a spoken proof-of-model beat ("where investment goes, software follows" + "PTSD is not the only condition in that class"). PTSD never on the slide.
+- **Slide 8 (landscape)**: DSM-5 trauma- and stressor-related chapter list; AndColon research-mapping screenshot as optional visual (⚠ contains a dissociative-disorders category — Jardin decides include/crop/replace).
