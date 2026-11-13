@@ -33,7 +33,7 @@
   /* ===== stage scaling ===== */
   #stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;
     transform-origin:center center;
-    background:linear-gradient(160deg,#FFF9E6 0%,#FFF1C9 100%);
+    background:linear-gradient(170deg,#FFEDB4 0%,#FFE4AC 42%,#FFF9E6 100%);
     transition:background .55s ease;
     box-shadow:0 20px 80px rgba(0,0,0,.45);border-radius:6px;overflow:hidden}
   #stage.on-navy{background:linear-gradient(152deg,#14265C 0%,#0A1D46 52%,#050F2B 100%)}
@@ -81,6 +81,10 @@
 
   /* corner logos */
   .corner-logo{position:absolute;top:26px;right:30px;height:64px;width:auto;z-index:4}
+  /* logo entrance: scale + spin, then settle */
+  @keyframes logoIn{0%{transform:scale(2.3) rotate(-160deg);opacity:0;filter:blur(5px)}55%{opacity:1;filter:blur(0)}100%{transform:scale(1) rotate(0deg);opacity:1}}
+  .slide.active .corner-logo, .slide.active .sys-logo-slot{animation:logoIn .85s cubic-bezier(.2,.7,.25,1) both}
+  @media (prefers-reduced-motion: reduce){.slide.active .corner-logo,.slide.active .sys-logo-slot{animation:none}}
   .corner-cap{position:absolute;top:92px;right:30px;font-size:10.5px;font-weight:700;letter-spacing:.14em;
     text-transform:uppercase;color:var(--ink-soft);z-index:4}
 
@@ -258,6 +262,19 @@
   .b.in .glab,.b.in .gsub{animation:fadein .5s forwards}
   .s11 .hubt{font-size:16px;font-weight:800;fill:#fff}
   .s11 .planned-note{margin-top:6px;font-size:15px;color:var(--peri)}
+  .s11 .bs{background:rgba(108,115,165,.16);border:1px solid rgba(108,115,165,.3);border-radius:12px;padding:14px 18px;font-size:16.5px;color:var(--snow)}
+  .s11 .bs div{padding:6px 0}
+  .s11 .bs .tag{font-size:10px;padding:2px 8px;vertical-align:middle}
+  .s11 .s11note{margin-top:16px;font-size:18px;line-height:1.5;color:var(--peri)}
+  .sgw{padding-top:110px}
+  .sgw .gwrap{max-width:820px;margin:18px auto 0}
+  .sgw svg{width:100%;height:auto}
+  .sgw .spoke{stroke:var(--orange);stroke-width:4;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1}
+  .sgw .spoke.dash{stroke-dasharray:.03 .025;stroke-dashoffset:0;stroke:var(--peri);stroke-width:3.5}
+  .sgw .glab{font-size:16px;font-weight:800;fill:#fff;opacity:0}
+  .sgw .gsub{font-size:13.5px;fill:var(--peri);opacity:0}
+  .sgw .hubt{font-size:16px;font-weight:800;fill:#fff}
+  .sgw .planned-note{margin-top:6px;font-size:15px;color:var(--peri);text-align:center}
 
   /* ================= SLIDE 12 — status ================= */
   .s12 .track{position:relative;margin:60px 20px 0;height:150px}
@@ -352,7 +369,11 @@
   .bfill.cold{background:rgba(91,58,14,.35)}
   .btrack{flex:1;height:32px;border-radius:6px;background:rgba(91,58,14,.10);position:relative;overflow:visible}
   .bar .bv{font-size:13.5px;font-weight:800;color:var(--ink);width:64px;flex:none;font-style:normal}
-  .bfill{position:absolute;left:0;top:0;height:100%;border-radius:6px;min-width:8px}
+  .bfill{position:absolute;left:0;top:0;height:100%;border-radius:6px;min-width:8px;transform:scaleX(0);transform-origin:left center;transition:transform .95s cubic-bezier(.2,.7,.2,1)}
+  .chartcol.in .bfill{transform:scaleX(1)}
+  .chartcol .bar:nth-child(2) .bfill{transition-delay:.16s}
+  .chartcol .bar:nth-child(3) .bfill{transition-delay:.32s}
+  .chartcol .bar:nth-child(4) .bfill{transition-delay:.48s}
   .bfill.mh{background:var(--butter)}
   .stchip{display:block;margin-top:8px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:3px 6px;text-align:center}
   .stchip.yes{background:rgba(255,189,89,.55);color:#241503}
@@ -413,16 +434,30 @@
   <line x1="12" x2="12" y1="17" y2="21" /></symbol>
       <symbol id="lc-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" />
   <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-  <path d="M2 12h20" /></symbol>
+  <path d="M2 12h20" /></symbol><symbol id="lc-msg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg
+  class="lucide lucide-message-square"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+</symbol>
     </defs></svg>
     <section class="slide s1">
-      <img class="b tc-logo-big" data-d="0" src="assets/team-calendula-logo.png" alt="Team Calendula logo" onerror="this.style.display='none'">
+      <img class="b tc-logo-big" data-d="0" src="assets/team-calendula-logo.svg" class="corner-logo svgspin" alt="Team Calendula logo" onerror="this.style.display='none'">
       <div class="kicker b" data-d="1" style="margin-top:16px">ACM Mid-Southeast 2026 · Gatlinburg, TN</div>
       <h1 class="b" data-d="2" style="font-size:30px;font-weight:700;letter-spacing:.02em">Team Calendula <span class="amp">&amp;</span> Systemiser</h1>
       <p class="subtitle b" data-d="3" style="font-size:44px;font-weight:800;line-height:1.18;color:var(--deep)">Building software for under-represented mental health conditions</p>
       <div class="rule b" data-d="4"></div>
       <p class="byline b" data-d="5">Clue-Hyde Pollen · Tennessee State University</p>
-      <div class="pagenum">1 / 16</div>
+      <div class="pagenum">1 / 17</div>
     </section>
 
     <!-- ============ 2 · HOOK ============ -->
@@ -433,7 +468,7 @@
         <img src="assets/photo-crisis.jpg" alt="" onerror="this.parentNode.style.display='none'">
         <figcaption class="photo-cap">Photo: Unsplash (credit on references slide)</figcaption>
       </figure>
-      <div class="pagenum">2 / 16</div>
+      <div class="pagenum">2 / 17</div>
     </section>
 
     <!-- ============ 3 · INNOVATION EVERYWHERE ============ -->
@@ -444,24 +479,24 @@
         <div class="chartcol b" data-d="2">
           <div class="ch">Where the wave goes <small>global venture funding by sector, one quarter (Q3 2024)</small></div>
           <div class="bars">
-            <div class="bar"><span class="bl">AI</span><div class="btrack"><div class="bfill hot" style="width:100%"></div></div><i class="bv">$19B</i></div>
-            <div class="bar"><span class="bl">Health &amp; biotech</span><div class="btrack"><div class="bfill" style="width:79%"></div></div><i class="bv">$15B</i></div>
-            <div class="bar"><span class="bl">Hardware</span><div class="btrack"><div class="bfill" style="width:68%"></div></div><i class="bv">$13B</i></div>
-            <div class="bar"><span class="bl">Fintech</span><div class="btrack"><div class="bfill" style="width:42%"></div></div><i class="bv">$8B</i></div>
+            <div class="bar"><span class="bl">AI</span><div class="btrack"><div class="bfill hot" style="width:100%"></div></div><i class="bv" data-pre="$" data-val="19" data-post="B" data-dec="0">v">$19B</i></div>
+            <div class="bar"><span class="bl">Health &amp; biotech</span><div class="btrack"><div class="bfill" style="width:79%"></div></div><i class="bv" data-pre="$" data-val="15" data-post="B" data-dec="0">v">$15B</i></div>
+            <div class="bar"><span class="bl">Hardware</span><div class="btrack"><div class="bfill" style="width:68%"></div></div><i class="bv" data-pre="$" data-val="13" data-post="B" data-dec="0">v">$13B</i></div>
+            <div class="bar"><span class="bl">Fintech</span><div class="btrack"><div class="bfill" style="width:42%"></div></div><i class="bv" data-pre="$" data-val="8" data-post="B" data-dec="0">v">$8B</i></div>
           </div>
           <div class="bcap">2024 context: AI took a <b>record 37%</b> of all venture funding, an all-time high · CB Insights</div>
         </div>
         <div class="chartcol b" data-d="4">
           <div class="ch">Zoom in on health <small>US venture funding, full-year 2024</small></div>
           <div class="bars">
-            <div class="bar"><span class="bl">All digital health</span><div class="btrack"><div class="bfill" style="width:100%"></div></div><i class="bv">$10.1B</i></div>
-            <div class="bar"><span class="bl">Mental health</span><div class="btrack"><div class="bfill mh" style="width:14%"></div></div><i class="bv">$1.4B</i></div>
+            <div class="bar"><span class="bl">All digital health</span><div class="btrack"><div class="bfill" style="width:100%"></div></div><i class="bv" data-pre="$" data-val="10.1" data-post="B" data-dec="1">v">$10.1B</i></div>
+            <div class="bar"><span class="bl">Mental health</span><div class="btrack"><div class="bfill mh" style="width:14%"></div></div><i class="bv" data-pre="$" data-val="1.4" data-post="B" data-dec="1">v">$1.4B</i></div>
           </div>
           <div class="bcap">Mental health is the <b>top-funded clinical area</b> in digital health, six years running · Rock Health</div>
         </div>
       </div>
       <p class="s3line b" data-d="6">The wave is real. <b>Mental health gets a sliver of it.</b></p>
-      <div class="pagenum">3 / 16</div>
+      <div class="pagenum">3 / 17</div>
     </section>
 
     <!-- ============ 4 · SCALE + UNEVEN NEGLECT ============ -->
@@ -477,7 +512,7 @@
         <div class="card res b" data-d="4"><h3>Some conditions…</h3><p>attract significant research funding and technology investment.</p></div>
         <div class="card neg b" data-d="5"><h3>Others…</h3><p>draw disproportionately little support relative to their real-world burden.</p></div>
       </div>
-      <div class="pagenum">4 / 16</div>
+      <div class="pagenum">4 / 17</div>
     </section>
 
     <!-- ============ 5 · TECHNOLOGY GAP ============ -->
@@ -495,7 +530,7 @@
         <div class="src">npj Digital Medicine — on why AI investment skips mental health</div>
       </div>
       <div class="triad b" data-d="7"><span>The need is there.</span><span>The capability is there.</span><span class="no">The investment isn't.</span></div>
-      <div class="pagenum">5 / 16</div>
+      <div class="pagenum">5 / 17</div>
     </section>
 
     <!-- ============ 6 · AI: THE TELLING EXTRA ============ -->
@@ -512,12 +547,12 @@
         <div class="fbox b" data-d="6"><b>OpenAI's own reported data</b><br>1,000,000+ users a week in conversations with explicit indicators of potential suicide planning.</div>
         <div class="fbox b" data-d="7"><b>ACM FAcT 2025 (Stanford)</b><br>Therapy chatbots showed stigma toward severe conditions and failed to interrupt suicidal intent.</div>
       </div>
-      <div class="pagenum">6 / 16</div>
+      <div class="pagenum">6 / 17</div>
     </section>
 
     <!-- ============ 7 · TEAM CALENDULA ============ -->
     <section class="slide s7">
-      <img class="corner-logo" src="assets/team-calendula-logo.png" alt="Team Calendula logo" onerror="this.style.display='none'">
+      <img class="corner-logo" src="assets/team-calendula-logo.svg" class="corner-logo svgspin" alt="Team Calendula logo" onerror="this.style.display='none'">
       <div class="corner-cap">Team Calendula</div>
       <div class="kicker b" data-d="0" style="margin-top:30px">Team Calendula, an independent software project</div>
       <div class="headline b" data-d="1">A solution to <span class="big">part</span> of this,<br>for <span class="accent">trauma-based disorders</span>.</div>
@@ -525,12 +560,12 @@
         <p class="b" data-d="2">Proof the model works: where a condition gets sustained investment, <b>purpose-built software follows</b>.</p>
         <p class="b" data-d="3">Every product begins the same way: <b>rigorous research into the condition it serves</b>, before a single feature is designed.</p>
       </div>
-      <div class="pagenum">7 / 16</div>
+      <div class="pagenum">7 / 17</div>
     </section>
 
     <!-- ============ 8 · LANDSCAPE ============ -->
     <section class="slide s8">
-      <img class="corner-logo" src="assets/team-calendula-logo.png" alt="Team Calendula logo" onerror="this.style.display='none'">
+      <img class="corner-logo" src="assets/team-calendula-logo.svg" class="corner-logo svgspin" alt="Team Calendula logo" onerror="this.style.display='none'">
       <div class="corner-cap">Team Calendula</div>
       <div class="kicker b" data-d="0" style="margin-top:30px">The landscape: how big is "the rest"?</div>
       <h2 class="b" data-d="1">Trauma-related conditions, category by category</h2>
@@ -571,14 +606,14 @@
         </div>
       </div>
       <p class="cnote b" data-d="6">Trauma-cluster categories, with ICD-10 codes as catalogued by our research mapping. <b>Other clusters exist where trauma can be a major causal factor</b>: depressive, anxiety, personality, and substance-use disorders.</p>
-      <div class="pagenum">8 / 16</div>
+      <div class="pagenum">8 / 17</div>
     </section>
 
     <!-- ============ 9 · SYSTEMISER: CONTINUITY (first dissociative mention) ============ -->
     <section class="slide s9 navy">
       <div class="sys-brand b" data-d="0">
         <!-- SYSTEMISER logo — assets/systemiser-logo.png (hidden automatically if the file is absent) -->
-        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Team Calendula's first product</span></div>
       </div>
       <h2 class="b" data-d="1" style="margin-top:6px">Built for dissociative disorders,<br>designed around one unifying need: <span class="accent">continuity</span>.</h2>
@@ -604,13 +639,13 @@
         <p class="b" data-d="7">Symptoms disrupt memory, identity, and the organization of daily life, <b>the thread of a person's own story can break without warning</b>.</p>
         <p class="b" data-d="8">Systemiser's purpose: <b>hold that thread</b>: restore continuity when symptoms disrupt it.</p>
       </div>
-      <div class="pagenum">9 / 16</div>
+      <div class="pagenum">9 / 17</div>
     </section>
 
     <!-- ============ 10 · CAPABILITIES ============ -->
     <section class="slide s10 navy">
       <div class="sys-brand b" data-d="0">
-        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Capabilities</span></div>
       </div>
       <h2 class="b" data-d="1" style="margin-top:10px">Continuity breaks down into concrete capabilities.</h2>
@@ -646,71 +681,87 @@
         </div>
       </div>
       <p class="footnote foot b" data-d="5">Capabilities as designed, in development; tested status follows.</p>
-      <div class="pagenum">10 / 16</div>
+      <div class="pagenum">10 / 17</div>
     </section>
 
     <!-- ============ 11 · ECOSYSTEM + PLANNED GATEWAYS ============ -->
-    <section class="slide s11 navy">
+<section class="slide s11 navy">
       <div class="sys-brand b" data-d="0">
-        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Ecosystem</span></div>
       </div>
-      <h2 class="b" data-d="1" style="margin-top:10px">Built as an ecosystem, with planned gateways.</h2>
+      <h2 class="b" data-d="1" style="margin-top:10px">Built as an application ecosystem: <span class="accent">desktop, mobile, web, and social-media integration</span>.</h2>
       <div class="grid">
         <div>
           <div class="devs b" data-d="2">
             <div class="dev"><span class="ic"><svg><use href="#lc-monitor"/></svg></span>Desktop</div>
             <div class="dev"><span class="ic"><svg><use href="#lc-smartphone"/></svg></span>Mobile</div>
             <div class="dev"><span class="ic"><svg><use href="#lc-globe"/></svg></span>Web</div>
+            <div class="dev"><span class="ic"><svg><use href="#lc-msg"/></svg></span>Social platforms</div>
           </div>
-          <div class="layer b" data-d="3">Real-time collaboration layer<small>across every device</small></div>
-          <div class="layer b" data-d="4">Privacy-focused, cloud-hosted data storage<small>designed for sensitive records</small></div>
+          <div class="layer b" data-d="3">Real-time collaboration layer<small>WebSocket sync, presence-aware, across every client</small></div>
+          <div class="layer b" data-d="4">Privacy-focused data layer<small>MongoDB · Redis cache · Cloudflare R2 object storage</small></div>
+          <div class="layer b" data-d="5">Access &amp; auth<small>OAuth2 + JWT · containerized services</small></div>
         </div>
         <div>
-          <svg class="b" data-d="5" viewBox="0 0 560 330" role="img" aria-label="Systemiser hub with planned gateway spokes">
-            <ellipse cx="97" cy="165" rx="84" ry="46" fill="#E7853F"/>
-            <text class="hubt" x="97" y="170" text-anchor="middle" style="font-size:14px;letter-spacing:.04em">SYSTEMISER</text>
-            <!-- spokes: draw outward -->
-            <line class="spoke b" data-d="6" pathLength="1" x1="181" y1="142" x2="360" y2="62"/>
-            <line class="spoke b" data-d="6" pathLength="1" x1="181" y1="165" x2="360" y2="165" style="animation-delay:.2s"/>
-            <line class="spoke dash b" data-d="7" x1="181" y1="188" x2="360" y2="268"/>
-            <!-- spoke labels -->
-            <text class="glab b" data-d="7" x="368" y="58" style="font-size:14px">Messaging &amp; collaboration</text>
-            <text class="gsub b" data-d="7" x="368" y="76">Discord · Slack</text>
-            <text class="glab b" data-d="8" x="368" y="170">In-vehicle assistants</text>
-            <text class="gsub b" data-d="8" x="368" y="188">Apple CarPlay · Android Auto</text>
-            <text class="glab b" data-d="9" x="368" y="272" opacity=".75">Further categories</text>
-          </svg>
-          <div class="planned-note b" data-d="9"><span class="tag">planned</span>&nbsp; every spoke is <b>planned: roadmap, not shipped</b>.</div>
+          <div class="bs b" data-d="6">
+            <div><span class="tag">built</span>&nbsp; chat-platform clients, REST API, web app</div>
+            <div><span class="tag ghost">planned</span>&nbsp; standalone desktop &amp; mobile apps, with offline mode</div>
+          </div>
+          <p class="s11note b" data-d="7">The point is continuity that <b>follows the person</b> across every surface they already use.</p>
         </div>
       </div>
-      <div class="pagenum">11 / 16</div>
+      <div class="pagenum">11 / 17</div>
     </section>
+    <section class="slide sgw navy">
+      <div class="sys-brand b" data-d="0">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
+        <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Gateways</span></div>
+      </div>
+      <h2 class="b" data-d="1" style="margin-top:10px">Planned gateways: platforms that already shape daily life, <span class="accent">turned toward assistive purposes</span>.</h2>
+      <div class="gwrap">
+        <svg class="b" data-d="2" viewBox="0 0 560 330" role="img" aria-label="Systemiser hub with planned gateway spokes">
+          <ellipse cx="97" cy="165" rx="84" ry="46" fill="#E7853F"/>
+          <text class="hubt" x="97" y="170" text-anchor="middle" style="font-size:14px;letter-spacing:.04em">SYSTEMISER</text>
+          <line class="spoke b" data-d="3" pathLength="1" x1="181" y1="142" x2="360" y2="62"/>
+          <line class="spoke b" data-d="3" pathLength="1" x1="181" y1="165" x2="360" y2="165" style="animation-delay:.2s"/>
+          <line class="spoke dash b" data-d="4" x1="181" y1="188" x2="360" y2="268"/>
+          <text class="glab b" data-d="4" x="368" y="58" style="font-size:14px">Social platforms</text>
+          <text class="gsub b" data-d="4" x="368" y="76">Discord · Slack</text>
+          <text class="glab b" data-d="5" x="368" y="170">In-vehicle assistants</text>
+          <text class="gsub b" data-d="5" x="368" y="188">Apple CarPlay · Android Auto</text>
+          <text class="glab b" data-d="6" x="368" y="272" opacity=".75">Further categories</text>
+        </svg>
+        <div class="planned-note b" data-d="7"><span class="tag">planned</span>&nbsp; every spoke is <b>planned: roadmap, not shipped</b>.</div>
+      </div>
+      <div class="pagenum">12 / 17</div>
+    </section>
+
 
     <!-- ============ 12 · HONEST STATUS ============ -->
     <section class="slide s12 navy">
       <div class="sys-brand b" data-d="0">
-        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Honest status</span></div>
       </div>
       <h2 class="b" data-d="1" style="margin-top:10px">Four core feature cycles, exercised in prototype testing to date.</h2>
       <div class="track">
         <div class="rail b" data-d="2"></div>
         <div class="nodes">
-          <div class="node b pop" data-d="3"><div class="chk">✓</div><div class="lb">Identity-state representation<small>&amp; transitions</small></div></div>
-          <div class="node b pop" data-d="4"><div class="chk">✓</div><div class="lb">Status &amp; functioning<small>tracking</small></div></div>
-          <div class="node b pop" data-d="5"><div class="chk">✓</div><div class="lb">Privacy-gated<small>sharing</small></div></div>
-          <div class="node b pop" data-d="6"><div class="chk">✓</div><div class="lb">Collaborative<small>information management</small></div></div>
+          <div class="node b pop" data-d="3"><div class="chk">✓</div><div class="lb">Identity-state representation<small>layer system · shift history</small></div></div>
+          <div class="node b pop" data-d="4"><div class="chk">✓</div><div class="lb">Status &amp; functioning<small>per-state status, battery, caution</small></div></div>
+          <div class="node b pop" data-d="5"><div class="chk">✓</div><div class="lb">Privacy-gated<small>sharing · per-field, per-tier buckets</small></div></div>
+          <div class="node b pop" data-d="6"><div class="chk">✓</div><div class="lb">Collaborative<small>information · WebSocket presence, auto-linked</small></div></div>
         </div>
       </div>
       <p class="honest b" data-d="7">That is what exists in testing. <span class="no">That is the line I won't blur.</span></p>
-      <div class="pagenum">12 / 16</div>
+      <div class="pagenum">13 / 17</div>
     </section>
 
     <!-- ============ 13 · ROADMAP ============ -->
     <section class="slide s13 navy">
       <div class="sys-brand b" data-d="0">
-        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Roadmap</span></div>
       </div>
       <h2 class="b" data-d="1" style="margin-top:10px">What's next: extending continuity into daily life.</h2>
@@ -722,26 +773,26 @@
         </div>
         <div class="rnode dashed b" data-d="4">
           <h3>Daily-organization continuity <span class="tag ghost">planned</span></h3>
-          <p>Reminders · offline access · accessibility work: <b>screen-reader support</b>, keyboard navigation, <b>motion-sensitivity options</b>.</p>
+          <p>Reminders · offline access · <b>mood check-ins</b> · a <b>calendar linking mood, transitions, and notes</b> · accessibility work: <b>screen-reader support</b>, keyboard navigation, <b>motion-sensitivity options</b>.</p>
         </div>
         <div class="rnode dashed b" data-d="5">
           <h3>App connectivity <span class="tag ghost">planned</span></h3>
           <p>Connects with <b>future Team Calendula apps</b> and <b>partnered apps and resources</b>.</p>
         </div>
       </div>
-      <div class="pagenum">13 / 16</div>
+      <div class="pagenum">14 / 17</div>
     </section>
 
     <!-- ============ 14 · BEYOND SYSTEMISER ============ -->
     <section class="slide s14">
-      <img class="corner-logo" src="assets/team-calendula-logo.png" alt="Team Calendula logo" onerror="this.style.display='none'">
+      <img class="corner-logo" src="assets/team-calendula-logo.svg" class="corner-logo svgspin" alt="Team Calendula logo" onerror="this.style.display='none'">
       <div class="corner-cap">Team Calendula</div>
       <div class="kicker b" data-d="0" style="margin-top:30px">Beyond Systemiser: the model is the point</div>
       <h2 class="b" data-d="1">A growing family of condition-specific products.</h2>
       <div class="traj">
         <div class="tnode b pop" data-d="2"><div class="tcirc oval">SYSTEM-<br>ISER</div><div class="lb">first product</div></div>
         <div class="tlink b" data-d="3"></div>
-        <div class="tnode future b pop" data-d="4"><div class="tcirc oval">TRIGIN</div><div class="lb">trigger management · <span class="tag ghost" style="font-size:10px;padding:2px 8px">planned</span></div></div>
+        <div class="tnode future b pop" data-d="4"><div class="tcirc oval"><img class="tnlogo" src="assets/trigin-logo.svg" alt="TrigIn logo" onerror="this.style.display='none'"><span>TRIGIN</span></div><div class="lb">trigger management · <span class="tag ghost" style="font-size:10px;padding:2px 8px">planned</span></div></div>
         <div class="tlink b" data-d="5"></div>
         <div class="tnode future b pop" data-d="5"><div class="tcirc oval">CANARY</div><div class="lb">pre-crisis companion · <span class="tag ghost" style="font-size:10px;padding:2px 8px">planned</span></div></div>
         <div class="tlink b" data-d="6"></div>
@@ -752,7 +803,7 @@
         <p class="b" data-d="8">Connectivity across the family: <b>apps talk to apps</b>, and to partnered resources.</p>
         <p class="b" data-d="9">Closing the gap <b>condition by condition</b>; early conversations with clinicians and organizations already underway.</p>
       </div>
-      <div class="pagenum">14 / 16</div>
+      <div class="pagenum">15 / 17</div>
     </section>
 
     <!-- ============ 15 · CLOSE ============ -->
@@ -762,7 +813,7 @@
       <p class="l b" data-d="2">Team Calendula targets that gap condition by condition, starting with Systemiser, whose four tested cycles are <b>the beginning, not the promise</b>.</p>
       <p class="final b" data-d="3">One condition at a time,<br>that is how the gap closes.</p>
       <p class="thanks b" data-d="4">Thank you · Questions welcome</p>
-      <div class="pagenum">15 / 16</div>
+      <div class="pagenum">16 / 17</div>
     </section>
 
     <!-- ============ 16 · REFERENCES ============ -->
@@ -811,7 +862,7 @@
 <script>
 (function(){
   "use strict";
-  var N = 16, cur = 0;
+  var N = 17, cur = 0;
   var deck  = document.getElementById('deck');
   var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
   var prog  = document.getElementById('progress');
@@ -855,12 +906,48 @@
     for (var j=0;j<bs.length;j++){ bs[j].classList.add('in'); }
   }
 
+  /* restart <img>-embedded SVG animations (gear spin) on slide entry */
+  function restartSvgImgs(slide){
+    slide.querySelectorAll('img.svgspin').forEach(function(img){
+      var c = img.cloneNode();
+      c.src = img.src;
+      img.parentNode.replaceChild(c, img);
+    });
+  }
+
+  /* ---------- slide-3 bar count-ups ---------- */
+  function runBarCounts(){
+    if (STATIC) return;
+    var cols = document.querySelectorAll('.slide.active .chartcol');
+    cols.forEach(function(col){
+      var d = parseFloat(col.getAttribute('data-d') || 0) * 280;
+      var bvs = col.querySelectorAll('.bv[data-val]');
+      bvs.forEach(function(el, i){
+        var val = parseFloat(el.getAttribute('data-val')),
+            dec = parseInt(el.getAttribute('data-dec') || 0),
+            pre = el.getAttribute('data-pre') || '', post = el.getAttribute('data-post') || '';
+        var T = 950, start = null, delay = d + i * 130;
+        function step(ts){
+          if (start === null) start = ts;
+          var el0 = ts - start - delay;
+          if (el0 < 0){ requestAnimationFrame(step); return; }
+          var pp = Math.min(1, el0 / T);
+          var e = 1 - Math.pow(1 - pp, 3);
+          el.textContent = pre + (val * e).toFixed(dec) + post;
+          if (pp < 1) requestAnimationFrame(step); else el.textContent = pre + val.toFixed(dec) + post;
+        }
+        requestAnimationFrame(step);
+      });
+    });
+  }
+
   /* ---------- slide-4 fraction visual: one lit segment of many ---------- */
   var STATIC = location.search.indexOf('static') !== -1;
   if (STATIC){
     var st = document.createElement('style');
     st.textContent = '*{transition:none!important;animation:none!important}' +
       '.b{opacity:1!important;transform:none!important}' +
+      '.chartcol .bfill{transform:none!important}' +
       '.s9 .seg,.s9 .mend,.s11 .spoke{stroke-dashoffset:0!important}';
     document.head.appendChild(st);
   }
@@ -882,7 +969,7 @@
     if(!el) return;
     if (STATIC){ el.textContent = '1,000,000,000+'; return; }
     counterDone = false;
-    var T = 2200, start = null, target = 1000000000;
+    var T = 1400, start = null, target = 1000000000;
     function fmt(n){ return Math.floor(n).toLocaleString('en-US'); }
     function step(ts){
       if (start===null) start = ts;
@@ -910,6 +997,8 @@
     if (meteors) meteors.style.display = navy ? '' : 'none';
     if (petals) petals.style.display = navy ? 'none' : '';
     if (cur===4){ buildFraction(); runCounter(); }
+    if (cur===3){ runBarCounts(); }
+    restartSvgImgs(slide);
   }
 
   function go(n, force, revealAll){

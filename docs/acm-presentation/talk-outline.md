@@ -1,5 +1,8 @@
 # ACM Talk Outline — Team Calendula and Systemiser (15 minutes) — v2
 
+> ⚠ v3.1 sync note: the deck is now 17 slides — slide 11 is the ecosystem/stack slide, NEW slide 12 is planned gateways (was part of 11), status/roadmap/family/close follow as 13–16, references is 17. Slide 11 no longer lists Discord by name (social platforms: Discord · Slack). `draft-script.md` v3.1 is the source of truth for spoken beats and timing.
+
+
 **Audience (Jardin, Nov 2026 — governs every slide): computer engineers, potential designers and developers.** Engineering-first register: design spaces, architecture, platform constraints. The human stakes carry the why; the engineering carries the how.
 
 Source of truth: `acm-abstract.md` v7. Framing constraints from `handoff-summary.md` apply throughout (clinical vocabulary only, singular first person, honest build status, continuity framing, no community terminology).
