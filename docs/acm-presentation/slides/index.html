@@ -83,8 +83,8 @@
   .corner-logo{position:absolute;top:26px;right:30px;height:64px;width:auto;z-index:4}
   /* logo entrance: scale + spin, then settle */
   @keyframes logoIn{0%{transform:scale(2.3) rotate(-160deg);opacity:0;filter:blur(5px)}55%{opacity:1;filter:blur(0)}100%{transform:scale(1) rotate(0deg);opacity:1}}
-  .slide.active .corner-logo, .slide.active .sys-logo-slot{animation:logoIn .85s cubic-bezier(.2,.7,.25,1) both}
-  @media (prefers-reduced-motion: reduce){.slide.active .corner-logo,.slide.active .sys-logo-slot{animation:none}}
+  .s1.active .corner-logo, .s15.active .corner-logo, .s9.active .sys-logo-slot{animation:logoIn .85s cubic-bezier(.2,.7,.25,1) both}
+  @media (prefers-reduced-motion: reduce){.s1.active .corner-logo,.s15.active .corner-logo,.s9.active .sys-logo-slot{animation:none}}
   .corner-cap{position:absolute;top:92px;right:30px;font-size:10.5px;font-weight:700;letter-spacing:.14em;
     text-transform:uppercase;color:var(--ink-soft);z-index:4}
 
@@ -613,7 +613,7 @@
     <section class="slide s9 navy">
       <div class="sys-brand b" data-d="0">
         <!-- SYSTEMISER logo — assets/systemiser-logo.png (hidden automatically if the file is absent) -->
-        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Team Calendula's first product</span></div>
       </div>
       <h2 class="b" data-d="1" style="margin-top:6px">Built for dissociative disorders,<br>designed around one unifying need: <span class="accent">continuity</span>.</h2>
@@ -645,7 +645,7 @@
     <!-- ============ 10 · CAPABILITIES ============ -->
     <section class="slide s10 navy">
       <div class="sys-brand b" data-d="0">
-        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Capabilities</span></div>
       </div>
       <h2 class="b" data-d="1" style="margin-top:10px">Continuity breaks down into concrete capabilities.</h2>
@@ -687,7 +687,7 @@
     <!-- ============ 11 · ECOSYSTEM + PLANNED GATEWAYS ============ -->
 <section class="slide s11 navy">
       <div class="sys-brand b" data-d="0">
-        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Ecosystem</span></div>
       </div>
       <h2 class="b" data-d="1" style="margin-top:10px">Built as an application ecosystem: <span class="accent">desktop, mobile, web, and social-media integration</span>.</h2>
@@ -715,7 +715,7 @@
     </section>
     <section class="slide sgw navy">
       <div class="sys-brand b" data-d="0">
-        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Gateways</span></div>
       </div>
       <h2 class="b" data-d="1" style="margin-top:10px">Planned gateways: platforms that already shape daily life, <span class="accent">turned toward assistive purposes</span>.</h2>
@@ -741,7 +741,7 @@
     <!-- ============ 12 · HONEST STATUS ============ -->
     <section class="slide s12 navy">
       <div class="sys-brand b" data-d="0">
-        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Honest status</span></div>
       </div>
       <h2 class="b" data-d="1" style="margin-top:10px">Four core feature cycles, exercised in prototype testing to date.</h2>
@@ -761,7 +761,7 @@
     <!-- ============ 13 · ROADMAP ============ -->
     <section class="slide s13 navy">
       <div class="sys-brand b" data-d="0">
-        <img class="sys-logo-slot" src="assets/systemiser-logo.svg" alt="Systemiser logo" onerror="this.style.display='none'">
+        <img class="sys-logo-slot" src="assets/systemiser-logo.png" alt="Systemiser logo" onerror="this.style.display='none'">
         <div class="brand-text"><span class="brand-name">SYSTEMISER</span><span class="brand-sub">Roadmap</span></div>
       </div>
       <h2 class="b" data-d="1" style="margin-top:10px">What's next: extending continuity into daily life.</h2>
@@ -792,7 +792,7 @@
       <div class="traj">
         <div class="tnode b pop" data-d="2"><div class="tcirc oval">SYSTEM-<br>ISER</div><div class="lb">first product</div></div>
         <div class="tlink b" data-d="3"></div>
-        <div class="tnode future b pop" data-d="4"><div class="tcirc oval"><img class="tnlogo" src="assets/trigin-logo.svg" alt="TrigIn logo" onerror="this.style.display='none'"><span>TRIGIN</span></div><div class="lb">trigger management · <span class="tag ghost" style="font-size:10px;padding:2px 8px">planned</span></div></div>
+        <div class="tnode future b pop" data-d="4"><div class="tcirc oval">TRIGIN</div><div class="lb">trigger management · <span class="tag ghost" style="font-size:10px;padding:2px 8px">planned</span></div></div>
         <div class="tlink b" data-d="5"></div>
         <div class="tnode future b pop" data-d="5"><div class="tcirc oval">CANARY</div><div class="lb">pre-crisis companion · <span class="tag ghost" style="font-size:10px;padding:2px 8px">planned</span></div></div>
         <div class="tlink b" data-d="6"></div>
@@ -998,7 +998,7 @@
     if (petals) petals.style.display = navy ? 'none' : '';
     if (cur===4){ buildFraction(); runCounter(); }
     if (cur===3){ runBarCounts(); }
-    restartSvgImgs(slide);
+    if (cur===1 || cur===15){ restartSvgImgs(slide); }
   }
 
   function go(n, force, revealAll){
